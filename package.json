@@ -9,7 +9,7 @@
 		"integration": "vitest run --project integration",
 		"lint": "biome check . && secretlint --secretlintignore .gitignore \"**/*\"",
 		"format": "biome check --write .",
-		"boundaries": "depcruise packages apps test --config .dependency-cruiser.cjs",
+		"boundaries": "depcruise packages test --config .dependency-cruiser.cjs",
 		"scan": "secretlint --secretlintignore .gitignore \"**/*\""
 	},
 	"devDependencies": {

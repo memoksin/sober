@@ -3,8 +3,8 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
 	test: {
 		projects: [
+			// 'apps/*' returns in phase 5, with the dashboard.
 			'packages/*',
-			'apps/*',
 			{
 				test: {
 					name: 'integration',
