@@ -27,21 +27,21 @@ it is not v1.
 
 ## MUST — v1
 
-| # | Capability | Which step | Why it cannot be cut |
-|---|---|---|---|
-| 1 | Graph model: nodes, dependencies, derived status | 2, 7 | "What can start now" is the orchestration pillar. Without derived status the graph is a to-do list. |
-| 2 | Decision records: own records, nodes bind them, gate on any bound-and-open | 3 | The one hard block. Cutting it makes SOBER accelerated vibe coding — the exact failure the charter names. Gating on the *binding* rather than on one flagged node is ADR 0006. |
-| 3 | Node brief, required before dispatch | 4 | An agent that has to ask a second question has not been briefed. This is what makes automation safe. |
-| 4 | Parallel dispatch: N isolated agent sessions, one branch each | 5 | The automation pillar is *parallel* agents. One-at-a-time is a different product. |
-| 5 | Human review before anything lands | 6 | The human owns intent. An agent that merges its own work owns intent. Review means check results against approved acceptance criteria; reading the diff is available, never required (ADR 0022). |
-| 6 | Dashboard: graph canvas, node panel, decision screen, review screen | 1–7 | The charter names the dashboard the primary surface for the board. A dashboard-shaped gap is a product gap. |
-| 7 | CLI mirroring every state-changing operation | 1–7 | The scriptable surface. Also the contract test: anything the dashboard can change, the CLI can change headless. |
-| 8 | Team sync: the board travels over git | 2, 7 | "A small team, human and agent, working one project in parallel" needs a shared board. |
-| 9 | Security scan of every dispatch result, before review | 6 | Review with no scan asks a human to spot a leaked key in a diff they did not write. Moved from SHOULD by ADR 0002; its tool and its rule list are ADR 0011. |
-| 10 | Agent-proposed decomposition: intent → proposed nodes, edges and decisions, nothing landing without human acceptance | 1, 2 | Without it v1's first run is an empty board and thirty manual node creations. Moved from SHOULD by ADR 0004. |
-| 11 | Contributors, assignment and claim, travelling with the board | 8 | Two people cannot work in parallel without knowing who has what. Added by ADR 0005. |
-| 12 | MCP server: an agent inside a host session reads the board, proposes, opens decisions, writes brief approaches, and reviews | 1–7 | Three of the MUSTs above are agent work, and this is where that work happens — in the session the user already opened, with the repository already in context. Moved from SHOULD by ADR 0009. |
-| 13 | The first host plugin: MCP configuration, commands, one skill | 1–4 | How MUST #12 reaches a host, and how a session learns the loop without being told again every time. Added by ADR 0009. |
+| #   | Capability                                                                                                                  | Which step | Why it cannot be cut                                                                                                                                                                             |
+| --- | --------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Graph model: nodes, dependencies, derived status                                                                            | 2, 7       | "What can start now" is the orchestration pillar. Without derived status the graph is a to-do list.                                                                                              |
+| 2   | Decision records: own records, nodes bind them, gate on any bound-and-open                                                  | 3          | The one hard block. Cutting it makes SOBER accelerated vibe coding — the exact failure the charter names. Gating on the _binding_ rather than on one flagged node is ADR 0006.                   |
+| 3   | Node brief, required before dispatch                                                                                        | 4          | An agent that has to ask a second question has not been briefed. This is what makes automation safe.                                                                                             |
+| 4   | Parallel dispatch: N isolated agent sessions, one branch each                                                               | 5          | The automation pillar is _parallel_ agents. One-at-a-time is a different product.                                                                                                                |
+| 5   | Human review before anything lands                                                                                          | 6          | The human owns intent. An agent that merges its own work owns intent. Review means check results against approved acceptance criteria; reading the diff is available, never required (ADR 0022). |
+| 6   | Dashboard: graph canvas, node panel, decision screen, review screen                                                         | 1–7        | The charter names the dashboard the primary surface for the board. A dashboard-shaped gap is a product gap.                                                                                      |
+| 7   | CLI mirroring every state-changing operation                                                                                | 1–7        | The scriptable surface. Also the contract test: anything the dashboard can change, the CLI can change headless.                                                                                  |
+| 8   | Team sync: the board travels over git                                                                                       | 2, 7       | "A small team, human and agent, working one project in parallel" needs a shared board.                                                                                                           |
+| 9   | Security scan of every dispatch result, before review                                                                       | 6          | Review with no scan asks a human to spot a leaked key in a diff they did not write. Moved from SHOULD by ADR 0002; its tool and its rule list are ADR 0011.                                      |
+| 10  | Agent-proposed decomposition: intent → proposed nodes, edges and decisions, nothing landing without human acceptance        | 1, 2       | Without it v1's first run is an empty board and thirty manual node creations. Moved from SHOULD by ADR 0004.                                                                                     |
+| 11  | Contributors, assignment and claim, travelling with the board                                                               | 8          | Two people cannot work in parallel without knowing who has what. Added by ADR 0005.                                                                                                              |
+| 12  | MCP server: an agent inside a host session reads the board, proposes, opens decisions, writes brief approaches, and reviews | 1–7        | Three of the MUSTs above are agent work, and this is where that work happens — in the session the user already opened, with the repository already in context. Moved from SHOULD by ADR 0009.    |
+| 13  | The first host plugin: MCP configuration, commands, one skill                                                               | 1–4        | How MUST #12 reaches a host, and how a session learns the loop without being told again every time. Added by ADR 0009.                                                                           |
 
 Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision**,
 never a "gate" — and by ADR 0009 for the three host-facing terms: an **adapter**
@@ -72,14 +72,14 @@ once. That is the whole test.
 
 ## WON'T — v1
 
-| Not building | Why not |
-|---|---|
-| Hosted sync, accounts, a **hosted** server | The board is git-native. A hosted tier is a business decision, not a v1 feature. This does not exclude the local process the dashboard talks to (ADR 0008) — that dies when the dashboard closes. |
-| Multi-project workspace | One project, one graph. Multi-project is a UI problem you cannot see until one project works. |
-| Knowledge map, learner-level assessment, education analytics | Modelling what a human knows is unbounded research. The charter's education pillar is served by option reasons and costs. |
-| Decomposition that lands without human acceptance | The human owns intent. A machine graph nobody evaluated is plausible and unevaluable at once. Proposing is MUST #10; landing unreviewed stays out (ADR 0004). |
-| Per-language static analysis of dispatch results | The scan ships a short, named signal list (ADR 0011). A real injection analyser needs one rule set per language a user might write in. |
-| Anything that serves none of the three pillars | The charter's own rule. |
+| Not building                                                 | Why not                                                                                                                                                                                           |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hosted sync, accounts, a **hosted** server                   | The board is git-native. A hosted tier is a business decision, not a v1 feature. This does not exclude the local process the dashboard talks to (ADR 0008) — that dies when the dashboard closes. |
+| Multi-project workspace                                      | One project, one graph. Multi-project is a UI problem you cannot see until one project works.                                                                                                     |
+| Knowledge map, learner-level assessment, education analytics | Modelling what a human knows is unbounded research. The charter's education pillar is served by option reasons and costs.                                                                         |
+| Decomposition that lands without human acceptance            | The human owns intent. A machine graph nobody evaluated is plausible and unevaluable at once. Proposing is MUST #10; landing unreviewed stays out (ADR 0004).                                     |
+| Per-language static analysis of dispatch results             | The scan ships a short, named signal list (ADR 0011). A real injection analyser needs one rule set per language a user might write in.                                                            |
+| Anything that serves none of the three pillars               | The charter's own rule.                                                                                                                                                                           |
 
 The WON'T list is the load-bearing half. A feature moves off it only by an ADR
 that says what changed.
@@ -109,7 +109,7 @@ mechanism.
 
 - **A shared server for team sync.** Means auth, hosting and a SaaS-shaped
   product — a different company. Git is the sync layer; merge conflicts on board
-  files *are* the collision detector.
+  files _are_ the collision detector.
 - **Splitting node storage across two branches.** Archiving is a rename across the
   two, so a split puts a review gate between the halves of one move: a teammate
   syncing in between sees neither the node nor its archive entry, and everything
@@ -150,7 +150,7 @@ mechanism.
   it did not raise passed every status check and reached `ready` — dispatchable,
   with an unanswered decision rendered into its brief. ADR 0006.
 - **Deriving a dependency edge from a shared decision.** Makes a node wait for the
-  introducer to be *accepted* when all it needed was the answer. Serialises every
+  introducer to be _accepted_ when all it needed was the answer. Serialises every
   shared decision and contradicts MUST #4. ADR 0006.
 - **Publishing `core` with "not a stable public API" in its description.** v0's
   choice. A README note is a request, not a contract, and phases 2–4 are when

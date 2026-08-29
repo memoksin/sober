@@ -3,7 +3,7 @@
 The ruling on execution: what order, at what pace, what runs in parallel, and
 where the work is handed to an agent versus read about for an afternoon first.
 
-`STRUCTURE.md` says what the repository *is*. This file says how it gets there
+`STRUCTURE.md` says what the repository _is_. This file says how it gets there
 without repeating v0. It is binding on execution the way `SCOPE.md` is binding on
 capability: changing an order or a gate here takes an ADR.
 
@@ -98,14 +98,14 @@ with a teammate, and then with no terminal.
 One **focused day** = 5–6 hours of real work, not a calendar day. Estimates include
 review time and the research blocks in §6.
 
-| Phase | Focused days | Cumulative | Why this long |
-|---|---|---|---|
-| 0 | 5–7 | 7 | Configuration, the integration fixture and packaging. For a junior these are debug spirals, not reading blocks (ADR 0023). |
-| 1 `schema` | 2–3 | 10 | Small surface. The time goes into the *shape*, not the typing. |
-| 2 `core` | 11–15 | 25 | The real work. Git plumbing and derived status are where correctness lives; the first real merge conflict costs a day. |
-| 3 `cli`, `mcp`, plugin, adapter, scan | 8–11 | **26–36 — M1** | CLI plumbing is fast. The MCP server, elicitation and the adapter are not. |
-| 4 sync, team, pull requests | 8–12 | **34–48 — M2** | Field-level conflict resolution and post-merge validation are half of it. |
-| 5 server, dashboard | 10–14 | **44–62 — M3, v1** | v0's dashboard was 8,892 lines — smaller than `core`. Its problem was order, not size. |
+| Phase                                 | Focused days | Cumulative         | Why this long                                                                                                              |
+| ------------------------------------- | ------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| 0                                     | 5–7          | 7                  | Configuration, the integration fixture and packaging. For a junior these are debug spirals, not reading blocks (ADR 0023). |
+| 1 `schema`                            | 2–3          | 10                 | Small surface. The time goes into the _shape_, not the typing.                                                             |
+| 2 `core`                              | 11–15        | 25                 | The real work. Git plumbing and derived status are where correctness lives; the first real merge conflict costs a day.     |
+| 3 `cli`, `mcp`, plugin, adapter, scan | 8–11         | **26–36 — M1**     | CLI plumbing is fast. The MCP server, elicitation and the adapter are not.                                                 |
+| 4 sync, team, pull requests           | 8–12         | **34–48 — M2**     | Field-level conflict resolution and post-merge validation are half of it.                                                  |
+| 5 server, dashboard                   | 10–14        | **44–62 — M3, v1** | v0's dashboard was 8,892 lines — smaller than `core`. Its problem was order, not size.                                     |
 
 **M1 is roughly 7–9 calendar weeks at four days a week. v1 is 3–4 months
 part-time.** Corrected by ADR 0023; `PLAYBOOK.md` holds the reasoning.
@@ -183,7 +183,7 @@ would have prevented v0's `server.ts` merge, and it costs ten seconds a module.
 - Mechanical refactors, renames, codemods
 - Documentation updates that follow a decision you already made
 
-The pattern: an agent is reliable when the *specification* is yours and the *typing*
+The pattern: an agent is reliable when the _specification_ is yours and the _typing_
 is theirs. It is unreliable in the opposite direction — the same line `CHARTER.md`
 draws between intent and technique. SOBER's own build should obey SOBER's own rule.
 
@@ -202,15 +202,15 @@ draws between intent and technique. SOBER's own build should obey SOBER's own ru
 Each of these is a place where a wrong first attempt costs days, and where an agent
 will produce something plausible you cannot evaluate.
 
-| Block | Read | Hours |
-|---|---|---|
-| **git worktrees and branches** | `git help worktree`, `git help branch`. Create three worktrees by hand, break one, recover it. | 2–3 |
-| **git merge without conflict markers** | `git help attributes` on `merge=binary` and `-text`, `git help show` for the `:1:`/`:2:`/`:3:` stage syntax, `git help merge`. Then resolve one conflict programmatically by hand. | 3–4 |
-| **npm packaging of a bundled CLI** | `exports` semantics, esbuild's `bundle`/`platform`/`banner` options, how a bundler inlines a workspace dependency and what stops it doing so, `publint`. Publish a throwaway scoped package and install it globally. | 2–3 |
-| **MCP: tools and elicitation** | The protocol's tool and elicitation shapes, and how Claude Code surfaces an elicitation request. This is what makes `PR-03-09` real. | 2–3 |
-| **The gating and status model** | On paper, not in an editor. Write the seven statuses and walk five real nodes through them, including a shared decision bound by three of them. | 1–2 |
-| **Host CLI headless invocation** | Each host's current documentation, at the moment you implement the adapter — never from memory, and never from v0's code. `DESIGN.md` §5.1 says why. | 2 per host |
-| **Graph library spike** | 200 nodes, circular, force layout, hover — in Cytoscape and in sigma. One question each. Not a benchmark, a feel test. | 1 day |
+| Block                                  | Read                                                                                                                                                                                                                 | Hours      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **git worktrees and branches**         | `git help worktree`, `git help branch`. Create three worktrees by hand, break one, recover it.                                                                                                                       | 2–3        |
+| **git merge without conflict markers** | `git help attributes` on `merge=binary` and `-text`, `git help show` for the `:1:`/`:2:`/`:3:` stage syntax, `git help merge`. Then resolve one conflict programmatically by hand.                                   | 3–4        |
+| **npm packaging of a bundled CLI**     | `exports` semantics, esbuild's `bundle`/`platform`/`banner` options, how a bundler inlines a workspace dependency and what stops it doing so, `publint`. Publish a throwaway scoped package and install it globally. | 2–3        |
+| **MCP: tools and elicitation**         | The protocol's tool and elicitation shapes, and how Claude Code surfaces an elicitation request. This is what makes `PR-03-09` real.                                                                                 | 2–3        |
+| **The gating and status model**        | On paper, not in an editor. Write the seven statuses and walk five real nodes through them, including a shared decision bound by three of them.                                                                      | 1–2        |
+| **Host CLI headless invocation**       | Each host's current documentation, at the moment you implement the adapter — never from memory, and never from v0's code. `DESIGN.md` §5.1 says why.                                                                 | 2 per host |
+| **Graph library spike**                | 200 nodes, circular, force layout, hover — in Cytoscape and in sigma. One question each. Not a benchmark, a feel test.                                                                                               | 1 day      |
 
 ### Never delegate
 
@@ -230,9 +230,9 @@ not a habit.
 28 modules and nobody noticed it happening. One test file per package:
 
 ```ts
-test('core exports nothing new without a reviewer seeing it', async () => {
-  expect(Object.keys(await import('./index.js')).sort()).toMatchSnapshot()
-})
+test("core exports nothing new without a reviewer seeing it", async () => {
+  expect(Object.keys(await import("./index.js")).sort()).toMatchSnapshot();
+});
 ```
 
 Growing the surface now means updating a snapshot in the same PR, where it is
@@ -269,18 +269,18 @@ ADR; it does not fail the build:
 
 Every row is measured from the archived repository, not from memory.
 
-| What happened in v0 | Measured | What stops it here |
-|---|---|---|
-| Nothing type-checked | **0** `tsconfig.json` files | Phase 0: `tsc` project references, `strict`, `noUncheckedIndexedAccess`, required |
-| CI was one command on one OS | `bun install && bun test`, Ubuntu | Six required checks; `integration` on three platforms |
-| Tests green, defects in the browser | 69 test files, 3 defects | Typecheck, plus the temp-repo harness whose coverage counts (ADR 0014) |
-| `core`'s surface grew unwatched | 291 exports / 28 modules | The surface snapshot test (§7.1) |
-| The screens came before the loop closed | dashboard 8,892 lines, core 13,352 — and no loop ever closed | Law 3: the loop closes at phase 3, headless, before a screen exists |
-| Nodes blocked and never opened | 22 of 56 | Decisions are shared records, and every binding holds (ADR 0006) |
-| Parallel agents on one file | 3 agents, `server.ts`, manual merge | Law 2, the 2-agent cap, barrels reserved to you, and the same-files warning at dispatch |
-| Admin bypass allowed and used | — | No admin bypass, and §7.5 |
-| The board became 57 patches on unrecorded decisions | 62 nodes, frozen behind a reform node | Decisions are records with reasons; the board is cut **after** the loop closes once |
-| A hand-written SVG renderer lengthened its phase | — | A ready-made library, one-day spike, no hand-written hit-testing (D11) |
+| What happened in v0                                 | Measured                                                     | What stops it here                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Nothing type-checked                                | **0** `tsconfig.json` files                                  | Phase 0: `tsc` project references, `strict`, `noUncheckedIndexedAccess`, required       |
+| CI was one command on one OS                        | `bun install && bun test`, Ubuntu                            | Six required checks; `integration` on three platforms                                   |
+| Tests green, defects in the browser                 | 69 test files, 3 defects                                     | Typecheck, plus the temp-repo harness whose coverage counts (ADR 0014)                  |
+| `core`'s surface grew unwatched                     | 291 exports / 28 modules                                     | The surface snapshot test (§7.1)                                                        |
+| The screens came before the loop closed             | dashboard 8,892 lines, core 13,352 — and no loop ever closed | Law 3: the loop closes at phase 3, headless, before a screen exists                     |
+| Nodes blocked and never opened                      | 22 of 56                                                     | Decisions are shared records, and every binding holds (ADR 0006)                        |
+| Parallel agents on one file                         | 3 agents, `server.ts`, manual merge                          | Law 2, the 2-agent cap, barrels reserved to you, and the same-files warning at dispatch |
+| Admin bypass allowed and used                       | —                                                            | No admin bypass, and §7.5                                                               |
+| The board became 57 patches on unrecorded decisions | 62 nodes, frozen behind a reform node                        | Decisions are records with reasons; the board is cut **after** the loop closes once     |
+| A hand-written SVG renderer lengthened its phase    | —                                                            | A ready-made library, one-day spike, no hand-written hit-testing (D11)                  |
 
 ---
 
@@ -304,11 +304,11 @@ deliberately not built there, because each one is infrastructure for something
 that does not exist yet. They are recorded here, against the phase that creates
 their subject, and each phase's gate includes its row.
 
-| Phase | Carried item | Why it waits | Cost |
-|---|---|---|---|
-| **2** — `core` | A soft ceiling beside the surface snapshot: `core` exports > 60 emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it. | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting. | ~10 min |
-| **3** — `cli` published | npm **provenance** and **trusted publishing**: `permissions: id-token: write` and `npm publish --provenance`, so the tarball is signed against the commit and workflow that built it, and no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007). | Provenance is three lines *inside a release workflow*, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing. | ~45 min with the release workflow |
-| **4** — contributors | `.github/CODEOWNERS` narrowed past `* @memoksin`: an explicit entry for every barrel (`**/index.ts`) and for `docs/`, which turns §5's "barrel files are yours" from a habit into a check (REVIEW-2026-08-29 §1.2/3). **And**: the admin bypass narrows or is removed (ADR 0026). | With one contributor, `*` already covers every path and the bypass exists precisely because a solo repository cannot satisfy a code-owner review. Both only become real when a second person pushes. | ~15 min |
+| Phase                   | Carried item                                                                                                                                                                                                                                                                      | Why it waits                                                                                                                                                                                         | Cost                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| **2** — `core`          | A soft ceiling beside the surface snapshot: `core` exports > 60 emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it.           | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting.                                                                                          | ~10 min                           |
+| **3** — `cli` published | npm **provenance** and **trusted publishing**: `permissions: id-token: write` and `npm publish --provenance`, so the tarball is signed against the commit and workflow that built it, and no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007).      | Provenance is three lines _inside a release workflow_, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing.                           | ~45 min with the release workflow |
+| **4** — contributors    | `.github/CODEOWNERS` narrowed past `* @memoksin`: an explicit entry for every barrel (`**/index.ts`) and for `docs/`, which turns §5's "barrel files are yours" from a habit into a check (REVIEW-2026-08-29 §1.2/3). **And**: the admin bypass narrows or is removed (ADR 0026). | With one contributor, `*` already covers every path and the bypass exists precisely because a solo repository cannot satisfy a code-owner review. Both only become real when a second person pushes. | ~15 min                           |
 
 Phase 0 also closed with four deviations from what this file and `STRUCTURE.md`
 predicted. All four are recorded where they belong rather than here:
@@ -318,4 +318,3 @@ and the `boundaries` command until phase 5 creates the dashboard; and
 `packages/cli` exists from day one as a stub, so that esbuild, `publint` and the
 pack-and-install smoke test are real checks before there is a CLI to break —
 Law 1, applied to itself.
-

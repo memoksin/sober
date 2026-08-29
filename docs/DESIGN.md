@@ -73,7 +73,7 @@ Consequences, all of them load-bearing:
   still fixes the board. This is why the orphan-branch-**only** design was
   rejected: the files live in the working tree as well.
 - Board churn never appears in a code PR's diff.
-- Archiving is a rename *inside* one directory pair, carried in **one** board
+- Archiving is a rename _inside_ one directory pair, carried in **one** board
   commit with the node it archives. Splitting the two across branches would let a
   teammate sync between the halves and see neither the node nor its archive entry.
 - **Pulling is always an explicit action.** The board is never auto-pulled when the
@@ -219,23 +219,23 @@ never a gate.
       "id": "cookie",
       "label": "Signed cookie, server-verified per request",
       "reason": "No client storage, revocable, one extra DB read per request",
-      "costLater": "Sticky sessions or a shared session store when you scale out"
+      "costLater": "Sticky sessions or a shared session store when you scale out",
     },
     {
       "id": "jwt",
       "label": "Stateless JWT in an Authorization header",
       "reason": "No session store, scales flat",
-      "costLater": "Revocation needs a denylist you will have to build"
-    }
+      "costLater": "Revocation needs a denylist you will have to build",
+    },
   ],
   "suggested": "cookie",
   "answer": {
     "option": "cookie",
     "rationale": "Single server for now; revocation matters more than scale-out.",
     "by": "memoksin",
-    "at": "2026-08-27T10:12:00Z"
+    "at": "2026-08-27T10:12:00Z",
   },
-  "createdAt": "2026-08-27T09:00:00Z"
+  "createdAt": "2026-08-27T09:00:00Z",
 }
 ```
 
@@ -255,7 +255,7 @@ node can be deleted without taking the reasoning with it.
 
 ```jsonc
 {
-  "decisions": ["auth-model", "error-envelope"]
+  "decisions": ["auth-model", "error-envelope"],
 }
 ```
 
@@ -317,7 +317,7 @@ is a real state in the file, not an assumption.
 The decision is the one hard block, so a question the human cannot evaluate does
 not slow work down — it stops it. The same request that asks an agent for options
 asks for what the human needs in order to choose: what the category means for
-*this* node, what each option costs later, what a project like this usually takes.
+_this_ node, what each option costs later, what a project like this usually takes.
 
 Someone who knows the trade-off skims a line; someone who does not gets the
 reasoning that makes the pick theirs. **Both read the same answer.** Depth lives in
@@ -377,11 +377,11 @@ beats changing it without the preview D19 exists to provide (ADR 0015).
 
 The preview and the save both work on three cases, not two:
 
-| The node | On save |
-|---|---|
-| Has not started | Its brief is re-rendered; brief approval is withdrawn; it returns to `needs-brief` |
-| Is `running` or `in-review` | It is **flagged**. Nothing automatic happens |
-| Is finished | It is **flagged**. It is *not* reopened |
+| The node                    | On save                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| Has not started             | Its brief is re-rendered; brief approval is withdrawn; it returns to `needs-brief` |
+| Is `running` or `in-review` | It is **flagged**. Nothing automatic happens                                       |
+| Is finished                 | It is **flagged**. It is _not_ reopened                                            |
 
 The middle row was missing, and its absence had a consequence. `in-review` outranks
 `needs-brief` in §3.2, so a node whose brief approval had just been withdrawn still
@@ -412,11 +412,11 @@ so.
 
 Three terms, because two words were carrying three meanings (ADR 0009):
 
-| Term | What it is | Version |
-|---|---|---|
-| **adapter** | SOBER launching a host headless, for a dispatch | v1 |
-| **plugin** | the bundle installed into a host: MCP configuration, commands, skills | v1, Claude Code |
-| **hook enforcement** | a plugin denying an agent spawn while a node is held | v1.x |
+| Term                 | What it is                                                            | Version         |
+| -------------------- | --------------------------------------------------------------------- | --------------- |
+| **adapter**          | SOBER launching a host headless, for a dispatch                       | v1              |
+| **plugin**           | the bundle installed into a host: MCP configuration, commands, skills | v1, Claude Code |
+| **hook enforcement** | a plugin denying an agent spawn while a node is held                  | v1.x            |
 
 In v1 the block lives in SOBER itself: a held node cannot be dispatched, from any
 surface. That is enforceable everywhere, because it is SOBER's own code path.
@@ -468,7 +468,7 @@ them (§3.2), and neither is a canvas position (§4).
   "assignee": "memoksin",
   "claim": { "by": "memoksin", "at": "2026-08-27T11:00:00Z" },
   "accepted": null,
-  "createdAt": "2026-08-27T09:00:00Z"
+  "createdAt": "2026-08-27T09:00:00Z",
 }
 ```
 
@@ -510,15 +510,15 @@ a field someone forgets to update; a derived one cannot disagree with the graph.
 
 Seven statuses (D20), evaluated in this order — the first that matches wins:
 
-| # | Status | When |
-|---|---|---|
-| 1 | `done` | `accepted` is set |
-| 2 | `in-review` | a run finished and its result is waiting for a human |
-| 3 | `running` | a run is in flight |
-| 4 | `blocked` | any node in `dependsOn` is not `done` |
-| 5 | `held` | any decision in `decisions` is still open |
-| 6 | `needs-brief` | `brief` is null, or is not approved, or its approval was withdrawn by a decision change |
-| 7 | `ready` | none of the above |
+| #   | Status        | When                                                                                    |
+| --- | ------------- | --------------------------------------------------------------------------------------- |
+| 1   | `done`        | `accepted` is set                                                                       |
+| 2   | `in-review`   | a run finished and its result is waiting for a human                                    |
+| 3   | `running`     | a run is in flight                                                                      |
+| 4   | `blocked`     | any node in `dependsOn` is not `done`                                                   |
+| 5   | `held`        | any decision in `decisions` is still open                                               |
+| 6   | `needs-brief` | `brief` is null, or is not approved, or its approval was withdrawn by a decision change |
+| 7   | `ready`       | none of the above                                                                       |
 
 `blocked` outranks `held` on purpose. A node whose upstream work is unfinished
 should not be asking its human to decide yet: options are generated against current
@@ -546,8 +546,13 @@ Two things are deliberately not statuses:
 ```jsonc
 {
   "contributors": [
-    { "handle": "memoksin", "name": "…", "role": "maintainer", "focus": "core, cli" }
-  ]
+    {
+      "handle": "memoksin",
+      "name": "…",
+      "role": "maintainer",
+      "focus": "core, cli",
+    },
+  ],
 }
 ```
 
@@ -637,14 +642,14 @@ with no second lookup (`SCOPE.md` MUST #3).
 
 **A fixed skeleton plus one written section** (D24):
 
-| Part | Source |
-|---|---|
-| How to approach this | written by an agent |
-| Project intent and constraints | `project.json` |
-| Node title, description, notes | the node |
-| Every bound decision, with the option chosen and its rationale | `decisions/*.json` |
-| Declared files | the node's `files` |
-| What upstream nodes produced | each finished dependency's `outcome` (D27) |
+| Part                                                           | Source                                     |
+| -------------------------------------------------------------- | ------------------------------------------ |
+| How to approach this                                           | written by an agent                        |
+| Project intent and constraints                                 | `project.json`                             |
+| Node title, description, notes                                 | the node                                   |
+| Every bound decision, with the option chosen and its rationale | `decisions/*.json`                         |
+| Declared files                                                 | the node's `files`                         |
+| What upstream nodes produced                                   | each finished dependency's `outcome` (D27) |
 
 Only the first row is stored on the node. Everything below it is rendered from the
 records **at read time**, which has two consequences worth stating: the skeleton
@@ -801,7 +806,7 @@ its output, and report how it exited. Anything an adapter needs to know about
 SOBER's state it gets from `core`. Claude Code is the first adapter; the rest are
 v1.x.
 
-Note what an adapter is *not* used for. Decomposition, option generation and brief
+Note what an adapter is _not_ used for. Decomposition, option generation and brief
 writing are not adapter calls — they happen inside the user's session through the
 MCP server (ADR 0009). SOBER launches a host headless only to make a node's code.
 
@@ -812,7 +817,7 @@ and CLI payload shapes drift between releases.
 ### 5.2 Before a run starts
 
 SOBER checks the host tool is installed and authenticated, and says what is missing
-*before* anything starts (`PR-05-04`). A run that fails three minutes in because a
+_before_ anything starts (`PR-05-04`). A run that fails three minutes in because a
 login expired is a worse version of the same message.
 
 The same principle covers the worktree. `git worktree add` produces a tree with no
@@ -974,7 +979,7 @@ ADR 0011 settles what runs:
 
 "Injection-shaped changes" was the earlier wording and is dropped. A real injection
 analyser needs one rule set per language a user might write in; a named short list
-keeps a promise the product can keep, and what the scan does *not* catch is
+keeps a promise the product can keep, and what the scan does _not_ catch is
 documented next to what it does.
 
 The scan reads the **added lines of the diff**, not the worktree. Scanning the
@@ -1027,13 +1032,13 @@ decisions answered, work finished, results waiting for review, nodes flagged.
 It is a filter over records that already exist — no new record type and no stored
 pointer. The two halves get their answers from different places:
 
-| Digest item | Where it comes from |
-|---|---|
-| New nodes | the delta between the local board branch and the fetched remote |
-| Decisions answered | the same delta — an `answer` that went from null to a record |
-| Work finished | the same delta, or the local run records |
-| Results waiting for review | **current state.** No fetch, no delta |
-| Nodes flagged | **current state.** No fetch, no delta |
+| Digest item                | Where it comes from                                             |
+| -------------------------- | --------------------------------------------------------------- |
+| New nodes                  | the delta between the local board branch and the fetched remote |
+| Decisions answered         | the same delta — an `answer` that went from null to a record    |
+| Work finished              | the same delta, or the local run records                        |
+| Results waiting for review | **current state.** No fetch, no delta                           |
+| Nodes flagged              | **current state.** No fetch, no delta                           |
 
 The delta needs only a `git fetch` and two refs. Git already tracks where the last
 sync left the board, so nothing is stored: `git diff` between the local board
@@ -1126,7 +1131,7 @@ named — the same refusal as above, with no exception for a decision whose node
 all finished.
 
 The reason is ADR 0006: a decision holds every node it binds, and that binding is
-the record of *why* those nodes are shaped as they are. A finished project whose
+the record of _why_ those nodes are shaped as they are. A finished project whose
 decisions were tidied away is exactly the outcome `CHARTER.md`'s third pillar exists
 to prevent (ADR 0024). Archiving keeps the explanation and takes the decision out of
 the working board, which is all "remove" ever needed to mean here.
@@ -1134,7 +1139,7 @@ the working board, which is all "remove" ever needed to mean here.
 Two consequences worth stating, because both would otherwise be inferred:
 
 - **Archiving a decision does not re-gate anything.** Bound nodes stay answered and
-  keep their status. The gate is about an *unanswered* decision (§3.2); an archived
+  keep their status. The gate is about an _unanswered_ decision (§3.2); an archived
   one has an answer.
 - **An unanswered draft decision is deletable** (§2.4). It binds nothing, explains
   nothing, and holds no answer — there is nothing to preserve.

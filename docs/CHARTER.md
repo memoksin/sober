@@ -39,8 +39,8 @@ weigh down the rest of this document. See ADR 0024.
 
 ## The human/agent line
 
-The human owns *intent* — what to build, why, which trade-off to accept. The agent
-owns *technique* — how a data flow is laid out, which pattern fits, what the error
+The human owns _intent_ — what to build, why, which trade-off to accept. The agent
+owns _technique_ — how a data flow is laid out, which pattern fits, what the error
 path looks like.
 
 When a decision needs knowledge the human lacks, the agent proposes options with
