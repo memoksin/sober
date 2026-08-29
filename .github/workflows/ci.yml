@@ -101,3 +101,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: publish shape
+        run: pnpm --filter @besober/cli publint

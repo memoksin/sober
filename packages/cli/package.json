@@ -1,0 +1,27 @@
+{
+	"name": "@besober/cli",
+	"version": "0.0.0",
+	"description": "SOBER — agentic development platform.",
+	"type": "module",
+	"bin": {
+		"sober": "./dist/sober.js"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "node build.mjs",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"publint": "publint --strict"
+	},
+	"devDependencies": {
+		"esbuild": "^0.28.0",
+		"publint": "^0.3.16"
+	}
+}
