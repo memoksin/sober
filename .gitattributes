@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# Board records are merged field by field by SOBER, never by git (DESIGN.md 1.2.1).
+.sober/nodes/*.yaml   merge=binary -text
+.sober/decisions/*.yaml merge=binary -text
+.sober/project.yaml   merge=binary -text
