@@ -10,7 +10,10 @@
 		"lint": "biome check . && secretlint --secretlintignore .gitignore \"**/*\"",
 		"format": "biome check --write .",
 		"boundaries": "depcruise packages test --config .dependency-cruiser.cjs",
-		"scan": "secretlint --secretlintignore .gitignore \"**/*\""
+		"scan": "secretlint --secretlintignore .gitignore \"**/*\"",
+		"coverage": "vitest run --coverage",
+		"coverage:check": "node scripts/coverage-ratchet.mjs",
+		"coverage:update": "vitest run --coverage && node scripts/coverage-ratchet.mjs --update"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.2",

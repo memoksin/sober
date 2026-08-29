@@ -294,3 +294,28 @@ so they are repeated here:
   commits and pushes between them. Law 1: the ratchet predates the work.
 - **Step 10 — break the ratchet on purpose.** Open a PR with a type error and watch
   it go red. A check nobody has seen fail is not known to work.
+
+---
+
+## 10. Carried into later phases
+
+Phase 0 closed on 2026-08-29. Three items from the 2026-08-29 review were
+deliberately not built there, because each one is infrastructure for something
+that does not exist yet. They are recorded here, against the phase that creates
+their subject, and each phase's gate includes its row.
+
+| Phase | Carried item | Why it waits | Cost |
+|---|---|---|---|
+| **2** — `core` | A soft ceiling beside the surface snapshot: `core` exports > 60 emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it. | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting. | ~10 min |
+| **3** — `cli` published | npm **provenance** and **trusted publishing**: `permissions: id-token: write` and `npm publish --provenance`, so the tarball is signed against the commit and workflow that built it, and no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007). | Provenance is three lines *inside a release workflow*, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing. | ~45 min with the release workflow |
+| **4** — contributors | `.github/CODEOWNERS` narrowed past `* @memoksin`: an explicit entry for every barrel (`**/index.ts`) and for `docs/`, which turns §5's "barrel files are yours" from a habit into a check (REVIEW-2026-08-29 §1.2/3). **And**: the admin bypass narrows or is removed (ADR 0026). | With one contributor, `*` already covers every path and the bypass exists precisely because a solo repository cannot satisfy a code-owner review. Both only become real when a second person pushes. | ~15 min |
+
+Phase 0 also closed with four deviations from what this file and `STRUCTURE.md`
+predicted. All four are recorded where they belong rather than here:
+TypeScript is pinned at 6.x and the reason is in `STRUCTURE.md`; the owner may
+bypass `main` and the reason is ADR 0026; `apps/*` is out of `vitest.config.ts`
+and the `boundaries` command until phase 5 creates the dashboard; and
+`packages/cli` exists from day one as a stub, so that esbuild, `publint` and the
+pack-and-install smoke test are real checks before there is a CLI to break —
+Law 1, applied to itself.
+

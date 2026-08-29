@@ -16,7 +16,9 @@ only selection criterion (ADR 0001).
 ```
 sober/
 ├── .changeset/                 # release notes + version bumps
-├── .github/workflows/ci.yml
+├── .github/
+│   ├── CODEOWNERS              # * @memoksin; the ruleset requires a code-owner review
+│   └── workflows/ci.yml
 ├── apps/
 │   └── dashboard/              # React + Vite. Browser only. Imports schema.
 ├── packages/
@@ -29,6 +31,8 @@ sober/
 │   └── tsconfig/               # shared tsconfig presets
 ├── test/
 │   └── integration/            # temp-repo fixture, fake host, fake gh
+├── scripts/
+│   └── coverage-ratchet.mjs    # coverage may not drop, per package
 ├── docs/
 │   ├── CHARTER.md              # what SOBER is and is not
 │   ├── SCOPE.md                # MUST / SHOULD / WON'T, + rejected alternatives
@@ -42,10 +46,12 @@ sober/
 ├── biome.json
 ├── .dependency-cruiser.cjs
 ├── commitlint.config.js
+├── coverage-baseline.json      # the committed floor the ratchet compares against
 ├── pnpm-workspace.yaml
+├── renovate.json               # one grouped pull request a week
 ├── tsconfig.base.json
 ├── turbo.json
-└── vitest.config.ts           # test.projects: [packages/*, apps/*] — vitest.workspace.ts was removed in Vitest 4
+└── vitest.config.ts           # test.projects — vitest.workspace.ts was removed in Vitest 4
 ```
 
 `apps/` vs `packages/` is the Turborepo convention: an app is deployed, a package
@@ -62,23 +68,48 @@ have surfaced in the last phase, where v0 wrote its dashboard — 8,892 lines,
 |---|---|---|
 | Workspace | **pnpm** | Strict `node_modules`. A package importing something it does not declare fails to resolve — phantom dependencies become impossible, not discouraged. |
 | Task graph | **Turborepo** | `typecheck`, `test`, `build` run in dependency order with caching. One command, one answer, locally and in CI. |
-| Types | **tsc + project references** | `strict: true`, `noUncheckedIndexedAccess`. Zero errors is the floor, not the goal. Never `any`, never `@ts-ignore` without an ADR. |
+| Types | **tsc + project references** | `strict: true`, `noUncheckedIndexedAccess`. Zero errors is the floor, not the goal. Never `any`, never `@ts-ignore` without an ADR. The full option list and the version pin are below. |
 | Boundaries | **dependency-cruiser** | Four rules (ADR 0008): the dashboard client may not import `core` or `server`; only `core` may reach `node:fs`, `node:child_process` or run `git`; `cli` may not import `apps/*`; no cycles. |
 | Lint + format | **Biome** | One tool for both. Also carries the `no-restricted-imports` rules for POSIX-only primitives. |
-| Unit test | **Vitest** | Per-package coverage, ratcheted — never lower than the last commit. `schema` excluded: a threshold on a types-and-Zod package produces tests written to reach a number. |
+| Unit test | **Vitest** | Per-package coverage, ratcheted — never lower than the last commit. Vitest offers only a fixed threshold, so `scripts/coverage-ratchet.mjs` compares each package against the committed `coverage-baseline.json`: a drop is red, and a rise of more than a point is red until the baseline is refreshed in the same commit. A ratchet whose floor never rises is a threshold. `schema` excluded: a threshold on a types-and-Zod package produces tests written to reach a number. |
 | Integration test | **Vitest + a temp-repo fixture** | Real git, real worktrees, a bare repository as the remote, a fake host executable, a fake `gh`, and the pack-and-install smoke test (ADR 0014). Its coverage counts toward the same number, or the git code contributes nothing and the ratchet points away from the risk. |
 | Bundling | **esbuild** | `cli` publishes with workspace dependencies inlined, so the published package declares no `@besober/*` dependency (ADR 0007). No `.d.ts` is produced — nothing published here is imported. **Caveat to check in phase 0:** import the MCP SDK by subpath (`/server/mcp.js`, `/server/stdio.js`) so its HTTP transports do not drag `express` and `hono` into the bundle; the package is 4.1 MB across 693 files. |
 | Publish shape | **publint** + a pack-and-install smoke test | `publint` checks `exports`, the file list and ESM/CJS shape. The smoke test installs the tarball in a temp directory and runs it — the only check that exercises `PR-00-01`. `@arethetypeswrong/cli` is not used: nothing here is importable, so there are no types to get wrong. |
 | Secrets | **secretlint** | MUST #9's scanner, and a check on SOBER's own commits — `SCOPE.md` rule 4 applies to SOBER first. It resolves rule packages by name, so it is left external and is the published package's one dependency. |
 | Versioning | **Changesets** | A PR without a changeset cannot be merged. Changelogs are generated, never written. Private packages are ignored, so the requirement stays meaningful. |
 | Commits | **commitlint** | Conventional commits, checked on the PR title and every commit. |
-| CI | **GitHub Actions** | Six required checks on every PR: `lint`, `typecheck`, `test`, `integration`, `boundaries`, `build`. All six, no exceptions for the owner. `integration` runs on Windows, macOS and Linux. |
+| CI | **GitHub Actions** | Six required checks on every PR: `lint`, `typecheck`, `test`, `integration`, `boundaries`, `build`. `integration` runs on Windows, macOS and Linux, so `required_status_checks` names eight contexts. A seventh job, `audit`, reports CVEs and is deliberately **not** required — a vulnerability published tomorrow would block every merge for a reason no pull request caused. The owner's bypass is ADR 0026. |
+| Dependencies | **Renovate** | One grouped pull request a week for minor and patch; a major waits on the dependency dashboard and is read on its own; GitHub Actions move together, monthly. Ungrouped, this is ten pull requests a week and they stop being read. |
 
 Node is pinned at `>=22` in `engines`, `packageManager` is pinned in the
 repository, and CI installs with `--frozen-lockfile` (ADR 0007). There is no
 native module: local state is files (ADR 0018). The Windows job exists for git's
 behaviour — path separators, line endings, file locking on worktree removal — which
 is a better reason than a native module was.
+
+## The TypeScript configuration
+
+`tsconfig.base.json` is the one place compiler options are set; `packages/tsconfig`
+adds `types: ["node"]` and every package extends that. Each option is a rule, not a
+preference:
+
+| Option | What it forbids |
+|---|---|
+| `strict` | The whole family, `strictNullChecks` first. |
+| `noUncheckedIndexedAccess` | `arr[i]` typed as `T` when it is `T \| undefined`. Nearly every crash v0 shipped was an index or a `Map.get` treated as present. |
+| `module` / `moduleResolution: nodenext` | Guessing. The repository is **ESM only**: every relative import carries its `.js` extension, and a CJS-only dependency has to be handled deliberately, not discovered at runtime. |
+| `verbatimModuleSyntax` | An import of a type that survives into the emitted JavaScript. Type imports must say `import type`. This is what keeps `packages/schema` from pulling runtime weight into `apps/dashboard`. |
+| `isolatedModules` | Anything a single-file transpiler cannot compile — `const enum`, re-exported types without `export type`. esbuild compiles file by file, so this is not a style rule; without it the bundle is wrong. |
+| `noUnusedLocals` / `noUnusedParameters` | Dead code, at the moment it is written. |
+| `noImplicitOverride` / `noFallthroughCasesInSwitch` | Two silent-failure shapes: a method that stops overriding after a rename, and a `case` that falls through by accident. |
+| `composite` / `declaration` | Project references need both; `tsc --build` then rebuilds only what changed. `cli` opts out — nothing imports it, and esbuild does its build. |
+
+**TypeScript is pinned at 6.x, deliberately.** `create-turbo` scaffolds 7.0.2, but
+dependency-cruiser declares `typescript: >=2.0.0 <7.0.0` and says TypeScript 7
+support waits on its API being published and stable. Taking 7 today means losing
+`boundaries`, and a required check outranks a compiler version. The pin is enforced
+by a Renovate rule as well as the lockfile, and lifts when dependency-cruiser ships
+TypeScript 7 support.
 
 ## Publishing
 
@@ -110,9 +141,9 @@ only the sequence does.
 |---|---|---|---|
 | 0 | repo skeleton, CI, integration fixture, docs | — | Six checks green on an empty repo, and one of them seen to fail on purpose. The ratchet exists before any code does. |
 | 1 | `schema` | solo | Every type and Zod schema for project, node, decision and run — the fields M1 uses, no more (ADR 0020). Not published. |
-| 2 | `core` | solo | Graph model, storage, derived status, DAG, brief rendering, worktree lifecycle, run log, error taxonomy, archive. No sync yet. Integration harness green against a real repository. |
-| 3 | `cli`, `mcp`, `claude-code-plugin`, the Claude Code adapter, `secretlint` | solo | **M1 — the loop closes once**, on a real repository: planning from a host session, dispatch and review headless. The nine-step script is in `BUILD-PLAN.md`. |
-| 4 | `core` sync, contributors, the pull request path | solo | **M2 — the board travels.** Two people share one board; conflicts resolve field by field; a merge cannot push a broken graph. |
+| 2 | `core` | solo | Graph model, storage, derived status, DAG, brief rendering, worktree lifecycle, run log, error taxonomy, archive. No sync yet. Integration harness green against a real repository. The export-ceiling alarm ships beside the surface snapshot (`BUILD-PLAN.md` §10). |
+| 3 | `cli`, `mcp`, `claude-code-plugin`, the Claude Code adapter, `secretlint` | solo | **M1 — the loop closes once**, on a real repository: planning from a host session, dispatch and review headless. The nine-step script is in `BUILD-PLAN.md`. The release workflow publishes with provenance and trusted publishing (`BUILD-PLAN.md` §10). |
+| 4 | `core` sync, contributors, the pull request path | solo | **M2 — the board travels.** Two people share one board; conflicts resolve field by field; a merge cannot push a broken graph. CODEOWNERS names the barrels, and the admin bypass narrows (`BUILD-PLAN.md` §10, ADR 0026). |
 | 5 | `packages/server`, `apps/dashboard` | solo | **M3 — v1.** The same loop closes from the dashboard with no terminal. |
 | 6 | other host plugins and adapters, hook enforcement | **parallel** | v1.x. All SHOULD in `SCOPE.md`. Parallel because by then nothing new is being defined. |
 

@@ -29,8 +29,9 @@ jobs:
       - name: commit messages
         if: github.event_name == 'pull_request'
         run: pnpm exec commitlint --from origin/${{ github.base_ref }} --to HEAD --verbose
+      # A dependency bump ships no behaviour, and the bot writes no changesets.
       - name: a changeset, or nothing to release
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.actor != 'renovate[bot]'
         run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
 
   typecheck:
@@ -56,6 +57,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test --coverage
+      - name: coverage did not drop
+        run: pnpm coverage:check
 
   integration:
     strategy:
@@ -103,3 +106,17 @@ jobs:
       - run: pnpm build
       - name: publish shape
         run: pnpm --filter @besober/cli publint
+
+  # Not a required check: a CVE published tomorrow would block every merge for a
+  # reason no pull request caused. It reports; it does not gate.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
