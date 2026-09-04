@@ -15,8 +15,11 @@ import {
 	setSetting,
 	stopRun,
 	tail,
+	wasStopped,
 	writeBrief,
 	writeNode,
+	writeRun,
+	writeRunPid,
 } from '@besober/core'
 import { afterEach, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
@@ -181,6 +184,30 @@ test('stopping a run leaves its worktree and returns it as stopped', async () =>
 
 	expect(result.exit).toBe('stopped')
 	expect(existsSync(result.worktree)).toBe(true)
+})
+
+test('stopping a run that has already ended is not an error, and marks nothing', async () => {
+	const paths = await board()
+	await writeRun(paths, 'run-gone-k7f2', {
+		node: 'auth-api-k7f2',
+		host: 'fake',
+		branch: 'sober/auth-api-k7f2',
+		worktree: '.sober/local/worktrees/auth-api-k7f2',
+		startedAt: '2026-09-04T00:00:00.000Z',
+		endedAt: null,
+		exit: null,
+		error: null,
+		verify: null,
+		acceptance: [],
+	})
+	// A pid nothing answers to: the run ended between the read and the kill,
+	// which is the outcome the caller wanted rather than a failure.
+	await writeRunPid(paths, 'run-gone-k7f2', 2 ** 30)
+
+	expect(await stopRun(paths, 'run-gone-k7f2')).toBe(false)
+	// And the stop is taken back, because nothing was stopped — a run that ends
+	// on its own must not be recorded as one somebody halted.
+	expect(await wasStopped(paths, 'run-gone-k7f2')).toBe(false)
 })
 
 test('a wave stops queueing after the first run that does not finish', async () => {

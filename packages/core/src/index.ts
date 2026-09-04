@@ -54,7 +54,9 @@ export {
 	readRunOutput,
 	readRuns,
 	runLog,
+	wasStopped,
 	writeRun,
+	writeRunPid,
 } from './local.js'
 export { LockBusyError, withLock } from './lock.js'
 export { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'

@@ -80,6 +80,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "tail",
   "topological",
   "unbound",
+  "wasStopped",
   "whoami",
   "withLock",
   "worktreeOf",
@@ -89,5 +90,6 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "writeNode",
   "writeProject",
   "writeRun",
+  "writeRunPid",
 ]
 `;
