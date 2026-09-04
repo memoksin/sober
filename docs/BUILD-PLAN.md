@@ -175,13 +175,13 @@ Growing the surface now means updating a snapshot in the same PR, where it is vi
 
 **3. One node, one PR, one changeset.** The board is the plan; a PR with no node is work nobody planned.
 
-**4. A deletion pass, weekly, thirty minutes.** `knip` for dead exports, `depcheck` for unused dependencies, and a read of every deliberate shortcut older than a month. Repositories do not shrink on their own, and v0's did not.
+**4. A deletion pass, weekly, thirty minutes.** `knip` for dead exports, `depcheck` for unused dependencies, a read of the surface snapshot itself (ADR 0028 — this, not the ceiling, is what shaves the surface), and a read of every deliberate shortcut older than a month. Repositories do not shrink on their own, and v0's did not.
 
 **5. Never bypass a check.** If a required check is wrong, change the check, in its own PR, with a reason. v0 allowed the admin bypass and it was used. A ratchet with an override is a suggestion.
 
 Three **alarms** beside the ratchets (ADR 0023). An alarm warns and asks for an ADR; it does not fail the build:
 
-- `core` exports > 60.
+- `core` exports > 90 (ADR 0028 — the number moves with the number of consumers, by ADR; the surface snapshot above is the guard that actually catches growth).
 - `apps/dashboard` lines > 1.5 × `packages/core` lines. v0's ratio was 0.67; the problem was that the screens came before the loop closed, and this is the only number that would have shown the phase running away.
 - A phase past 1.5 × its estimate: rewrite the phase gate before continuing.
 
@@ -221,7 +221,7 @@ Phase 0 closed on 2026-08-29. Three items from the 2026-08-29 review were delibe
 
 | Phase | Carried item | Why it waits | Cost |
 | --- | --- | --- | --- |
-| **2** — `core` | A soft ceiling beside the surface snapshot: `core` exports > 60 emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it. | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting. | ~10 min |
+| **2** — `core` | A soft ceiling beside the surface snapshot: `core` exports over the ceiling emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it. | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting. | ~10 min |
 | **3** — `cli` published | npm **provenance** and **trusted publishing**: `permissions: id-token: write` and `npm publish --provenance`, so the tarball is signed against the commit and workflow that built it, and no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007). | Provenance is three lines _inside a release workflow_, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing. | ~45 min with the release workflow |
 | **4** — contributors | `.github/CODEOWNERS` narrowed past `* @memoksin`: an explicit entry for every barrel (`**/index.ts`) and for `docs/`, which turns §5's "barrel files are yours" from a habit into a check (REVIEW-2026-08-29 §1.2/3). **And**: the admin bypass narrows or is removed (ADR 0026). | With one contributor, `*` already covers every path and the bypass exists precisely because a solo repository cannot satisfy a code-owner review. Both only become real when a second person pushes. | ~15 min |
 
