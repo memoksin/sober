@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
@@ -6,6 +7,14 @@ export default defineConfig({
 			// 'apps/*' returns in phase 5, with the dashboard.
 			'packages/*',
 			{
+				// The integration project imports core's source, not its build:
+				// coverage from the git tests has to count, or the ratchet points
+				// away from the riskiest code in the repository (STRUCTURE.md).
+				resolve: {
+					alias: {
+						'@besober/core': fileURLToPath(new URL('packages/core/src/index.ts', import.meta.url)),
+					},
+				},
 				test: {
 					name: 'integration',
 					root: 'test/integration',

@@ -16,6 +16,7 @@
 		"coverage:update": "vitest run --coverage && node scripts/coverage-ratchet.mjs --update"
 	},
 	"devDependencies": {
+		"@besober/core": "workspace:*",
 		"@biomejs/biome": "^2.4.2",
 		"@changesets/cli": "^3.0.1",
 		"@commitlint/cli": "^21.2.2",
