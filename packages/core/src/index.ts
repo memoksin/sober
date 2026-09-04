@@ -12,6 +12,7 @@ export {
 	setSetting,
 	writeConfig,
 } from './config.js'
+export { dispatch, dispatchWave, SetupFailedError, stopRun } from './dispatch.js'
 export {
 	AnsweredDecisionError,
 	type ErrorCode,
@@ -30,8 +31,9 @@ export {
 	loadBoard,
 	topological,
 } from './graph.js'
+export { checkHost, HostError } from './host.js'
 export { newId } from './id.js'
-export { appendEvent, type ReadLog, readLog, readRuns, writeRun } from './local.js'
+export { appendEvent, type ReadLog, readLog, readRuns, runLog, writeRun } from './local.js'
 export { LockBusyError, withLock } from './lock.js'
 export { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'
 export { findRoot, type Paths, paths } from './paths.js'
@@ -55,6 +57,7 @@ export {
 	startRun,
 } from './run.js'
 export { type Flags, flagsOf, ready, statuses, statusOf } from './status.js'
+export { tail } from './tail.js'
 export {
 	addWorktree,
 	branchOf,

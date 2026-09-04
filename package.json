@@ -11,6 +11,7 @@
 		"format": "biome check --write .",
 		"boundaries": "depcruise packages test --config .dependency-cruiser.cjs",
 		"scan": "secretlint --secretlintignore .gitignore \"**/*\"",
+		"demo:dispatch": "pnpm --filter @besober/core build && node scripts/demo-dispatch.mjs",
 		"coverage": "vitest run --coverage",
 		"coverage:check": "node scripts/coverage-ratchet.mjs",
 		"coverage:update": "vitest run --coverage && node scripts/coverage-ratchet.mjs --update"

@@ -442,7 +442,7 @@ When a decision changes, approval on every affected brief is **withdrawn** and t
 
 A finishing agent writes a short summary of what it did into the node's `outcome`. Downstream briefs carry it, which is what lets them execute cold without the agent reading upstream code or doing git work to find out what happened.
 
-**OPEN (phase 2):** the exact prompt shape handed to the host, and where the rendered brief is materialised for a dispatch.
+The brief is handed to the host as its prompt argument, and is **not materialised anywhere**. A brief written into the worktree would be a file outside the node's declared `files`, which is one of the scan's six signals (§6.2) — the review would open with a finding SOBER itself caused, on every dispatch. Settled in phase 3.
 
 ---
 
@@ -503,7 +503,21 @@ This is the **adapter** (§2.9). It is thin by contract: build an invocation, st
 
 Note what an adapter is _not_ used for. Decomposition, option generation and brief writing are not adapter calls — they happen inside the user's session through the MCP server (ADR 0009). SOBER launches a host headless only to make a node's code.
 
-**OPEN (phase 3):** the exact invocation per host — verified against each host's current documentation at implementation time, never from memory. v0's lesson: hook and CLI payload shapes drift between releases.
+The Claude Code invocation, read off the installed CLI at implementation time rather than from memory:
+
+```
+claude -p <the brief> --output-format stream-json --verbose --permission-mode bypassPermissions
+```
+
+Three things in it are not obvious, and each was a surprise worth recording:
+
+- `--output-format stream-json` is what makes a live tail possible at all (`PR-05-09`). Plain `--print` emits the final answer only, after the run is over.
+- **stdin is closed.** A `claude -p` with an inherited stdin waits three seconds for input that never arrives, on every dispatch.
+- `--permission-mode bypassPermissions` is what an unattended run needs: an agent that must build and test its own work cannot answer a permission prompt nobody is watching. The containment is the worktree and the review, not the prompt — which is the trade `PR-09-05` already makes explicit by never letting an agent land its own work.
+
+`dispatch.host` is a command line, not just a program name, so `npx claude` and `claude --model opus` are both settable. It is split on whitespace: a host whose path contains a space needs a wrapper script.
+
+The other hosts are v1.x, and each one's invocation is read from its own current documentation when its adapter is written — never ported from this one.
 
 ### 5.2 Before a run starts
 

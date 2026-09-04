@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Run } from '@besober/schema'
 import { z } from 'zod'
@@ -26,6 +26,30 @@ export const runLog = (paths: Paths, id: string): string => join(paths.runs, `${
 
 export const appendRunOutput = (paths: Paths, id: string, chunk: string): Promise<void> =>
 	append(runLog(paths, id), chunk)
+
+/**
+ * The host's pid, beside the run, for as long as it is running. `sober stop` is
+ * a second process — usually a second terminal — so the pid has to survive the
+ * gap between them. It is deleted when the run ends, and a stale one is treated
+ * as no run at all.
+ */
+export const runPidFile = (paths: Paths, id: string): string => join(paths.runs, `${id}.pid`)
+
+export const writeRunPid = (paths: Paths, id: string, pid: number): Promise<void> =>
+	writeFile(runPidFile(paths, id), `${pid}\n`)
+
+export const readRunPid = async (paths: Paths, id: string): Promise<number | null> => {
+	try {
+		const pid = Number.parseInt(await readFile(runPidFile(paths, id), 'utf8'), 10)
+		return Number.isFinite(pid) ? pid : null
+	} catch {
+		return null
+	}
+}
+
+export const clearRunPid = async (paths: Paths, id: string): Promise<void> => {
+	await rm(runPidFile(paths, id), { force: true })
+}
 
 /**
  * `local/log.jsonl` — one line per event, with an `action` discriminator rather

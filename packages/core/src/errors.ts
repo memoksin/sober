@@ -14,6 +14,8 @@ export const ERROR_CODES = [
 	'not-on-board',
 	'still-referenced',
 	'not-answered',
+	'host',
+	'setup-failed',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

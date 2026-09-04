@@ -1,0 +1,228 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+	checkHost,
+	dispatch,
+	dispatchWave,
+	HostError,
+	initBoard,
+	type Paths,
+	readRuns,
+	runLog,
+	SetupFailedError,
+	setSetting,
+	stopRun,
+	tail,
+	writeNode,
+} from '@besober/core'
+import { afterEach, expect, test } from 'vitest'
+import { createTempRepo, type TempRepo } from './fixture.js'
+
+/**
+ * Dispatch against a real git repository and a real child process, with the
+ * host itself faked (ADR 0014): the host is the one thing that costs money and
+ * answers differently every time. Everything between SOBER and it — the
+ * worktree, the setup command, the run record, the log, the kill — is real.
+ */
+const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./fake-host.mjs', import.meta.url))}`
+
+const aNode = (title: string) => ({
+	title,
+	description: 'Sign in and sign out.',
+	notes: '',
+	dependsOn: [],
+	decisions: [],
+	files: ['src/auth.ts'],
+	brief: null,
+	outcome: null,
+	accepted: null,
+	createdAt: '2026-09-04T00:00:00.000Z',
+})
+
+let repo: TempRepo | undefined
+
+afterEach(() => {
+	repo?.cleanup()
+	repo = undefined
+	delete process.env.FAKE_HOST_FAIL
+	delete process.env.FAKE_HOST_HANG
+	delete process.env.FAKE_HOST_LOGGED_OUT
+	delete process.env.FAKE_HOST_WRITE
+})
+
+const board = async (settings: Record<string, unknown> = {}): Promise<Paths> => {
+	const created = createTempRepo()
+	repo = created
+	writeFileSync(join(created.dir, 'README.md'), '# fixture\n')
+	created.git('add', 'README.md')
+	created.git('commit', '-m', 'chore: first')
+
+	const { paths } = await initBoard(created.dir, { title: 'Acme', intent: 'ship', constraints: [] })
+	let config = readFileSync(paths.config, 'utf8')
+	config = setSetting(config, ['dispatch', 'host'], FAKE_HOST)
+	for (const [key, value] of Object.entries(settings))
+		config = setSetting(config, ['dispatch', key], value)
+	writeFileSync(paths.config, config)
+
+	await writeNode(paths, 'auth-api-k7f2', aNode('The auth API'))
+
+	// Settings are read from the base ref, never from the branch under review
+	// (ADR 0019) — so the base has to carry them.
+	created.git('add', '.gitignore', '.sober/config.jsonc')
+	created.git('commit', '-m', 'chore: sober')
+	return paths
+}
+
+test('a dispatch runs the host in the node’s worktree and records how it exited', async () => {
+	const paths = await board()
+	const written = join(paths.root, 'seen-by-the-agent.txt')
+	process.env.FAKE_HOST_WRITE = written
+
+	const result = await dispatch(paths, 'auth-api-k7f2', {
+		base: 'main',
+		prompt: '# The auth API\n\nSign in and sign out.',
+	})
+
+	expect(result).toMatchObject({ exit: 'finished', error: null, prepared: true })
+	expect(existsSync(result.worktree)).toBe(true)
+
+	const runs = await readRuns(paths)
+	expect(runs.records.size).toBe(1)
+	const record = [...runs.records.values()][0]
+	expect(record).toMatchObject({
+		node: 'auth-api-k7f2',
+		branch: 'sober/auth-api-k7f2',
+		exit: 'finished',
+		error: null,
+	})
+	expect(record?.endedAt).not.toBeNull()
+
+	// The brief reached the host as its prompt, and no brief file was left in
+	// the worktree for the scan to report as an undeclared file.
+	expect(readFileSync(written, 'utf8')).toContain('Sign in and sign out.')
+	expect(existsSync(join(result.worktree, 'brief.md'))).toBe(false)
+})
+
+test('the raw log is kept, and the tail renders it without the host’s own noise', async () => {
+	const paths = await board()
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	const raw = readFileSync(runLog(paths, result.run), 'utf8')
+	expect(raw).toContain('hook_started')
+
+	const rendered = tail(raw)
+	expect(rendered.map((line) => line.kind)).toEqual(['started', 'tool', 'text', 'result'])
+	expect(rendered.at(-1)?.text).toBe('finished')
+	expect(rendered.some((line) => line.text.includes('noise-a-tail-must-drop'))).toBe(false)
+})
+
+test('a host that exits non-zero is a failed run, and the worktree is preserved', async () => {
+	const paths = await board()
+	process.env.FAKE_HOST_FAIL = '1'
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	expect(result.exit).toBe('failed')
+	expect(result.error).toContain('the host gave up')
+	expect(existsSync(result.worktree)).toBe(true)
+})
+
+test('a logged-out host is refused before a worktree exists', async () => {
+	const paths = await board()
+	process.env.FAKE_HOST_LOGGED_OUT = '1'
+
+	await expect(
+		dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' }),
+	).rejects.toBeInstanceOf(HostError)
+
+	expect(await readRuns(paths).then((runs) => runs.records.size)).toBe(0)
+	expect(existsSync(join(paths.local, 'worktrees', 'auth-api-k7f2'))).toBe(false)
+})
+
+test('a failing setup command stops the agent from starting at all', async () => {
+	const paths = await board({ setup: 'node -e "process.exit(3)"' })
+
+	await expect(
+		dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' }),
+	).rejects.toBeInstanceOf(SetupFailedError)
+
+	expect(await readRuns(paths).then((runs) => runs.records.size)).toBe(0)
+})
+
+test('a run past its timeout is killed and recorded as failed, not as a stop', async () => {
+	const paths = await board({ timeoutMinutes: 1 })
+	process.env.FAKE_HOST_HANG = '1'
+
+	// One minute is the smallest a user can configure; the test drives the same
+	// path with a limit it can wait for.
+	const result = await withTimeoutOf(0.02, () =>
+		dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' }),
+	)
+
+	expect(result.exit).toBe('failed')
+	expect(result.error).toContain('killed')
+	expect(existsSync(result.worktree)).toBe(true)
+})
+
+test('stopping a run leaves its worktree and returns it as stopped', async () => {
+	const paths = await board()
+	process.env.FAKE_HOST_HANG = '1'
+
+	const running = dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+	await until(async () => (await readRuns(paths)).records.size === 1)
+	const id = [...(await readRuns(paths)).records.keys()][0]
+	expect(id).toBeDefined()
+
+	await until(() => stopRun(paths, id as string))
+	const result = await running
+
+	expect(result.exit).toBe('stopped')
+	expect(existsSync(result.worktree)).toBe(true)
+})
+
+test('a wave stops queueing after the first run that does not finish', async () => {
+	const paths = await board({ concurrency: 1 })
+	process.env.FAKE_HOST_FAIL = '1'
+	await writeNode(paths, 'billing-ui-p3x9', aNode('Billing'))
+
+	const results = await dispatchWave(
+		paths,
+		[
+			{ node: 'auth-api-k7f2', options: { base: 'main', prompt: 'first' } },
+			{ node: 'billing-ui-p3x9', options: { base: 'main', prompt: 'second' } },
+		],
+		'main',
+	)
+
+	expect(results).toHaveLength(1)
+	expect(existsSync(join(paths.local, 'worktrees', 'billing-ui-p3x9'))).toBe(false)
+})
+
+test('a host that is not installed says so, and names the command it looked for', async () => {
+	expect(await checkHost('sober-no-such-host')).toMatchObject({
+		ok: false,
+		reason: expect.stringContaining('sober-no-such-host'),
+	})
+})
+
+/** Drives the real timeout path with a limit a test can wait for. */
+const withTimeoutOf = async <T>(minutes: number, run: () => Promise<T>): Promise<T> => {
+	const real = setTimeout
+	const patched = ((fn: () => void, ms?: number) =>
+		real(fn, ms !== undefined && ms >= 60_000 ? minutes * 60_000 : ms)) as typeof setTimeout
+	globalThis.setTimeout = patched
+	try {
+		return await run()
+	} finally {
+		globalThis.setTimeout = real
+	}
+}
+
+const until = async (check: () => Promise<boolean> | boolean): Promise<void> => {
+	for (let attempt = 0; attempt < 200; attempt++) {
+		if (await check()) return
+		await new Promise((resolve) => setTimeout(resolve, 25))
+	}
+	throw new Error('condition never became true')
+}
