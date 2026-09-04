@@ -9,6 +9,19 @@ export {
 	setSetting,
 	writeConfig,
 } from './config.js'
+export { newId } from './id.js'
+export {
+	appendEvent,
+	appendRunOutput,
+	LogEvent,
+	type ReadLog,
+	readLog,
+	readRun,
+	readRuns,
+	runLog,
+	writeRun,
+} from './local.js'
+export { acquire, type Held, LockBusyError, withLock } from './lock.js'
 export { fileId, findRoot, type Paths, paths, recordFile, SOBER_DIR } from './paths.js'
 export {
 	type BrokenRecord,
@@ -28,4 +41,4 @@ export {
 	writeNode,
 	writeProject,
 } from './records.js'
-export { appendLine, writeAtomic, writeRecord } from './write.js'
+export { append, appendLine, writeAtomic, writeRecord } from './write.js'

@@ -25,8 +25,11 @@ export const writeAtomic = async (file: string, contents: string): Promise<void>
 export const writeRecord = (file: string, record: unknown): Promise<void> =>
 	writeAtomic(file, `${JSON.stringify(record, null, '\t')}\n`)
 
-/** The log's append (DESIGN §1.4). A torn last line is §8.4's problem, not a crash. */
-export const appendLine = async (file: string, line: string): Promise<void> => {
+/** The one documented exception to the atomic rule (DESIGN §1.4): appends. */
+export const append = async (file: string, text: string): Promise<void> => {
 	await mkdir(dirname(file), { recursive: true })
-	await writeFile(file, `${line}\n`, { encoding: 'utf8', flag: 'a' })
+	await writeFile(file, text, { encoding: 'utf8', flag: 'a' })
 }
+
+/** The audit log's append. A torn last line is §8.4's problem, not a crash. */
+export const appendLine = (file: string, line: string): Promise<void> => append(file, `${line}\n`)
