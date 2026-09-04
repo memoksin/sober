@@ -29,6 +29,9 @@ export const writeDecision = (paths: Paths, id: string, decision: Decision): Pro
 export const readDecisions = (paths: Paths): Promise<ReadRecords<Decision>> =>
 	readRecords(paths.decisions, Decision)
 
-/** Archived nodes keep the node shape — archiving is a file move (DESIGN §8.3). */
-export const readArchived = (paths: Paths): Promise<ReadRecords<Node>> =>
-	readRecords(paths.archive, Node)
+/** A node that bound a decision keeps reading it after it is archived (DESIGN §8.3). */
+export const readArchivedNodes = (paths: Paths): Promise<ReadRecords<Node>> =>
+	readRecords(paths.archivedNodes, Node)
+
+export const readArchivedDecisions = (paths: Paths): Promise<ReadRecords<Decision>> =>
+	readRecords(paths.archivedDecisions, Decision)

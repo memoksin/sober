@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
+import { SoberError } from './errors.js'
 import { git, isDirty, refExists } from './git.js'
 import type { Paths } from './paths.js'
 
@@ -17,13 +18,15 @@ export const branchOf = (id: string): string => `sober/${id}`
  */
 export const worktreeOf = (paths: Paths, id: string): string => join(paths.local, 'worktrees', id)
 
-export class DirtyWorktreeError extends Error {
+export class DirtyWorktreeError extends SoberError {
 	constructor(
 		readonly node: string,
 		readonly path: string,
 	) {
-		super(`${node} has uncommitted work in ${path} — commit it or remove it by hand`)
-		this.name = 'DirtyWorktreeError'
+		super(
+			'dirty-worktree',
+			`${node} has uncommitted work in ${path} — commit it or remove it by hand`,
+		)
 	}
 }
 

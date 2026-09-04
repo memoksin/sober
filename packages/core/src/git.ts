@@ -1,16 +1,16 @@
 import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { SoberError } from './errors.js'
 
 const run = promisify(execFile)
 
-export class GitError extends Error {
+export class GitError extends SoberError {
 	constructor(
 		readonly args: readonly string[],
 		readonly stderr: string,
 	) {
-		super(`git ${args.join(' ')} failed: ${stderr.trim().split('\n')[0] ?? 'no output'}`)
-		this.name = 'GitError'
+		super('git', `git ${args.join(' ')} failed: ${stderr.trim().split('\n')[0] ?? 'no output'}`)
 	}
 }
 

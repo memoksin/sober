@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { z } from 'zod'
 import type { Config } from './config.js'
 import { DEFAULT_CONFIG } from './config.js'
+import { SoberError } from './errors.js'
 import type { Paths } from './paths.js'
 
 /**
@@ -30,13 +31,12 @@ export interface Held {
 	readonly release: () => Promise<void>
 }
 
-export class LockBusyError extends Error {
+export class LockBusyError extends SoberError {
 	constructor(
 		readonly action: string,
 		readonly host: string,
 	) {
-		super(`another SOBER action is writing this board: ${action} on ${host}`)
-		this.name = 'LockBusyError'
+		super('lock-busy', `another SOBER action is writing this board: ${action} on ${host}`)
 	}
 }
 

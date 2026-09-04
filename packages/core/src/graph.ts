@@ -2,7 +2,7 @@ import type { Decision, Node, Project, Run } from '@besober/schema'
 import { readRuns } from './local.js'
 import type { Paths } from './paths.js'
 import type { BrokenRecord } from './read.js'
-import { readDecisions, readNodes, readProject } from './records.js'
+import { readArchivedDecisions, readDecisions, readNodes, readProject } from './records.js'
 
 /**
  * Everything a surface needs to answer "what can start now", loaded once. The
@@ -20,21 +20,25 @@ export interface Board {
 }
 
 export const loadBoard = async (paths: Paths): Promise<Board> => {
-	const [project, nodes, decisions, runs] = await Promise.all([
+	const [project, nodes, decisions, archived, runs] = await Promise.all([
 		readProject(paths),
 		readNodes(paths),
 		readDecisions(paths),
+		// A node that bound a decision keeps pointing at it and keeps reading it
+		// after it is archived (§8.3), so the board loads both.
+		readArchivedDecisions(paths),
 		readRuns(paths),
 	])
 	return {
 		project: project.kind === 'ok' ? project.value : null,
 		nodes: nodes.records,
-		decisions: decisions.records,
+		decisions: new Map([...archived.records, ...decisions.records]),
 		runs: runs.records,
 		broken: [
 			...(project.kind === 'broken' ? [{ file: project.file, reason: project.reason }] : []),
 			...nodes.broken,
 			...decisions.broken,
+			...archived.broken,
 			...runs.broken,
 		],
 	}

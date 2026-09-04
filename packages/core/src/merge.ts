@@ -1,3 +1,4 @@
+import { SoberError } from './errors.js'
 import { git, isDirty } from './git.js'
 import type { Paths } from './paths.js'
 import { branchOf } from './worktree.js'
@@ -7,10 +8,9 @@ import { branchOf } from './worktree.js'
  * with no remote cannot take a pull request (§6.3). The pull request path is
  * M2's, and it is a second implementation of this decision, not a change to it.
  */
-export class MergeRefusedError extends Error {
+export class MergeRefusedError extends SoberError {
 	constructor(reason: string) {
-		super(reason)
-		this.name = 'MergeRefusedError'
+		super('merge-refused', reason)
 	}
 }
 

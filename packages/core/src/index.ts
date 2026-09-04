@@ -12,6 +12,13 @@ export {
 	setSetting,
 	writeConfig,
 } from './config.js'
+export {
+	AnsweredDecisionError,
+	type ErrorCode,
+	NotOnBoardError,
+	SoberError,
+	StillReferencedError,
+} from './errors.js'
 export { GitError, hasRemote, isRepo, showFromRef } from './git.js'
 export {
 	type Board,
@@ -30,7 +37,8 @@ export { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge
 export { findRoot, type Paths, paths } from './paths.js'
 export type { BrokenRecord } from './read.js'
 export {
-	readArchived,
+	readArchivedDecisions,
+	readArchivedNodes,
 	readDecisions,
 	readNodes,
 	readProject,
@@ -38,6 +46,14 @@ export {
 	writeNode,
 	writeProject,
 } from './records.js'
+export {
+	acceptNode,
+	finishRun,
+	type RunResult,
+	recordOutcome,
+	type StartedRun,
+	startRun,
+} from './run.js'
 export { type Flags, flagsOf, ready, statuses, statusOf } from './status.js'
 export {
 	addWorktree,

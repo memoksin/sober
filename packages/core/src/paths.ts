@@ -13,6 +13,8 @@ export interface Paths {
 	readonly nodes: string
 	readonly decisions: string
 	readonly archive: string
+	readonly archivedNodes: string
+	readonly archivedDecisions: string
 	readonly local: string
 	readonly runs: string
 	readonly log: string
@@ -33,6 +35,10 @@ export const paths = (root: string): Paths => {
 		nodes: join(sober, 'nodes'),
 		decisions: join(sober, 'decisions'),
 		archive: join(sober, 'archive'),
+		// Two shapes never share a directory: one flat archive would report every
+		// archived decision as a broken node (DESIGN §8.4).
+		archivedNodes: join(sober, 'archive', 'nodes'),
+		archivedDecisions: join(sober, 'archive', 'decisions'),
 		local,
 		runs: join(local, 'runs'),
 		log: join(local, 'log.jsonl'),
