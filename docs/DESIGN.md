@@ -385,7 +385,7 @@ The warning is only as good as the `files` prediction, which is why the field is
 
 Intent in, proposed graph out (D13, ADR 0004). The agent returns nodes, **the edges between them**, and the decisions each node binds. A proposal is not board state: it is rendered as a proposal, and the human accepts, edits, or drops it.
 
-This happens in the user's host session, through SOBER's tools (ADR 0009). That session already holds the repository in context, which is why its proposals beat a cold subprocess's — and why the empty state in the dashboard points at `/sober-plan` rather than generating anything itself (ADR 0010).
+This happens in the user's host session, through SOBER's tools (ADR 0009). That session already holds the repository in context, which is why its proposals beat a cold subprocess's — and why the empty state in the dashboard points at `/sober:plan` rather than generating anything itself (ADR 0010).
 
 Proposals are **written to disk as they are made**: nodes as proposals, decisions as records with `suggested` set and no `answer`, which §2.4 already treats as open. A crashed session loses nothing, and the acceptance record lands on the board rather than in a chat log.
 

@@ -22,7 +22,7 @@ sober/
 │   ├── server/                 # HTTP over core. Serves the dashboard.
 │   ├── mcp/                    # MCP server over core. Ships as `sober mcp`.
 │   ├── cli/                    # bin: sober. Thin.
-│   ├── claude-code-plugin/     # MCP config, commands, one skill
+│   ├── claude-code-plugin/     # MCP config and four skills
 │   └── tsconfig/               # shared tsconfig presets
 ├── test/
 │   └── integration/            # temp-repo fixture, fake host, fake gh
@@ -35,6 +35,7 @@ sober/
 │   ├── DESIGN.md               # mechanism
 │   ├── STRUCTURE.md            # this file
 │   ├── BUILD-PLAN.md           # how it gets built, in what order, at what pace
+│   ├── M1-GATE.md              # the nine-step gate, run, and what it found
 │   ├── MANIFESTO.md            # how SOBER gets built
 │   └── adr/NNNN-*.md           # one decision per file, MADR format
 ├── .gitattributes
@@ -103,6 +104,8 @@ Node is pinned at `>=22` in `engines`, `packageManager` is pinned in the reposit
 | `server`, `mcp` | no | Bundled into `cli`. `mcp` ships as the `sober mcp` subcommand: one install, one version, one changelog. |
 | `dashboard` | no | An app. Its built assets are written into the CLI's `dist` by a `prepack` script and shipped inside it. |
 | `claude-code-plugin` | no | Distributed as a plugin, not on npm. |
+
+**One deviation from ADR 0009, forced by the host and recorded here rather than by amending an accepted ADR.** That ADR named "three commands (`/sober-plan`, `/sober-next`, `/sober-decide`), and one skill". Claude Code's plugin format now derives an invocable name from a skill's *directory*, and `commands/` is the legacy path — so the plugin ships four skills under `skills/`, three of them invocable as `/sober:plan`, `/sober:decide` and `/sober:next`, and one not invocable at all: the loop itself, which the model reads on its own. The count and the split are what ADR 0009 decided; the file layout is the host's, read off the installed CLI at implementation time (`BUILD-PLAN.md` §6) rather than from the ADR.
 
 Owning the `@besober` org means the whole namespace is already reserved. So publishing is never about claiming a name — it is only ever about taking on a semver contract, and exactly one package takes one.
 

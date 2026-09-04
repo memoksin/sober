@@ -49,7 +49,7 @@ Phase 5. `packages/server` and the wire contract first, then the canvas, node pa
 On a real repository:
 
 1. `npm i -g @besober/cli`, then `sober init`
-2. In a Claude Code session, `/sober-plan`, intent in free text
+2. In a Claude Code session, `/sober:plan`, intent in free text
 3. See the proposed nodes and edges; accept as a batch
 4. Open a decision, options are produced, pick through elicitation
 5. Ask for a node's brief, read the approach, approve it
@@ -59,6 +59,8 @@ On a real repository:
 9. A downstream node moves off `blocked`
 
 Nine steps. Green means the product exists. M2 and M3's gates are the same script with a teammate, and then with no terminal.
+
+**Run on 2026-09-04, green.** `pnpm gate:m1` prepares it; `M1-GATE.md` records what it found — fourteen defects, none of which the suite could see against a faked host.
 
 ---
 
@@ -222,7 +224,7 @@ Phase 0 closed on 2026-08-29. Three items from the 2026-08-29 review were delibe
 | Phase | Carried item | Why it waits | Cost |
 | --- | --- | --- | --- |
 | **2** — `core` | A soft ceiling beside the surface snapshot: `core` exports over the ceiling emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it. | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting. | ~10 min |
-| **3** — `cli` published | npm **provenance** and **trusted publishing**: `permissions: id-token: write` and `npm publish --provenance`, so the tarball is signed against the commit and workflow that built it, and no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007). | Provenance is three lines _inside a release workflow_, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing. | ~45 min with the release workflow |
+| **3** — `cli` published | ~~npm **provenance** and **trusted publishing**~~ — **done**, phase 3 session 5: `.github/workflows/release.yml` carries `id-token: write`, `NPM_CONFIG_PROVENANCE`, and an npm new enough to mint its own credential, so no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007). | Provenance is three lines _inside a release workflow_, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing. | ~45 min with the release workflow |
 | **4** — contributors | `.github/CODEOWNERS` narrowed past `* @memoksin`: an explicit entry for every barrel (`**/index.ts`) and for `docs/`, which turns §5's "barrel files are yours" from a habit into a check (REVIEW-2026-08-29 §1.2/3). **And**: the admin bypass narrows or is removed (ADR 0026). | With one contributor, `*` already covers every path and the bypass exists precisely because a solo repository cannot satisfy a code-owner review. Both only become real when a second person pushes. | ~15 min |
 
 Phase 0 also closed with four deviations from what this file and `STRUCTURE.md` predicted. All four are recorded where they belong rather than here: TypeScript is pinned at 6.x and the reason is in `STRUCTURE.md`; the owner may bypass `main` and the reason is ADR 0026; `apps/*` is out of `vitest.config.ts` and the `boundaries` command until phase 5 creates the dashboard; and `packages/cli` exists from day one as a stub, so that esbuild, `publint` and the pack-and-install smoke test are real checks before there is a CLI to break — Law 1, applied to itself.
