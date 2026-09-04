@@ -1,4 +1,5 @@
 export { ensureGitignore, GITIGNORE_BLOCK, type InitResult, initBoard } from './board.js'
+export { renderBrief } from './brief.js'
 export {
 	Config,
 	DEFAULT_CONFIG,

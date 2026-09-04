@@ -42,6 +42,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "readRuns",
   "ready",
   "recordFile",
+  "renderBrief",
   "runLog",
   "setSetting",
   "statusOf",

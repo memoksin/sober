@@ -1,0 +1,50 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the brief renders the whole skeleton from the records, in the design order 1`] = `
+"# Session endpoints
+
+## How to approach this
+
+Write the endpoints first, then the middleware that reads what they set.
+
+## What must be true when this is done
+
+- Login and logout answer, and a bad password does not.
+  \`pnpm test src/auth\`
+- The session type reaches every caller.
+  \`pnpm typecheck\`
+
+## The project
+
+A billing API two teams can call.
+
+Constraints:
+- No new services
+- Postgres only
+
+## This node
+
+Login, logout, and the middleware that reads the session.
+
+The mobile client sends the token in a header, not a cookie.
+
+## Decisions
+
+**Where does session state live?**
+- Chosen: Redis
+- Why: Revocable
+- Costs later: A service to run
+- Your reason: We already run one.
+
+## Declared files
+
+- src/auth/**
+- src/middleware/session.ts
+
+This list is a prediction. Work outside it is shown in review, not refused.
+
+## What upstream nodes produced
+
+- **Billing tables**: Added invoices and line_items, with a unique index on (account, period).
+"
+`;
