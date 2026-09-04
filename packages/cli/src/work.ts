@@ -17,7 +17,20 @@ import {
 } from '@besober/core'
 import { Brief } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
-import { blue, bold, cyan, dim, fail, green, magenta, red, say, spinner, yellow } from './out.js'
+import {
+	blue,
+	bold,
+	cyan,
+	dim,
+	fail,
+	green,
+	magenta,
+	red,
+	refuse,
+	say,
+	spinner,
+	yellow,
+} from './out.js'
 
 /**
  * A tool call, a sentence and an ending do not read alike, so they do not look
@@ -36,12 +49,6 @@ const mark = (kind: string): string => {
 	const [glyph, colour] = TAIL[kind] ?? ['·', dim]
 	return colour(glyph)
 }
-
-/** Every command that writes turns a refusal into a sentence, never a stack trace (§8.7). */
-export const refuse = (error: unknown): never =>
-	error instanceof SoberError
-		? fail(error.message)
-		: fail(String((error as Error).message ?? error))
 
 export const decisions = async (): Promise<void> => {
 	const paths = await openBoard()

@@ -4,7 +4,12 @@
 // one-line diff the day something outside asks for it.
 
 export { archiveDecision, archiveNode } from './archive.js'
-export { createBoardBranch, detectSetup, type InitResult, initBoard } from './board.js'
+export {
+	createBoardBranch,
+	detectSetup,
+	type InitResult,
+	initBoard,
+} from './board.js'
 export { renderBrief } from './brief.js'
 export {
 	applySetting,
@@ -96,6 +101,7 @@ export {
 	statuses,
 	statusOf,
 } from './status.js'
+export { adoptBoard, sync } from './sync.js'
 export { tail } from './tail.js'
 export {
 	addWorktree,

@@ -7,8 +7,7 @@ import {
 	whoami,
 } from '@besober/core'
 import { baseOf, openBoard, readBoard } from './board.js'
-import { blue, bold, columns, cyan, dim, fail, green, red, say, yellow } from './out.js'
-import { refuse } from './work.js'
+import { blue, bold, columns, cyan, dim, fail, green, red, refuse, say, yellow } from './out.js'
 
 /**
  * Review is checks, not reading (ADR 0022). The scan sits above the diff and

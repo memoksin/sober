@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
 import {
+	adoptBoard,
 	applySetting,
 	createBoardBranch,
 	currentBranch,
@@ -10,9 +11,10 @@ import {
 	loadBoard,
 	type Paths,
 	readConfig,
+	readProject,
 	paths as resolve,
 } from '@besober/core'
-import { bold, columns, dim, fail, green, say, yellow } from './out.js'
+import { bold, columns, dim, fail, green, refuse, say, yellow } from './out.js'
 
 /** Every command but `init` starts here: a board, found from wherever you stand. */
 export const openBoard = async (): Promise<Paths> => {
@@ -36,6 +38,17 @@ export const init = async (options: { title?: string; intent?: string }): Promis
 	const root = process.cwd()
 	if (!(await isRepo(root)))
 		return fail('this is not a git repository — SOBER plans work that git tracks')
+
+	// A second person clones the repository and runs the same command. The board
+	// is already on its branch, so init takes it rather than writing a second
+	// project record — which is the one way a team ends up with two boards for
+	// one repository (DESIGN §1.2).
+	if ((await readProject(resolve(root))).kind === 'missing') {
+		const paths = resolve(root)
+		const branch = (await settingsOf(paths)).board.branch
+		const adopted = await adoptBoard(paths, branch).catch(refuse)
+		if (adopted !== null) return joined(branch, adopted)
+	}
 
 	const { paths, created } = await initBoard(root, {
 		title: options.title ?? basename(root),
@@ -62,6 +75,7 @@ export const init = async (options: { title?: string; intent?: string }): Promis
 			['  .sober/', dim('the board — one file per node and decision')],
 			['  .sober/config.jsonc', dim('every setting, with the reason for each')],
 			['  .gitignore', dim('the entries the board depends on')],
+			['  .gitattributes', dim('so no conflict marker ever lands in a record')],
 			[
 				`  ${settings.board.branch}`,
 				dim(branch ? 'the branch the board travels on' : 'was already here'),
@@ -81,6 +95,21 @@ export const init = async (options: { title?: string; intent?: string }): Promis
 	say(
 		`Next: open a session and say what you want built, or ${bold('sober status')} to see the board.`,
 	)
+}
+
+/** The other half of `init`: the board was already made, by someone else. */
+const joined = (branch: string, records: number): void => {
+	say(`${green('✓')} the team’s board is here`)
+	say()
+	say(
+		columns([
+			['  .sober/', dim(`${records} records, taken from ${branch}`)],
+			['  .gitignore', dim('the entries the board depends on')],
+			['  .gitattributes', dim('so no conflict marker ever lands in a record')],
+		]).join('\n'),
+	)
+	say()
+	say(`Next: ${bold('sober status')} to see what the team is building.`)
 }
 
 /** A board that cannot be read whole is said out loud, never rendered as empty (§8.4). */

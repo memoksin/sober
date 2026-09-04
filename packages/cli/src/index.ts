@@ -4,6 +4,7 @@ import { init } from './board.js'
 import { bold, columns, dim, fail, say } from './out.js'
 import { accept, archive, reject, review } from './review.js'
 import { status } from './status.js'
+import { sync } from './sync.js'
 import { approve, bind, brief, decide, decisions, logs, run, stop } from './work.js'
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
@@ -59,6 +60,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['reject <node> -m "…"', 'send it back with what was wrong'],
 		],
 	],
+	['Share', [['sync [--no-push]', 'take in the team’s board, then send yours']]],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
 	['In a session', [['mcp', 'serve SOBER’s tools to a host — the plugin starts this']]],
 ]
@@ -87,6 +89,7 @@ const options = {
 	decisions: { type: 'string' },
 	'depends-on': { type: 'string' },
 	queue: { type: 'boolean' },
+	'no-push': { type: 'boolean' },
 	clean: { type: 'boolean' },
 	diff: { type: 'boolean' },
 	version: { type: 'boolean', short: 'v' },
@@ -146,6 +149,8 @@ const main = async (): Promise<void> => {
 			const text = values.message ?? fail('say what was wrong: sober reject <node> -m "…"')
 			return reject(node, text, values.clean === true, values.base)
 		}
+		case 'sync':
+			return sync(values['no-push'] === true)
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'mcp': {

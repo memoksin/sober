@@ -60,10 +60,17 @@ If a conflict appears, **the push does not happen**. Conflicts are resolved in t
 Default git behaviour is the opposite of that promise: a conflicted text file gets `<<<<<<<` written into it, and every SOBER surface parses these files. One `.gitattributes` block prevents it (ADR 0013):
 
 ```
-.sober/nodes/*.json     merge=binary -text
-.sober/decisions/*.json merge=binary -text
-.sober/archive/*.json   merge=binary -text
+.sober/project.json            merge=binary -text
+.sober/contributors.json       merge=binary -text
+.sober/nodes/*.json            merge=binary -text
+.sober/decisions/*.json        merge=binary -text
+.sober/archive/nodes/*.json    merge=binary -text
+.sober/archive/decisions/*.json merge=binary -text
 ```
+
+`sober init` writes that block, and adds it to a `.gitattributes` a project
+already has rather than replacing one. The archive is two directories, not one
+flat `archive/`, for the reason §8.4 gives.
 
 `merge=binary` stops git attempting a textual merge. The working-tree file stays as ours, no markers are written, and the path is recorded unmerged with all three versions available in the index. `-text` stops line-ending conversion, which on Windows would otherwise produce phantom diffs and turn a merged file into a conflict on every line.
 
