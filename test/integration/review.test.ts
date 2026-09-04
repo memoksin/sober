@@ -14,6 +14,7 @@ import {
 	loadBoard,
 	NoBriefError,
 	NoSuchOptionError,
+	openDecisions,
 	type Paths,
 	readFeedback,
 	rejectWork,
@@ -218,4 +219,18 @@ test('an archived decision still reads on the node that bound it', async () => {
 	const after = await loadBoard(paths)
 	expect(after.decisions.get(DECISION)?.answer?.option).toBe('cookie')
 	expect(statusOf(after, NODE)).toBe('needs-brief')
+	// Readable, and no longer offered as something to answer — the one list
+	// every surface renders from.
+	expect(after.archivedDecisions.has(DECISION)).toBe(true)
+	expect(openDecisions(after)).toEqual([])
+})
+
+test('an archived decision that was never answered stops being listed, and still holds', async () => {
+	const paths = await board()
+	await archiveDecision(paths, DECISION)
+
+	const after = await loadBoard(paths)
+	expect(openDecisions(after)).toEqual([])
+	// It still holds the node that bound it: archiving is not answering (§8.3).
+	expect(statusOf(after, NODE)).toBe('held')
 })

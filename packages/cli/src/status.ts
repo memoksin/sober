@@ -1,4 +1,4 @@
-import { flagsOf, lastRun, statusOf } from '@besober/core'
+import { flagsOf, lastRun, openDecisions, statusOf } from '@besober/core'
 import { decisionState } from '@besober/schema'
 import { openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
@@ -58,7 +58,7 @@ export const status = async (only?: string): Promise<void> => {
 	})
 	say(columns(rows).join('\n'))
 
-	const open = [...board.decisions].filter(([, d]) => decisionState(d) !== 'answered')
+	const open = openDecisions(board)
 	if (open.length > 0) {
 		say()
 		say(bold(`${open.length} decision${open.length === 1 ? '' : 's'} waiting on you`))
@@ -71,10 +71,16 @@ const waiting = (board: Awaited<ReturnType<typeof readBoard>>, id: string): stri
 	const node = board.nodes.get(id)
 	if (node === undefined) return ''
 
-	const held = node.decisions.filter((decision) => {
-		const record = board.decisions.get(decision)
-		return record === undefined || decisionState(record) !== 'answered'
-	})
+	const held = node.decisions
+		.filter((decision) => {
+			const record = board.decisions.get(decision)
+			return record === undefined || decisionState(record) !== 'answered'
+		})
+		// An archived decision is not in the open list, so a node held by one
+		// would otherwise be waiting on something nothing offers to answer.
+		.map((decision) =>
+			board.archivedDecisions.has(decision) ? `${decision} (archived)` : decision,
+		)
 	if (held.length > 0) return dim(`waiting on ${held.join(', ')}`)
 
 	const blocked = node.dependsOn.filter((dep) => board.nodes.get(dep)?.accepted == null)

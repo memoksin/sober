@@ -1,4 +1,4 @@
-import type { Run, Status } from '@besober/schema'
+import type { Decision, Run, Status } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import type { Board } from './graph.js'
 
@@ -76,6 +76,17 @@ export const flagsOf = (board: Board, id: string): Flags => ({
 })
 
 /** What can start now (§3.2's whole point), in dependency order. */
+/**
+ * The decisions still waiting on a human: unanswered, and not archived. Every
+ * surface asks the same question, so it is answered once — the CLI and the
+ * session listing different sets is how two surfaces become two products
+ * (`PR-09-08`).
+ */
+export const openDecisions = (board: Board): [string, Decision][] =>
+	[...board.decisions].filter(
+		([id, decision]) => decisionState(decision) !== 'answered' && !board.archivedDecisions.has(id),
+	)
+
 export const ready = (board: Board): string[] =>
 	[...board.nodes.keys()].filter((id) => statusOf(board, id) === 'ready').sort()
 

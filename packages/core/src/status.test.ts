@@ -23,6 +23,7 @@ const board = (
 	project: null,
 	nodes: new Map(Object.entries(nodes)),
 	decisions: new Map([['auth-model-k7f2', aDecision(answered ? { answer } : {})]]),
+	archivedDecisions: new Set(),
 	runs: new Map(Object.entries(runs)),
 	feedback: new Map(Object.entries(feedback)),
 	broken: [],

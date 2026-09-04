@@ -82,7 +82,15 @@ export {
 	startRun,
 } from './run.js'
 export { type Finding, type ScanReport, scanNode } from './scan.js'
-export { type Flags, flagsOf, lastRun, ready, statuses, statusOf } from './status.js'
+export {
+	type Flags,
+	flagsOf,
+	lastRun,
+	openDecisions,
+	ready,
+	statuses,
+	statusOf,
+} from './status.js'
 export { tail } from './tail.js'
 export {
 	addWorktree,

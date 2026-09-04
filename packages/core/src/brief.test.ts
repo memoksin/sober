@@ -46,6 +46,7 @@ const board = (): Board => ({
 		],
 	]),
 	decisions: new Map([['auth-model-k7f2', aDecision({ answer })]]),
+	archivedDecisions: new Set(),
 	runs: new Map(),
 	feedback: new Map(),
 	broken: [],

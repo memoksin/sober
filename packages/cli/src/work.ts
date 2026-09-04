@@ -4,6 +4,7 @@ import {
 	approveBrief,
 	dispatch,
 	dispatchWave,
+	openDecisions,
 	renderBrief,
 	runLog,
 	SoberError,
@@ -48,8 +49,7 @@ export const decisions = async (): Promise<void> => {
 	const paths = await openBoard()
 	const board = await readBoard(paths)
 
-	for (const [id, decision] of board.decisions) {
-		if (decision.answer !== null) continue
+	for (const [id, decision] of openDecisions(board)) {
 		say(`${magenta(bold(id))}  ${dim(decision.category)}`)
 		say(`  ${decision.question}`)
 		if (decision.options === null) {
