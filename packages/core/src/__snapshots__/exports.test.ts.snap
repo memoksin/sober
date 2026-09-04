@@ -4,6 +4,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
 [
   "AnswerLockedError",
   "AnsweredDecisionError",
+  "CycleError",
   "DEFAULT_CONFIG",
   "DirtyWorktreeError",
   "GitError",
@@ -25,6 +26,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "approveBrief",
   "archiveDecision",
   "archiveNode",
+  "bind",
   "branchOf",
   "checkHost",
   "createBoardBranch",
@@ -77,6 +79,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "stopRun",
   "tail",
   "topological",
+  "unbound",
   "whoami",
   "withLock",
   "worktreeOf",

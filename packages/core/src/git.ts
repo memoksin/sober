@@ -77,9 +77,20 @@ export const refExists = async (dir: string, ref: string): Promise<boolean> => {
 	}
 }
 
-/** Uncommitted or untracked: the one question every removal and merge asks first. */
+/** Uncommitted or untracked: what a worktree removal asks, because both are work. */
 export const isDirty = async (dir: string): Promise<boolean> =>
 	(await git(dir, 'status', '--porcelain')).length > 0
+
+/**
+ * Tracked changes only — the question a merge asks. Untracked files are not at
+ * risk from a merge and git does not refuse one for them.
+ *
+ * Found in the M1 gate: `sober init` writes `.gitignore` and `.sober/` and does
+ * not commit them, so the very first accept was refused by SOBER's own files,
+ * on a repository where nothing was wrong.
+ */
+export const hasUncommitted = async (dir: string): Promise<boolean> =>
+	(await git(dir, 'status', '--porcelain', '--untracked-files=no')).length > 0
 
 /**
  * Configuration that governs a run or a review is read from the base ref, never

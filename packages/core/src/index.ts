@@ -24,6 +24,7 @@ export {
 	writeBrief,
 } from './decide.js'
 export { dispatch, dispatchWave, SetupFailedError, stopRun } from './dispatch.js'
+export { bind, CycleError, type Edges, unbound } from './edges.js'
 export {
 	AnsweredDecisionError,
 	type ErrorCode,

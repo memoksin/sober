@@ -2,6 +2,7 @@ import {
 	answerDecision,
 	applySetting,
 	approveBrief,
+	bind,
 	createBoardBranch,
 	detectSetup,
 	findCycle,
@@ -169,6 +170,20 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				])
 				for (const [id, record] of records) written.set(id, record)
 
+				// A decision nothing binds holds no work: it reads as a question
+				// waiting on the human and blocks nobody, which is the failure the
+				// one hard block exists to prevent (§2.3). Found in the M1 gate.
+				const bound = new Set(nodes.flatMap((node) => node.decisions))
+				const loose = decisions.filter((decision) => !bound.has(decision.key))
+				if (loose.length > 0)
+					return text(
+						[
+							`Nothing was written. These decisions bind no node: ${loose.map((one) => one.key).join(', ')}.`,
+							'A decision holds the nodes that bind it and nothing else — one nobody binds blocks no work.',
+							'Put its key in the `decisions` list of every node whose shape the answer changes, and propose again.',
+						].join(' '),
+					)
+
 				// A dependency that would close a cycle is refused, with the cycle
 				// shown (§3.6). Refused before anything is written, so a rejected
 				// proposal leaves the board exactly as it was.
@@ -251,6 +266,40 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 	)
 
 	server.registerTool(
+		'bind',
+		{
+			title: 'Correct a node’s edges',
+			description:
+				'Set which decisions a node binds and what it depends on. The lists replace what was there, so pass the full list — this is how a wrong edge is removed, not only how one is added.',
+			inputSchema: {
+				node: z.string(),
+				decisions: z.array(z.string()).nullish().describe('decision ids; omit to leave unchanged'),
+				dependsOn: z.array(z.string()).nullish().describe('node ids; omit to leave unchanged'),
+			},
+		},
+		tool(
+			async ({
+				node,
+				decisions,
+				dependsOn,
+			}: {
+				node: string
+				decisions?: string[] | null
+				dependsOn?: string[] | null
+			}) => {
+				const paths = await openBoard(cwd)
+				const updated = await bind(paths, node, {
+					decisions: decisions ?? undefined,
+					dependsOn: dependsOn ?? undefined,
+				})
+				return text(
+					`${node} now binds ${updated.decisions.join(', ') || 'no decision'} and depends on ${updated.dependsOn.join(', ') || 'nothing'}.`,
+				)
+			},
+		),
+	)
+
+	server.registerTool(
 		'decide',
 		{
 			title: 'Ask the human to answer one decision',
@@ -270,14 +319,12 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 
 			const picked = await askChoice(
 				server.server,
-				'Which one?',
-				[
-					record.question,
-					'',
-					...record.options.map(
-						(option) => `${option.label} — because ${option.reason}; later: ${option.costLater}`,
-					),
-				].join('\n'),
+				record.question,
+				record.question,
+				// Labels only. A narrow terminal cuts the line rather than wrapping
+				// it, and half a trade-off read is worse than none — so the reason
+				// and what it costs later are read in the conversation, which the
+				// decide skill shows in full before this is called (ADR 0024, §2.5).
 				record.options.map((option) => ({ id: option.id, label: option.label })),
 			)
 			if (picked === null) return text('The human did not answer. Nothing was recorded.')
@@ -376,12 +423,12 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			if (record.brief === null)
 				return text(`${node} has no brief yet — write one with \`write_brief\` first.`)
 
+			// One line. The approach and the criteria are read in the conversation,
+			// where nothing truncates them; the prompt is where the human decides.
 			const yes = await askYes(
 				server.server,
 				'Approve this brief?',
-				`${record.title}\n\n${record.brief.approach}\n\nWhen it is done:\n${record.brief.acceptance
-					.map((criterion) => `· ${criterion.proves} (${criterion.run})`)
-					.join('\n')}`,
+				`Approve the brief for “${record.title}”, with ${record.brief.acceptance.length} acceptance criteria?`,
 				queue ? 'Yes — approve, and start it when it is ready' : 'Yes, approve it',
 			)
 			if (!yes) return text('Not approved. Nothing was recorded.')

@@ -2,12 +2,12 @@ import type { Handle, ScanResult } from '@besober/schema'
 import { git } from './git.js'
 import { loadBoard } from './graph.js'
 import { appendEvent, type Feedback, writeFeedback } from './local.js'
-import { deleteBranch, mergeNode } from './merge.js'
+import { deleteBranch, MergeRefusedError, mergeNode } from './merge.js'
 import type { Paths } from './paths.js'
 import { acceptNode } from './run.js'
 import { type ScanReport, scanNode } from './scan.js'
 import { lastRun } from './status.js'
-import { removeWorktree, resetToBase } from './worktree.js'
+import { branchOf, removeWorktree, resetToBase, worktreeOf } from './worktree.js'
 
 /**
  * Review is checks, not reading (ADR 0022): what a surface shows is the scan,
@@ -24,6 +24,13 @@ export interface Review {
 	readonly run: string | null
 	readonly exit: string | null
 	readonly acceptance: readonly { readonly run: string; readonly proves: string }[]
+	/**
+	 * Work sitting in the worktree that was never committed. A diff against the
+	 * base cannot see it, so without this a review of an agent that wrote
+	 * everything and committed nothing reads exactly like a review of an agent
+	 * that did nothing (found in the M1 gate).
+	 */
+	readonly uncommitted: readonly string[]
 }
 
 export const reviewNode = async (
@@ -47,7 +54,18 @@ export const reviewNode = async (
 		run: run?.id ?? null,
 		exit: run?.run.exit ?? null,
 		acceptance: record.brief?.acceptance ?? [],
+		uncommitted: await uncommittedIn(paths, node),
 	}
+}
+
+const uncommittedIn = async (paths: Paths, node: string): Promise<string[]> => {
+	const path = worktreeOf(paths, node)
+	// `--untracked-files=all`, because the default collapses a new directory to
+	// `src/` and the human needs the file names to know what is missing.
+	return (await git(path, 'status', '--porcelain', '--untracked-files=all').catch(() => ''))
+		.split('\n')
+		.map((line) => line.slice(3).trim())
+		.filter((file) => file !== '')
 }
 
 const unified0 = (paths: Paths, base: string, node: string): Promise<string> =>
@@ -71,6 +89,24 @@ export interface AcceptOptions {
  * can retry.
  */
 export const acceptWork = async (paths: Paths, node: string, options: AcceptOptions) => {
+	// Nothing to land is not something to accept. Found in the M1 gate: an agent
+	// wrote its files and never committed them, the branch held no commit past
+	// the base, and `git merge` on an ancestor succeeds by doing nothing — so
+	// the node read `done` with an empty `main` behind it.
+	//
+	// This runs before the record is written, because the record is what makes
+	// the node done: the safe order below only helps when there is a merge to
+	// retry.
+	const commits = await git(paths.root, 'rev-list', '--count', `${options.base}..${branchOf(node)}`)
+	if (commits.trim() === '0') {
+		const waiting = await uncommittedIn(paths, node)
+		throw new MergeRefusedError(
+			waiting.length > 0
+				? `${node} has nothing committed to merge, and ${waiting.length} file(s) are sitting uncommitted in its worktree: ${waiting.join(', ')} — accepting now would land nothing and record it as done`
+				: `${node} has nothing to merge: its branch holds no commit that ${options.base} does not`,
+		)
+	}
+
 	await acceptNode(paths, node, {
 		by: options.by,
 		at: new Date().toISOString(),

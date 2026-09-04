@@ -202,20 +202,43 @@ export const dispatchWave = async (
  * agent has not already seen, and "rejecting is correcting" only works if the
  * correction is not buried under a page the agent wrote itself.
  */
+/**
+ * What SOBER does after the run, and what it therefore needs the agent to have
+ * done. Found in the M1 gate: an agent wrote the files, left them uncommitted,
+ * and the review that followed was empty — correctly, because a diff against
+ * the base has nothing in it until there is a commit. Nothing had told it.
+ *
+ * It is not part of the brief. The brief is what a human approves, and this is
+ * a fact about the machinery around the run.
+ */
+const HOW_IT_ENDS = `
+
+---
+
+## When you are done
+
+Commit your work on this branch. Nothing outside a commit is reviewed: SOBER
+reads \`git diff <base>...<this branch>\`, so uncommitted files are invisible to
+the human who has to accept them.
+
+Do not push, do not merge, and do not switch branches. Landing the work is a
+human's decision, made after the review.
+`
+
 const promptFor = async (paths: Paths, node: string): Promise<string> => {
 	const board = await loadBoard(paths)
 	const brief = renderBrief(board, node)
 	if (brief === null) throw new NotOnBoardError('node', node)
 
 	const feedback = board.feedback.get(node)
-	if (feedback === undefined) return brief
+	if (feedback === undefined) return `${brief}${HOW_IT_ENDS}`
 	return `# The last attempt was turned down
 
 ${feedback.text}
 
 What follows is the brief, unchanged.
 
-${brief}`
+${brief}${HOW_IT_ENDS}`
 }
 
 const settings = async (paths: Paths, base: string): Promise<Config> => {

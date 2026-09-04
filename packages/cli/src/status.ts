@@ -1,4 +1,4 @@
-import { flagsOf, lastRun, openDecisions, statusOf } from '@besober/core'
+import { flagsOf, lastRun, openDecisions, statusOf, unbound } from '@besober/core'
 import { decisionState } from '@besober/schema'
 import { openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
@@ -57,6 +57,16 @@ export const status = async (only?: string): Promise<void> => {
 		]
 	})
 	say(columns(rows).join('\n'))
+
+	const loose = unbound(board)
+	if (loose.length > 0) {
+		say()
+		say(bold(`${loose.length} decision${loose.length === 1 ? '' : 's'} bound to nothing`))
+		say(dim(`  ${loose.join(', ')}`))
+		// Answering one of these unblocks nothing, which is the failure the one
+		// hard block exists to prevent (§2.3).
+		say(dim('  each holds no node — bind it with `sober bind <node> --decisions <id,…>`'))
+	}
 
 	const open = openDecisions(board)
 	if (open.length > 0) {

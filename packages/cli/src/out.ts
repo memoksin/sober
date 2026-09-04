@@ -53,3 +53,38 @@ export const columns = (rows: readonly (readonly string[])[]): string[] => {
 // biome-ignore lint/suspicious/noControlCharactersInRegex: measuring what colour codes do not print
 const ESCAPES = /\[\d+m/g
 const visible = (text: string): string => text.replace(ESCAPES, '')
+
+const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const TICK = 80
+
+/**
+ * A run takes minutes and says nothing between tool calls, which reads as a
+ * hang. The spinner lives on **stderr**, so a piped `sober run` still gets only
+ * the lines — the CLI is the scriptable surface as well as a human one (§4).
+ */
+export const spinner = (label: string) => {
+	if (plain) return { clear: () => {}, stop: () => {} }
+
+	const started = Date.now()
+	let frame = 0
+	const draw = () => {
+		const seconds = Math.floor((Date.now() - started) / 1000)
+		process.stderr.write(
+			`\r${dim(`${FRAMES[frame++ % FRAMES.length]} ${label} ${seconds}s`)}\u001b[K`,
+		)
+	}
+	const timer = setInterval(draw, TICK)
+	// Nothing should keep the process alive for a spinner.
+	timer.unref?.()
+	draw()
+
+	const clear = () => process.stderr.write('\r\u001b[K')
+	return {
+		/** Wipe the line so a tail line can be printed over it, then it redraws. */
+		clear,
+		stop: () => {
+			clearInterval(timer)
+			clear()
+		},
+	}
+}

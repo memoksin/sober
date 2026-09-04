@@ -56,18 +56,17 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 			if (found === null) return text(`${node} is not on this board.`)
 
 			const scan = found.scan.result
+			// One line, and the line says the two things that decide it: how the
+			// scan read, and where it lands. The findings are read in the
+			// conversation, where nothing truncates them.
 			const yes = await askYes(
 				server.server,
 				`Accept ${node}?`,
-				[
-					`${found.files.length} file(s), and the scan reads: ${scan}.`,
-					...found.scan.didNotRun.map((missing) => `A scanner did not run: ${missing}`),
-					...found.scan.findings.map(
-						(finding) => `${finding.signal}: ${finding.file} — ${finding.message}`,
-					),
-					'',
-					`Accepting merges it into ${ref}.`,
-				].join('\n'),
+				`Merge ${found.files.length} file(s) into ${ref}? The scan reads: ${scan}${
+					scan === 'clean'
+						? ''
+						: ` (${found.scan.findings.length + found.scan.didNotRun.length} to read above)`
+				}.`,
 				scan === 'clean'
 					? `Yes, merge it into ${ref}`
 					: `Yes — merge it, knowing the scan says ${scan}`,

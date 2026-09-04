@@ -33,6 +33,16 @@ export const review = async (node: string, base?: string, showDiff = false): Pro
 	say()
 	say(`  ${head}   ${dim(`·  rules: ${scan.ruleSet}  ·  ${found.files.length} file(s)`)}`)
 	say()
+	if (found.uncommitted.length > 0) {
+		// Without this line an agent that wrote everything and committed nothing
+		// reviews exactly like one that did nothing (found in the M1 gate).
+		say(
+			`    ${yellow('!')}  ${found.uncommitted.length} file(s) in the worktree were never committed`,
+		)
+		say(dim(`       ${found.uncommitted.join(', ')}`))
+		say(dim('       nothing below sees them — a review reads the diff against the base'))
+		say()
+	}
 	for (const missing of scan.didNotRun) say(`    ${red('!')}  ${missing}`)
 	// A leaked key and a changed lockfile are both worth reading; they are
 	// not worth the same alarm. The colour says which is which before the

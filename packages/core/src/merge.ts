@@ -1,5 +1,5 @@
 import { SoberError } from './errors.js'
-import { git, isDirty } from './git.js'
+import { git, hasUncommitted } from './git.js'
 import type { Paths } from './paths.js'
 import { branchOf } from './worktree.js'
 
@@ -28,7 +28,7 @@ export interface Merged {
 export const mergeNode = async (paths: Paths, id: string, base: string): Promise<Merged> => {
 	const branch = branchOf(id)
 
-	if (await isDirty(paths.root)) {
+	if (await hasUncommitted(paths.root)) {
 		throw new MergeRefusedError(
 			`the working tree has uncommitted changes — accept would merge into them`,
 		)

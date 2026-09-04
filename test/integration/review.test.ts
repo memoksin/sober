@@ -234,3 +234,56 @@ test('an archived decision that was never answered stops being listed, and still
 	// It still holds the node that bound it: archiving is not answering (§8.3).
 	expect(statusOf(after, NODE)).toBe('held')
 })
+
+test('work that was written but never committed is named, not reviewed as nothing', async () => {
+	const paths = await board()
+	const { path } = await addWorktree(paths, NODE, 'main')
+	mkdirSync(dirname(join(path, 'src/auth/token.ts')), { recursive: true })
+	writeFileSync(join(path, 'src/auth/token.ts'), 'export const sign = () => "ok"\n')
+	// No commit. This is what the M1 gate produced: an agent that wrote
+	// everything, committed nothing, and reviewed as if it had done nothing.
+
+	const review = await reviewNode(paths, NODE, 'main')
+	expect(review?.diff).toBe('')
+	expect(review?.files).toEqual([])
+	expect(review?.uncommitted).toEqual(['src/auth/token.ts'])
+})
+
+test('untracked files in the repository do not refuse a merge', async () => {
+	const paths = await board()
+	await work(paths)
+	// `sober init` writes .gitignore and .sober/ and does not commit them, so
+	// the first accept on a fresh board was refused by SOBER's own files.
+	writeFileSync(join(paths.root, 'untracked.txt'), 'not committed, not tracked\n')
+
+	const merged = await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+	expect(merged.base).toBe('main')
+	expect(statusOf(await loadBoard(paths), NODE)).toBe('done')
+})
+
+test('a tracked change still refuses a merge, because that one would be merged into', async () => {
+	const paths = await board()
+	await work(paths)
+	writeFileSync(join(paths.root, 'README.md'), '# fixture, edited\n')
+
+	await expect(
+		acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' }),
+	).rejects.toThrow(/uncommitted changes/)
+})
+
+test('a node with nothing committed cannot be accepted, and says what is waiting', async () => {
+	const paths = await board()
+	const { path } = await addWorktree(paths, NODE, 'main')
+	writeFileSync(join(path, 'token.ts'), 'export const sign = () => "ok"\n')
+
+	// The M1 gate produced exactly this: `git merge` on a branch the base already
+	// contains succeeds by doing nothing, so the node read `done` over an
+	// unchanged main and the work stayed in the worktree.
+	await expect(
+		acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' }),
+	).rejects.toThrow(/nothing committed to merge.*token\.ts/s)
+
+	// And nothing was recorded: the node is not done.
+	expect(statusOf(await loadBoard(paths), NODE)).not.toBe('done')
+	expect((await loadBoard(paths)).nodes.get(NODE)?.accepted).toBeNull()
+})

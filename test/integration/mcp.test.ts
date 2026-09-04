@@ -25,7 +25,7 @@ afterEach(() => {
 })
 
 /** What the human does when asked. `null` is a human who walks away. */
-type Human = (message: string, choices: string[]) => string | null
+type Human = (message: string, choices: string[], labels: string[]) => string | null
 
 const connect = async (dir: string, human: Human = (_, choices) => choices[0] ?? null) => {
 	const client = new Client(
@@ -35,9 +35,24 @@ const connect = async (dir: string, human: Human = (_, choices) => choices[0] ??
 	client.setRequestHandler(ElicitRequestSchema, (request) => {
 		const params = request.params as {
 			message: string
-			requestedSchema?: { properties?: { choice?: { enum?: string[] } } }
+			requestedSchema?: {
+				properties?: {
+					choice?: { enum?: string[]; enumNames?: string[] }
+					confirmed?: { type: 'boolean' }
+				}
+			}
 		}
-		const choice = human(params.message, params.requestedSchema?.properties?.choice?.enum ?? [])
+		const properties = params.requestedSchema?.properties
+		// A confirmation is a boolean field, a choice is an enum one: the host
+		// renders the first without an expand step, and every approval is one.
+		if (properties?.confirmed !== undefined) {
+			const said = human(params.message, ['yes', 'no'], ['yes', 'no'])
+			return said === null
+				? { action: 'decline' }
+				: { action: 'accept', content: { confirmed: said === 'yes' } }
+		}
+		const field = properties?.choice
+		const choice = human(params.message, field?.enum ?? [], field?.enumNames ?? [])
 		return choice === null ? { action: 'decline' } : { action: 'accept', content: { choice } }
 	})
 
@@ -100,6 +115,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'accept',
 			'approve',
 			'archive',
+			'bind',
 			'board',
 			'brief',
 			'decide',
@@ -153,8 +169,10 @@ test('a proposal that closes a cycle is refused, and nothing is written', async 
 test('the human picks the option; the agent cannot supply one', async () => {
 	const { repo: created, paths } = await board()
 	const asked: string[] = []
-	const client = await connect(created.dir, (message, choices) => {
+	const asked_choices: string[][] = []
+	const client = await connect(created.dir, (message, choices, labels) => {
 		asked.push(message)
+		asked_choices.push(labels)
 		return choices[1] ?? null
 	})
 	await call(client, 'propose', PROPOSAL)
@@ -162,9 +180,12 @@ test('the human picks the option; the agent cannot supply one', async () => {
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
 	const answered = await call(client, 'decide', { decision })
 
-	// The question and both options reached the human, not just the ids.
-	expect(asked[0]).toContain('Where does session state live?')
-	expect(asked[0]).toContain('A service to run')
+	// The message is the question and nothing else: a host truncates a long one,
+	// and a truncated option list is a choice made blind (found in the M1 gate).
+	expect(asked[0]).toBe('Where does session state live?')
+	// Labels alone: a narrow terminal cuts what it cannot fit, so nothing that
+	// has to be read whole is put where it can be cut (found in the M1 gate).
+	expect(asked_choices[0]).toEqual(['A cookie', 'Redis'])
 	expect(answered).toContain('redis')
 
 	const after = await loadBoard(paths)
@@ -339,7 +360,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(16)
+		expect((await client.listTools()).tools.length).toBe(17)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -369,6 +390,7 @@ test('a decision with no options is opened before it is put to anyone', async ()
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
 	await call(client, 'propose', {
+		nodes: [{ key: 'form', title: 'The sign-up form', decisions: ['d'] }],
 		decisions: [{ key: 'd', category: 'data-flow', question: 'How does the form submit?' }],
 	})
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
@@ -424,4 +446,89 @@ test('a repository with no board says so, and `init` makes one', async () => {
 	)
 	expect(await call(client, 'board')).toContain('Acme')
 	expect(await call(client, 'init', {})).toContain('already a board')
+})
+
+test('a decision nothing binds is refused, and nothing is written', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+
+	// Found in the M1 gate: two of three decisions bound no node, so answering
+	// them would have unblocked nothing and the node they were about was ready.
+	const said = await call(client, 'propose', {
+		nodes: [{ key: 'auth', title: 'The auth API' }],
+		decisions: [
+			{
+				key: 'store',
+				category: 'state',
+				question: 'Where does session state live?',
+				options: [
+					{ id: 'cookie', label: 'A cookie', reason: 'No server state', costLater: 'Size limits' },
+					{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
+				],
+			},
+		],
+	})
+	expect(said).toContain('bind no node')
+	expect(said).toContain('store')
+
+	const loaded = await loadBoard(paths)
+	expect(loaded.nodes.size).toBe(0)
+	expect(loaded.decisions.size).toBe(0)
+})
+
+test('a wrong edge can be corrected, which is what makes a proposal safe to accept', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+
+	const before = await loadBoard(paths)
+	const [decision] = [...before.decisions.keys()]
+	const billing = [...before.nodes].find(
+		([, node]) => node.title === 'The billing screen',
+	)?.[0] as string
+
+	// The decision was bound to the auth node only; it holds the billing screen too.
+	expect(before.nodes.get(billing)?.decisions).toEqual([])
+	await call(client, 'bind', { node: billing, decisions: [decision] })
+
+	const after = await loadBoard(paths)
+	expect(after.nodes.get(billing)?.decisions).toEqual([decision])
+
+	// And removing it again, which is the half an add-only edit cannot do.
+	await call(client, 'bind', { node: billing, decisions: [] })
+	expect((await loadBoard(paths)).nodes.get(billing)?.decisions).toEqual([])
+})
+
+test('an edge that would close a cycle is refused after the fact too', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', {
+		nodes: [
+			{ key: 'a', title: 'A' },
+			{ key: 'b', title: 'B', dependsOn: ['a'] },
+		],
+	})
+	const nodes = await loadBoard(paths)
+	const a = [...nodes.nodes].find(([, node]) => node.title === 'A')?.[0] as string
+	const b = [...nodes.nodes].find(([, node]) => node.title === 'B')?.[0] as string
+
+	expect(await call(client, 'bind', { node: a, dependsOn: [b] })).toContain('closes a cycle')
+	expect((await loadBoard(paths)).nodes.get(a)?.dependsOn).toEqual([])
+})
+
+test('a decision nothing binds is named on the board, not left to be noticed', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
+	const auth = [...(await loadBoard(paths)).nodes].find(
+		([, node]) => node.title === 'The auth API',
+	)?.[0] as string
+
+	expect(await call(client, 'board')).not.toContain('Bound to nothing')
+	await call(client, 'bind', { node: auth, decisions: [] })
+
+	const shown = await call(client, 'board')
+	expect(shown).toContain('Bound to nothing')
+	expect(shown).toContain(decision ?? '')
 })

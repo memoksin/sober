@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import {
 	answerDecision,
 	approveBrief,
+	bind as bindEdges,
 	dispatch,
 	dispatchWave,
 	openDecisions,
@@ -16,15 +17,24 @@ import {
 } from '@besober/core'
 import { Brief } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
-import { blue, bold, columns, cyan, dim, fail, green, magenta, red, say, yellow } from './out.js'
+import { blue, bold, cyan, dim, fail, green, magenta, red, say, spinner, yellow } from './out.js'
 
-/** A tool call, a sentence and an ending do not read alike, so they do not look alike. */
-const TAIL: Record<string, ((text: string) => string) | undefined> = {
-	started: dim,
-	tool: blue,
-	text: dim,
-	result: green,
-	raw: red,
+/**
+ * A tool call, a sentence and an ending do not read alike, so they do not look
+ * alike. A mark rather than the word: the word `tool` beside every tool name is
+ * eight columns saying what the colour already said.
+ */
+const TAIL: Record<string, readonly [string, (text: string) => string] | undefined> = {
+	started: ['◌', dim],
+	tool: ['▸', blue],
+	text: ['│', dim],
+	result: ['✓', green],
+	raw: ['!', red],
+}
+
+const mark = (kind: string): string => {
+	const [glyph, colour] = TAIL[kind] ?? ['·', dim]
+	return colour(glyph)
 }
 
 /** Every command that writes turns a refusal into a sentence, never a stack trace (§8.7). */
@@ -158,21 +168,25 @@ export const run = async (nodes: readonly string[], base?: string): Promise<void
 
 	for (const node of nodes) {
 		say(`${cyan(bold(node))} ${dim(`on ${ref}`)}`)
+		const spin = spinner(node)
 		try {
 			const result = await dispatch(paths, node, {
 				base: ref,
 				onLine: (line) => {
 					const [rendered] = tail(line)
-					if (rendered !== undefined)
-						say(`  ${(TAIL[rendered.kind] ?? dim)(rendered.kind.padEnd(8))} ${rendered.text}`)
+					if (rendered === undefined) return
+					spin.clear()
+					say(`  ${mark(rendered.kind)} ${rendered.text}`)
 				},
 			})
+			spin.stop()
 			say(
 				result.exit === 'finished'
 					? `${green('✓')} ${node} finished — review it with \`sober review ${node}\``
 					: `${result.exit === 'stopped' ? yellow('·') : red('×')} ${node} ${result.exit}${result.error === null ? '' : `: ${result.error}`}`,
 			)
 		} catch (error) {
+			spin.stop()
 			refuse(error)
 		}
 	}
@@ -184,11 +198,14 @@ const wave = async (
 	base: string,
 ): Promise<void> => {
 	say(dim(`${nodes.length} nodes on ${base}, up to the concurrency limit`))
+	// A wave has no tail — two outputs interleave into noise — so the spinner is
+	// the only thing between the first line and the last.
+	const spin = spinner(`${nodes.length} nodes`)
 	const results = await dispatchWave(
 		paths,
 		nodes.map((node) => ({ node, options: { base } })),
 		base,
-	)
+	).finally(() => spin.stop())
 
 	for (const [index, result] of results.entries()) {
 		const node = nodes[index] ?? ''
@@ -234,9 +251,9 @@ export const logs = async (node: string): Promise<void> => {
 
 	const text = await readRunOutput(paths, last[0])
 	say(
-		columns(tail(text).map((line) => [`  ${(TAIL[line.kind] ?? dim)(line.kind)}`, line.text])).join(
-			'\n',
-		),
+		tail(text)
+			.map((line) => `  ${mark(line.kind)} ${line.text}`)
+			.join('\n'),
 	)
 }
 
@@ -245,4 +262,30 @@ const stdin = async (): Promise<string> => {
 	const chunks: Buffer[] = []
 	for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
 	return Buffer.concat(chunks).toString('utf8')
+}
+
+/**
+ * The edge correction §2.3 always claimed was supported. The lists replace what
+ * was there, which is what makes removing a wrong edge possible at all.
+ */
+export const bind = async (node: string, decisions?: string, dependsOn?: string): Promise<void> => {
+	const paths = await openBoard()
+	const list = (value?: string) =>
+		value === undefined
+			? undefined
+			: value
+					.split(',')
+					.map((one) => one.trim())
+					.filter(Boolean)
+	try {
+		const updated = await bindEdges(paths, node, {
+			decisions: list(decisions),
+			dependsOn: list(dependsOn),
+		})
+		say(`${green('✓')} ${cyan(node)}`)
+		say(`  ${magenta('binds')}    ${updated.decisions.join(', ') || dim('no decision')}`)
+		say(`  ${cyan('depends')}  ${updated.dependsOn.join(', ') || dim('nothing')}`)
+	} catch (error) {
+		refuse(error)
+	}
 }

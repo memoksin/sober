@@ -1,5 +1,5 @@
 import type { Board, Review } from '@besober/core'
-import { flagsOf, openDecisions, statusOf } from '@besober/core'
+import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
 import { decisionState } from '@besober/schema'
 
 /**
@@ -35,6 +35,15 @@ export const renderBoard = (board: Board): string => {
 		lines.push('', '## Decisions waiting on the human')
 		for (const [id, decision] of open)
 			lines.push(`- ${id} [${decisionState(decision)}] ${decision.category}: ${decision.question}`)
+	}
+
+	const loose = unbound(board)
+	if (loose.length > 0) {
+		lines.push(
+			'',
+			'## Bound to nothing',
+			`${loose.join(', ')} — each holds no node, so answering it unblocks nothing. Fix it with \`bind\`.`,
+		)
 	}
 
 	// A board that cannot be read whole is said out loud, never rendered as
@@ -101,6 +110,13 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 		`## Scan: ${scan.result === 'clean' ? 'clean' : scan.result === 'findings' ? `${scan.findings.length} finding(s)` : 'DID NOT RUN'}`,
 		`rules: ${scan.ruleSet}   files: ${review.files.length}`,
 	]
+	if (review.uncommitted.length > 0)
+		lines.push(
+			'',
+			`**${review.uncommitted.length} file(s) in the worktree were never committed**, so nothing below sees them: ${review.uncommitted.join(', ')}.`,
+			'A review reads the diff against the base, and an uncommitted file is not in it. Say this to the user rather than reporting the node as empty.',
+		)
+
 	// A scanner that could not run is never reported as clean (ADR 0011).
 	for (const missing of scan.didNotRun) lines.push(`! ${missing}`)
 	for (const finding of scan.findings)

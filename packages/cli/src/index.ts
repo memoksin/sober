@@ -4,7 +4,7 @@ import { init } from './board.js'
 import { bold, columns, dim, fail, say } from './out.js'
 import { accept, archive, reject, review } from './review.js'
 import { status } from './status.js'
-import { approve, brief, decide, decisions, logs, run, stop } from './work.js'
+import { approve, bind, brief, decide, decisions, logs, run, stop } from './work.js'
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -33,6 +33,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['decisions', 'every decision still waiting on you'],
 			['decide <id> <option>', 'answer one, and unblock what it holds'],
+			['bind <node> --decisions <ids>', 'say which decisions hold a node'],
 		],
 	],
 	[
@@ -83,6 +84,8 @@ const options = {
 	message: { type: 'string', short: 'm' },
 	why: { type: 'string' },
 	write: { type: 'string' },
+	decisions: { type: 'string' },
+	'depends-on': { type: 'string' },
 	queue: { type: 'boolean' },
 	clean: { type: 'boolean' },
 	diff: { type: 'boolean' },
@@ -116,6 +119,12 @@ const main = async (): Promise<void> => {
 			const id = need('decision')
 			const option = rest[1] ?? fail(`which option? \`sober decisions\` lists them`)
 			return decide(id, option, values.why)
+		}
+		case 'bind': {
+			const node = need('node')
+			if (values.decisions === undefined && values['depends-on'] === undefined)
+				fail('bind what? --decisions <ids> and --depends-on <ids>, comma separated')
+			return bind(node, values.decisions, values['depends-on'])
 		}
 		case 'brief':
 			return brief(need('node'), values.write)
