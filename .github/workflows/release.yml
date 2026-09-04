@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      # Trusted publishing: npm mints a short-lived credential from this token,
+      # so no publish token is ever stored in the repository (ADR 0007,
+      # BUILD-PLAN §10). The same token is what signs the provenance attestation.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # The npm bundled with Node 22 predates trusted publishing. Without this
+      # the publish falls back to asking for a token that does not exist.
+      - name: an npm that can publish without a token
+        run: npm install --global npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # Two states, one action: with changesets pending it opens or updates the
+      # version pull request; with none pending — which is what merging that
+      # pull request leaves behind — it publishes.
+      - uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          publish: pnpm release
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'

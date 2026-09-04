@@ -1,0 +1,11 @@
+{
+	"name": "sober",
+	"owner": { "name": "Mehmet Yiğit Keskin" },
+	"plugins": [
+		{
+			"name": "sober",
+			"source": "./packages/claude-code-plugin",
+			"description": "Plan work as a graph, then dispatch agents into it."
+		}
+	]
+}
