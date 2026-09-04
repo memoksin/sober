@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Run } from '@besober/schema'
@@ -7,11 +7,14 @@ import { newId } from './id.js'
 import {
 	appendEvent,
 	appendRunOutput,
+	clearRunPid,
 	readLog,
 	readRun,
+	readRunPid,
 	readRuns,
 	runLog,
 	writeRun,
+	writeRunPid,
 } from './local.js'
 import { paths } from './paths.js'
 
@@ -61,4 +64,18 @@ test('a torn line is reported and the rest of the log still loads', async () => 
 	expect(events[0]).toMatchObject({ node: 'auth-api-k7f2' })
 	expect(broken).toHaveLength(1)
 	expect(broken[0]?.file).toBe(`${board.log}:3`)
+})
+
+test('a run with no pid file cannot be stopped, and says so instead of throwing', async () => {
+	expect(await readRunPid(board, 'auth-api-k7f2-r1')).toBeNull()
+
+	await mkdir(board.runs, { recursive: true })
+	await writeRunPid(board, 'auth-api-k7f2-r1', 4242)
+	expect(await readRunPid(board, 'auth-api-k7f2-r1')).toBe(4242)
+
+	// Cleared when the run ends: a stale pid belongs to whatever process the
+	// operating system handed the number to next.
+	await clearRunPid(board, 'auth-api-k7f2-r1')
+	expect(await readRunPid(board, 'auth-api-k7f2-r1')).toBeNull()
+	await clearRunPid(board, 'auth-api-k7f2-r1')
 })

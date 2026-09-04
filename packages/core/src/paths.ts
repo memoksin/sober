@@ -17,6 +17,7 @@ export interface Paths {
 	readonly archivedDecisions: string
 	readonly local: string
 	readonly runs: string
+	readonly feedback: string
 	readonly log: string
 	readonly cache: string
 	readonly lock: string
@@ -41,6 +42,7 @@ export const paths = (root: string): Paths => {
 		archivedDecisions: join(sober, 'archive', 'decisions'),
 		local,
 		runs: join(local, 'runs'),
+		feedback: join(local, 'feedback'),
 		log: join(local, 'log.jsonl'),
 		cache: join(local, 'cache.json'),
 		lock: join(local, 'lock'),

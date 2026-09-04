@@ -1,10 +1,11 @@
-import { mkdir, readFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Project } from '@besober/schema'
 import { SCHEMA_VERSION } from '@besober/schema'
 import { DEFAULT_CONFIG_TEXT, writeConfig } from './config.js'
+import { git, gitWithEnv, refExists } from './git.js'
 import type { Paths } from './paths.js'
-import { paths as resolvePaths } from './paths.js'
+import { paths as resolvePaths, SOBER_DIR } from './paths.js'
 import { readProject, writeProject } from './records.js'
 import { writeAtomic } from './write.js'
 
@@ -60,4 +61,59 @@ export const ensureGitignore = async (root: string): Promise<void> => {
 		file,
 		`${current}${separator}${current.length === 0 ? '' : '\n'}${GITIGNORE_BLOCK}`,
 	)
+}
+
+/**
+ * The board branch is an **orphan** (`PR-00-05`): it shares no history with the
+ * code, so a board merge never touches source and `git log` on main is not half
+ * board commits. It is created empty and never checked out in the working copy
+ * — M2's sync reads and writes it through plumbing.
+ */
+export const createBoardBranch = async (root: string, branch: string): Promise<boolean> => {
+	if (await refExists(root, branch)) return false
+	// An empty commit rather than a first file: the branch has to exist before
+	// there is anything to put on it, and a tree written now would be wrong by
+	// the time sync writes one. The tree is written through a throwaway index,
+	// so no working copy is touched and no path is hardcoded (§9).
+	const index = join(root, SOBER_DIR, 'local', 'empty-index')
+	const tree = await gitWithEnv(root, { GIT_INDEX_FILE: index }, ['write-tree'])
+	await rm(index, { force: true })
+	const commit = await git(root, 'commit-tree', tree, '-m', 'sober: the board branch')
+	await git(root, 'branch', branch, commit)
+	return true
+}
+
+/**
+ * `sober init` writes a concrete value into `dispatch.setup` rather than
+ * leaving it blank (`PR-00-06`): a lockfile says what the install command is,
+ * and the user corrects one line instead of writing one from nothing. This is
+ * D1's shape applied to configuration — the tool fills it in, the human
+ * approves. There is no detection at dispatch time.
+ */
+const INSTALLERS: readonly (readonly [string, string])[] = [
+	['pnpm-lock.yaml', 'pnpm install --frozen-lockfile'],
+	['yarn.lock', 'yarn install --immutable'],
+	['bun.lock', 'bun install --frozen-lockfile'],
+	['bun.lockb', 'bun install --frozen-lockfile'],
+	['package-lock.json', 'npm ci'],
+	['uv.lock', 'uv sync --frozen'],
+	['poetry.lock', 'poetry install'],
+	['Pipfile.lock', 'pipenv install --deploy'],
+	['requirements.txt', 'pip install -r requirements.txt'],
+	['Cargo.lock', 'cargo fetch'],
+	['go.sum', 'go mod download'],
+	['Gemfile.lock', 'bundle install'],
+	['composer.lock', 'composer install'],
+]
+
+export const detectSetup = async (root: string): Promise<string | null> => {
+	for (const [file, command] of INSTALLERS) {
+		try {
+			await access(join(root, file))
+			return command
+		} catch {
+			// Not this one.
+		}
+	}
+	return null
 }

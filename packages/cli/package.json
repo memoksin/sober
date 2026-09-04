@@ -1,7 +1,7 @@
 {
 	"name": "@besober/cli",
 	"version": "0.0.0",
-	"description": "SOBER — agentic development platform.",
+	"description": "SOBER \u2014 agentic development platform.",
 	"type": "module",
 	"bin": {
 		"sober": "./dist/sober.js"
@@ -21,7 +21,14 @@
 		"publint": "publint --strict"
 	},
 	"devDependencies": {
+		"@besober/core": "workspace:*",
+		"@besober/mcp": "workspace:*",
+		"@besober/schema": "workspace:*",
 		"esbuild": "^0.28.0",
 		"publint": "^0.3.16"
+	},
+	"dependencies": {
+		"secretlint": "^13.0.5",
+		"@secretlint/secretlint-rule-preset-recommend": "^13.0.5"
 	}
 }

@@ -13,6 +13,12 @@ await build({
 	format: 'esm',
 	sourcemap: true,
 	packages: 'bundle',
+	// jsonc-parser's `main` is a UMD file whose inner require() calls go through
+	// the factory argument, so a bundler cannot follow them and the published
+	// binary dies on its first config read. Its ESM build has plain imports —
+	// preferring `module` is what makes the bundle whole (ADR 0007's warning
+	// about a plausible wrong bundle, met in practice).
+	mainFields: ['module', 'main'],
 	external: ['secretlint'],
 	banner: {
 		js: [

@@ -49,7 +49,7 @@ Phase 5. `packages/server` and the wire contract first, then the canvas, node pa
 On a real repository:
 
 1. `npm i -g @besober/cli`, then `sober init`
-2. In a Claude Code session, `/sober-plan`, intent in free text
+2. In a Claude Code session, `/sober:plan`, intent in free text
 3. See the proposed nodes and edges; accept as a batch
 4. Open a decision, options are produced, pick through elicitation
 5. Ask for a node's brief, read the approach, approve it
@@ -59,6 +59,8 @@ On a real repository:
 9. A downstream node moves off `blocked`
 
 Nine steps. Green means the product exists. M2 and M3's gates are the same script with a teammate, and then with no terminal.
+
+**Run on 2026-09-04, green.** `pnpm gate:m1` prepares it; `M1-GATE.md` records what it found — fourteen defects, none of which the suite could see against a faked host.
 
 ---
 
@@ -144,7 +146,7 @@ Each of these is a place where a wrong first attempt costs days, and where an ag
 | **git worktrees and branches** | `git help worktree`, `git help branch`. Create three worktrees by hand, break one, recover it. | 2–3 |
 | **git merge without conflict markers** | `git help attributes` on `merge=binary` and `-text`, `git help show` for the `:1:`/`:2:`/`:3:` stage syntax, `git help merge`. Then resolve one conflict programmatically by hand. | 3–4 |
 | **npm packaging of a bundled CLI** | `exports` semantics, esbuild's `bundle`/`platform`/`banner` options, how a bundler inlines a workspace dependency and what stops it doing so, `publint`. Publish a throwaway scoped package and install it globally. | 2–3 |
-| **MCP: tools and elicitation** | The protocol's tool and elicitation shapes, and how Claude Code surfaces an elicitation request. This is what makes `PR-03-09` real. | 2–3 |
+| **MCP: tools and elicitation** | The protocol's tool and elicitation shapes, and how Claude Code surfaces an elicitation request. This is what makes `PR-03-09` real. Read off the installed SDK, not from memory: two protocol revisions are in the field, and the newer one's `elicitation.form` capability makes an SDK refuse a request that the older, bare `elicitation` host would have answered. | 2–3 |
 | **The gating and status model** | On paper, not in an editor. Write the seven statuses and walk five real nodes through them, including a shared decision bound by three of them. | 1–2 |
 | **Host CLI headless invocation** | Each host's current documentation, at the moment you implement the adapter — never from memory, and never from v0's code. `DESIGN.md` §5.1 says why. | 2 per host |
 | **Graph library spike** | 200 nodes, circular, force layout, hover — in Cytoscape and in sigma. One question each. Not a benchmark, a feel test. | 1 day |
@@ -175,13 +177,13 @@ Growing the surface now means updating a snapshot in the same PR, where it is vi
 
 **3. One node, one PR, one changeset.** The board is the plan; a PR with no node is work nobody planned.
 
-**4. A deletion pass, weekly, thirty minutes.** `knip` for dead exports, `depcheck` for unused dependencies, and a read of every deliberate shortcut older than a month. Repositories do not shrink on their own, and v0's did not.
+**4. A deletion pass, weekly, thirty minutes.** `knip` for dead exports, `depcheck` for unused dependencies, a read of the surface snapshot itself (ADR 0028 — this, not the ceiling, is what shaves the surface), and a read of every deliberate shortcut older than a month. Repositories do not shrink on their own, and v0's did not.
 
 **5. Never bypass a check.** If a required check is wrong, change the check, in its own PR, with a reason. v0 allowed the admin bypass and it was used. A ratchet with an override is a suggestion.
 
 Three **alarms** beside the ratchets (ADR 0023). An alarm warns and asks for an ADR; it does not fail the build:
 
-- `core` exports > 60.
+- `core` exports > 90 (ADR 0028 — the number moves with the number of consumers, by ADR; the surface snapshot above is the guard that actually catches growth).
 - `apps/dashboard` lines > 1.5 × `packages/core` lines. v0's ratio was 0.67; the problem was that the screens came before the loop closed, and this is the only number that would have shown the phase running away.
 - A phase past 1.5 × its estimate: rewrite the phase gate before continuing.
 
@@ -221,8 +223,8 @@ Phase 0 closed on 2026-08-29. Three items from the 2026-08-29 review were delibe
 
 | Phase | Carried item | Why it waits | Cost |
 | --- | --- | --- | --- |
-| **2** — `core` | A soft ceiling beside the surface snapshot: `core` exports > 60 emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it. | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting. | ~10 min |
-| **3** — `cli` published | npm **provenance** and **trusted publishing**: `permissions: id-token: write` and `npm publish --provenance`, so the tarball is signed against the commit and workflow that built it, and no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007). | Provenance is three lines _inside a release workflow_, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing. | ~45 min with the release workflow |
+| **2** — `core` | A soft ceiling beside the surface snapshot: `core` exports over the ceiling emits a CI warning (§7's first alarm, REVIEW-2026-08-29 §3.6). The snapshot makes growth visible; the ceiling is the second line, for the day one tired reviewer updates a snapshot without reading it. | There is no `core` to count. It belongs in the same file as the snapshot test, written in the same sitting. | ~10 min |
+| **3** — `cli` published | ~~npm **provenance** and **trusted publishing**~~ — **done**, phase 3 session 5: `.github/workflows/release.yml` carries `id-token: write`, `NPM_CONFIG_PROVENANCE`, and an npm new enough to mint its own credential, so no publish token is stored in the repository (REVIEW-2026-08-29 §1.2/2, ADR 0007). | Provenance is three lines _inside a release workflow_, and nothing is published before M1. Writing the workflow early means maintaining a workflow that publishes nothing. | ~45 min with the release workflow |
 | **4** — contributors | `.github/CODEOWNERS` narrowed past `* @memoksin`: an explicit entry for every barrel (`**/index.ts`) and for `docs/`, which turns §5's "barrel files are yours" from a habit into a check (REVIEW-2026-08-29 §1.2/3). **And**: the admin bypass narrows or is removed (ADR 0026). | With one contributor, `*` already covers every path and the bypass exists precisely because a solo repository cannot satisfy a code-owner review. Both only become real when a second person pushes. | ~15 min |
 
 Phase 0 also closed with four deviations from what this file and `STRUCTURE.md` predicted. All four are recorded where they belong rather than here: TypeScript is pinned at 6.x and the reason is in `STRUCTURE.md`; the owner may bypass `main` and the reason is ADR 0026; `apps/*` is out of `vitest.config.ts` and the `boundaries` command until phase 5 creates the dashboard; and `packages/cli` exists from day one as a stub, so that esbuild, `publint` and the pack-and-install smoke test are real checks before there is a CLI to break — Law 1, applied to itself.

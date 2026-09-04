@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { applyEdits, modify, type ParseError, parse as parseJsonc } from 'jsonc-parser'
 import { z } from 'zod'
+import { showFromRef } from './git.js'
 import type { Paths } from './paths.js'
+import { SOBER_DIR } from './paths.js'
 import type { BrokenRecord } from './read.js'
 import { writeAtomic } from './write.js'
 
@@ -17,11 +19,18 @@ import { writeAtomic } from './write.js'
  */
 export const Config = z.strictObject({
 	dispatch: z.strictObject({
+		host: z.string().min(1),
 		setup: z.string().nullable(),
 		verify: z.string().nullable(),
 		timeoutMinutes: z.int().positive(),
 		concurrency: z.int().positive(),
 		draftPr: z.boolean(),
+	}),
+	board: z.strictObject({
+		branch: z.string().min(1),
+	}),
+	scan: z.strictObject({
+		extra: z.array(z.string()),
 	}),
 	lock: z.strictObject({
 		staleSeconds: z.int().positive(),
@@ -34,11 +43,18 @@ export type Config = z.infer<typeof Config>
 /** Conservative on purpose: a first dispatch should not open twelve invoices (§5.3). */
 export const DEFAULT_CONFIG: Config = {
 	dispatch: {
+		host: 'claude',
 		setup: null,
 		verify: null,
 		timeoutMinutes: 30,
 		concurrency: 3,
 		draftPr: true,
+	},
+	board: {
+		branch: 'sober-graph',
+	},
+	scan: {
+		extra: [],
 	},
 	lock: {
 		staleSeconds: 60,
@@ -55,6 +71,11 @@ export const DEFAULT_CONFIG_TEXT = `{
 	"$schema": "https://besober.dev/schema/config.json",
 
 	"dispatch": {
+		// The host CLI SOBER launches headless. It is the tool you already
+		// installed and logged into: SOBER never asks for an API key and
+		// never chooses the model (DESIGN §5.1).
+		"host": "${DEFAULT_CONFIG.dispatch.host}",
+
 		// Shell command run in a fresh worktree before the agent starts.
 		// null runs nothing. Read from the base ref, never from the branch
 		// being worked on (ADR 0019).
@@ -74,6 +95,21 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// Open the node's pull request as a draft. A draft asks nobody to
 		// review anything.
 		"draftPr": ${DEFAULT_CONFIG.dispatch.draftPr}
+	},
+
+	"board": {
+		// The orphan branch the board travels on. Created by \`sober init\`,
+		// and never checked out in your working copy (DESIGN §1.2).
+		"branch": "${DEFAULT_CONFIG.board.branch}"
+	},
+
+	"scan": {
+		// Extra scanners run in the worktree beside the bundled secretlint,
+		// as commands — for example ["semgrep scan --error --quiet"]. A
+		// non-zero exit is a finding; a command that is not installed is
+		// reported, never silently skipped (DESIGN §6.2). Read from the base
+		// ref, never from the branch under review.
+		"extra": []
 	},
 
 	"lock": {
@@ -104,6 +140,22 @@ export const readConfig = async (paths: Paths): Promise<ReadConfig> => {
 	return parseConfig(paths.config, text)
 }
 
+/**
+ * The reader ADR 0019 requires: the settings that govern how a run is prepared
+ * and how its result is judged come from the base ref, not from the branch
+ * being worked on. A dispatched agent can write to `config.jsonc`; read from
+ * its own branch, it could rewrite the command SOBER runs on the next dispatch,
+ * or relax the scan its own diff is measured by. Read from the base, that edit
+ * is a diff line a human reads first.
+ *
+ * A base that carries no config is the defaults, exactly like a missing file.
+ */
+export const readConfigFromBase = async (paths: Paths, base: string): Promise<ReadConfig> => {
+	const text = await showFromRef(paths.root, base, `${SOBER_DIR}/config.jsonc`)
+	if (text === null) return { kind: 'ok', value: DEFAULT_CONFIG }
+	return parseConfig(`${base}:${SOBER_DIR}/config.jsonc`, text)
+}
+
 export const parseConfig = (file: string, text: string): ReadConfig => {
 	const errors: ParseError[] = []
 	const parsed = parseJsonc(text, errors, { allowTrailingComma: true })
@@ -115,6 +167,8 @@ export const parseConfig = (file: string, text: string): ReadConfig => {
 		...DEFAULT_CONFIG,
 		...(parsed as Partial<Config>),
 		dispatch: { ...DEFAULT_CONFIG.dispatch, ...(parsed as Partial<Config>)?.dispatch },
+		board: { ...DEFAULT_CONFIG.board, ...(parsed as Partial<Config>)?.board },
+		scan: { ...DEFAULT_CONFIG.scan, ...(parsed as Partial<Config>)?.scan },
 		lock: { ...DEFAULT_CONFIG.lock, ...(parsed as Partial<Config>)?.lock },
 	}
 	const { $schema: _schema, ...settings } = merged as Config & { $schema?: unknown }
@@ -141,3 +195,17 @@ export const setSetting = (
 
 export const writeConfig = (paths: Paths, text: string): Promise<void> =>
 	writeAtomic(paths.config, text)
+
+/**
+ * Change one setting in place, keeping every comment and the shape of the file
+ * around it. Both writing surfaces do the same three steps — read, modify,
+ * write atomically — so they do it here rather than each holding a copy.
+ */
+export const applySetting = async (
+	paths: Paths,
+	path: readonly (string | number)[],
+	value: unknown,
+): Promise<void> => {
+	const text = await readFile(paths.config, 'utf8')
+	await writeConfig(paths, setSetting(text, path, value))
+}

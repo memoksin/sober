@@ -1,5 +1,5 @@
 import type { Decision, Node, Project, Run } from '@besober/schema'
-import { readRuns } from './local.js'
+import { type Feedback, readFeedbacks, readRuns } from './local.js'
 import type { Paths } from './paths.js'
 import type { BrokenRecord } from './read.js'
 import { readArchivedDecisions, readDecisions, readNodes, readProject } from './records.js'
@@ -13,14 +13,23 @@ export interface Board {
 	readonly project: Project | null
 	readonly nodes: ReadonlyMap<string, Node>
 	readonly decisions: ReadonlyMap<string, Decision>
+	/**
+	 * Which of those decisions are archived. They stay in `decisions` because a
+	 * node that bound one keeps reading it (§8.3) — and they are named here
+	 * because a surface that cannot tell them apart lists an archived decision
+	 * as one still waiting on the human.
+	 */
+	readonly archivedDecisions: ReadonlySet<string>
 	/** Local, disposable, and never shared: runs decide `running` and `in-review`. */
 	readonly runs: ReadonlyMap<string, Run>
+	/** Local too, and by node: a rejection is what takes a node back out of review (§6.4). */
+	readonly feedback: ReadonlyMap<string, Feedback>
 	/** Named, never thrown: one bad file does not take down the board (§8.4). */
 	readonly broken: readonly BrokenRecord[]
 }
 
 export const loadBoard = async (paths: Paths): Promise<Board> => {
-	const [project, nodes, decisions, archived, runs] = await Promise.all([
+	const [project, nodes, decisions, archived, runs, feedback] = await Promise.all([
 		readProject(paths),
 		readNodes(paths),
 		readDecisions(paths),
@@ -28,18 +37,22 @@ export const loadBoard = async (paths: Paths): Promise<Board> => {
 		// after it is archived (§8.3), so the board loads both.
 		readArchivedDecisions(paths),
 		readRuns(paths),
+		readFeedbacks(paths),
 	])
 	return {
 		project: project.kind === 'ok' ? project.value : null,
 		nodes: nodes.records,
 		decisions: new Map([...archived.records, ...decisions.records]),
+		archivedDecisions: new Set(archived.records.keys()),
 		runs: runs.records,
+		feedback: feedback.records,
 		broken: [
 			...(project.kind === 'broken' ? [{ file: project.file, reason: project.reason }] : []),
 			...nodes.broken,
 			...decisions.broken,
 			...archived.broken,
 			...runs.broken,
+			...feedback.broken,
 		],
 	}
 }

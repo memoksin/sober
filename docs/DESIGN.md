@@ -385,7 +385,7 @@ The warning is only as good as the `files` prediction, which is why the field is
 
 Intent in, proposed graph out (D13, ADR 0004). The agent returns nodes, **the edges between them**, and the decisions each node binds. A proposal is not board state: it is rendered as a proposal, and the human accepts, edits, or drops it.
 
-This happens in the user's host session, through SOBER's tools (ADR 0009). That session already holds the repository in context, which is why its proposals beat a cold subprocess's — and why the empty state in the dashboard points at `/sober-plan` rather than generating anything itself (ADR 0010).
+This happens in the user's host session, through SOBER's tools (ADR 0009). That session already holds the repository in context, which is why its proposals beat a cold subprocess's — and why the empty state in the dashboard points at `/sober:plan` rather than generating anything itself (ADR 0010).
 
 Proposals are **written to disk as they are made**: nodes as proposals, decisions as records with `suggested` set and no `answer`, which §2.4 already treats as open. A crashed session loses nothing, and the acceptance record lands on the board rather than in a chat log.
 
@@ -442,7 +442,7 @@ When a decision changes, approval on every affected brief is **withdrawn** and t
 
 A finishing agent writes a short summary of what it did into the node's `outcome`. Downstream briefs carry it, which is what lets them execute cold without the agent reading upstream code or doing git work to find out what happened.
 
-**OPEN (phase 2):** the exact prompt shape handed to the host, and where the rendered brief is materialised for a dispatch.
+The brief is handed to the host as its prompt argument, and is **not materialised anywhere**. A brief written into the worktree would be a file outside the node's declared `files`, which is one of the scan's six signals (§6.2) — the review would open with a finding SOBER itself caused, on every dispatch. Settled in phase 3.
 
 ---
 
@@ -455,6 +455,10 @@ Three surfaces, one contract. `PR-09-08`: every **state-changing** operation is 
 - **The dashboard**: the primary surface for the board (MUST #6). **M3.**
 
 `core` owns every read and write under `.sober/`. The CLI, the dashboard server, and the MCP server call into `core` and never touch storage themselves. This is not a convention: `dependency-cruiser` fails the build on a violation (`STRUCTURE.md`).
+
+The MCP server ships as `sober mcp`, a subcommand of the same binary rather than a second package — one install, one version, one changelog (ADR 0007). It offers one tool per operation: `init` and `board` and `decisions` to read, `propose` to write a graph with its edges in one call, `open_decision` and `write_brief` to author, `run` and `stop` and `logs` to dispatch, `review` and `reject` and `archive` to judge, and `decide`, `approve` and `accept` — the three the agent cannot perform alone.
+
+Those three go to the human through elicitation (ADR 0010). A host that declares no elicitation capability is refused and told to use the command line; the board is the same one either way. Two revisions of the protocol are in the field at once — the newer splits the capability into `form` and `url`, the older declares a bare `elicitation` — so the capability is read before the request is made, and a host is never refused for something it supports.
 
 ### 4.1 The dashboard has a server — M3
 
@@ -503,7 +507,21 @@ This is the **adapter** (§2.9). It is thin by contract: build an invocation, st
 
 Note what an adapter is _not_ used for. Decomposition, option generation and brief writing are not adapter calls — they happen inside the user's session through the MCP server (ADR 0009). SOBER launches a host headless only to make a node's code.
 
-**OPEN (phase 3):** the exact invocation per host — verified against each host's current documentation at implementation time, never from memory. v0's lesson: hook and CLI payload shapes drift between releases.
+The Claude Code invocation, read off the installed CLI at implementation time rather than from memory:
+
+```
+claude -p <the brief> --output-format stream-json --verbose --permission-mode bypassPermissions
+```
+
+Three things in it are not obvious, and each was a surprise worth recording:
+
+- `--output-format stream-json` is what makes a live tail possible at all (`PR-05-09`). Plain `--print` emits the final answer only, after the run is over.
+- **stdin is closed.** A `claude -p` with an inherited stdin waits three seconds for input that never arrives, on every dispatch.
+- `--permission-mode bypassPermissions` is what an unattended run needs: an agent that must build and test its own work cannot answer a permission prompt nobody is watching. The containment is the worktree and the review, not the prompt — which is the trade `PR-09-05` already makes explicit by never letting an agent land its own work.
+
+`dispatch.host` is a command line, not just a program name, so `npx claude` and `claude --model opus` are both settable. It is split on whitespace: a host whose path contains a space needs a wrapper script.
+
+The other hosts are v1.x, and each one's invocation is read from its own current documentation when its adapter is written — never ported from this one.
 
 ### 5.2 Before a run starts
 
@@ -586,6 +604,10 @@ ADR 0011 settles what runs:
 
 "Injection-shaped changes" was the earlier wording and is dropped. A real injection analyser needs one rule set per language a user might write in; a named short list keeps a promise the product can keep, and what the scan does _not_ catch is documented next to what it does.
 
+What the six do **not** catch is part of the promise. They read one added line at a time, with no per-language parsing: a URL inside an added comment is reported, a shell call assembled across three lines is not, and neither is anything already in the repository — `PR-09-07` covers that. Each signal is a reason for a human to look, never a proof.
+
+`scan.extra` runs a project's own scanners beside the bundled one, as **commands** rather than tool names — `semgrep scan --error --quiet`. Every scanner's invocation, output format and exit codes differ, and a name would mean SOBER guessing one per tool and ageing badly. A non-zero exit is a finding carrying its first line; a command that is not installed did not run, and says so.
+
 The scan reads the **added lines of the diff**, not the worktree. Scanning the worktree reports everything already in the repository and makes the screen useless; `PR-09-07` covers what is already there.
 
 A scanner that cannot run does not disappear. Review proceeds, "the scan did not run" renders with the weight of a finding, and the fact goes into the `accepted` record. `PR-09-06` requires that a failed scan is never silently dropped, and a broken scanner is the case that would otherwise slip through.
@@ -606,7 +628,13 @@ Rejecting is correcting, not discarding (D34). The user writes what was wrong; t
 
 The branch, the worktree and the draft pull request all stay as they are (§5.0), and the next attempt commits on top unless the user asks to start clean. Throwing the work away and saying nothing means the agent repeats the mistake — and deletion is the one thing a review cannot undo.
 
-**OPEN (phase 3):** how feedback is carried into the next run — appended to the brief, or a separate field the adapter passes through.
+The feedback is a **local record**, `local/feedback/<node>.json`, and the next dispatch puts it **above** the brief rather than inside it. Three things follow from that shape, and each one was the reason to pick it:
+
+- The approved text stays the approved text. Appending to the brief would have a machine editing what a human signed off, and two rejections in it is a page nobody reads to the end.
+- Feedback first, because it is the only part the agent has not already seen. "Rejecting is correcting" fails if the correction is buried under a page the agent wrote itself.
+- It is what takes the node **out** of the review queue: a rejection written after the run ended is what makes a `finished` run stop counting as `in-review` (§3.2). There is no field on the run to forget to set.
+
+Local, like the run it answers (§5.5) — a teammate needs to know the node is unfinished, not how many times someone's laptop turned work down. If M2 finds a reason for feedback to travel, it moves to the board then.
 
 ---
 
