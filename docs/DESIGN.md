@@ -600,6 +600,10 @@ ADR 0011 settles what runs:
 
 "Injection-shaped changes" was the earlier wording and is dropped. A real injection analyser needs one rule set per language a user might write in; a named short list keeps a promise the product can keep, and what the scan does _not_ catch is documented next to what it does.
 
+What the six do **not** catch is part of the promise. They read one added line at a time, with no per-language parsing: a URL inside an added comment is reported, a shell call assembled across three lines is not, and neither is anything already in the repository — `PR-09-07` covers that. Each signal is a reason for a human to look, never a proof.
+
+`scan.extra` runs a project's own scanners beside the bundled one, as **commands** rather than tool names — `semgrep scan --error --quiet`. Every scanner's invocation, output format and exit codes differ, and a name would mean SOBER guessing one per tool and ageing badly. A non-zero exit is a finding carrying its first line; a command that is not installed did not run, and says so.
+
 The scan reads the **added lines of the diff**, not the worktree. Scanning the worktree reports everything already in the repository and makes the screen useless; `PR-09-07` covers what is already there.
 
 A scanner that cannot run does not disappear. Review proceeds, "the scan did not run" renders with the weight of a finding, and the fact goes into the `accepted` record. `PR-09-06` requires that a failed scan is never silently dropped, and a broken scanner is the case that would otherwise slip through.

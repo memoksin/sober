@@ -56,6 +56,7 @@ export {
 	type StartedRun,
 	startRun,
 } from './run.js'
+export { type Finding, type ScanReport, scanNode } from './scan.js'
 export { type Flags, flagsOf, ready, statuses, statusOf } from './status.js'
 export { tail } from './tail.js'
 export {

@@ -104,10 +104,11 @@ export const DEFAULT_CONFIG_TEXT = `{
 	},
 
 	"scan": {
-		// Extra scanners run beside the bundled secretlint, by name — for
-		// example ["semgrep", "gitleaks"]. Each must already be installed;
-		// one that is not is reported, never silently skipped (DESIGN §6.2).
-		// Read from the base ref, never from the branch under review.
+		// Extra scanners run in the worktree beside the bundled secretlint,
+		// as commands — for example ["semgrep scan --error --quiet"]. A
+		// non-zero exit is a finding; a command that is not installed is
+		// reported, never silently skipped (DESIGN §6.2). Read from the base
+		// ref, never from the branch under review.
 		"extra": []
 	},
 

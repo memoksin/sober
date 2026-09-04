@@ -50,6 +50,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "renderBrief",
   "resetToBase",
   "runLog",
+  "scanNode",
   "setSetting",
   "showFromRef",
   "startRun",
