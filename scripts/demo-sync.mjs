@@ -59,6 +59,8 @@ const node = (title, description, files) =>
 			files,
 			brief: null,
 			outcome: null,
+			assignee: null,
+			claim: null,
 			accepted: null,
 			createdAt: AT,
 		},

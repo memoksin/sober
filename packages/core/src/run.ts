@@ -1,5 +1,6 @@
 import type { CommandResult, Node, Run, RunExit } from '@besober/schema'
 import { NotOnBoardError } from './errors.js'
+import { whoami } from './git.js'
 import { newId } from './id.js'
 import { appendEvent, readRun, writeRun } from './local.js'
 import { withLock } from './lock.js'
@@ -19,7 +20,16 @@ export interface StartedRun {
 
 export const startRun = (paths: Paths, node: string, host: string): Promise<StartedRun> =>
 	withLock(paths, 'run', async () => {
-		if ((await readNode(paths, node)).kind !== 'ok') throw new NotOnBoardError('node', node)
+		const record = await readNode(paths, node)
+		if (record.kind !== 'ok') throw new NotOnBoardError('node', node)
+
+		// Claim is a fact: whoever actually starts it (DESIGN §3.3). Written here
+		// so a run started from a session and one started from the CLI say the
+		// same thing about who is on the node.
+		await writeNode(paths, node, {
+			...record.value,
+			claim: { by: await whoami(paths.root), at: new Date().toISOString() },
+		})
 
 		const id = newId(node)
 		const run: Run = {

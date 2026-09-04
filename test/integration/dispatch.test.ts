@@ -8,6 +8,7 @@ import {
 	HostError,
 	initBoard,
 	type Paths,
+	readNodes,
 	readRuns,
 	rejectWork,
 	runLog,
@@ -41,6 +42,8 @@ const aNode = (title: string) => ({
 	files: ['src/auth.ts'],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
 	createdAt: '2026-09-04T00:00:00.000Z',
 })
@@ -107,6 +110,18 @@ test('a dispatch runs the host in the node’s worktree and records how it exite
 	// the worktree for the scan to report as an undeclared file.
 	expect(readFileSync(written, 'utf8')).toContain('Sign in and sign out.')
 	expect(existsSync(join(result.worktree, 'brief.md'))).toBe(false)
+})
+
+test('starting work claims the node, so a teammate sees who is on it', async () => {
+	const paths = await board()
+	expect((await readNodes(paths)).records.get('auth-api-k7f2')?.claim).toBeNull()
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	// git's `user.name` in the fixture repository — the same name every other
+	// surface attributes with (DESIGN §3.3, ADR 0030).
+	const after = (await readNodes(paths)).records.get('auth-api-k7f2')
+	expect(after?.claim?.by).toBe('SOBER Test')
 })
 
 test('the raw log is kept, and the tail renders it without the host’s own noise', async () => {

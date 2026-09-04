@@ -1,5 +1,6 @@
 import type { Board, Review } from '@besober/core'
 import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
+import type { Node } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 
 /**
@@ -25,7 +26,7 @@ export const renderBoard = (board: Board): string => {
 			const state = statusOf(board, id) ?? 'needs-brief'
 			const flags = flagsOf(board, id)
 			lines.push(
-				`- ${id} [${state}] ${node?.title ?? ''}${flags.lastRunFailed ? ' — the last run failed' : ''}${waiting(board, id)}`,
+				`- ${id} [${state}] ${node?.title ?? ''}${who(node)}${flags.lastRunFailed ? ' — the last run failed' : ''}${waiting(board, id)}`,
 			)
 		}
 	}
@@ -53,6 +54,13 @@ export const renderBoard = (board: Board): string => {
 		for (const broken of board.broken) lines.push(`- ${broken.file}: ${broken.reason}`)
 	}
 	return lines.join('\n')
+}
+
+/** A claim is a fact and an assignment is a plan (§3.3), so they never read the same. */
+const who = (node: Node | undefined): string => {
+	if (node?.claim != null) return ` — ${node.claim.by} is on it`
+	if (node?.assignee != null) return ` — for ${node.assignee}`
+	return ''
 }
 
 const waiting = (board: Board, id: string): string => {

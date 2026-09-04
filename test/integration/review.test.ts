@@ -71,6 +71,8 @@ const board = async (): Promise<Paths> => {
 		files: ['src/auth/**'],
 		brief: null,
 		outcome: null,
+		assignee: null,
+		claim: null,
 		accepted: null,
 		createdAt: AT,
 	})

@@ -9,6 +9,7 @@ import {
 	initBoard,
 	isRepo,
 	loadBoard,
+	migrateBoard,
 	type Paths,
 	readConfig,
 	readProject,
@@ -16,12 +17,24 @@ import {
 } from '@besober/core'
 import { bold, columns, dim, fail, green, refuse, say, yellow } from './out.js'
 
-/** Every command but `init` starts here: a board, found from wherever you stand. */
+/**
+ * Every command but `init` starts here: a board, found from wherever you stand,
+ * and brought forward if it was written by an older SOBER (D42, §8.5). A newer
+ * board is refused here — a version that does not understand a field drops it
+ * on the next write, and on a shared board that is everyone's data.
+ */
 export const openBoard = async (): Promise<Paths> => {
 	const root = findRoot(process.cwd())
 	if (root === null)
 		return fail('there is no board here — run `sober init` at the root of your repository')
-	return resolve(root)
+
+	const paths = resolve(root)
+	const migrated = await migrateBoard(paths).catch(refuse)
+	if (migrated.kind === 'migrated')
+		say(
+			`${yellow('·')} board brought forward from schema ${migrated.from} to ${migrated.to} — ${migrated.records} record${migrated.records === 1 ? '' : 's'} rewritten, sync to share it`,
+		)
+	return paths
 }
 
 export const settingsOf = async (paths: Paths) => {

@@ -6,6 +6,7 @@ import { listConflicts, resolve } from './resolve.js'
 import { accept, archive, reject, review } from './review.js'
 import { status } from './status.js'
 import { sync } from './sync.js'
+import { assign, claim, contributors, release } from './team.js'
 import { approve, bind, brief, decide, decisions, logs, run, stop } from './work.js'
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
@@ -61,7 +62,22 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['reject <node> -m "…"', 'send it back with what was wrong'],
 		],
 	],
-	['Share', [['sync [--no-push]', 'take in the team’s board, then send yours']]],
+	[
+		'Share',
+		[
+			['sync [--no-push]', 'take in the team’s board, then send yours'],
+			['resolve [record] [field=side]', 'answer what the merge could not'],
+		],
+	],
+	[
+		'Team',
+		[
+			['contributors [add|remove] <handle>', 'who is on this project'],
+			['assign <node> [handle]', 'hand a node to someone, or to nobody'],
+			['claim <node>', 'say you are on it — a signal, never a lock'],
+			['release <node>', 'give it back'],
+		],
+	],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
 	['In a session', [['mcp', 'serve SOBER’s tools to a host — the plugin starts this']]],
 ]
@@ -91,6 +107,9 @@ const options = {
 	'depends-on': { type: 'string' },
 	queue: { type: 'boolean' },
 	'no-push': { type: 'boolean' },
+	name: { type: 'string' },
+	role: { type: 'string' },
+	focus: { type: 'string' },
 	clean: { type: 'boolean' },
 	diff: { type: 'boolean' },
 	version: { type: 'boolean', short: 'v' },
@@ -154,6 +173,18 @@ const main = async (): Promise<void> => {
 			return sync(values['no-push'] === true)
 		case 'resolve':
 			return rest.length === 0 ? listConflicts() : resolve(rest[0] as string, rest.slice(1))
+		case 'contributors':
+			return contributors(rest[0], rest[1], {
+				name: values.name,
+				role: values.role,
+				focus: values.focus,
+			})
+		case 'assign':
+			return assign(need('node'), rest[1] ?? null)
+		case 'claim':
+			return claim(need('node'))
+		case 'release':
+			return release(need('node'))
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'mcp': {

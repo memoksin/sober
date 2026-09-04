@@ -331,14 +331,14 @@ It is not a node, because it is not work. It is not in `config.jsonc`, because c
 }
 ```
 
-Ids are a slug plus a short random suffix, so two machines adding the same title never produce the same file (ADR 0020). There is no `updatedAt`: "when did this change" is `git log` on the file. `createdAt` stays because it is written once and never conflicts. Fields marked **M2** below are added to the schema when M2 opens, not before.
+Ids are a slug plus a short random suffix, so two machines adding the same title never produce the same file (ADR 0020). There is no `updatedAt`: "when did this change" is `git log` on the file. `createdAt` stays because it is written once and never conflicts.
 
 - `decisions` — every decision binding this node. Any open one holds it (§2.2).
 - `files` — the files this node is expected to touch, as plain globs matched by `picomatch` (ADR 0021). The agent proposes them at decomposition and the human corrects them (D22). It is a **prediction**, refined when the brief is rendered. It feeds two things: the same-files warning (§3.4) and one of the scan's signals (§6.2). It is not a contract enforced before the work runs.
 - `brief` — null until rendered. Holds only the agent-written approach and its approval — `{ approach, approval: { by, at, queue } | null }` (ADR 0021); the rest of a brief is rendered from the records at read time (§3.7).
 - `outcome` — a short summary of what the finishing agent did, written at the end of a run. Downstream briefs carry it (§3.7).
-- `assignee` — a contributor handle, or null. Set by a human. **M2.**
-- `claim` — who is actually working on it, and since when. Set when work starts. **M2.**
+- `assignee` — a contributor handle, or null. Set by a human, and refused for a handle the project does not hold (ADR 0030).
+- `claim` — who is actually working on it, and since when. Written by `sober claim` and again when a run starts (ADR 0030).
 - `accepted` — the record of a human accepting the result: `{ by, at, flagged, scan }` (ADR 0021). Its presence is what makes a node finished; there is no `done` boolean to forget to set. `flagged` records whether the node was flagged when it was accepted (§2.8); `scan` records whether the scan was clean, had findings, or did not run (§6.2).
 
 Title and description are always visible in the panel; notes, brief, and decisions are collapsed by default (`PR-01-07`), and every field is editable in place (`PR-01-08`).
@@ -368,7 +368,7 @@ Two things are deliberately not statuses:
 - **Archived** is a location — the file lives in `.sober/archive/`. A status would have to be kept in step with the file's whereabouts, and would eventually disagree with it.
 - **Flagged** — a node whose bound decision changed after its brief was approved (§2.8) — is a flag. It does not reopen or stop the node, so it cannot be a status without lying about what happened. Same for "the last run failed" (§8.1).
 
-### 3.3 Contributors, assignment and claim — M2
+### 3.3 Contributors, assignment and claim
 
 `.sober/contributors.json` — who is on the project, and what each one works on:
 
@@ -387,6 +387,8 @@ Two things are deliberately not statuses:
 
 Board state, not configuration: it syncs with the graph, because the team is a property of the project rather than of one machine.
 
+Someone is put on the project by hand — `sober contributors add <handle>`, or the same tool in a session. Nobody is added by acting: a list that fills itself is a list nobody curates, and neither `role` nor `focus` can be read off a git config (ADR 0030).
+
 **Assignment** is a human handing a node to a contributor ahead of time. **Claim** is whoever actually starts it. They are separate fields because they answer different questions — one is a plan, the other is a fact.
 
 A claim is a **signal, not a lock** (D23, ADR 0005). SOBER warns; it never blocks. Enforcing exclusivity would need an authority SOBER does not have and does not want: the git host already decides who can push to the board branch, and an outside contributor forks and opens a pull request like anywhere else.
@@ -401,7 +403,7 @@ The warning is about **nodes, not people**. An earlier requirement scoped it to 
 
 So it fires at two moments:
 
-- at **claim** time, when a teammate takes a node someone else is heading for (M2);
+- at **claim** time, when a teammate takes a node someone else is heading for. Two globs overlap when either matches the other read as a path — enough for `src/auth/**` against `src/auth/session.ts`, and honest about what a prediction can carry;
 - at **dispatch** time, on any wave, including a single user's own — and there it asks for a confirmation before starting.
 
 The confirmation is not a block. It is the shape §2.8 already uses for an expensive action with a foreseeable outcome: show it, then let the human proceed. It also has one automatic consequence — an overlapping node is never dispatched unattended by "approve and queue" (§5.3), because the confirmation needs a human.
@@ -749,7 +751,9 @@ The same rule covers a torn line in the local log (§1.4).
 `project.json` carries the schema version the board was written with (D42).
 
 - An **older** SOBER seeing a newer board refuses to open it and says to upgrade.
-- A **newer** SOBER reads an older board and migrates it when needed.
+- A **newer** SOBER reads an older board and migrates it when needed — in the CLI, which brings the board forward on its way in and says in one line what it rewrote. The MCP server does not migrate: it may not write to stdout, so it refuses and names the surface that can (ADR 0030).
+
+A migrated record is written back through the current schema, so its field order matches every other record's. Bytes that differ only by key order are a whole-file diff to git and a phantom change to the field-level merge (§1.2.1).
 
 Refusing to read is the only safe direction. A version that does not understand a field drops it on write, and on a shared board that is silent data loss for everyone else.
 

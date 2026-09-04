@@ -82,6 +82,8 @@ const node = (dir: string, id: string, title: string, dependsOn: string[] = []):
 				files: [],
 				brief: null,
 				outcome: null,
+				assignee: null,
+				claim: null,
 				accepted: null,
 				createdAt: '2026-09-05T00:00:00.000Z',
 			},

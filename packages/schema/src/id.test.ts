@@ -29,6 +29,8 @@ test('the id is the file name, never a field on the record', () => {
 		files: [],
 		brief: null,
 		outcome: null,
+		assignee: null,
+		claim: null,
 		accepted: null,
 		createdAt: '2026-08-27T09:00:00Z',
 	}

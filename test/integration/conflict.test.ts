@@ -43,6 +43,8 @@ const node = (fields: Partial<Record<string, unknown>> = {}) => ({
 	files: [] as string[],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
 	createdAt: '2026-09-05T00:00:00.000Z',
 	...fields,

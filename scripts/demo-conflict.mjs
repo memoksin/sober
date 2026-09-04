@@ -50,6 +50,8 @@ const node = (fields) =>
 			files: [],
 			brief: null,
 			outcome: null,
+			assignee: null,
+			claim: null,
 			accepted: null,
 			createdAt: AT,
 			...fields,

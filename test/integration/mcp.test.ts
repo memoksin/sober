@@ -146,9 +146,12 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'accept',
 			'approve',
 			'archive',
+			'assign',
 			'bind',
 			'board',
 			'brief',
+			'claim',
+			'contributors',
 			'decide',
 			'decisions',
 			'init',
@@ -392,7 +395,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(18)
+		expect((await client.listTools()).tools.length).toBe(21)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -640,4 +643,60 @@ test('a human who walks away merges nothing', async () => {
 	expect((await loadBoard(paths)).nodes.get(id as string)?.title).toBe('Mine again')
 
 	rmSync(other.root, { recursive: true, force: true })
+})
+
+test('the team is put together in a session, and an unknown handle is refused', async () => {
+	const { repo: created } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+
+	expect(await call(client, 'contributors')).toContain('Nobody is on this project yet')
+	expect(await call(client, 'contributors', { action: 'add' })).toContain('Which handle')
+
+	await call(client, 'contributors', { action: 'add', handle: 'alice', role: 'maintainer' })
+	expect(await call(client, 'contributors')).toContain('maintainer')
+
+	const node = [...(await loadBoard(resolve(created.dir))).nodes.keys()].sort()[0] as string
+	expect(await call(client, 'assign', { node, handle: 'alcie' })).toContain(
+		'is not on this project',
+	)
+	expect(await call(client, 'assign', { node, handle: 'alice' })).toContain('assigned to alice')
+	expect(await call(client, 'assign', { node })).toContain('assigned to nobody')
+
+	expect(await call(client, 'contributors', { action: 'remove', handle: 'alice' })).toContain(
+		'off the project',
+	)
+	expect(await call(client, 'contributors', { action: 'remove', handle: 'alice' })).toContain(
+		'was not on it',
+	)
+})
+
+test('a claim in a session names what it is heading for, and gives it back', async () => {
+	const { repo: created } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+
+	const ids = [...(await loadBoard(resolve(created.dir))).nodes.keys()].sort()
+	const auth = ids.find((id) => id.startsWith('the-auth-api')) as string
+	const billing = ids.find((id) => id.startsWith('the-billing-screen')) as string
+
+	expect(await call(client, 'claim', { node: auth })).toContain("'s")
+	// The proposal gives only the auth node files, so nothing is heading anywhere.
+	expect(await call(client, 'claim', { node: billing })).not.toContain('same files')
+
+	expect(await call(client, 'claim', { node: auth, release: true })).toContain("nobody's again")
+	expect(await call(client, 'claim', { node: auth, release: true })).toContain('Nobody had claimed')
+})
+
+test('an older board is not rewritten inside a session — it names the surface that can', async () => {
+	const { repo: created, paths: board_ } = await board()
+	const client = await connect(created.dir)
+	writeFileSync(
+		board_.project,
+		JSON.stringify({ schemaVersion: 1, title: 'Acme', intent: '', constraints: [] }),
+	)
+
+	const said_ = await call(client, 'board')
+	expect(said_).toContain('older SOBER')
+	expect(said_).toContain('sober status')
 })

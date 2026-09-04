@@ -86,6 +86,8 @@ const seed = (dir: string) => {
 			files: ['src/auth/**'],
 			brief: null,
 			outcome: null,
+			assignee: null,
+			claim: null,
 			accepted: null,
 			createdAt: at,
 		}),

@@ -21,14 +21,21 @@ export const Accepted = z.strictObject({
 
 export type Accepted = z.infer<typeof Accepted>
 
+/** Who is actually working on a node, and since when (DESIGN §3.3). */
+export const Claim = z.strictObject({
+	by: Handle,
+	at: Timestamp,
+})
+
+export type Claim = z.infer<typeof Claim>
+
 /**
  * `.sober/nodes/<id>.json`. Every field is a stored fact: status is derived
  * (DESIGN §3.2) and so is a canvas position (ADR 0016). There is no
  * `updatedAt` — "when did this change" is `git log` on the file (ADR 0020).
  *
- * M1 fields only. `assignee` and `claim` are added when M2 opens, and the
- * object is strict so a board carrying them fails loudly instead of quietly
- * dropping them (ADR 0020).
+ * The object is strict, so a board written by a newer SOBER fails loudly here
+ * instead of being quietly rewritten without the fields it holds (ADR 0020).
  */
 export const Node = z.strictObject({
 	title: z.string().min(1),
@@ -41,6 +48,10 @@ export const Node = z.strictObject({
 	files: z.array(z.string().min(1)),
 	brief: Brief.nullable(),
 	outcome: z.string().nullable(),
+	// Assignment is a plan, a claim is a fact — two questions, two fields
+	// (DESIGN §3.3). A claim is a signal, never a lock (D23, ADR 0005).
+	assignee: Handle.nullable(),
+	claim: Claim.nullable(),
 	accepted: Accepted.nullable(),
 	createdAt: Timestamp,
 })

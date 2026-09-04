@@ -4,6 +4,7 @@ import { registerBuilding } from './tools/build.js'
 import { registerPlanning } from './tools/plan.js'
 import { registerReview } from './tools/review.js'
 import { registerSync } from './tools/sync.js'
+import { registerTeam } from './tools/team.js'
 
 const VERSION = '0.0.0'
 
@@ -31,6 +32,7 @@ export const createServer = (cwd: string = process.cwd()): McpServer => {
 	registerBuilding(server, cwd)
 	registerReview(server, cwd)
 	registerSync(server, cwd)
+	registerTeam(server, cwd)
 	return server
 }
 

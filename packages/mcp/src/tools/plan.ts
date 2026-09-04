@@ -164,6 +164,8 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 						files: node.files,
 						brief: null,
 						outcome: null,
+						assignee: null,
+						claim: null,
 						accepted: null,
 						createdAt: at,
 					},

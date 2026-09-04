@@ -28,6 +28,11 @@ export {
 	type Side,
 } from './conflict.js'
 export {
+	addContributor,
+	readContributors,
+	removeContributor,
+} from './contributors.js'
+export {
 	AnswerLockedError,
 	answerDecision,
 	approveBrief,
@@ -72,6 +77,7 @@ export {
 } from './local.js'
 export { LockBusyError, withLock } from './lock.js'
 export { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'
+export { type Migrated, migrateBoard, needsMigration } from './migrate.js'
 export { findRoot, type Paths, paths } from './paths.js'
 export type { BrokenRecord } from './read.js'
 export {
@@ -118,6 +124,13 @@ export {
 	sync,
 } from './sync.js'
 export { tail } from './tail.js'
+export {
+	assignNode,
+	type Claimed,
+	claimNode,
+	type Overlap,
+	releaseNode,
+} from './team.js'
 export {
 	addWorktree,
 	branchOf,
