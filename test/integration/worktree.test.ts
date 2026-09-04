@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
 	addWorktree,
@@ -16,6 +16,14 @@ import {
 } from '@besober/core'
 import { afterEach, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
+
+/**
+ * That git knows the node's worktree — not the shape of the path it answers
+ * with. Windows reports the long form of a name the filesystem also has a short
+ * one for, and no amount of resolving makes the two strings equal.
+ */
+const knows = (node: string) => (paths: string[]) =>
+	paths.some((path) => path.replaceAll('\\', '/').toLowerCase().endsWith(`/${node}`))
 
 let repo: TempRepo | undefined
 
@@ -48,7 +56,7 @@ test('a node gets one worktree and one branch, and a retry reuses both', async (
 
 	const first = await addWorktree(paths, 'auth-api-k7f2', 'main')
 	expect(first).toMatchObject({ branch: 'sober/auth-api-k7f2', created: true })
-	expect(await listWorktrees(paths)).toContain(realpathSync(first.path))
+	expect(await listWorktrees(paths)).toSatisfy(knows('auth-api-k7f2'))
 
 	const again = await addWorktree(paths, 'auth-api-k7f2', 'main')
 	expect(again).toMatchObject({ path: first.path, created: false })
@@ -61,7 +69,7 @@ test('nothing removes a dirty worktree — the node and the path are named', asy
 
 	await expect(removeWorktree(paths, 'auth-api-k7f2')).rejects.toBeInstanceOf(DirtyWorktreeError)
 	await expect(removeWorktree(paths, 'auth-api-k7f2')).rejects.toThrow(/auth-api-k7f2/)
-	expect(await listWorktrees(paths)).toContain(realpathSync(path))
+	expect(await listWorktrees(paths)).toSatisfy(knows('auth-api-k7f2'))
 })
 
 test('a clean worktree is removed, and removing a node that has none is not an error', async () => {

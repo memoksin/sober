@@ -101,6 +101,8 @@ export const scanNode = async (
 
 const asFinding = (finding: SignalFinding): Finding => finding
 
+const samePath = (path: string): string => path.replaceAll('\\', '/').toLowerCase()
+
 interface ScannerPart {
 	readonly findings: readonly Finding[]
 	readonly didNotRun: readonly string[]
@@ -140,7 +142,11 @@ const secretlint = async (
 		const results = JSON.parse(stdout) as SecretlintResult[]
 		const findings: Finding[] = []
 		for (const result of results) {
-			const source = written.find((file) => result.filePath.endsWith(file.temp))
+			// Compared in one shape: secretlint answers with the platform's
+			// separators and case, and `endsWith` on a raw Windows path matches
+			// nothing — the finding then loses both its file and its line.
+			const reported = samePath(result.filePath)
+			const source = written.find((file) => reported.endsWith(samePath(file.temp)))
 			for (const message of result.messages)
 				findings.push({
 					signal: 'secret',

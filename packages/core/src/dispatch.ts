@@ -82,7 +82,10 @@ export const dispatch = async (
 		await prepare(node, worktree.path, config.dispatch.setup)
 
 	const { id } = await startRun(paths, node, config.dispatch.host)
-	await writeRunPid(paths, id, process.pid)
+	// The pid file holds the **agent's** pid and nothing else, written by
+	// `onStart` below. It used to be seeded with this process's, so a `sober
+	// stop` landing before the child started killed the process that owns the
+	// run — which is also the process that would have recorded it.
 
 	const control = new AbortController()
 	let timedOut = false
@@ -155,14 +158,16 @@ export const dispatch = async (
 export const stopRun = async (paths: Paths, id: string): Promise<boolean> => {
 	const pid = await readRunPid(paths, id)
 	if (pid === null) return false
-	// Written before the kill: the run has to find it when it dies, and a
-	// process that ends between these two lines still ended because of this.
+	// Written before the kill, so the run finds it when it dies — and taken back
+	// if the kill does not land, because a run that finished on its own was not
+	// stopped, whatever anyone asked for.
 	await markStopped(paths, id)
 	try {
 		process.kill(pid, 'SIGTERM')
 	} catch {
 		// Already gone: a run that ended between the read and the kill is not
 		// an error, it is the outcome the caller wanted.
+		await clearStopped(paths, id)
 		await clearRunPid(paths, id)
 		return false
 	}
