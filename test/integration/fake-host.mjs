@@ -45,6 +45,18 @@ if (process.env.FAKE_HOST_HANG === '1') {
 		writeFileSync(process.env.FAKE_HOST_WRITE, `${prompt}\n`)
 	}
 
+	// A real agent commits its work on the node's branch; a fake that only
+	// writes a file leaves an empty branch and an accept that merges nothing.
+	if (process.env.FAKE_HOST_COMMIT) {
+		const { writeFileSync: write, mkdirSync } = await import('node:fs')
+		const { execFileSync } = await import('node:child_process')
+		const { dirname } = await import('node:path')
+		mkdirSync(dirname(process.env.FAKE_HOST_COMMIT), { recursive: true })
+		write(process.env.FAKE_HOST_COMMIT, `${prompt}\n`)
+		execFileSync('git', ['add', '-A'])
+		execFileSync('git', ['commit', '-m', 'feat: the agent worked'])
+	}
+
 	const failing = process.env.FAKE_HOST_FAIL === '1'
 	say({
 		type: 'result',

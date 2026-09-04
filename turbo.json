@@ -4,6 +4,7 @@
 	// The fake host in test/integration reads these; naming them here keeps
 	// caching correct and the lint rule quiet.
 	"globalPassThroughEnv": [
+		"FAKE_HOST_COMMIT",
 		"FAKE_HOST_FAIL",
 		"FAKE_HOST_HANG",
 		"FAKE_HOST_LOGGED_OUT",

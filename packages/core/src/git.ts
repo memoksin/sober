@@ -19,12 +19,24 @@ export class GitError extends SoberError {
  * branch name or a path carrying a space or a semicolon is an argument and
  * never a second command.
  */
-export const git = async (cwd: string, ...args: string[]): Promise<string> => {
+export const git = (cwd: string, ...args: string[]): Promise<string> => gitWithEnv(cwd, {}, args)
+
+/**
+ * The same call with extra environment. Only `GIT_INDEX_FILE` needs it today —
+ * writing a tree with no working copy — and an env-based variant beats a second
+ * `execFile` site that forgets the no-shell rule.
+ */
+export const gitWithEnv = async (
+	cwd: string,
+	env: Readonly<Record<string, string>>,
+	args: readonly string[],
+): Promise<string> => {
 	try {
-		const { stdout } = await run('git', args, {
+		const { stdout } = await run('git', [...args], {
 			cwd,
 			encoding: 'utf8',
 			maxBuffer: 32 * 1024 * 1024,
+			env: { ...process.env, ...env },
 		})
 		return stdout.trimEnd()
 	} catch (error) {

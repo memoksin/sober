@@ -42,5 +42,5 @@ test('the packed tarball installs and runs', () => {
 	run('npm', args, prefix)
 
 	const bin = join(prefix, 'node_modules', '.bin', isWindows ? 'sober.cmd' : 'sober')
-	expect(run(bin, ['--help'], prefix)).toContain('usage: sober')
+	expect(run(bin, ['--help'], prefix)).toContain('SOBER plans work as a graph')
 }, 180_000)

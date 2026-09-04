@@ -1,6 +1,7 @@
 import type { Answer, Approval, Node, Run } from '@besober/schema'
 import { expect, test } from 'vitest'
 import type { Board } from './graph.js'
+import type { Feedback } from './local.js'
 import { aDecision, aNode, aRun } from './records.fixture.js'
 import { flagsOf, ready, statusOf } from './status.js'
 
@@ -17,11 +18,13 @@ const board = (
 	nodes: Record<string, Node>,
 	runs: Record<string, Run> = {},
 	answered = true,
+	feedback: Record<string, Feedback> = {},
 ): Board => ({
 	project: null,
 	nodes: new Map(Object.entries(nodes)),
 	decisions: new Map([['auth-model-k7f2', aDecision(answered ? { answer } : {})]]),
 	runs: new Map(Object.entries(runs)),
+	feedback: new Map(Object.entries(feedback)),
 	broken: [],
 })
 
@@ -107,4 +110,36 @@ test('ready lists what can start now, and nothing else', () => {
 
 test('a node the board does not hold has no status', () => {
 	expect(statusOf(board({}), 'gone-node-x9y8')).toBe(null)
+})
+
+test('a rejection takes the node back out of the review queue', () => {
+	// The run still says `finished`; what changed is that a human answered it.
+	// No field on the run to forget to set (§6.4).
+	const node = aNode({ decisions: ['auth-model-k7f2'], brief: approved })
+	const run = aRun('auth-api-k7f2', { exit: 'finished', endedAt: AT })
+	const feedback: Feedback = {
+		at: '2026-09-04T01:00:00.000Z',
+		by: 'memoksin',
+		text: 'The endpoints answer, but nothing checks the session.',
+		clean: false,
+	}
+
+	const reviewing = board({ 'auth-api-k7f2': node }, { 'auth-api-k7f2-r1': run })
+	expect(statusOf(reviewing, 'auth-api-k7f2')).toBe('in-review')
+
+	const rejected = board({ 'auth-api-k7f2': node }, { 'auth-api-k7f2-r1': run }, true, {
+		'auth-api-k7f2': feedback,
+	})
+	expect(statusOf(rejected, 'auth-api-k7f2')).toBe('ready')
+})
+
+test('feedback older than the run answers an earlier attempt, not this one', () => {
+	const node = aNode({ decisions: ['auth-model-k7f2'], brief: approved })
+	const run = aRun('auth-api-k7f2', { exit: 'finished', endedAt: '2026-09-04T02:00:00.000Z' })
+	const stale: Feedback = { at: AT, by: 'memoksin', text: 'the first attempt', clean: false }
+
+	const reviewing = board({ 'auth-api-k7f2': node }, { 'auth-api-k7f2-r1': run }, true, {
+		'auth-api-k7f2': stale,
+	})
+	expect(statusOf(reviewing, 'auth-api-k7f2')).toBe('in-review')
 })

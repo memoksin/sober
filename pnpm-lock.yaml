@@ -49,7 +49,20 @@ importers:
         version: 4.1.11(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.6.1)(yaml@2.9.0))
 
   packages/cli:
+    dependencies:
+      '@secretlint/secretlint-rule-preset-recommend':
+        specifier: ^13.0.5
+        version: 13.0.5
+      secretlint:
+        specifier: ^13.0.5
+        version: 13.0.5(supports-color@10.2.2)
     devDependencies:
+      '@besober/core':
+        specifier: workspace:*
+        version: link:../core
+      '@besober/schema':
+        specifier: workspace:*
+        version: link:../schema
       esbuild:
         specifier: ^0.28.0
         version: 0.28.2

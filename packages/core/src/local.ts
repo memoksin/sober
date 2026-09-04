@@ -52,6 +52,35 @@ export const clearRunPid = async (paths: Paths, id: string): Promise<void> => {
 }
 
 /**
+ * What the human wrote when they rejected a result (§6.4). Local, like the run
+ * it answers: rejecting is correcting, and the correction is for the next run
+ * on this machine — a teammate needs to know the node is unfinished, not how
+ * many times someone's laptop turned work down.
+ *
+ * It is also what takes the node out of the review queue. A finished run makes
+ * a node `in-review`; a rejection written after that run ended is what makes it
+ * `ready` again, with no field on the run to forget to set.
+ */
+export const Feedback = z.strictObject({
+	at: z.iso.datetime(),
+	by: z.string().min(1),
+	text: z.string().min(1),
+	/** "Start clean" reset the branch to its base rather than building on it (§5.0). */
+	clean: z.boolean(),
+})
+
+export type Feedback = z.infer<typeof Feedback>
+
+export const readFeedback = (paths: Paths, node: string): Promise<ReadRecord<Feedback>> =>
+	readRecord(recordFile(paths.feedback, node), Feedback)
+
+export const writeFeedback = (paths: Paths, node: string, feedback: Feedback): Promise<void> =>
+	writeRecord(recordFile(paths.feedback, node), feedback)
+
+export const readFeedbacks = (paths: Paths): Promise<ReadRecords<Feedback>> =>
+	readRecords(paths.feedback, Feedback)
+
+/**
  * `local/log.jsonl` — one line per event, with an `action` discriminator rather
  * than a file per event type. Loose on purpose: an event carries whatever its
  * action needs, and an audit log that refuses to record something is worse than

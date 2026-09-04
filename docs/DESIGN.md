@@ -624,7 +624,13 @@ Rejecting is correcting, not discarding (D34). The user writes what was wrong; t
 
 The branch, the worktree and the draft pull request all stay as they are (§5.0), and the next attempt commits on top unless the user asks to start clean. Throwing the work away and saying nothing means the agent repeats the mistake — and deletion is the one thing a review cannot undo.
 
-**OPEN (phase 3):** how feedback is carried into the next run — appended to the brief, or a separate field the adapter passes through.
+The feedback is a **local record**, `local/feedback/<node>.json`, and the next dispatch puts it **above** the brief rather than inside it. Three things follow from that shape, and each one was the reason to pick it:
+
+- The approved text stays the approved text. Appending to the brief would have a machine editing what a human signed off, and two rejections in it is a page nobody reads to the end.
+- Feedback first, because it is the only part the agent has not already seen. "Rejecting is correcting" fails if the correction is buried under a page the agent wrote itself.
+- It is what takes the node **out** of the review queue: a rejection written after the run ended is what makes a `finished` run stop counting as `in-review` (§3.2). There is no field on the run to forget to set.
+
+Local, like the run it answers (§5.5) — a teammate needs to know the node is unfinished, not how many times someone's laptop turned work down. If M2 finds a reason for feedback to travel, it moves to the board then.
 
 ---
 

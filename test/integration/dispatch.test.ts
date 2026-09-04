@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
 	checkHost,
@@ -9,11 +9,13 @@ import {
 	initBoard,
 	type Paths,
 	readRuns,
+	rejectWork,
 	runLog,
 	SetupFailedError,
 	setSetting,
 	stopRun,
 	tail,
+	writeBrief,
 	writeNode,
 } from '@besober/core'
 import { afterEach, expect, test } from 'vitest'
@@ -197,6 +199,27 @@ test('a wave stops queueing after the first run that does not finish', async () 
 
 	expect(results).toHaveLength(1)
 	expect(existsSync(join(paths.local, 'worktrees', 'billing-ui-p3x9'))).toBe(false)
+})
+
+test('with no prompt given, the brief is built here — with any rejection above it', async () => {
+	const paths = await board()
+	await writeBrief(paths, 'auth-api-k7f2', {
+		approach: 'Add the endpoints, then the middleware.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await rejectWork(paths, 'auth-api-k7f2', { by: 'memoksin', text: 'Nothing checks the session.' })
+
+	const written = join(dirname(paths.root), 'agent-saw.txt')
+	process.env.FAKE_HOST_WRITE = written
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	// Feedback first: it is the only part the agent has not already seen, and
+	// "rejecting is correcting" fails if the correction is buried (§6.4).
+	const seen = readFileSync(written, 'utf8')
+	expect(seen).toContain('Nothing checks the session.')
+	expect(seen.indexOf('Nothing checks the session.')).toBeLessThan(
+		seen.indexOf('Add the endpoints'),
+	)
 })
 
 test('a host that is not installed says so, and names the command it looked for', async () => {

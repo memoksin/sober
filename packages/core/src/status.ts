@@ -37,8 +37,9 @@ export const statusOf = (board: Board, id: string): Status | null => {
 
 	if (node.accepted !== null) return 'done'
 	// A stopped or failed run does not wait for a human (§5.4, §8.1); only a
-	// finished one does.
-	if (run?.exit === 'finished') return 'in-review'
+	// finished one does — until the human turns it down, which is what returns
+	// the node to the queue with no field on the run to forget to set (§6.4).
+	if (run?.exit === 'finished' && !rejected(board, id, run)) return 'in-review'
 	if (isRunning(run)) return 'running'
 	if (node.dependsOn.some((dependency) => !isDone(board, dependency))) return 'blocked'
 	if (node.decisions.some((decision) => !isAnswered(board, decision))) return 'held'
@@ -47,6 +48,12 @@ export const statusOf = (board: Board, id: string): Status | null => {
 }
 
 const isDone = (board: Board, id: string): boolean => board.nodes.get(id)?.accepted != null
+
+/** A rejection written after the run ended is the answer to that run. */
+const rejected = (board: Board, id: string, run: Run): boolean => {
+	const feedback = board.feedback.get(id)
+	return feedback !== undefined && run.endedAt !== null && feedback.at >= run.endedAt
+}
 
 /** A decision the board does not hold cannot have been answered, so it holds the node. */
 const isAnswered = (board: Board, id: string): boolean => {

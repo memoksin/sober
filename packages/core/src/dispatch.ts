@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process'
 import type { RunExit } from '@besober/schema'
+import { renderBrief } from './brief.js'
 import { type Config, readConfigFromBase } from './config.js'
-import { SoberError } from './errors.js'
+import { NotOnBoardError, SoberError } from './errors.js'
+import { loadBoard } from './graph.js'
 import { checkHost, HostError, startAgent } from './host.js'
 import { appendEvent, appendRunOutput, clearRunPid, readRunPid, writeRunPid } from './local.js'
 import type { Paths } from './paths.js'
@@ -32,8 +34,13 @@ export class SetupFailedError extends SoberError {
 export interface DispatchOptions {
 	/** The ref the node's branch is cut from, and the ref its settings are read from. */
 	readonly base: string
-	/** The rendered brief, handed to the host as its prompt (§3.7). */
-	readonly prompt: string
+	/**
+	 * What the host is asked to do. Left out, it is built here: the rendered
+	 * brief, with the last rejection's feedback above it. Building it in one
+	 * place is what keeps a run started from a session identical to one started
+	 * from the CLI (`PR-09-08`).
+	 */
+	readonly prompt?: string
 	/** Called for every line the host writes, for a live tail (`PR-05-09`). */
 	readonly onLine?: (line: string) => void
 }
@@ -59,6 +66,8 @@ export const dispatch = async (
 	const host = await checkHost(config.dispatch.host)
 	if (!host.ok) throw new HostError(`${node} was not started: ${host.reason}`)
 
+	const prompt = options.prompt ?? (await promptFor(paths, node))
+
 	const worktree = await addWorktree(paths, node, options.base)
 	if (worktree.created && config.dispatch.setup !== null)
 		await prepare(node, worktree.path, config.dispatch.setup)
@@ -82,7 +91,7 @@ export const dispatch = async (
 		const exit = await startAgent({
 			host: config.dispatch.host,
 			cwd: worktree.path,
-			prompt: options.prompt,
+			prompt,
 			signal: control.signal,
 			onStart: (pid) => void writeRunPid(paths, id, pid),
 			onLine: (line) => {
@@ -185,6 +194,28 @@ export const dispatchWave = async (
 	const workers = Math.min(config.dispatch.concurrency, wave.length)
 	await Promise.all(Array.from({ length: workers }, worker))
 	return results.filter((result) => result !== undefined)
+}
+
+/**
+ * The brief, and above it what the human wrote when they turned the last
+ * attempt down (§6.4). Feedback goes first because it is the only part the
+ * agent has not already seen, and "rejecting is correcting" only works if the
+ * correction is not buried under a page the agent wrote itself.
+ */
+const promptFor = async (paths: Paths, node: string): Promise<string> => {
+	const board = await loadBoard(paths)
+	const brief = renderBrief(board, node)
+	if (brief === null) throw new NotOnBoardError('node', node)
+
+	const feedback = board.feedback.get(node)
+	if (feedback === undefined) return brief
+	return `# The last attempt was turned down
+
+${feedback.text}
+
+What follows is the brief, unchanged.
+
+${brief}`
 }
 
 const settings = async (paths: Paths, base: string): Promise<Config> => {

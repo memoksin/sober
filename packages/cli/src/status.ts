@@ -1,0 +1,85 @@
+import { flagsOf, lastRun, statusOf } from '@besober/core'
+import { decisionState } from '@besober/schema'
+import { openBoard, readBoard } from './board.js'
+import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
+
+/**
+ * One colour language across every command: magenta is a decision, cyan is a
+ * node, blue is a file or a brief, yellow is something in motion, green is
+ * done. A status takes the colour of whatever it is waiting for, so the column
+ * answers "waiting on what" before the sentence beside it does.
+ */
+const COLOUR: Record<string, ((text: string) => string) | undefined> = {
+	done: green,
+	ready: bold,
+	running: yellow,
+	'in-review': yellow,
+	blocked: dim,
+	held: magenta,
+	'needs-brief': blue,
+}
+
+/**
+ * The board, and what it says can start now (§3.2). Status is never printed
+ * from a field: it is derived here the same way every other surface derives it,
+ * which is why the CLI is the contract test rather than the lesser twin
+ * (`PR-09-08`).
+ */
+export const status = async (only?: string): Promise<void> => {
+	const paths = await openBoard()
+	const board = await readBoard(paths)
+
+	if (board.project !== null) {
+		say(bold(board.project.title))
+		if (board.project.intent !== '') say(dim(board.project.intent))
+		say()
+	}
+
+	const ids = [...board.nodes.keys()].filter((id) => only === undefined || id === only).sort()
+	if (ids.length === 0) {
+		say(only === undefined ? dim('No nodes yet.') : `${red('×')} ${only} is not on this board`)
+		if (only === undefined) {
+			say()
+			say('Open a session with the SOBER plugin and say what you want built.')
+		}
+		return
+	}
+
+	const rows = ids.map((id) => {
+		const node = board.nodes.get(id)
+		const state = statusOf(board, id) ?? 'needs-brief'
+		const flags = flagsOf(board, id)
+		return [
+			`  ${(COLOUR[state] ?? dim)(state)}`,
+			cyan(id),
+			node?.title ?? '',
+			flags.lastRunFailed ? red('last run failed') : waiting(board, id),
+		]
+	})
+	say(columns(rows).join('\n'))
+
+	const open = [...board.decisions].filter(([, d]) => decisionState(d) !== 'answered')
+	if (open.length > 0) {
+		say()
+		say(bold(`${open.length} decision${open.length === 1 ? '' : 's'} waiting on you`))
+		say(columns(open.map(([id, decision]) => [`  ${magenta(id)}`, decision.question])).join('\n'))
+	}
+}
+
+/** The one thing a reader wants beside a held or blocked node: what it is waiting for. */
+const waiting = (board: Awaited<ReturnType<typeof readBoard>>, id: string): string => {
+	const node = board.nodes.get(id)
+	if (node === undefined) return ''
+
+	const held = node.decisions.filter((decision) => {
+		const record = board.decisions.get(decision)
+		return record === undefined || decisionState(record) !== 'answered'
+	})
+	if (held.length > 0) return dim(`waiting on ${held.join(', ')}`)
+
+	const blocked = node.dependsOn.filter((dep) => board.nodes.get(dep)?.accepted == null)
+	if (blocked.length > 0) return dim(`waiting on ${blocked.join(', ')}`)
+
+	const run = lastRun(board, id)
+	return run !== null && run.run.exit === null ? dim(`run ${run.id}`) : ''
+}

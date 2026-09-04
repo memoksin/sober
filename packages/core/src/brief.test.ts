@@ -47,6 +47,7 @@ const board = (): Board => ({
 	]),
 	decisions: new Map([['auth-model-k7f2', aDecision({ answer })]]),
 	runs: new Map(),
+	feedback: new Map(),
 	broken: [],
 })
 
