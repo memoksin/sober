@@ -20,7 +20,7 @@ export default defineConfig({
 			provider: 'v8',
 			reporter: ['text', 'json-summary'],
 			include: ['packages/*/src/**', 'apps/*/src/**'],
-			exclude: ['packages/schema/**', 'packages/tsconfig/**'],
+			exclude: ['packages/schema/**', 'packages/tsconfig/**', '**/*.fixture.ts'],
 		},
 	},
 })

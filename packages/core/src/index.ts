@@ -9,6 +9,16 @@ export {
 	setSetting,
 	writeConfig,
 } from './config.js'
+export {
+	type Board,
+	cycleFrom,
+	type DanglingEdge,
+	dangling,
+	dependents,
+	findCycle,
+	loadBoard,
+	topological,
+} from './graph.js'
 export { newId } from './id.js'
 export {
 	appendEvent,
@@ -41,4 +51,5 @@ export {
 	writeNode,
 	writeProject,
 } from './records.js'
+export { type Flags, flagsOf, lastRun, ready, statuses, statusOf } from './status.js'
 export { append, appendLine, writeAtomic, writeRecord } from './write.js'
