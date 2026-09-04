@@ -410,13 +410,14 @@ A node whose decisions are all answered gets a brief an agent can execute cold, 
 | Part | Source |
 | --- | --- |
 | How to approach this | written by an agent |
+| What must be true when this is done | written by an agent, approved with the approach (ADR 0022, ADR 0027) |
 | Project intent and constraints | `project.json` |
 | Node title, description, notes | the node |
 | Every bound decision, with the option chosen and its rationale | `decisions/*.json` |
 | Declared files | the node's `files` |
 | What upstream nodes produced | each finished dependency's `outcome` (D27) |
 
-Only the first row is stored on the node. Everything below it is rendered from the records **at read time**, which has two consequences worth stating: the skeleton cannot omit an answered decision, and it cannot go stale, because there is no copy to fall behind.
+Only the first two rows are stored on the node. Everything below it is rendered from the records **at read time**, which has two consequences worth stating: the skeleton cannot omit an answered decision, and it cannot go stale, because there is no copy to fall behind.
 
 The written section can still go stale — it was reasoned against answers that may have changed. That is what §2.8 withdraws.
 
@@ -569,7 +570,7 @@ The brief carries an `acceptance` section, approved with it (§3.7). A run ends 
 
 A node whose verification, scan and CI are all clean is **green**. Green nodes are accepted together — `sober accept --green` in M1, one list on the review screen in M3. A node that is not green takes the single-node path below. The human performs every accept; nothing lands by itself.
 
-**OPEN (phase 1):** the `acceptance` field's shape in `schema` — free text the agent turns into tests, or a list of commands. Decided before ADR 0021's brief shape is coded.
+`acceptance` is a list of commands, each carrying the one sentence it proves (ADR 0027). Every criterion runs in the worktree after `dispatch.verify`; **green** means all of them exited 0, verification passed, the scan is clean and CI is green.
 
 ### 6.2 The scan sits above the diff
 
