@@ -69,12 +69,22 @@ export const removeWorktree = async (paths: Paths, id: string): Promise<void> =>
 	await git(paths.root, 'worktree', 'remove', path)
 }
 
-/** The worktrees git knows about, by path. `--porcelain` so no locale changes the parse. */
-export const listWorktrees = async (paths: Paths): Promise<string[]> =>
-	(await git(paths.root, 'worktree', 'list', '--porcelain'))
+/**
+ * The worktrees git knows about, by path. `--porcelain` so no locale changes
+ * the parse, and every path resolved — git answers in its own shape (forward
+ * slashes on Windows, the long form of a short name) and a caller comparing it
+ * to a path this module built would never match.
+ */
+export const listWorktrees = async (paths: Paths): Promise<string[]> => {
+	const listed = (await git(paths.root, 'worktree', 'list', '--porcelain'))
 		.split('\n')
 		.filter((line) => line.startsWith('worktree '))
-		.map((line) => line.slice('worktree '.length))
+		.map((line) => line.slice('worktree '.length).trim())
+	const resolvedPaths = await Promise.all(
+		listed.map(async (path) => (await resolved(path)) ?? path),
+	)
+	return resolvedPaths
+}
 
 /**
  * git reports resolved paths, and a temp directory on macOS reaches the same
@@ -84,8 +94,7 @@ export const listWorktrees = async (paths: Paths): Promise<string[]> =>
 const isWorktree = async (paths: Paths, path: string): Promise<boolean> => {
 	const target = await resolved(path)
 	if (target === null) return false
-	const known = await Promise.all((await listWorktrees(paths)).map(resolved))
-	return known.includes(target)
+	return (await listWorktrees(paths)).includes(target)
 }
 
 const resolved = async (path: string): Promise<string | null> => {

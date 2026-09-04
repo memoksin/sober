@@ -55,6 +55,31 @@ export const clearRunPid = async (paths: Paths, id: string): Promise<void> => {
 	await rm(runPidFile(paths, id), { force: true })
 }
 
+const stopFile = (paths: Paths, id: string): string => join(paths.runs, `${id}.stop`)
+
+/**
+ * That someone asked for this run to end, written down rather than inferred
+ * from how it died. `sober stop` is a second process, and the signal it sends
+ * is the only evidence the first one has — on POSIX. Windows has no SIGTERM to
+ * report, so a stopped run there looked exactly like a crashed one, and the
+ * work was recorded as failed.
+ */
+export const markStopped = (paths: Paths, id: string): Promise<void> =>
+	writeFile(stopFile(paths, id), `${new Date().toISOString()}\n`)
+
+export const wasStopped = async (paths: Paths, id: string): Promise<boolean> => {
+	try {
+		await readFile(stopFile(paths, id), 'utf8')
+		return true
+	} catch {
+		return false
+	}
+}
+
+export const clearStopped = async (paths: Paths, id: string): Promise<void> => {
+	await rm(stopFile(paths, id), { force: true })
+}
+
 /**
  * What the human wrote when they rejected a result (§6.4). Local, like the run
  * it answers: rejecting is correcting, and the correction is for the next run

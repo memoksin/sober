@@ -5,7 +5,16 @@ import { type Config, readConfigFromBase } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { checkHost, HostError, startAgent } from './host.js'
-import { appendEvent, appendRunOutput, clearRunPid, readRunPid, writeRunPid } from './local.js'
+import {
+	appendEvent,
+	appendRunOutput,
+	clearRunPid,
+	clearStopped,
+	markStopped,
+	readRunPid,
+	wasStopped,
+	writeRunPid,
+} from './local.js'
 import type { Paths } from './paths.js'
 import { finishRun, startRun } from './run.js'
 import { addWorktree } from './worktree.js'
@@ -104,13 +113,20 @@ export const dispatch = async (
 		// A run past its limit is killed and recorded as failed with a timeout
 		// error, never as a stop (§5.4). Its worktree is preserved like any
 		// other failure — whatever the agent wrote stays inspectable (§8.2).
+		//
+		// Otherwise, a run someone asked to stop is stopped however it died. The
+		// signal is not portable evidence: Windows has none to report, so the
+		// second process writes the fact down and this reads it.
+		const asked = !timedOut && (await wasStopped(paths, id))
 		const result =
 			timedOut && exit.kind === 'stopped'
 				? {
 						exit: 'failed' as const,
 						error: `the run passed its ${config.dispatch.timeoutMinutes}-minute limit and was killed`,
 					}
-				: { exit: exit.kind, error: exit.kind === 'failed' ? exit.reason : undefined }
+				: asked
+					? { exit: 'stopped' as const, error: undefined }
+					: { exit: exit.kind, error: exit.kind === 'failed' ? exit.reason : undefined }
 
 		const run = await finishRun(paths, id, result)
 		return {
@@ -123,6 +139,7 @@ export const dispatch = async (
 	} finally {
 		clearTimeout(timer)
 		await clearRunPid(paths, id)
+		await clearStopped(paths, id)
 	}
 }
 
@@ -138,6 +155,9 @@ export const dispatch = async (
 export const stopRun = async (paths: Paths, id: string): Promise<boolean> => {
 	const pid = await readRunPid(paths, id)
 	if (pid === null) return false
+	// Written before the kill: the run has to find it when it dies, and a
+	// process that ends between these two lines still ended because of this.
+	await markStopped(paths, id)
 	try {
 		process.kill(pid, 'SIGTERM')
 	} catch {

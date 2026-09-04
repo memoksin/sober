@@ -31,7 +31,9 @@ export const addedLines = (diff: string): readonly AddedFile[] => {
 		lines = []
 	}
 
-	for (const line of diff.split('\n')) {
+	// `\r` is stripped rather than split on: git writes CRLF on Windows and a
+	// path or a line ending in one matches nothing a caller compares it to.
+	for (const line of diff.replace(/\r/g, '').split('\n')) {
 		const file = FILE.exec(line)
 		if (file?.[1] !== undefined) {
 			close()
