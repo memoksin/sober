@@ -195,3 +195,17 @@ export const setSetting = (
 
 export const writeConfig = (paths: Paths, text: string): Promise<void> =>
 	writeAtomic(paths.config, text)
+
+/**
+ * Change one setting in place, keeping every comment and the shape of the file
+ * around it. Both writing surfaces do the same three steps — read, modify,
+ * write atomically — so they do it here rather than each holding a copy.
+ */
+export const applySetting = async (
+	paths: Paths,
+	path: readonly (string | number)[],
+	value: unknown,
+): Promise<void> => {
+	const text = await readFile(paths.config, 'utf8')
+	await writeConfig(paths, setSetting(text, path, value))
+}

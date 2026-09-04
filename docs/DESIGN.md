@@ -456,6 +456,10 @@ Three surfaces, one contract. `PR-09-08`: every **state-changing** operation is 
 
 `core` owns every read and write under `.sober/`. The CLI, the dashboard server, and the MCP server call into `core` and never touch storage themselves. This is not a convention: `dependency-cruiser` fails the build on a violation (`STRUCTURE.md`).
 
+The MCP server ships as `sober mcp`, a subcommand of the same binary rather than a second package — one install, one version, one changelog (ADR 0007). It offers one tool per operation: `init` and `board` and `decisions` to read, `propose` to write a graph with its edges in one call, `open_decision` and `write_brief` to author, `run` and `stop` and `logs` to dispatch, `review` and `reject` and `archive` to judge, and `decide`, `approve` and `accept` — the three the agent cannot perform alone.
+
+Those three go to the human through elicitation (ADR 0010). A host that declares no elicitation capability is refused and told to use the command line; the board is the same one either way. Two revisions of the protocol are in the field at once — the newer splits the capability into `form` and `url`, the older declares a bare `elicitation` — so the capability is read before the request is made, and a host is never refused for something it supports.
+
 ### 4.1 The dashboard has a server — M3
 
 A browser cannot import `core`: `core` owns the filesystem, git and local state. So the dashboard is two pieces (ADR 0008):

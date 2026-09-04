@@ -16,14 +16,17 @@
 		"demo:cli": "pnpm --filter @besober/cli build && node scripts/demo-cli.mjs",
 		"coverage": "vitest run --coverage",
 		"coverage:check": "node scripts/coverage-ratchet.mjs",
-		"coverage:update": "vitest run --coverage && node scripts/coverage-ratchet.mjs --update"
+		"coverage:update": "vitest run --coverage && node scripts/coverage-ratchet.mjs --update",
+		"demo:mcp": "pnpm --filter @besober/cli build && node scripts/demo-mcp.mjs"
 	},
 	"devDependencies": {
 		"@besober/core": "workspace:*",
+		"@besober/mcp": "workspace:*",
 		"@biomejs/biome": "^2.4.2",
 		"@changesets/cli": "^3.0.1",
 		"@commitlint/cli": "^21.2.2",
 		"@commitlint/config-conventional": "^21.2.2",
+		"@modelcontextprotocol/sdk": "^1.30.0",
 		"@secretlint/secretlint-rule-preset-recommend": "^13.0.5",
 		"@types/node": "^26.4.0",
 		"@vitest/coverage-v8": "^4.1.3",

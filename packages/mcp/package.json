@@ -1,0 +1,29 @@
+{
+	"name": "@besober/mcp",
+	"version": "0.0.0",
+	"private": true,
+	"description": "SOBER's tools inside a host session: the board, decisions, dispatch and review.",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"build": "tsc -b",
+		"typecheck": "tsc --noEmit -p tsconfig.json"
+	},
+	"dependencies": {
+		"@besober/core": "workspace:*",
+		"@besober/schema": "workspace:*",
+		"@modelcontextprotocol/sdk": "^1.30.0",
+		"zod": "^4.5.4"
+	}
+}

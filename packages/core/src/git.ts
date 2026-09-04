@@ -44,6 +44,16 @@ export const gitWithEnv = async (
 	}
 }
 
+/**
+ * Whoever git says is committing here. SOBER never asks for a second identity,
+ * and every surface attributes with the same name — which is why this lives
+ * beside the other git calls rather than in whichever surface asked first.
+ */
+export const whoami = async (root: string): Promise<string> => {
+	const name = await git(root, 'config', 'user.name').catch(() => '')
+	return name.trim() === '' ? 'unknown' : name.trim()
+}
+
 export const isRepo = async (dir: string): Promise<boolean> => {
 	try {
 		return (await git(dir, 'rev-parse', '--is-inside-work-tree')) === 'true'

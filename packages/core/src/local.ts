@@ -27,6 +27,10 @@ export const runLog = (paths: Paths, id: string): string => join(paths.runs, `${
 export const appendRunOutput = (paths: Paths, id: string, chunk: string): Promise<void> =>
 	append(runLog(paths, id), chunk)
 
+/** The same log, read back. A run with no log yet reads as empty, never as an error. */
+export const readRunOutput = (paths: Paths, id: string): Promise<string> =>
+	readFile(runLog(paths, id), 'utf8').catch(() => '')
+
 /**
  * The host's pid, beside the run, for as long as it is running. `sober stop` is
  * a second process — usually a second terminal — so the pid has to survive the

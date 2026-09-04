@@ -5,30 +5,18 @@ import {
 	dispatch,
 	dispatchWave,
 	openDecisions,
+	readRunOutput,
 	renderBrief,
-	runLog,
 	SoberError,
 	statusOf,
 	stopRun,
 	tail,
+	whoami,
 	writeBrief,
 } from '@besober/core'
 import { Brief } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
-import {
-	blue,
-	bold,
-	columns,
-	cyan,
-	dim,
-	fail,
-	green,
-	magenta,
-	red,
-	say,
-	whoami,
-	yellow,
-} from './out.js'
+import { blue, bold, columns, cyan, dim, fail, green, magenta, red, say, yellow } from './out.js'
 
 /** A tool call, a sentence and an ending do not read alike, so they do not look alike. */
 const TAIL: Record<string, ((text: string) => string) | undefined> = {
@@ -74,7 +62,7 @@ export const decide = async (id: string, option: string, why?: string): Promise<
 		const decision = await answerDecision(paths, id, {
 			option,
 			rationale: why ?? '',
-			by: whoami(paths.root),
+			by: await whoami(paths.root),
 		})
 		say(`${green('✓')} ${magenta(id)}: ${bold(decision.answer?.option ?? '')}`)
 
@@ -132,7 +120,7 @@ export const brief = async (node: string, write?: string): Promise<void> => {
 export const approve = async (node: string, queue: boolean): Promise<void> => {
 	const paths = await openBoard()
 	try {
-		await approveBrief(paths, node, { by: whoami(paths.root), queue })
+		await approveBrief(paths, node, { by: await whoami(paths.root), queue })
 	} catch (error) {
 		refuse(error)
 	}
@@ -244,7 +232,7 @@ export const logs = async (node: string): Promise<void> => {
 	const last = runs.at(-1)
 	if (last === undefined) return fail(`${node} has not run yet`)
 
-	const text = await readFile(runLog(paths, last[0]), 'utf8').catch(() => '')
+	const text = await readRunOutput(paths, last[0])
 	say(
 		columns(tail(text).map((line) => [`  ${(TAIL[line.kind] ?? dim)(line.kind)}`, line.text])).join(
 			'\n',

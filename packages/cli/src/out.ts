@@ -1,5 +1,3 @@
-import { execFileSync } from 'node:child_process'
-
 /**
  * Everything the CLI prints goes through here. Colour is off when the output is
  * not a terminal, so a pipe gets text and a person gets a readable screen — the
@@ -30,15 +28,6 @@ export const say = (line = ''): void => {
 export const fail = (message: string): never => {
 	process.stderr.write(`${red('×')} ${message}\n`)
 	process.exit(1)
-}
-
-/** Whoever git says is committing here: SOBER never asks for a second identity. */
-export const whoami = (root: string): string => {
-	try {
-		return execFileSync('git', ['config', 'user.name'], { cwd: root, encoding: 'utf8' }).trim()
-	} catch {
-		return 'unknown'
-	}
 }
 
 export const columns = (rows: readonly (readonly string[])[]): string[] => {

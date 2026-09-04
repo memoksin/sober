@@ -13,6 +13,7 @@ export default defineConfig({
 				resolve: {
 					alias: {
 						'@besober/core': fileURLToPath(new URL('packages/core/src/index.ts', import.meta.url)),
+						'@besober/mcp': fileURLToPath(new URL('packages/mcp/src/index.ts', import.meta.url)),
 					},
 				},
 				test: {

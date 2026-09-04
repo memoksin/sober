@@ -7,6 +7,7 @@ export { archiveDecision, archiveNode } from './archive.js'
 export { createBoardBranch, detectSetup, type InitResult, initBoard } from './board.js'
 export { renderBrief } from './brief.js'
 export {
+	applySetting,
 	type Config,
 	DEFAULT_CONFIG,
 	type ReadConfig,
@@ -30,7 +31,7 @@ export {
 	SoberError,
 	StillReferencedError,
 } from './errors.js'
-export { currentBranch, GitError, hasRemote, isRepo, showFromRef } from './git.js'
+export { currentBranch, GitError, hasRemote, isRepo, showFromRef, whoami } from './git.js'
 export {
 	type Board,
 	cycleFrom,
@@ -49,6 +50,7 @@ export {
 	type ReadLog,
 	readFeedback,
 	readLog,
+	readRunOutput,
 	readRuns,
 	runLog,
 	writeRun,

@@ -1,6 +1,6 @@
-import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import {
+	applySetting,
 	createBoardBranch,
 	currentBranch,
 	detectSetup,
@@ -11,8 +11,6 @@ import {
 	type Paths,
 	readConfig,
 	paths as resolve,
-	setSetting,
-	writeConfig,
 } from '@besober/core'
 import { bold, columns, dim, fail, green, say, yellow } from './out.js'
 
@@ -52,10 +50,7 @@ export const init = async (options: { title?: string; intent?: string }): Promis
 	// PR-00-06: a default that can be detected is written in concretely, with
 	// its comment above it. The user corrects one line instead of writing one.
 	const setup = await detectSetup(root)
-	if (setup !== null) {
-		const text = setSetting(await readFile(paths.config, 'utf8'), ['dispatch', 'setup'], setup)
-		await writeConfig(paths, text)
-	}
+	if (setup !== null) await applySetting(paths, ['dispatch', 'setup'], setup)
 
 	const settings = await settingsOf(paths)
 	const branch = await createBoardBranch(root, settings.board.branch)

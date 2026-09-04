@@ -1,6 +1,13 @@
-import { acceptWork, archiveDecision, archiveNode, rejectWork, reviewNode } from '@besober/core'
+import {
+	acceptWork,
+	archiveDecision,
+	archiveNode,
+	rejectWork,
+	reviewNode,
+	whoami,
+} from '@besober/core'
 import { baseOf, openBoard, readBoard } from './board.js'
-import { blue, bold, columns, cyan, dim, fail, green, red, say, whoami, yellow } from './out.js'
+import { blue, bold, columns, cyan, dim, fail, green, red, say, yellow } from './out.js'
 import { refuse } from './work.js'
 
 /**
@@ -71,7 +78,7 @@ export const accept = async (node: string, base?: string): Promise<void> => {
 
 	try {
 		const merged = await acceptWork(paths, node, {
-			by: whoami(paths.root),
+			by: await whoami(paths.root),
 			base: ref,
 			scan: found.scan.result,
 		})
@@ -94,7 +101,7 @@ export const reject = async (node: string, text: string, clean: boolean, base?: 
 	const paths = await openBoard()
 	try {
 		await rejectWork(paths, node, {
-			by: whoami(paths.root),
+			by: await whoami(paths.root),
 			text,
 			clean,
 			base: await baseOf(paths, base),

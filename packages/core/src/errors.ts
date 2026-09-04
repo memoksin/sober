@@ -19,6 +19,7 @@ export const ERROR_CODES = [
 	'answer-locked',
 	'no-such-option',
 	'no-brief',
+	'no-board',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

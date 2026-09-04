@@ -59,6 +59,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		],
 	],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
+	['In a session', [['mcp', 'serve SOBER’s tools to a host — the plugin starts this']]],
 ]
 
 const help = (): void => {
@@ -138,6 +139,13 @@ const main = async (): Promise<void> => {
 		}
 		case 'archive':
 			return archive(need('node or decision'))
+		case 'mcp': {
+			// The MCP server ships as a subcommand, not a second package: one
+			// install, one version, one changelog (ADR 0007). It speaks over
+			// stdio, so nothing after this line may write to stdout.
+			const { serve } = await import('@besober/mcp')
+			return serve()
+		}
 		default:
 			return fail(`there is no \`sober ${command}\`. \`sober --help\` lists what there is.`)
 	}
