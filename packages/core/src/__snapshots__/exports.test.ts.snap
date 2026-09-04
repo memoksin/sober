@@ -1,3 +1,35 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`core exports nothing new without a reviewer seeing it 1`] = `[]`;
+exports[`core exports nothing new without a reviewer seeing it 1`] = `
+[
+  "Config",
+  "DEFAULT_CONFIG",
+  "DEFAULT_CONFIG_TEXT",
+  "GITIGNORE_BLOCK",
+  "SOBER_DIR",
+  "appendLine",
+  "ensureGitignore",
+  "fileId",
+  "findRoot",
+  "initBoard",
+  "parseConfig",
+  "paths",
+  "readArchived",
+  "readConfig",
+  "readDecision",
+  "readDecisions",
+  "readNode",
+  "readNodes",
+  "readProject",
+  "readRecord",
+  "readRecords",
+  "recordFile",
+  "setSetting",
+  "writeAtomic",
+  "writeConfig",
+  "writeDecision",
+  "writeNode",
+  "writeProject",
+  "writeRecord",
+]
+`;
