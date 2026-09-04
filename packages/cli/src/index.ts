@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import { init } from './board.js'
 import { bold, columns, dim, fail, say } from './out.js'
+import { listConflicts, resolve } from './resolve.js'
 import { accept, archive, reject, review } from './review.js'
 import { status } from './status.js'
 import { sync } from './sync.js'
@@ -151,6 +152,8 @@ const main = async (): Promise<void> => {
 		}
 		case 'sync':
 			return sync(values['no-push'] === true)
+		case 'resolve':
+			return rest.length === 0 ? listConflicts() : resolve(rest[0] as string, rest.slice(1))
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'mcp': {

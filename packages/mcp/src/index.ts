@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { registerBuilding } from './tools/build.js'
 import { registerPlanning } from './tools/plan.js'
 import { registerReview } from './tools/review.js'
+import { registerSync } from './tools/sync.js'
 
 const VERSION = '0.0.0'
 
@@ -29,6 +30,7 @@ export const createServer = (cwd: string = process.cwd()): McpServer => {
 	registerPlanning(server, cwd)
 	registerBuilding(server, cwd)
 	registerReview(server, cwd)
+	registerSync(server, cwd)
 	return server
 }
 

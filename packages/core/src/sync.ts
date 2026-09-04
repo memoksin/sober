@@ -1,13 +1,24 @@
-import { access, mkdir, readdir, rm } from 'node:fs/promises'
+import { access, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createBoardBranch, ensureAttributes, ensureGitignore } from './board.js'
 import { DEFAULT_CONFIG_TEXT, writeConfig } from './config.js'
+import {
+	ARCHIVE_FIELD,
+	archivePathOf,
+	type Choices,
+	type Conflict,
+	conflictsOf,
+	mergeRecord,
+	settle,
+	stagesOf,
+} from './conflict.js'
 import { SoberError } from './errors.js'
 import { git, gitVerbatim, gitWithEnv, isAncestor, refExists, remoteName, whoami } from './git.js'
+import { dangling, findCycle, loadBoard } from './graph.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
 import { SOBER_DIR } from './paths.js'
-import { writeAtomic } from './write.js'
+import { writeAtomic, writeRecord } from './write.js'
 
 /**
  * What the board branch carries, and nothing else. `config.jsonc` is machine
@@ -35,18 +46,38 @@ const NOTHING: SyncChange = { updated: [], removed: [] }
 export interface SyncResult {
 	/**
 	 * `synced` — the board is level with the remote, as far as it was taken.
-	 * `conflicted` — the same records changed on both sides; that is a
-	 * field-by-field question and nothing was touched. `no-remote` — the board
-	 * was committed locally and there is nowhere to send it.
+	 * `conflicted` — the same records changed on both sides, and a human has to
+	 * choose; nothing was touched. `invalid` — the merge landed and left a board
+	 * that does not hold together, so the push is blocked until it does
+	 * (§1.2.1). `no-remote` — the board was committed locally and there is
+	 * nowhere to send it.
 	 */
-	readonly kind: 'synced' | 'conflicted' | 'no-remote'
+	readonly kind: 'synced' | 'conflicted' | 'invalid' | 'no-remote'
 	/** A board commit was made from what is in the working tree right now. */
 	readonly committed: boolean
 	readonly pulled: SyncChange
 	readonly pushed: boolean
 	/** The records both sides changed. Only ever set when `kind` is `conflicted`. */
-	readonly conflicts: readonly string[]
+	readonly conflicts: readonly Conflict[]
+	/** What the merged board gets wrong. Only ever set when `kind` is `invalid`. */
+	readonly findings: readonly string[]
+	/**
+	 * The board branch here was ahead of the remote's, so the push carried
+	 * something. Not the same as `committed`: a merge you resolved is board
+	 * state to send even though nothing in the working tree changed since.
+	 */
+	readonly outgoing: boolean
 }
+
+const EMPTY = {
+	kind: 'synced',
+	committed: false,
+	pulled: NOTHING,
+	pushed: false,
+	conflicts: [],
+	findings: [],
+	outgoing: false,
+} as const satisfies SyncResult
 
 /**
  * One action, in this order: commit what is here, pull, push (D35). Never
@@ -67,30 +98,37 @@ export const sync = async (
 		const committed = await snapshot(paths, branch)
 
 		const remote = await remoteName(root)
-		if (remote === null)
-			return { kind: 'no-remote', committed, pulled: NOTHING, pushed: false, conflicts: [] }
+		if (remote === null) return { ...EMPTY, kind: 'no-remote', committed }
 
 		const theirs = await fetchBoard(root, remote, branch)
 		let pulled = NOTHING
+		let findings: readonly string[] = []
 		if (theirs !== null) {
 			const ours = await git(root, 'rev-parse', branch)
 			if (ours !== theirs && !(await isAncestor(root, theirs, ours))) {
 				const landed = await pull(paths, branch, ours, theirs)
 				if ('conflicts' in landed)
-					return {
-						kind: 'conflicted',
-						committed,
-						pulled: NOTHING,
-						pushed: false,
-						conflicts: landed.conflicts,
-					}
+					return { ...EMPTY, kind: 'conflicted', committed, conflicts: landed.conflicts }
 				pulled = landed.pulled
+				findings = landed.findings
 			}
 		}
 
-		if (!options.push) return { kind: 'synced', committed, pulled, pushed: false, conflicts: [] }
+		const outgoing =
+			theirs === null || !(await isAncestor(root, await git(root, 'rev-parse', branch), theirs))
+
+		// The push is blocked until the findings are resolved (§1.2.1) — which
+		// is a state, not a moment. Checking only at the merge would block one
+		// sync and wave the same broken board through on the next one, so what
+		// is about to go out is what is checked.
+		if (outgoing && findings.length === 0) findings = await validate(paths)
+		// Nothing is undone: whatever came in is committed here. It just does
+		// not leave until the board holds together.
+		if (findings.length > 0) return { ...EMPTY, kind: 'invalid', committed, pulled, findings }
+
+		if (!options.push) return { ...EMPTY, kind: 'synced', committed, pulled, outgoing }
 		await pushBoard(root, remote, branch)
-		return { kind: 'synced', committed, pulled, pushed: true, conflicts: [] }
+		return { ...EMPTY, kind: 'synced', committed, pulled, pushed: true, outgoing }
 	})
 
 /**
@@ -98,49 +136,46 @@ export const sync = async (
  * two people do in a day touches different files, and git resolves that with no
  * question at all — so the question is asked only for records both sides
  * changed, which is the whole point of the layout (§1.2.1).
- *
- * A record both sides changed is where the field-level merge belongs, and it is
- * not written yet: those are named and nothing is touched.
  */
 const pull = async (
 	paths: Paths,
 	branch: string,
 	ours: string,
 	theirs: string,
-): Promise<{ pulled: SyncChange } | { conflicts: string[] }> => {
+): Promise<
+	{ pulled: SyncChange; findings: readonly string[] } | { conflicts: readonly Conflict[] }
+> => {
 	const { root } = paths
 	if (await isAncestor(root, ours, theirs)) {
 		// Fast-forward: nothing of ours is left behind, so the remote tree
-		// becomes the working tree and the branch follows it.
+		// becomes the working tree and the branch follows it. No validation
+		// pass — this is not a merge, and blocking a push we are not making
+		// would say nothing about a board the remote already holds.
 		const pulled = await materialize(paths, ours, theirs)
 		await git(root, 'update-ref', `refs/heads/${branch}`, theirs)
-		return { pulled }
+		return { pulled, findings: [] }
 	}
 
-	const base = await git(root, 'merge-base', ours, theirs).catch(() => '')
-	if (base === '')
-		throw new SoberError(
-			'git',
-			`${branch} here and ${branch} on the remote share no history — they are two different boards, and merging them is not something SOBER can decide`,
-		)
+	const attempt = await merge(paths, ours, theirs)
+	try {
+		const conflicts = await conflictsOf(paths, attempt.index, attempt.unmerged)
+		if (conflicts.length > 0) return { conflicts }
 
-	const merged = await mergeTrees(paths, base, ours, theirs)
-	if ('conflicts' in merged) return merged
+		for (const path of attempt.unmerged) await settleUnasked(paths, attempt, path)
+		return await complete(paths, branch, attempt)
+	} finally {
+		await rm(attempt.index, { force: true })
+	}
+}
 
-	const commit = await git(
-		root,
-		'commit-tree',
-		merged.tree,
-		'-p',
-		ours,
-		'-p',
-		theirs,
-		'-m',
-		'sober: board merge',
-	)
-	const pulled = await materialize(paths, ours, commit)
-	await git(root, 'update-ref', `refs/heads/${branch}`, commit)
-	return { pulled }
+interface Attempt {
+	/** The throwaway index holding the merge. The caller removes it. */
+	readonly index: string
+	readonly base: string
+	readonly ours: string
+	readonly theirs: string
+	/** Paths git left with three versions in the index — never with markers. */
+	readonly unmerged: readonly string[]
 }
 
 /**
@@ -151,28 +186,237 @@ const pull = async (
  *
  * What is left unmerged is exactly the set ADR 0013 says a human decides.
  */
-const mergeTrees = async (
-	paths: Paths,
-	base: string,
-	ours: string,
-	theirs: string,
-): Promise<{ tree: string } | { conflicts: string[] }> => {
+const merge = async (paths: Paths, ours: string, theirs: string): Promise<Attempt> => {
 	const { root } = paths
+	const base = await git(root, 'merge-base', ours, theirs).catch(() => '')
+	if (base === '')
+		throw new SoberError(
+			'git',
+			'this board and the one on the remote share no history — they are two different boards, and merging them is not something SOBER can decide',
+		)
+
 	const index = join(paths.local, 'merge-index')
 	await mkdir(paths.local, { recursive: true })
 	await rm(index, { force: true })
-	try {
-		const env = { GIT_INDEX_FILE: index }
-		await gitWithEnv(root, env, ['read-tree', '-i', '-m', '--aggressive', base, ours, theirs])
-		const unmerged = await gitWithEnv(root, env, ['ls-files', '--unmerged'])
-		if (unmerged !== '') {
-			const paths = unmerged.split('\n').map((line) => line.split('\t')[1] ?? '')
-			return { conflicts: [...new Set(paths)].filter((path) => path !== '').sort() }
+	const env = { GIT_INDEX_FILE: index }
+	await gitWithEnv(root, env, ['read-tree', '-i', '-m', '--aggressive', base, ours, theirs])
+	const listing = await gitWithEnv(root, env, ['ls-files', '--unmerged'])
+	const unmerged =
+		listing === ''
+			? []
+			: [...new Set(listing.split('\n').map((line) => line.split('\t')[1] ?? ''))]
+					.filter((path) => path !== '')
+					.sort()
+	return { index, base, ours, theirs, unmerged }
+}
+
+/**
+ * A record git could not settle but a person does not have to: they edited
+ * different fields of it. This is the case that makes the whole layout worth
+ * its cost — one file per entity, merged field by field, and the `notes`
+ * against `dependsOn` example in §1.2.1 costs nobody a question.
+ *
+ * Taking ours here instead would be silent data loss, which §1.2 rules out by
+ * name.
+ */
+const settleUnasked = async (paths: Paths, attempt: Attempt, path: string): Promise<void> => {
+	const [base, ours, theirs] = await stagesOf(paths.root, attempt.index, path)
+	if (ours === null || theirs === null)
+		throw new SoberError('git', `${path} was archived on one side, and nobody was asked about it`)
+	await settle(paths, attempt.index, path, mergeRecord(path, base, ours, theirs, {}))
+}
+
+/**
+ * Everything after the last question is answered: the merge commit, the working
+ * tree, and the pass that asks whether what came out still holds together.
+ */
+const complete = async (
+	paths: Paths,
+	branch: string,
+	attempt: Attempt,
+): Promise<{ pulled: SyncChange; findings: readonly string[] }> => {
+	const { root } = paths
+	const tree = await gitWithEnv(root, { GIT_INDEX_FILE: attempt.index }, ['write-tree'])
+	const commit = await git(
+		root,
+		'commit-tree',
+		tree,
+		'-p',
+		attempt.ours,
+		'-p',
+		attempt.theirs,
+		'-m',
+		'sober: board merge',
+	)
+	const pulled = await materialize(paths, attempt.ours, commit)
+	await git(root, 'update-ref', `refs/heads/${branch}`, commit)
+	await rm(paths.merge, { force: true })
+	return { pulled, findings: await validate(paths) }
+}
+
+/**
+ * Two records that merge cleanly can still make a board that does not hold: one
+ * side deletes a node the other adds a dependency on, or two edges that are
+ * each fine alone together close a cycle. §8.3 and §3.6 refuse both at edit
+ * time; a merge is the other edge, and this is where it is checked (§1.2.1).
+ */
+const validate = async (paths: Paths): Promise<string[]> => {
+	const board = await loadBoard(paths)
+	const findings = dangling(board).map(
+		(edge) =>
+			`${edge.node} ${edge.kind === 'dependsOn' ? 'depends on' : 'binds'} ${edge.missing}, which is not on this board`,
+	)
+	const cycle = findCycle(board.nodes)
+	if (cycle !== null) findings.push(`these depend on each other in a circle: ${cycle.join(' → ')}`)
+	return findings
+}
+
+/** The choices made so far in a merge that is not finished, and what they are for. */
+interface MergeState {
+	readonly ours: string
+	readonly theirs: string
+	readonly choices: Readonly<Record<string, Choices>>
+}
+
+export interface Resolution {
+	/** `done` — every question is answered and the merge landed. */
+	readonly kind: 'recorded' | 'done'
+	/** What is still waiting on a human. */
+	readonly left: readonly Conflict[]
+	readonly findings: readonly string[]
+}
+
+/**
+ * One record's answer. The choices are kept under `local/` until the last one
+ * arrives, because a merge with three conflicted records is three questions and
+ * a person is allowed to answer them one at a time. Losing that file loses no
+ * record — the questions are asked again (§1.4).
+ */
+export const resolveConflict = async (
+	paths: Paths,
+	branch: string,
+	id: string,
+	choices: Choices,
+): Promise<Resolution> =>
+	withLock(paths, 'resolve', async () => {
+		const { root } = paths
+		const remote = await remoteName(root)
+		if (remote === null)
+			throw new SoberError('git', 'there is nothing to resolve — this repository has no remote')
+
+		const ours = await git(root, 'rev-parse', branch)
+		const theirs = await git(root, 'rev-parse', `refs/remotes/${remote}/${branch}`).catch(() => '')
+		if (theirs === '')
+			throw new SoberError('git', 'there is nothing to resolve — run `sober sync` first')
+
+		const attempt = await merge(paths, ours, theirs)
+		try {
+			const conflicts = await conflictsOf(paths, attempt.index, attempt.unmerged)
+			const asked = conflicts.find((conflict) => conflict.id === id)
+			if (asked === undefined)
+				throw new SoberError('git', `${id} is not one of the records waiting on you`)
+
+			const state = await readMergeState(paths, ours, theirs)
+			const recorded = { ...state.choices, [asked.path]: choices }
+			const left = conflicts.filter((conflict) => recorded[conflict.path] === undefined)
+			if (left.length > 0) {
+				await writeRecord(paths.merge, { ours, theirs, choices: recorded })
+				return { kind: 'recorded', left, findings: [] }
+			}
+
+			for (const conflict of conflicts)
+				await apply(paths, attempt, conflict, recorded[conflict.path] ?? {})
+			for (const path of attempt.unmerged) {
+				if (conflicts.some((conflict) => conflict.path === path)) continue
+				await settleUnasked(paths, attempt, path)
+			}
+			const { findings } = await complete(paths, branch, attempt)
+			return { kind: 'done', left: [], findings }
+		} finally {
+			await rm(attempt.index, { force: true })
 		}
-		return { tree: await gitWithEnv(root, env, ['write-tree']) }
+	})
+
+/** A conflict, and whether this person has already said what they want. */
+export type OpenConflict = Conflict & { readonly answered: boolean }
+
+/**
+ * Every record in the merge a human is in, with the two versions to choose
+ * between and whether it is still waiting. An answered record stays in the
+ * list, marked: a person is allowed to change their mind before the last
+ * answer lands the merge.
+ */
+export const openConflicts = async (paths: Paths, branch: string): Promise<OpenConflict[]> => {
+	const { root } = paths
+	const remote = await remoteName(root)
+	if (remote === null) return []
+	const theirs = await git(root, 'rev-parse', `refs/remotes/${remote}/${branch}`).catch(() => '')
+	if (theirs === '') return []
+	const ours = await git(root, 'rev-parse', branch)
+	if (ours === theirs || (await isAncestor(root, theirs, ours))) return []
+
+	const attempt = await merge(paths, ours, theirs)
+	try {
+		const conflicts = await conflictsOf(paths, attempt.index, attempt.unmerged)
+		const { choices } = await readMergeState(paths, ours, theirs)
+		return conflicts.map((conflict) => ({
+			...conflict,
+			answered: choices[conflict.path] !== undefined,
+		}))
 	} finally {
-		await rm(index, { force: true })
+		await rm(attempt.index, { force: true })
 	}
+}
+
+const readMergeState = async (paths: Paths, ours: string, theirs: string): Promise<MergeState> => {
+	try {
+		const state = JSON.parse(await readFile(paths.merge, 'utf8')) as MergeState
+		// Either side moved, so the answers were to a different question.
+		if (state.ours !== ours || state.theirs !== theirs) return { ours, theirs, choices: {} }
+		return state
+	} catch {
+		return { ours, theirs, choices: {} }
+	}
+}
+
+/**
+ * Puts one answered record into the merge index. An archived record is not a
+ * field question: keeping the archive removes the live record, and restoring it
+ * puts the other side's version back and takes the archive entry away again.
+ */
+const apply = async (
+	paths: Paths,
+	attempt: Attempt,
+	conflict: Conflict,
+	choices: Choices,
+): Promise<void> => {
+	const [base, ours, theirs] = await stagesOf(paths.root, attempt.index, conflict.path)
+
+	if (conflict.kind === 'archived') {
+		const chosen = choices[ARCHIVE_FIELD]
+		if (chosen !== 'keep' && chosen !== 'restore')
+			throw new SoberError(
+				'git',
+				`${conflict.id} was archived on one side and edited on the other — say \`keep\` or \`restore\``,
+			)
+		if (chosen === 'keep') {
+			// The archive entry itself merged cleanly; only the live record has
+			// to go, which is what archiving meant on the side that did it.
+			await settle(paths, attempt.index, conflict.path, null)
+			return
+		}
+		await settle(paths, attempt.index, conflict.path, conflict.by === 'ours' ? theirs : ours)
+		await settle(paths, attempt.index, archivePathOf(conflict.path), null)
+		return
+	}
+
+	if (ours === null || theirs === null) return
+	await settle(
+		paths,
+		attempt.index,
+		conflict.path,
+		mergeRecord(conflict.path, base, ours, theirs, choices),
+	)
 }
 
 /**

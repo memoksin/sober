@@ -40,9 +40,9 @@ const refused = (cwd: string, ...args: string[]): string => {
 		sober(cwd, ...args)
 		throw new Error(`sober ${args.join(' ')} was expected to exit non-zero`)
 	} catch (error) {
-		const failure = error as { stdout?: string; status?: number }
+		const failure = error as { stdout?: string; stderr?: string; status?: number }
 		expect(failure.status).toBe(1)
-		return failure.stdout ?? ''
+		return `${failure.stdout ?? ''}${failure.stderr ?? ''}`
 	}
 }
 
@@ -63,7 +63,13 @@ const alice = (): TempRepo => {
 	return created
 }
 
-const node = (dir: string, id: string, title: string): void => {
+/** Changes one line of a record, the way a person editing the file would. */
+const edit = (dir: string, id: string, line: string): void => {
+	const file = join(dir, '.sober/nodes', `${id}.json`)
+	writeFileSync(file, readFileSync(file, 'utf8').replace(/"title": "[^"]*"/, line))
+}
+
+const node = (dir: string, id: string, title: string, dependsOn: string[] = []): void => {
 	writeFileSync(
 		join(dir, '.sober/nodes', `${id}.json`),
 		`${JSON.stringify(
@@ -71,7 +77,7 @@ const node = (dir: string, id: string, title: string): void => {
 				title,
 				description: title,
 				notes: '',
-				dependsOn: [],
+				dependsOn,
 				decisions: [],
 				files: [],
 				brief: null,
@@ -206,11 +212,69 @@ test('the same record changed on both sides is named, and nothing is touched', (
 	expect(out).toContain('changed on both sides')
 	expect(out).toContain('shared-node-aaaa')
 	// A refusal that names no way out is a support request (§8.7).
-	expect(out).toContain('match theirs')
+	expect(out).toContain('sober resolve')
 	// Alice's own edit is still hers — the merge did not run.
 	expect(readFileSync(join(a.dir, '.sober/nodes/shared-node-aaaa.json'), 'utf8')).toContain(
 		'Alice’s title',
 	)
+})
+
+test('resolve shows both versions, takes the answer, and lands the merge', () => {
+	const a = alice()
+	node(a.dir, 'shared-node-aaaa', 'Shared')
+	sober(a.dir, 'sync')
+	const b = bob(a.remote)
+	sober(b, 'init')
+
+	edit(b, 'shared-node-aaaa', '"title": "Bob’s title"')
+	sober(b, 'sync')
+	edit(a.dir, 'shared-node-aaaa', '"title": "Alice’s title"')
+	expect(refused(a.dir, 'sync')).toContain('only you can say which')
+
+	// The two versions, side by side, before anything is chosen.
+	const shown = sober(a.dir, 'resolve')
+	expect(shown).toContain('shared-node-aaaa')
+	expect(shown).toContain('Alice’s title')
+	expect(shown).toContain('Bob’s title')
+
+	expect(sober(a.dir, 'resolve', 'shared-node-aaaa', 'title=theirs')).toContain('merge landed')
+	expect(readFileSync(join(a.dir, '.sober/nodes/shared-node-aaaa.json'), 'utf8')).toContain(
+		'Bob’s title',
+	)
+	expect(sober(a.dir, 'sync')).toContain('your board went out')
+})
+
+test('an answer that is not a side is refused before anything is written', () => {
+	const a = alice()
+	node(a.dir, 'shared-node-aaaa', 'Shared')
+	sober(a.dir, 'sync')
+	const b = bob(a.remote)
+	sober(b, 'init')
+	edit(b, 'shared-node-aaaa', '"title": "Bob’s"')
+	sober(b, 'sync')
+	edit(a.dir, 'shared-node-aaaa', '"title": "Alice’s"')
+	refused(a.dir, 'sync')
+
+	expect(refused(a.dir, 'resolve', 'shared-node-aaaa', 'title=mine')).toContain('is not an answer')
+	expect(refused(a.dir, 'resolve', 'no-such-node-zzzz')).toContain('is not waiting on you')
+})
+
+test('a merge that breaks the board blocks the push and names the finding', () => {
+	const a = alice()
+	node(a.dir, 'shared-node-aaaa', 'Shared')
+	sober(a.dir, 'sync')
+	const b = bob(a.remote)
+	sober(b, 'init')
+
+	rmSync(join(b, '.sober/nodes/shared-node-aaaa.json'))
+	sober(b, 'sync')
+	node(a.dir, 'dependent-node-cccc', 'Dependent', ['shared-node-aaaa'])
+
+	const out = refused(a.dir, 'sync')
+	expect(out).toContain('does not hold together, so nothing went out')
+	expect(out).toContain('depends on shared-node-aaaa')
+	// And it stays blocked: the next sync does not wave the same board through.
+	expect(refused(a.dir, 'sync')).toContain('does not hold together')
 })
 
 test('a repository with no remote commits the board and says where it went', () => {

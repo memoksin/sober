@@ -102,6 +102,21 @@ test('adopting brings the board in, and the second clone reads the same records'
 	expect(existsSync(theirs.decisions)).toBe(true)
 })
 
+test('a clone whose repository never tracked config.jsonc still gets one', async () => {
+	const { created, paths } = await board()
+	await sync(paths, BRANCH)
+	// A repository whose owner never committed `.sober/config.jsonc`: the
+	// clone has no settings file at all until adopting writes the default.
+	created.git('rm', '--cached', '-q', '.sober/config.jsonc')
+	created.git('commit', '-m', 'chore: untrack config')
+	created.git('push', 'origin', 'main')
+
+	const theirs = await second(created.remote)
+	expect(existsSync(theirs.config)).toBe(false)
+	await adoptBoard(theirs, BRANCH)
+	expect(existsSync(theirs.config)).toBe(true)
+})
+
 test('there is nothing to adopt when the remote has no board', async () => {
 	const { created } = await board()
 	const theirs = await second(created.remote)
@@ -148,7 +163,7 @@ test('one record changed on both sides is named, and the working tree is untouch
 	await writeNode(paths, 'shared-aaaa', node('Ours'))
 	const result = await sync(paths, BRANCH)
 	expect(result).toMatchObject({ kind: 'conflicted', pushed: false })
-	expect(result.conflicts).toEqual(['.sober/nodes/shared-aaaa.json'])
+	expect(result.conflicts.map((conflict) => conflict.id)).toEqual(['shared-aaaa'])
 	expect((await readNodes(paths)).records.get('shared-aaaa')?.title).toBe('Ours')
 })
 

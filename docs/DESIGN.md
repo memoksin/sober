@@ -87,6 +87,21 @@ Whole-record choice is also lossy. If one person edits a node's `notes` while an
 
 In that example nothing is asked and nothing is lost.
 
+Both surfaces ask the same question in M2. The CLI never prompts — `sober sync`
+names the records and stops, `sober resolve <record>` shows the two versions,
+and `sober resolve <record> <field>=ours` is the answer, exactly the shape
+`sober decide` already has (§4: the CLI is the scriptable surface as well as a
+human one). A session asks through elicitation: **one form per record, one enum
+per conflicted field**, so a record with three questions is one window rather
+than three.
+
+Answers to a merge with several conflicted records are held in
+`local/merge.json` until the last one arrives, and the merge lands on it. That
+file is disposable like everything else under `local/` — losing it loses no
+record, the questions are simply asked again (§1.4). It is dropped the moment
+either side moves, because answers to a merge that no longer exists are not
+answers.
+
 #### Archive against edit
 
 Archiving is a rename, so a node archived on one side and edited on the other is a different kind of conflict with a different question: "this node was archived by someone else while you edited it — keep the archive, or restore it?"
@@ -97,7 +112,12 @@ One file per entity reduces conflicts, and that is exactly what makes this possi
 
 §8.3 refuses a severing delete and §3.6 refuses a cycle-closing edge, but both run locally at edit time. A merge is the other edge, and §3.6's own sentence names the cost of missing it: enforcing at the edge is one check, detecting later is a class of bug.
 
-So a **validation pass runs after the merge and before the commit** — dangling references and cycles. The merge completes locally, so no work is lost, and the push is blocked until the findings are resolved. That reuses the gate `PR-07-02` already defines rather than adding one.
+So a **validation pass runs over the merged board** — dangling references and cycles. The merge completes locally, so no work is lost, and the push is blocked until the findings are resolved. That reuses the gate `PR-07-02` already defines rather than adding one.
+
+"Blocked until resolved" is a state, not a moment: the check runs before every
+push that has something to send, not only on the sync that merged. Checking only
+at the merge would block one sync and wave the same broken board through on the
+next one.
 
 All of this needs real git state to exercise. It is the highest-risk code in `core`, and ADR 0014 exists for it.
 

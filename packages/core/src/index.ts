@@ -21,6 +21,13 @@ export {
 	writeConfig,
 } from './config.js'
 export {
+	ARCHIVE_FIELD,
+	type Choices,
+	type Conflict,
+	type FieldConflict,
+	type Side,
+} from './conflict.js'
+export {
 	AnswerLockedError,
 	answerDecision,
 	approveBrief,
@@ -101,7 +108,15 @@ export {
 	statuses,
 	statusOf,
 } from './status.js'
-export { adoptBoard, sync } from './sync.js'
+export {
+	adoptBoard,
+	type OpenConflict,
+	openConflicts,
+	type Resolution,
+	resolveConflict,
+	type SyncResult,
+	sync,
+} from './sync.js'
 export { tail } from './tail.js'
 export {
 	addWorktree,

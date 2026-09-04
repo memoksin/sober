@@ -1,8 +1,18 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { addWorktree, initBoard, loadBoard, setSetting, statusOf } from '@besober/core'
+import {
+	addWorktree,
+	adoptBoard,
+	initBoard,
+	loadBoard,
+	paths as resolve,
+	setSetting,
+	statusOf,
+	sync,
+	writeNode,
+} from '@besober/core'
 import { createServer } from '@besober/mcp'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -42,7 +52,12 @@ const connect = async (dir: string, human: Human = (_, choices) => choices[0] ??
 				}
 			}
 		}
-		const properties = params.requestedSchema?.properties
+		const properties = params.requestedSchema?.properties as
+			| {
+					choice?: { enum?: string[]; enumNames?: string[] }
+					confirmed?: { type: 'boolean' }
+			  }
+			| undefined
 		// A confirmation is a boolean field, a choice is an enum one: the host
 		// renders the first without an expand step, and every approval is one.
 		if (properties?.confirmed !== undefined) {
@@ -52,8 +67,24 @@ const connect = async (dir: string, human: Human = (_, choices) => choices[0] ??
 				: { action: 'accept', content: { confirmed: said === 'yes' } }
 		}
 		const field = properties?.choice
-		const choice = human(params.message, field?.enum ?? [], field?.enumNames ?? [])
-		return choice === null ? { action: 'decline' } : { action: 'accept', content: { choice } }
+		if (field !== undefined) {
+			const choice = human(params.message, field.enum ?? [], field.enumNames ?? [])
+			return choice === null ? { action: 'decline' } : { action: 'accept', content: { choice } }
+		}
+
+		// A merge asks about one record at a time, and a record is several
+		// fields: one form, one enum per field (ADR 0013).
+		const form = (params.requestedSchema?.properties ?? {}) as Record<
+			string,
+			{ enum?: string[]; enumNames?: string[] }
+		>
+		const content: Record<string, string> = {}
+		for (const [name, one] of Object.entries(form)) {
+			const said = human(`${params.message} ${name}`, one.enum ?? [], one.enumNames ?? [])
+			if (said === null) return { action: 'decline' }
+			content[name] = said
+		}
+		return { action: 'accept', content }
 	})
 
 	const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
@@ -128,6 +159,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'review',
 			'run',
 			'stop',
+			'sync',
 			'write_brief',
 		].sort(),
 	)
@@ -360,7 +392,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(17)
+		expect((await client.listTools()).tools.length).toBe(18)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -531,4 +563,81 @@ test('a decision nothing binds is named on the board, not left to be noticed', a
 	const shown = await call(client, 'board')
 	expect(shown).toContain('Bound to nothing')
 	expect(shown).toContain(decision ?? '')
+})
+
+/** A second clone of the same remote, so the session has something to merge. */
+const teammate = async (created: TempRepo) => {
+	created.git('add', '-A')
+	// The board fixture may already have committed everything.
+	try {
+		created.git('commit', '-m', 'chore: board')
+	} catch {
+		// Nothing to commit.
+	}
+	created.git('push', '-u', 'origin', 'main')
+	const dir = join(created.remote, '..', 'teammate')
+	execFileSync('git', ['clone', '--quiet', created.remote, dir])
+	execFileSync('git', ['config', 'user.name', 'Bob'], { cwd: dir })
+	execFileSync('git', ['config', 'user.email', 'bob@example.com'], { cwd: dir })
+	execFileSync('git', ['config', 'commit.gpgsign', 'false'], { cwd: dir })
+	const other = resolve(dir)
+	await adoptBoard(other, 'sober-graph')
+	return other
+}
+
+test('the session syncs the board, and says what went out', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'A node' }] })
+
+	expect(await call(client, 'sync')).toContain('your board went out')
+	expect(await sync(paths, 'sober-graph')).toMatchObject({ kind: 'synced' })
+})
+
+test('a record both of you changed is put to the human, one form, and lands', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir, (message, choices) =>
+		message.includes('title') ? 'theirs' : (choices[0] ?? null),
+	)
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Ours' }] })
+	await sync(paths, 'sober-graph')
+
+	const other = await teammate(created)
+	const [id] = [...(await loadBoard(paths)).nodes.keys()]
+	const mine = (await loadBoard(paths)).nodes.get(id as string)
+	await writeNode(other, id as string, { ...mine, title: 'Theirs', notes: 'from Bob' } as never)
+	await sync(other, 'sober-graph')
+	await writeNode(paths, id as string, { ...mine, title: 'Mine again' } as never)
+
+	const answered = await call(client, 'sync')
+	expect(answered).toContain('Records both of you changed')
+	expect(answered).toContain('the merge landed')
+	const merged = (await loadBoard(paths)).nodes.get(id as string)
+	expect(merged?.title).toBe('Theirs')
+	// The field only one of them touched came through without a question.
+	expect(merged?.notes).toBe('from Bob')
+
+	rmSync(other.root, { recursive: true, force: true })
+})
+
+test('a human who walks away merges nothing', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir, (message, choices) =>
+		message.includes('title') ? null : (choices[0] ?? null),
+	)
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Ours' }] })
+	await sync(paths, 'sober-graph')
+
+	const other = await teammate(created)
+	const [id] = [...(await loadBoard(paths)).nodes.keys()]
+	const mine = (await loadBoard(paths)).nodes.get(id as string)
+	await writeNode(other, id as string, { ...mine, title: 'Theirs' } as never)
+	await sync(other, 'sober-graph')
+	await writeNode(paths, id as string, { ...mine, title: 'Mine again' } as never)
+
+	const stopped = await call(client, 'sync')
+	expect(stopped).toContain('You stopped at')
+	expect((await loadBoard(paths)).nodes.get(id as string)?.title).toBe('Mine again')
+
+	rmSync(other.root, { recursive: true, force: true })
 })

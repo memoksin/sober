@@ -2,6 +2,7 @@
 
 exports[`core exports nothing new without a reviewer seeing it 1`] = `
 [
+  "ARCHIVE_FIELD",
   "AnswerLockedError",
   "AnsweredDecisionError",
   "CycleError",
@@ -51,6 +52,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "loadBoard",
   "mergeNode",
   "newId",
+  "openConflicts",
   "openDecisions",
   "paths",
   "readArchivedDecisions",
@@ -69,6 +71,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "removeWorktree",
   "renderBrief",
   "resetToBase",
+  "resolveConflict",
   "reviewNode",
   "runLog",
   "scanNode",

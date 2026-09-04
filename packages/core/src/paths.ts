@@ -21,6 +21,7 @@ export interface Paths {
 	readonly log: string
 	readonly cache: string
 	readonly lock: string
+	readonly merge: string
 }
 
 /** The layout of DESIGN §1.1, resolved against one project root. */
@@ -46,6 +47,9 @@ export const paths = (root: string): Paths => {
 		log: join(local, 'log.jsonl'),
 		cache: join(local, 'cache.json'),
 		lock: join(local, 'lock'),
+		// The choices a human made in a merge that is not finished yet. Losing
+		// it loses no record — the questions are simply asked again (§1.4).
+		merge: join(local, 'merge.json'),
 	}
 }
 
