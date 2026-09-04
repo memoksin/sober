@@ -25,6 +25,7 @@ export const Config = z.strictObject({
 		timeoutMinutes: z.int().positive(),
 		concurrency: z.int().positive(),
 		draftPr: z.boolean(),
+		accept: z.enum(['merge', 'pull-request']),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -49,6 +50,7 @@ export const DEFAULT_CONFIG: Config = {
 		timeoutMinutes: 30,
 		concurrency: 3,
 		draftPr: true,
+		accept: 'merge',
 	},
 	board: {
 		branch: 'sober-graph',
@@ -92,9 +94,18 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// How many runs may burn at once. Ready nodes beyond it queue.
 		"concurrency": ${DEFAULT_CONFIG.dispatch.concurrency},
 
-		// Open the node's pull request as a draft. A draft asks nobody to
-		// review anything.
-		"draftPr": ${DEFAULT_CONFIG.dispatch.draftPr}
+		// When a run finishes, push its branch and open the node's pull
+		// request as a draft, so CI runs before a human looks. A draft asks
+		// nobody to review anything, and the review stays in SOBER either
+		// way (DESIGN §6.1). Needs a remote and the \`gh\` CLI; without
+		// either, everything else is identical.
+		"draftPr": ${DEFAULT_CONFIG.dispatch.draftPr},
+
+		// What accepting does: "merge" lands the branch locally,
+		// "pull-request" marks the draft ready and merges it on the host.
+		// A protected main cannot take a local merge; a repository with no
+		// remote cannot take a pull request (DESIGN §6.3).
+		"accept": "${DEFAULT_CONFIG.dispatch.accept}"
 	},
 
 	"board": {

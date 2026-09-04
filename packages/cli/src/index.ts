@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util'
 import { init } from './board.js'
 import { bold, columns, dim, fail, say } from './out.js'
 import { listConflicts, resolve } from './resolve.js'
-import { accept, archive, reject, review } from './review.js'
+import { accept, acceptGreen, archive, reject, review } from './review.js'
 import { status } from './status.js'
 import { sync } from './sync.js'
 import { assign, claim, contributors, release } from './team.js'
@@ -59,6 +59,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['review <node>', 'the scan, the criteria, and the diff'],
 			['accept <node>', 'land it — merge, and the node is done'],
+			['accept --green', 'land every node whose checks are all clean'],
 			['reject <node> -m "…"', 'send it back with what was wrong'],
 		],
 	],
@@ -111,6 +112,7 @@ const options = {
 	role: { type: 'string' },
 	focus: { type: 'string' },
 	clean: { type: 'boolean' },
+	green: { type: 'boolean' },
 	diff: { type: 'boolean' },
 	version: { type: 'boolean', short: 'v' },
 	help: { type: 'boolean', short: 'h' },
@@ -163,7 +165,7 @@ const main = async (): Promise<void> => {
 		case 'review':
 			return review(need('node'), values.base, values.diff === true)
 		case 'accept':
-			return accept(need('node'), values.base)
+			return values.green === true ? acceptGreen(values.base) : accept(need('node'), values.base)
 		case 'reject': {
 			const node = need('node')
 			const text = values.message ?? fail('say what was wrong: sober reject <node> -m "…"')

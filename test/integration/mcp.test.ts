@@ -7,6 +7,7 @@ import {
 	adoptBoard,
 	initBoard,
 	loadBoard,
+	publish,
 	paths as resolve,
 	setSetting,
 	statusOf,
@@ -699,4 +700,39 @@ test('an older board is not rewritten inside a session — it names the surface 
 	const said_ = await call(client, 'board')
 	expect(said_).toContain('older SOBER')
 	expect(said_).toContain('sober status')
+})
+
+test('the session’s review carries CI, and a host that could not be read is not a pass', async () => {
+	const { repo: created, paths: board_ } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const node = [...(await loadBoard(board_)).nodes.keys()].sort()[0] as string
+
+	// A branch with a commit on it, so there is something to open a draft over.
+	const worktree = await addWorktree(board_, node, 'main')
+	writeFileSync(join(worktree.path, 'written.ts'), 'export const x = 1\n')
+	execFileSync('git', ['add', '-A'], { cwd: worktree.path })
+	execFileSync('git', ['commit', '-m', 'feat: work'], { cwd: worktree.path })
+
+	process.env.SOBER_GH = `${process.execPath} ${fileURLToPath(new URL('./fake-gh.mjs', import.meta.url))}`
+	process.env.FAKE_GH_STATE = join(board_.local, 'gh.json')
+	created.git('push', '-u', 'origin', 'main')
+	await publish(board_, node, 'main')
+
+	process.env.FAKE_GH_CHECKS = 'pass'
+	expect(await call(client, 'review', { node })).toContain('## CI: green')
+
+	process.env.FAKE_GH_CHECKS = 'fail'
+	expect(await call(client, 'review', { node })).toContain('## CI: FAILED')
+
+	process.env.FAKE_GH_CHECKS = 'pending'
+	expect(await call(client, 'review', { node })).toContain('still running')
+
+	delete process.env.FAKE_GH_CHECKS
+	process.env.FAKE_GH_FAIL = '1'
+	expect(await call(client, 'review', { node })).toContain('COULD NOT BE READ')
+
+	delete process.env.FAKE_GH_FAIL
+	delete process.env.SOBER_GH
+	delete process.env.FAKE_GH_STATE
 })

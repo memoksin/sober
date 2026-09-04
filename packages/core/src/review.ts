@@ -1,12 +1,14 @@
 import type { Handle, ScanResult } from '@besober/schema'
-import { git } from './git.js'
-import { loadBoard } from './graph.js'
+import { DEFAULT_CONFIG, readConfig } from './config.js'
+import { git, refExists } from './git.js'
+import { type Board, loadBoard } from './graph.js'
 import { appendEvent, type Feedback, writeFeedback } from './local.js'
-import { deleteBranch, MergeRefusedError, mergeNode } from './merge.js'
+import { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'
 import type { Paths } from './paths.js'
+import { type Checks, checksOf, type PullRequest, pullRequestOf, readyAndMerge } from './pr.js'
 import { acceptNode } from './run.js'
 import { type ScanReport, scanNode } from './scan.js'
-import { lastRun } from './status.js'
+import { lastRun, statusOf } from './status.js'
 import { branchOf, removeWorktree, resetToBase, worktreeOf } from './worktree.js'
 
 /**
@@ -24,6 +26,10 @@ export interface Review {
 	readonly run: string | null
 	readonly exit: string | null
 	readonly acceptance: readonly { readonly run: string; readonly proves: string }[]
+	/** CI, when there is a pull request to read it from (§6.1). */
+	readonly ci: Checks
+	/** The node's draft pull request, when one was opened. */
+	readonly pr: PullRequest | null
 	/**
 	 * Work sitting in the worktree that was never committed. A diff against the
 	 * base cannot see it, so without this a review of an agent that wrote
@@ -42,8 +48,15 @@ export const reviewNode = async (
 	const record = board.nodes.get(node)
 	if (record === undefined) return null
 
-	const diff = await git(paths.root, 'diff', `${base}...sober/${node}`)
-	const scan = await scanNode(paths, node, { base, diff: await unified0(paths, base, node) })
+	// A node nobody has run has no branch, and `git diff` against a ref that is
+	// not there is a fatal error rather than an empty diff. Nothing has run, so
+	// there is nothing to review — which `exit` already says (§8.7: no message
+	// here is a stack trace).
+	const started = await refExists(paths.root, branchOf(node))
+	const diff = started ? await git(paths.root, 'diff', `${base}...${branchOf(node)}`) : ''
+	const scan = started
+		? await scanNode(paths, node, { base, diff: await unified0(paths, base, node) })
+		: await scanNode(paths, node, { base, diff: '' })
 	const run = lastRun(board, node)
 
 	return {
@@ -54,6 +67,8 @@ export const reviewNode = async (
 		run: run?.id ?? null,
 		exit: run?.run.exit ?? null,
 		acceptance: record.brief?.acceptance ?? [],
+		ci: await checksOf(paths, node),
+		pr: await pullRequestOf(paths, node),
 		uncommitted: await uncommittedIn(paths, node),
 	}
 }
@@ -88,7 +103,15 @@ export interface AcceptOptions {
  * nobody accepted; the other order leaves an accepted node whose merge the user
  * can retry.
  */
-export const acceptWork = async (paths: Paths, node: string, options: AcceptOptions) => {
+export type Landed =
+	| ({ readonly kind: 'merged' } & Merged)
+	| { readonly kind: 'pull-request'; readonly pr: PullRequest; readonly base: string }
+
+export const acceptWork = async (
+	paths: Paths,
+	node: string,
+	options: AcceptOptions,
+): Promise<Landed> => {
 	// Nothing to land is not something to accept. Found in the M1 gate: an agent
 	// wrote its files and never committed them, the branch held no commit past
 	// the base, and `git merge` on an ancestor succeeds by doing nothing — so
@@ -107,6 +130,19 @@ export const acceptWork = async (paths: Paths, node: string, options: AcceptOpti
 		)
 	}
 
+	// Which landing (D33) is the project's, not the run's: a protected main
+	// cannot take a local merge, and a repository with no remote cannot take a
+	// pull request. It governs neither how a run is prepared nor how it is
+	// judged, so it is read normally rather than from the base (§5.2).
+	const config = await readConfig(paths)
+	const through =
+		config.kind === 'ok' ? config.value.dispatch.accept : DEFAULT_CONFIG.dispatch.accept
+
+	// The pull request has to be there before the record is written: the record
+	// is what makes the node done, and a done node whose work never landed is
+	// the one state this order exists to prevent.
+	if (through === 'pull-request') await requirePullRequest(paths, node)
+
 	await acceptNode(paths, node, {
 		by: options.by,
 		at: new Date().toISOString(),
@@ -115,12 +151,30 @@ export const acceptWork = async (paths: Paths, node: string, options: AcceptOpti
 		// did not run" — `PR-09-06` exists so that case cannot be dropped.
 		scan: options.scan,
 	})
+
+	if (through === 'pull-request') {
+		const pr = await readyAndMerge(paths, node)
+		await removeWorktree(paths, node)
+		// The merge happened on the host, so this branch is not an ancestor of
+		// anything here — `-d` would refuse work that is already landed.
+		await deleteBranch(paths, node, { force: true })
+		return { kind: 'pull-request', pr, base: options.base }
+	}
+
 	const merged = await mergeNode(paths, node, options.base)
 	// Nothing removes a dirty worktree (§8.2), so this can refuse — and it
 	// refuses after the work is safely merged, which is the harmless order.
 	await removeWorktree(paths, node)
 	await deleteBranch(paths, node)
-	return merged
+	return { kind: 'merged', ...merged }
+}
+
+/** Refusing here beats writing an `accepted` record for work that cannot land. */
+const requirePullRequest = async (paths: Paths, node: string): Promise<void> => {
+	if ((await pullRequestOf(paths, node)) === null)
+		throw new MergeRefusedError(
+			`${node} has no pull request to merge — this project accepts through one (dispatch.accept), so let a run open it, or set dispatch.accept to "merge"`,
+		)
 }
 
 export interface RejectOptions {
@@ -152,4 +206,64 @@ export const rejectWork = async (
 		await resetToBase(paths, node, options.base)
 	await appendEvent(paths, { action: 'node.rejected', node, by: options.by })
 	return feedback
+}
+
+export interface Green {
+	/** Every node in review whose checks are all clean, in id order. */
+	readonly green: readonly string[]
+	readonly held: readonly { readonly id: string; readonly why: string }[]
+}
+
+/**
+ * Green is checks, not reading (ADR 0022): verification passed, every
+ * acceptance command exited 0, the scan is clean, and CI is green (§6.0). Green
+ * nodes are accepted together; a node that is not green takes the single-node
+ * path, where a human reads what is wrong with it.
+ *
+ * "Did not run" is never "passed" — for the scan (`PR-09-06`), for an
+ * acceptance command (ADR 0021), and for a git host that could not be reached.
+ * A check nobody configured is a different thing from a check that failed to
+ * answer, and only the first one is silence worth ignoring.
+ */
+export const greenNodes = async (paths: Paths, base: string): Promise<Green> => {
+	const board = await loadBoard(paths)
+	const green: string[] = []
+	const held: { id: string; why: string }[] = []
+
+	for (const id of [...board.nodes.keys()].sort()) {
+		if (statusOf(board, id) !== 'in-review') continue
+		const why = await notGreen(paths, board, id, base)
+		if (why === null) green.push(id)
+		else held.push({ id, why })
+	}
+	return { green, held }
+}
+
+const notGreen = async (
+	paths: Paths,
+	board: Board,
+	id: string,
+	base: string,
+): Promise<string | null> => {
+	const run = lastRun(board, id)?.run
+	if (run === undefined || run.exit !== 'finished') return 'its last run did not finish'
+	if (run.verify !== null && run.verify.exit !== 0) return 'verification failed'
+
+	const criteria = board.nodes.get(id)?.brief?.acceptance ?? []
+	for (const [at, criterion] of criteria.entries()) {
+		const result = run.acceptance[at]
+		if (result === undefined || result === null) return `\`${criterion.run}\` did not run`
+		if (result.exit !== 0) return `\`${criterion.run}\` failed`
+	}
+
+	const found = await reviewNode(paths, id, base)
+	if (found === null) return 'it is not on this board'
+	if (found.scan.result !== 'clean')
+		return found.scan.result === 'did-not-run' ? 'the scan did not run' : 'the scan has findings'
+	if (found.uncommitted.length > 0) return 'its worktree holds work nobody committed'
+
+	if (found.ci.kind === 'failing') return `CI failed: ${found.ci.failed.join(', ')}`
+	if (found.ci.kind === 'pending') return 'CI has not finished'
+	if (found.ci.kind === 'unavailable') return 'CI could not be read'
+	return null
 }

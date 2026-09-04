@@ -603,7 +603,7 @@ Nothing lands without a human (`SCOPE.md` MUST #5). An agent can neither merge i
 
 Review is available on all three surfaces (§4). In M1 that means the session and the CLI; the dashboard's single review screen is M3.
 
-### 6.1 The pull request is a mechanism, not a surface — M2
+### 6.1 The pull request is a mechanism, not a surface
 
 When a run finishes, its branch is pushed and a **draft** pull request is opened (D32). CI then runs before a human looks, which is the whole point: human attention should not be spent on a diff that does not compile. v0 learned this and got it right; what it got wrong was letting the review itself move to the git host.
 
@@ -611,9 +611,15 @@ So the pull request is opened, and the review stays in SOBER. One screen carries
 
 One pull request per node, not per attempt (§5.0). Draft matters: a draft pull request asks nobody to review anything. Opening it is still an outward-facing action that pushes agent output to a remote, so it is a documented config setting (`dispatch.draftPr`), on by default when a remote exists, and never a silent one.
 
+The host is talked to through its own CLI, `gh`, as a subprocess — the same shape as the agent host (§5.1), and for the same reason: SOBER never asks for a token and never holds one (ADR 0031). `SOBER_GH` names the executable when it is not on the PATH. A branch that holds no commit past its base opens nothing: there is no diff for CI to run and none for anyone to read.
+
+CI is read at review time, never cached and never waited for. "Still running" is a true answer; **"could not be read" is not "passing"**, and the line is rendered even when the pull request itself could not be read — a CI line that disappears reads as a clean one.
+
 ### 6.0 Review is checks, not reading — ADR 0022
 
 The brief carries an `acceptance` section, approved with it (§3.7). A run ends with `dispatch.verify`, read from the base like `dispatch.setup` (§5.2). The review renders, in order: verification, the scan (§6.2), CI when there is one, the files-outside-declared signal, the `outcome` summary. The diff renders on request.
+
+`dispatch.verify` and every acceptance criterion run **in the node's worktree, after the agent exits**, and their exit codes land on the run record. A run that did not finish is not verified: there is nothing to verify.
 
 A node whose verification, scan and CI are all clean is **green**. Green nodes are accepted together — `sober accept --green` in M1, one list on the review screen in M3. A node that is not green takes the single-node path below. The human performs every accept; nothing lands by itself.
 
@@ -645,7 +651,7 @@ Two other things render in the same place: the flag from §2.8, when the node wa
 
 ### 6.3 Accept
 
-Configurable, because projects differ (D33): a local merge, or marking the pull request ready and merging it. A protected main cannot take a local merge; a repo with no remote cannot take a pull request, which is M1's default.
+Configurable, because projects differ (D33): `dispatch.accept` is `merge` or `pull-request`, and it defaults to `merge`. A protected main cannot take a local merge; a repo with no remote cannot take a pull request. Detecting which and switching silently was rejected: accept is the one irreversible command in the product, and it must not change behaviour because somebody added a remote (ADR 0031).
 
 Either way the node's `accepted` record is written, which is what makes it `done` (§3.2), and its `outcome` summary is recorded for downstream briefs (§3.7). The worktree is removed (§8.2).
 

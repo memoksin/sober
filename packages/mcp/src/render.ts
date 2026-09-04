@@ -110,6 +110,22 @@ export const renderDecisions = (board: Board): string => {
  * Review is checks, not reading (ADR 0022): the scan first, the criteria next,
  * the diff last and never beside the findings (§6.2).
  */
+/** A check that could not answer is never reported as one that passed (§6.2). */
+const ci = (checks: Review['ci']): string => {
+	switch (checks.kind) {
+		case 'passing':
+			return 'green'
+		case 'failing':
+			return `FAILED — ${checks.failed.join(', ')}`
+		case 'pending':
+			return 'still running'
+		case 'unavailable':
+			return `COULD NOT BE READ — ${checks.reason}`
+		default:
+			return 'no checks on this pull request'
+	}
+}
+
 export const renderReview = (review: Review, showDiff: boolean): string => {
 	const scan = review.scan
 	const lines = [
@@ -132,6 +148,13 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 			`- ${finding.signal}  ${finding.file}${finding.line === null ? '' : `:${finding.line}`}  ${finding.message}`,
 		)
 	if (scan.findings.length === 0 && scan.didNotRun.length === 0) lines.push('nothing to look at')
+
+	// Not gated on having a pull request: a host that cannot be reached hides
+	// both, and a CI line that disappears reads as a clean one (§6.2).
+	if (review.pr !== null || review.ci.kind !== 'none') {
+		lines.push('', `## CI: ${ci(review.ci)}`)
+		if (review.pr !== null) lines.push(`draft #${review.pr.number}  ${review.pr.url}`)
+	}
 
 	if (review.acceptance.length > 0) {
 		lines.push('', '## What must be true when this is done')

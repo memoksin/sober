@@ -53,7 +53,16 @@ export const mergeNode = async (paths: Paths, id: string, base: string): Promise
 	return { branch, base, commit: await git(paths.root, 'rev-parse', 'HEAD') }
 }
 
-/** After an accepted merge the branch has no job left; a rejection keeps everything (§6.4). */
-export const deleteBranch = async (paths: Paths, id: string): Promise<void> => {
-	await git(paths.root, 'branch', '-d', branchOf(id))
+/**
+ * After an accepted merge the branch has no job left; a rejection keeps
+ * everything (§6.4). `force` is the pull-request landing: the merge happened on
+ * the host, so the branch is not an ancestor of anything here and `-d` would
+ * refuse to delete work that is already landed.
+ */
+export const deleteBranch = async (
+	paths: Paths,
+	id: string,
+	options: { readonly force?: boolean } = {},
+): Promise<void> => {
+	await git(paths.root, 'branch', options.force === true ? '-D' : '-d', branchOf(id))
 }

@@ -23,7 +23,8 @@
 		"gate:m1": "pnpm --filter @besober/cli build && node scripts/m1-gate.mjs",
 		"demo:sync": "pnpm --filter @besober/cli build && node scripts/demo-sync.mjs",
 		"demo:conflict": "pnpm --filter @besober/cli build && node scripts/demo-conflict.mjs",
-		"demo:team": "pnpm --filter @besober/cli build && node scripts/demo-team.mjs"
+		"demo:team": "pnpm --filter @besober/cli build && node scripts/demo-team.mjs",
+		"demo:pr": "pnpm --filter @besober/cli build && node scripts/demo-pr.mjs"
 	},
 	"devDependencies": {
 		"@besober/core": "workspace:*",

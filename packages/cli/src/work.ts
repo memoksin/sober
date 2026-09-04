@@ -6,6 +6,7 @@ import {
 	dispatch,
 	dispatchWave,
 	openDecisions,
+	type Published,
 	readRunOutput,
 	renderBrief,
 	SoberError,
@@ -192,11 +193,25 @@ export const run = async (nodes: readonly string[], base?: string): Promise<void
 					? `${green('✓')} ${node} finished — review it with \`sober review ${node}\``
 					: `${result.exit === 'stopped' ? yellow('·') : red('×')} ${node} ${result.exit}${result.error === null ? '' : `: ${result.error}`}`,
 			)
+			opened(result.pr)
 		} catch (error) {
 			spin.stop()
 			refuse(error)
 		}
 	}
+}
+
+/**
+ * The pull request is a mechanism, not a surface (§6.1) — so it is one line,
+ * and a step that did not happen says why rather than passing in silence.
+ */
+const opened = (pr: Published | null): void => {
+	if (pr === null) return
+	if (pr.kind === 'skipped') {
+		say(dim(`  no pull request: ${pr.reason}`))
+		return
+	}
+	say(dim(`  draft #${pr.pr.number} ${pr.kind === 'opened' ? 'opened' : 'updated'} — ${pr.pr.url}`))
 }
 
 const wave = async (

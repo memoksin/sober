@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
-import type { RunExit } from '@besober/schema'
+import type { CommandResult, RunExit } from '@besober/schema'
 import { renderBrief } from './brief.js'
-import { type Config, readConfigFromBase } from './config.js'
+import { type Config, readConfig, readConfigFromBase } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { checkHost, HostError, startAgent } from './host.js'
@@ -16,6 +16,8 @@ import {
 	writeRunPid,
 } from './local.js'
 import type { Paths } from './paths.js'
+import { type Published, publish } from './pr.js'
+import { readNode } from './records.js'
 import { finishRun, startRun } from './run.js'
 import { addWorktree } from './worktree.js'
 
@@ -61,6 +63,8 @@ export interface Dispatched {
 	readonly worktree: string
 	/** False when the worktree was already there — setup runs once per node (§5.2). */
 	readonly prepared: boolean
+	/** What happened with the node's pull request, or null when nobody asked for one. */
+	readonly pr: Published | null
 }
 
 export const dispatch = async (
@@ -131,13 +135,30 @@ export const dispatch = async (
 					? { exit: 'stopped' as const, error: undefined }
 					: { exit: exit.kind, error: exit.kind === 'failed' ? exit.reason : undefined }
 
-		const run = await finishRun(paths, id, result)
+		// The run is judged where it worked (§6.0): `dispatch.verify` first, then
+		// every acceptance criterion the human approved, each in the node's own
+		// worktree. Both are read from the base (ADR 0019) — work under review
+		// does not get to write the test it is judged by.
+		const judged =
+			result.exit === 'finished'
+				? {
+						verify: await judge(worktree.path, config.dispatch.verify),
+						acceptance: await Promise.all(
+							(await criteriaOf(paths, node)).map((criterion) =>
+								judge(worktree.path, criterion.run),
+							),
+						),
+					}
+				: {}
+
+		const run = await finishRun(paths, id, { ...result, ...judged })
 		return {
 			run: id,
 			exit: run.exit ?? 'failed',
 			error: run.error,
 			worktree: worktree.path,
 			prepared: worktree.created,
+			pr: await published(paths, node, options.base),
 		}
 	} finally {
 		clearTimeout(timer)
@@ -290,3 +311,46 @@ const prepare = (node: string, cwd: string, command: string): Promise<void> =>
 			resolve()
 		})
 	})
+
+/**
+ * The pull request, after the run and never before it (§6.1): a branch with
+ * nothing on it has nothing for CI to run. `draftPr` governs neither how the
+ * run is prepared nor how it is judged, so it is read normally rather than from
+ * the base (§5.2) — the person deciding to push work outward is the one at this
+ * machine, not the branch under review.
+ *
+ * Nothing here can fail a run. The work is committed and the record is written
+ * by the time this runs; a git host that is down is a step that did not happen,
+ * reported and never fatal.
+ */
+const published = async (paths: Paths, node: string, base: string): Promise<Published | null> => {
+	const config = await readConfig(paths)
+	if (config.kind !== 'ok' || !config.value.dispatch.draftPr) return null
+	return publish(paths, node, base).catch((error: Error) => ({
+		kind: 'skipped' as const,
+		reason: error.message,
+	}))
+}
+
+/**
+ * One command, in the worktree, reduced to the one thing anyone reads later: the
+ * exit code. `null` means it did not run, and never that it passed (ADR 0021) —
+ * which is why a command that was never configured returns null rather than 0.
+ *
+ * A shell, like the setup command and for the same reason: the value is a shell
+ * line a human wrote into their own config on the base ref.
+ */
+const judge = (cwd: string, command: string | null): Promise<CommandResult | null> =>
+	command === null
+		? Promise.resolve(null)
+		: new Promise((resolve) => {
+				execFile(command, { cwd, shell: true, encoding: 'utf8' }, (error) => {
+					const code = (error as { code?: number } | null)?.code
+					resolve({ exit: error === null ? 0 : typeof code === 'number' ? code : 1 })
+				})
+			})
+
+const criteriaOf = async (paths: Paths, node: string) => {
+	const record = await readNode(paths, node)
+	return record.kind === 'ok' ? (record.value.brief?.acceptance ?? []) : []
+}
