@@ -13,7 +13,10 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"outputs": ["dist/**"]
+			// `tsc -b` writes its incremental state here and emits nothing when it
+			// says the build is current. Restoring `dist` without it leaves the two
+			// disagreeing, and the next build produces no output at all.
+			"outputs": ["dist/**", "*.tsbuildinfo"]
 		},
 		"typecheck": {
 			"dependsOn": ["^build"]
