@@ -1,0 +1,42 @@
+import { expect, test } from 'vitest'
+import { Id, Timestamp } from './id.js'
+import { Node } from './node.js'
+
+test('accepts a slug with a four-character suffix', () => {
+	expect(Id.safeParse('auth-api-k7f2').success).toBe(true)
+	expect(Id.safeParse('db-m3q8').success).toBe(true)
+})
+
+test('rejects a bare slug, so two machines cannot produce the same file', () => {
+	expect(Id.safeParse('session-endpoints').success).toBe(false)
+	expect(Id.safeParse('auth').success).toBe(false)
+})
+
+test('rejects ids that are not lowercase, dashed and alphanumeric', () => {
+	for (const bad of ['Auth-API-k7f2', 'auth api k7f2', 'auth--k7f2', 'auth-k7f2-', '']) {
+		expect(Id.safeParse(bad).success, bad).toBe(false)
+	}
+})
+
+test('the id is the file name, never a field on the record', () => {
+	const node = {
+		id: 'auth-api-k7f2',
+		title: 'Session endpoints',
+		description: '',
+		notes: '',
+		dependsOn: [],
+		decisions: [],
+		files: [],
+		brief: null,
+		outcome: null,
+		accepted: null,
+		createdAt: '2026-08-27T09:00:00Z',
+	}
+
+	expect(Node.safeParse(node).success).toBe(false)
+})
+
+test('a timestamp must be ISO 8601', () => {
+	expect(Timestamp.safeParse('2026-08-27T09:00:00Z').success).toBe(true)
+	expect(Timestamp.safeParse('2026-08-27').success).toBe(false)
+})

@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`schema exports nothing new without a reviewer seeing it 1`] = `
+[
+  "Accepted",
+  "Answer",
+  "Approval",
+  "Brief",
+  "CATEGORIES",
+  "Category",
+  "CommandResult",
+  "Criterion",
+  "Decision",
+  "Handle",
+  "ID_PATTERN",
+  "Id",
+  "Node",
+  "Option",
+  "Project",
+  "RUN_EXITS",
+  "Run",
+  "RunExit",
+  "SCAN_RESULTS",
+  "SCHEMA_VERSION",
+  "STATUSES",
+  "ScanResult",
+  "Timestamp",
+  "decisionState",
+]
+`;
