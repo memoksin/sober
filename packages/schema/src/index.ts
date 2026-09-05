@@ -14,8 +14,8 @@ export { Accepted, Claim, Node, SCAN_RESULTS, ScanResult } from './node.js'
 export {
 	AGENT_OPERATIONS,
 	type AgentOperation,
-	type Operation,
 	OPERATIONS,
+	type Operation,
 } from './operation.js'
 export { Project, SCHEMA_VERSION } from './project.js'
 export { CommandResult, RUN_EXITS, Run, RunExit } from './run.js'

@@ -22,7 +22,8 @@ test('every route says what it accepts, so a body is parsed before core sees it'
 })
 
 test('planning is not routed — M3 has no planning screen', () => {
-	for (const authored of AGENT_OPERATIONS) expect(Object.keys(OPS), authored).not.toContain(authored)
+	for (const authored of AGENT_OPERATIONS)
+		expect(Object.keys(OPS), authored).not.toContain(authored)
 })
 
 test('a read is never spelled like an operation', () => {
