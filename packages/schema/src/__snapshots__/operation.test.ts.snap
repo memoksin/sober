@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the catalogue is what PR-09-08 binds, so growing it is visible in review 1`] = `
+[
+  "accept",
+  "approve",
+  "archive",
+  "assign",
+  "bind",
+  "claim",
+  "contributors_add",
+  "contributors_remove",
+  "decide",
+  "init",
+  "reject",
+  "release",
+  "resolve",
+  "run",
+  "stop",
+  "sync",
+  "write_brief",
+]
+`;

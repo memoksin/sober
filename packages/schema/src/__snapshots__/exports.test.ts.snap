@@ -2,6 +2,7 @@
 
 exports[`schema exports nothing new without a reviewer seeing it 1`] = `
 [
+  "AGENT_OPERATIONS",
   "Accepted",
   "Answer",
   "Approval",
@@ -18,6 +19,7 @@ exports[`schema exports nothing new without a reviewer seeing it 1`] = `
   "ID_PATTERN",
   "Id",
   "Node",
+  "OPERATIONS",
   "Option",
   "Project",
   "RUN_EXITS",
