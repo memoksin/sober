@@ -206,7 +206,8 @@ ${step(11, `${bold('sober init')}  ${dim('as Bob — it takes the team’s board
       ${bold('sober status')} ${dim('as Bob: the same graph, from the same records')}
       ${dim('any other command in a clone with no board says which one takes it')}
 
-${step(12, `${bold('sober contributors add bob')}  ${dim('· then')} ${bold('sober assign <node> bob')}`)}
+${step(12, `${bold('sober contributors add Bob')}  ${dim('· then')} ${bold('sober assign <node> Bob')}`)}
+      ${dim('the handle is the git user.name a claim will report — here, Bob')}
       ${dim('assignment is a plan; claim is a fact. Both travel with the board.')}
 
 ${step(13, `${bold('sober claim <node>')}  ${dim('as Bob, on a node whose files meet Alice’s')}`)}
@@ -231,7 +232,8 @@ ${bold('And the one that only happens once:')}
   ${dim('an older board, brought forward. In Alice’s clone:')}
   node -e "const f='.sober/project.json',fs=require('fs');const p=JSON.parse(fs.readFileSync(f));p.schemaVersion=1;fs.writeFileSync(f,JSON.stringify(p,null,'\\t'))"
   ${dim('drop "assignee" and "claim" from one node file, then')} ${bold('sober status')}
-  ${dim('one line says what it rewrote; `git diff` shows the fields back in order')}
+  ${dim('one line says what it rewrote. The records are on sober-graph, not main,')}
+  ${dim('so `git diff` here shows nothing — read the file, or `sober sync` and diff that')}
 
 ${bold('Green means the product travels.')} ${dim('What happened goes in docs/M2-GATE.md.')}
 

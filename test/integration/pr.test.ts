@@ -228,10 +228,18 @@ test('accept lands locally by default, and never touches the git host', async ()
 	await publish(paths, 'auth-api-k7f2', 'main')
 	const before = said('pr merge').length
 
-	await acceptWork(paths, 'auth-api-k7f2', { by: 'alice', base: 'main', scan: 'clean' })
+	const landed = await acceptWork(paths, 'auth-api-k7f2', {
+		by: 'alice',
+		base: 'main',
+		scan: 'clean',
+	})
 
 	expect(said('pr merge')).toHaveLength(before)
 	expect(repo?.git('log', '--oneline', 'main')).toContain('sober: auth-api-k7f2')
+	// M2 gate finding 2: the draft it opened stays open, and the host only
+	// notices when the base is pushed. The surfaces can only say so if the
+	// landing carries it.
+	expect(landed.kind === 'merged' && landed.openPr?.number).toBe(1)
 })
 
 test('a project set to the pull request marks it ready and merges it there', async () => {

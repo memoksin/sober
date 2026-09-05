@@ -17,6 +17,7 @@ const COLOUR: Record<string, ((text: string) => string) | undefined> = {
 	blocked: dim,
 	held: magenta,
 	'needs-brief': blue,
+	'needs-approval': blue,
 }
 
 /**

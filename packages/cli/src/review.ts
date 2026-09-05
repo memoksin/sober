@@ -153,6 +153,12 @@ const land = async (paths: Paths, node: string, ref: string): Promise<void> => {
 		say(`${green('✓')} ${node} is done — ${where(landed)}`)
 		if (found.scan.result !== 'clean')
 			say(dim(`  recorded as accepted with the scan reading "${found.scan.result}"`))
+		if (landed.kind === 'merged' && landed.openPr !== null)
+			say(
+				dim(
+					`  draft #${landed.openPr.number} is still open — it closes when you push ${landed.base}`,
+				),
+			)
 	} catch (error) {
 		refuse(error)
 	}

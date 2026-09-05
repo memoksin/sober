@@ -137,6 +137,17 @@ describe('on a board', () => {
 		])
 	})
 
+	test('Bob is not a second person from bob', async () => {
+		await addContributor(paths, { handle: 'bob', name: '', role: 'author', focus: '' })
+		await addContributor(paths, { handle: 'Bob', name: 'Bob', role: 'author', focus: '' })
+
+		expect(await readContributors(paths)).toEqual([
+			{ handle: 'Bob', name: 'Bob', role: 'author', focus: '' },
+		])
+		expect(await removeContributor(paths, 'BOB')).toBe(true)
+		expect(await readContributors(paths)).toEqual([])
+	})
+
 	test('taking off somebody who was never on says so rather than pretending', async () => {
 		expect(await removeContributor(paths, 'alice')).toBe(false)
 

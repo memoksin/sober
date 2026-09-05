@@ -19,11 +19,24 @@ export const readContributors = async (paths: Paths): Promise<readonly Contribut
 	return record.value.contributors
 }
 
-/** Adding someone already there replaces them, so the same command corrects a role. */
+/**
+ * A handle names a person, and `Bob` is not a second person from `bob`. Found
+ * in the M2 gate: `contributors add bob` was accepted, the claim that followed
+ * still said "you are not on this project yet" — `whoami` reads git's
+ * `user.name` — and running what it suggested left one human on the board
+ * twice, with no warning.
+ */
+export const sameHandle = (left: string, right: string): boolean =>
+	left.toLowerCase() === right.toLowerCase()
+
+/**
+ * Adding someone already there replaces them, so the same command corrects a
+ * role — and corrects the spelling of their handle with it.
+ */
 export const addContributor = (paths: Paths, contributor: Contributor): Promise<void> =>
 	withLock(paths, 'contributors', async () => {
 		const team = (await readContributors(paths)).filter(
-			(person) => person.handle !== contributor.handle,
+			(person) => !sameHandle(person.handle, contributor.handle),
 		)
 		await write(paths, [...team, contributor])
 	})
@@ -31,7 +44,7 @@ export const addContributor = (paths: Paths, contributor: Contributor): Promise<
 export const removeContributor = (paths: Paths, handle: string): Promise<boolean> =>
 	withLock(paths, 'contributors', async () => {
 		const team = await readContributors(paths)
-		const left = team.filter((person) => person.handle !== handle)
+		const left = team.filter((person) => !sameHandle(person.handle, handle))
 		if (left.length === team.length) return false
 		await write(paths, left)
 		return true

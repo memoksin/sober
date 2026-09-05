@@ -3,6 +3,7 @@
 exports[`core exports nothing new without a reviewer seeing it 1`] = `
 [
   "ARCHIVE_FIELD",
+  "AcceptedAlreadyError",
   "AnswerLockedError",
   "DirtyWorktreeError",
   "HostError",
@@ -72,6 +73,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "reviewNode",
   "runLog",
   "runQueue",
+  "sameHandle",
   "scanNode",
   "setSetting",
   "showFromRef",

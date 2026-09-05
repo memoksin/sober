@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
-import { init } from './board.js'
+import { init, openBoard } from './board.js'
+import { widen } from './name.js'
 import { bold, columns, dim, fail, say } from './out.js'
 import { listConflicts, resolve } from './resolve.js'
 import { accept, acceptGreen, archive, reject, review } from './review.js'
@@ -98,6 +99,26 @@ const help = (): void => {
 	say(dim('Every command here works headless, for hosts that have no plugin.'))
 }
 
+/** The commands whose first positional is a node or a decision on the board. */
+const NAMES_A_RECORD = new Set([
+	'status',
+	'decide',
+	'bind',
+	'brief',
+	'approve',
+	'run',
+	'stop',
+	'logs',
+	'review',
+	'accept',
+	'reject',
+	'resolve',
+	'assign',
+	'claim',
+	'release',
+	'archive',
+])
+
 const options = {
 	title: { type: 'string' },
 	intent: { type: 'string' },
@@ -126,7 +147,8 @@ const main = async (): Promise<void> => {
 		options,
 		allowPositionals: true,
 	})
-	const [command, ...rest] = positionals
+	const [command, ...positional] = positionals
+	let rest = positional
 
 	if (values.version === true) return say(version)
 	// `sober` with no arguments and `sober --help` print the same thing
@@ -134,6 +156,15 @@ const main = async (): Promise<void> => {
 	if (command === undefined || values.help === true) return help()
 
 	const need = (what: string): string => rest[0] ?? fail(`which ${what}? try \`sober --help\``)
+
+	// One place, because every command that names a record reads it from the
+	// same array (M2 gate finding 7). `run` names as many as you give it; the
+	// rest name one and then say something else — a handle, a field, a reason.
+	if (NAMES_A_RECORD.has(command) && rest.length > 0) {
+		const paths = await openBoard()
+		const widened = await widen(paths, command === 'run' ? rest : rest.slice(0, 1))
+		rest = [...widened, ...rest.slice(widened.length)]
+	}
 
 	switch (command) {
 		case 'init':

@@ -89,8 +89,12 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 				landed.kind === 'merged'
 					? `merged into ${landed.base} as ${landed.commit.slice(0, 8)}`
 					: `pull request #${landed.pr.number} was marked ready and merged`
+			const draft =
+				landed.kind === 'merged' && landed.openPr !== null
+					? ` Draft #${landed.openPr.number} is still open — it closes when the human pushes ${landed.base}.`
+					: ''
 			return text(
-				`${node} is done — ${where}.${freed.length > 0 ? ` ${freed.join(', ')} can move now.` : ''}${await drained(paths, ref)}`,
+				`${node} is done — ${where}.${draft}${freed.length > 0 ? ` ${freed.join(', ')} can move now.` : ''}${await drained(paths, ref)}`,
 			)
 		}),
 	)

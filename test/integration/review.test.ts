@@ -2,7 +2,9 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
+	AcceptedAlreadyError,
 	AnswerLockedError,
+	acceptNode,
 	acceptWork,
 	addWorktree,
 	answerDecision,
@@ -116,6 +118,30 @@ test('changing an answer is refused in M1, with the reason it is refused', async
 	await expect(
 		answerDecision(paths, DECISION, { option: 'redis', by: 'memoksin' }),
 	).rejects.toBeInstanceOf(AnswerLockedError)
+})
+
+test('a node that is already done cannot be approved again', async () => {
+	const paths = await board()
+	await writeBrief(paths, NODE, {
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await approveBrief(paths, NODE, { by: 'memoksin' })
+	await acceptNode(paths, NODE, {
+		by: 'memoksin',
+		at: '2026-09-05T21:06:47.698Z',
+		flagged: false,
+		scan: 'clean',
+	})
+
+	// M2 gate finding 3: this wrote a fresh approval onto an accepted node, so
+	// the record said the approval came after the acceptance.
+	await expect(approveBrief(paths, NODE, { by: 'memoksin' })).rejects.toBeInstanceOf(
+		AcceptedAlreadyError,
+	)
+	expect((await loadBoard(paths)).nodes.get(NODE)?.brief?.approval?.at).not.toBe(
+		'2026-09-05T21:06:47.698Z',
+	)
 })
 
 test('a node with no brief cannot be approved, and writing one clears the approval', async () => {

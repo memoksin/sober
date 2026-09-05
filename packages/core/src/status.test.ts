@@ -95,8 +95,16 @@ test('a decision the board does not hold cannot have been answered', () => {
 test('a brief is not enough — an unapproved one still needs approval', () => {
 	const unapproved = aNode({ brief: { ...approved, approval: null } })
 
-	expect(statusOf(board({ a: unapproved }), 'a')).toBe('needs-brief')
+	expect(statusOf(board({ a: unapproved }), 'a')).toBe('needs-approval')
 	expect(statusOf(board({ a: aNode({ brief: approved }) }), 'a')).toBe('ready')
+})
+
+test('a written brief and no brief at all are two different waits', () => {
+	const none = aNode({ brief: null })
+	const written = aNode({ brief: { ...approved, approval: null } })
+
+	expect(statusOf(board({ a: none }), 'a')).toBe('needs-brief')
+	expect(statusOf(board({ a: written }), 'a')).toBe('needs-approval')
 })
 
 test('ready lists what can start now, and nothing else', () => {

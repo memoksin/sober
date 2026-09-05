@@ -19,6 +19,7 @@ export const ERROR_CODES = [
 	'answer-locked',
 	'no-such-option',
 	'no-brief',
+	'accepted-already',
 	'no-board',
 	'cycle',
 	'schema',

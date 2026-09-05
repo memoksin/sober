@@ -43,7 +43,8 @@ export const statusOf = (board: Board, id: string): Status | null => {
 	if (isRunning(run)) return 'running'
 	if (node.dependsOn.some((dependency) => !isDone(board, dependency))) return 'blocked'
 	if (node.decisions.some((decision) => !isAnswered(board, decision))) return 'held'
-	if (node.brief === null || node.brief.approval === null) return 'needs-brief'
+	if (node.brief === null) return 'needs-brief'
+	if (node.brief.approval === null) return 'needs-approval'
 	return 'ready'
 }
 

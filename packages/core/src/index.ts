@@ -22,8 +22,10 @@ export {
 	addContributor,
 	readContributors,
 	removeContributor,
+	sameHandle,
 } from './contributors.js'
 export {
+	AcceptedAlreadyError,
 	AnswerLockedError,
 	answerDecision,
 	approveBrief,

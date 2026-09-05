@@ -44,9 +44,10 @@ real host against a real git host.
 
 ## What it found
 
-Eight things. None is fixed yet: the gate ran to the end first, on purpose, so
-that the fixes are read against a complete drive rather than one defect at a
-time.
+Eight things. The gate ran to the end before any of them was touched, on
+purpose, so that the fixes are read against a complete drive rather than one
+defect at a time. All eight are fixed in the commit that follows this
+one, with the gate script's own two, and each carries a test.
 
 **The two that cost the drive something**
 

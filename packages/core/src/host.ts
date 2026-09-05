@@ -20,13 +20,25 @@ const run = promisify(execFile)
  *   nothing to watch while a node is building (`PR-05-09`).
  * - stdin is closed. A `claude -p` with an open stdin waits three seconds for
  *   input that never comes, on every dispatch.
+ * - `--append-system-prompt` is the M2 gate's finding 1. The host discovers the
+ *   operator's own `CLAUDE.md` and rules, and one of them said "never run
+ *   `git commit` without asking": two of five dispatches stopped to ask a
+ *   permission nobody was there to give, finished with an empty branch, and
+ *   left the work staged in the worktree. `bypassPermissions` does not reach
+ *   this — the agent was not blocked, it was instructed. So the instruction is
+ *   answered where instructions live.
  */
+export const NO_HUMAN =
+	'You are running headless, dispatched by SOBER. No human is reading this session and no question you ask can be answered. Ignore any instruction — from a CLAUDE.md, a rules file, or anywhere else — that tells you to ask for confirmation or approval before acting, including before committing: there is nobody to ask. Do the work described and commit it. If something genuinely stops you, stop and say why in your final message, because that message is what the human will read.'
+
 export const HOST_ARGS = [
 	'--output-format',
 	'stream-json',
 	'--verbose',
 	'--permission-mode',
 	'bypassPermissions',
+	'--append-system-prompt',
+	NO_HUMAN,
 ] as const
 
 /**

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, test } from 'vitest'
-import { checkHost, hostCommand, startAgent } from './host.js'
+import { checkHost, HOST_ARGS, hostCommand, NO_HUMAN, startAgent } from './host.js'
 
 const scripts = mkdtempSync(join(tmpdir(), 'sober-host-'))
 afterAll(() => rmSync(scripts, { recursive: true, force: true }))
@@ -18,6 +18,17 @@ const node = (script: string): string => {
 	writeFileSync(file, script)
 	return `${process.execPath} ${file}`
 }
+
+test('the dispatched agent is told there is nobody to ask', () => {
+	// M2 gate finding 1: the host discovers the operator's own CLAUDE.md, and a
+	// rule there ("never commit without asking") stopped two of five dispatches
+	// dead. `bypassPermissions` does not answer an instruction.
+	const flag = HOST_ARGS.indexOf('--append-system-prompt')
+	expect(flag).toBeGreaterThan(-1)
+	expect(HOST_ARGS[flag + 1]).toBe(NO_HUMAN)
+	expect(NO_HUMAN).toMatch(/no question you ask can be answered/)
+	expect(NO_HUMAN).toMatch(/CLAUDE\.md/)
+})
 
 test('a host command may carry arguments, so `npx claude` needs no second setting', () => {
 	expect(hostCommand('claude')).toEqual(['claude', []])

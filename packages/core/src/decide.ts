@@ -84,6 +84,15 @@ export class NoBriefError extends SoberError {
 	}
 }
 
+export class AcceptedAlreadyError extends SoberError {
+	constructor(readonly id: string) {
+		super(
+			'accepted-already',
+			`${id} is done, so there is nothing left to approve — its work was accepted and merged`,
+		)
+	}
+}
+
 /**
  * Approval is human, per node, and never a batch (D26). Reading twenty full
  * briefs is how a per-node approval becomes a rubber stamp through fatigue,
@@ -98,6 +107,11 @@ export const approveBrief = (
 		const record = await readNode(paths, id)
 		if (record.kind !== 'ok') throw new NotOnBoardError('node', id)
 		if (record.value.brief === null) throw new NoBriefError(id)
+		// Found in the M2 gate: approving an accepted node rewrote the approval
+		// with a fresh timestamp, so the record read as approved *after* it was
+		// accepted. `run` refuses a done node; this is the same refusal, one
+		// command earlier, before the record can say something untrue.
+		if (record.value.accepted !== null) throw new AcceptedAlreadyError(id)
 
 		const brief: Brief = {
 			...record.value.brief,

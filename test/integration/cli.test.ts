@@ -357,3 +357,48 @@ test('a clone that has no board yet is told which command takes the team’s', (
 	expect(said).toContain('sober-graph')
 	expect(said).not.toContain('run `sober init` at the root of your repository')
 })
+
+test('a prefix names a node, and an ambiguous one lists what it could have meant', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+
+	// M2 gate finding 7: nobody types `auth-api-k7f2` from memory.
+	expect(sober(created.dir, 'status', 'auth-api')).toContain('auth-api-k7f2')
+	expect(failed(created.dir, 'run', 'auth-api')).toContain('needs-brief')
+
+	// A second node sharing the prefix turns the guess back into a question.
+	writeFileSync(
+		join(created.dir, '.sober/nodes/auth-api-m3q8.json'),
+		readFileSync(join(created.dir, '.sober/nodes/auth-api-k7f2.json'), 'utf8'),
+	)
+	const said = failed(created.dir, 'run', 'auth-api')
+	expect(said).toContain('auth-api-k7f2')
+	expect(said).toContain('auth-api-m3q8')
+	expect(said).toContain('names only one')
+})
+
+test('a node that is done cannot be approved a second time', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+
+	// Written but not approved is its own wait now, not "needs-brief" again.
+	expect(sober(created.dir, 'status')).toContain('needs-approval')
+
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	process.env.FAKE_HOST_COMMIT = 'src/auth/token.ts'
+	sober(created.dir, 'run', 'auth-api-k7f2')
+	sober(created.dir, 'accept', 'auth-api-k7f2')
+
+	// M2 gate finding 3 and 4: this used to succeed and then tell you to run it.
+	const said = failed(created.dir, 'approve', 'auth-api-k7f2')
+	expect(said).toContain('is done')
+	expect(said).not.toContain('Start it with')
+})

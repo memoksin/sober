@@ -11,12 +11,18 @@ const records = (count: number): string => `${count} record${count === 1 ? '' : 
  * without it one id turns up as both added and removed and neither line says
  * what happened.
  */
-const named = (path: string): string =>
-	`${basename(path, '.json')}${path.includes('/archive/') ? ' (archive)' : ''}`
+const named = (path: string, gone: boolean): string => {
+	const id = basename(path, '.json')
+	if (!path.includes('/archive/')) return id
+	// Which directory it left is the whole of it. Found in the M2 gate: a node
+	// restored from the archive was announced as `removed … (archive)`, which
+	// reads as removed from the board — the opposite of what happened.
+	return gone ? `${id} (back on the board)` : `${id} (archived)`
+}
 
-const listed = (label: string, ids: readonly string[]): void => {
+const listed = (label: string, ids: readonly string[], gone = false): void => {
 	if (ids.length === 0) return
-	say(`  ${label} ${ids.map(named).join(', ')}`)
+	say(`  ${label} ${ids.map((path) => named(path, gone)).join(', ')}`)
 }
 
 /**
@@ -81,7 +87,7 @@ export const sync = async (noPush: boolean): Promise<void> => {
 	} else {
 		say(`${green('✓')} ${records(updated.length + removed.length)} came in`)
 		listed(dim('updated'), updated)
-		listed(dim('removed'), removed)
+		listed(dim('removed'), removed, true)
 	}
 
 	if (result.kind === 'no-remote') {

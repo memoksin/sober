@@ -6,6 +6,7 @@ import {
 	readContributors,
 	releaseNode,
 	removeContributor,
+	sameHandle,
 	whoami,
 } from '@besober/core'
 import { openBoard } from './board.js'
@@ -100,7 +101,7 @@ export const claim = async (node: string): Promise<void> => {
 	}
 
 	const team = await readContributors(paths).catch(refuse)
-	if (!team.some((person) => person.handle === by)) {
+	if (!team.some((person) => sameHandle(person.handle, by))) {
 		say()
 		say(`${yellow('·')} you are not on this project yet`)
 		say(dim(`  sober contributors add "${by}"`))

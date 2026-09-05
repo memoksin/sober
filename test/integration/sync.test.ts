@@ -175,8 +175,32 @@ test('a node archived by one person disappears for the other', () => {
 	sober(a.dir, 'sync')
 	const pulled = sober(b, 'sync')
 	expect(pulled).toContain('removed')
+	expect(pulled).toContain('(archived)')
 	expect(existsSync(join(b, '.sober/nodes/doomed-node-aaaa.json'))).toBe(false)
 	expect(existsSync(join(b, '.sober/archive/nodes/doomed-node-aaaa.json'))).toBe(true)
+})
+
+test('a node that comes back from the archive does not read as a removal', () => {
+	const a = alice()
+	node(a.dir, 'doomed-node-aaaa', 'Doomed')
+	sober(a.dir, 'sync')
+	const b = bob(a.remote)
+	sober(b, 'init')
+
+	// One archives it while the other edits it — the archive question.
+	edit(b, 'doomed-node-aaaa', '"title": "Bob is still on this"')
+	sober(a.dir, 'archive', 'doomed-node-aaaa')
+	sober(a.dir, 'sync')
+	expect(refused(b, 'sync')).toContain('only you can say which')
+	sober(b, 'resolve', 'doomed-node-aaaa', 'restore')
+	sober(b, 'sync')
+
+	// M2 gate finding 8: the archive entry going away was announced as
+	// `removed … (archive)`, which reads as removed from the board — the
+	// opposite of what happened.
+	const back = sober(a.dir, 'sync')
+	expect(back).toContain('(back on the board)')
+	expect(existsSync(join(a.dir, '.sober/nodes/doomed-node-aaaa.json'))).toBe(true)
 })
 
 test('two people who touched different records merge with no question', () => {

@@ -112,7 +112,16 @@ export interface AcceptOptions {
  * can retry.
  */
 export type Landed =
-	| ({ readonly kind: 'merged' } & Merged)
+	| ({ readonly kind: 'merged' } & Merged & {
+				/**
+				 * The draft this run opened, still open on the host. A local merge
+				 * does not touch it: the host only notices when the base is pushed,
+				 * and pushing the base is the human's (ADR 0026). Carried out so the
+				 * surfaces can say so — the M2 gate left three drafts open on
+				 * branches whose work was already merged, and nothing said why.
+				 */
+				readonly openPr: PullRequest | null
+			})
 	| { readonly kind: 'pull-request'; readonly pr: PullRequest; readonly base: string }
 
 export const acceptWork = async (
@@ -178,12 +187,14 @@ export const acceptWork = async (
 		return { kind: 'pull-request', pr, base: options.base }
 	}
 
+	// Read before the branch goes: the pull request is found by its branch.
+	const openPr = await pullRequestOf(paths, node).catch(() => null)
 	const merged = await mergeNode(paths, node, options.base)
 	// Nothing removes a dirty worktree (§8.2), so this can refuse — and it
 	// refuses after the work is safely merged, which is the harmless order.
 	await removeWorktree(paths, node)
 	await deleteBranch(paths, node)
-	return { kind: 'merged', ...merged }
+	return { kind: 'merged', ...merged, openPr }
 }
 
 /** Refusing here beats writing an `accepted` record for work that cannot land. */
