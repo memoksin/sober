@@ -275,7 +275,7 @@ So the flag's definition is broader than "a finished node whose decision changed
 
 The preview counts running and in-review nodes too, so a user can stop a run that is building against the answer they are about to change. Nothing stops automatically — §7.2 says why.
 
-Editing stays available from every surface; restricting it to one would break `PR-09-08`.
+Editing stays available from every surface; restricting it to one would break `PR-09-08`. On the screen the preview is the screen. On the command line and in a host session it takes ADR 0032's shape rather than a second one: the edit prints the fan-out and refuses, and a second command carrying the confirmation applies it. One confirmation vocabulary, not two.
 
 Letting the change apply forward-only is the alternative, and it leaves half the graph carrying an assumption that is no longer true with nothing on screen saying so.
 
@@ -500,9 +500,15 @@ The wire types live in `schema`, alongside the record types, and are written at 
 
 The server binds loopback TCP on `127.0.0.1`, port `0`, plus a token — the rule §9 already sets for IPC, applied rather than restated.
 
+**The wire is request/response JSON over HTTP** (ADR 0036). One route per `core` operation, its shapes typed in `schema` beside the record types; no RPC framework, because that would make `schema` a client-server coupling rather than a description of what travels. Freshness is the client asking again: the canvas polls for the slim projection, and a panel fetches the full record when it opens. An event channel is the named next move and its first subject is the run log, where polling is plainly the wrong shape — additive when it arrives, and not free, because `EventSource` cannot set a header and the token moves into the URL.
+
+**Every state-changing operation has a route, `run` included.** `PR-09-08` requires the parity, and the three operations an agent may not perform alone (ADR 0010) need no elicitation here — the human is at the screen, and the screen is the asking. One consequence is recorded rather than left to be discovered: `accept`, `archive` and editing an answered decision are a single step on the screen and two on the command line, where ADR 0032's confirmation lives.
+
+**The server's lifetime is `sober dashboard`'s, not the browser tab's** (ADR 0037). The command starts the server, prints the URL and the token, and stays in the foreground; closing the tab stops nothing, and `Ctrl-C` stops the server and the runs it started — which is what `sober run` already does. Runs stay owned by the process that started them: no detached spawn, no pid file, no re-attach. The server takes the same file lock every other command takes, so ADR 0025 counts it as a writer.
+
 ### 4.2 The canvas — M3
 
-A force-directed canvas of circular nodes, in the manner of Obsidian's graph view (`PR-01-03`), using a ready-made rendering library — Cytoscape.js or sigma.js, chosen at the start of M3 (D11). Both ship a force layout and native circular styling; the spike asks one question of each, at 200 nodes.
+A force-directed canvas of circular nodes, in the manner of Obsidian's graph view (`PR-01-03`), using a ready-made rendering library: **Cytoscape.js**, chosen at the start of M3 by a half-day one-sided spike (ADR 0038). Its `cose` layout and circular styling are built in, and the graph it carries is a queryable model rather than only a picture — which is what the `done` filter, the blocked highlight and the panel's dependency list are all written against.
 
 - **Budget: ~200 active nodes**, with 1,000 as headroom rather than a requirement (ADR 0016). `done` work is archived continuously, so an active board does not pass roughly 200.
 - **`done` nodes are filtered by default.** A view filter, free because status is derived — and without it the budget would rest on the user remembering to archive.

@@ -64,6 +64,10 @@ Nine steps. Green means the product exists. M2 and M3's gates are the same scrip
 
 M2's is `pnpm gate:m2`: the same nine steps with a teammate, on a **real private repository** — two clones, a real `gh`, and a real workflow, because a gate that fakes the thing it exists to prove is a demo. `M2-GATE.md` records what it finds.
 
+**Run on 2026-09-05/06, green.** `M2-GATE.md` records it: seventeen steps and the migration, eight defects found, all fixed in the commit after it.
+
+M3's is the same nine steps with **no terminal**, and it is driven by a human rather than by a browser automation. A script that replays clicks answers "do the selectors still match"; the question this gate exists to ask is whether the loop closes for someone who never opens a shell, and only a person can answer that. The script prepares the repository and the board; the drive is by hand, and `M3-GATE.md` records what it finds. ADR 0037 adds one step the earlier gates had no reason to carry: start a run from the screen, close the tab, reopen it, and find the run still there.
+
 ---
 
 ## 4. Pace
@@ -151,7 +155,7 @@ Each of these is a place where a wrong first attempt costs days, and where an ag
 | **MCP: tools and elicitation** | The protocol's tool and elicitation shapes, and how Claude Code surfaces an elicitation request. This is what makes `PR-03-09` real. Read off the installed SDK, not from memory: two protocol revisions are in the field, and the newer one's `elicitation.form` capability makes an SDK refuse a request that the older, bare `elicitation` host would have answered. | 2–3 |
 | **The gating and status model** | On paper, not in an editor. Write the seven statuses and walk five real nodes through them, including a shared decision bound by three of them. | 1–2 |
 | **Host CLI headless invocation** | Each host's current documentation, at the moment you implement the adapter — never from memory, and never from v0's code. `DESIGN.md` §5.1 says why. | 2 per host |
-| **Graph library spike** | 200 nodes, circular, force layout, hover — in Cytoscape and in sigma. One question each. Not a benchmark, a feel test. | 1 day |
+| ~~**Graph library spike**~~ | **Done**, 2026-09-06, and one-sided: 200 nodes, circular, `cose`, hover — in Cytoscape only, with sigma named as the fallback if it disappointed. It did not (ADR 0038). Half the budgeted day, and sigma is un-measured, which is written down as the cost. | ~~1 day~~ ½ |
 
 ### Never delegate
 
