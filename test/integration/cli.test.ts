@@ -237,3 +237,84 @@ test('rejecting returns the node to the queue and carries the note into the next
 		seen.indexOf('Add the endpoints'),
 	)
 })
+
+test('a node heading for a claimed node’s files is refused, and the second command is the confirmation', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+
+	// A second node someone is already on, heading for one of the same files.
+	writeFileSync(
+		join(created.dir, '.sober/nodes/session-ui-m3q8.json'),
+		JSON.stringify({
+			title: 'The session panel',
+			description: '',
+			notes: '',
+			dependsOn: [],
+			decisions: [],
+			files: ['src/auth/session.ts'],
+			brief: null,
+			outcome: null,
+			assignee: null,
+			claim: { by: 'Bob', at: '2026-09-05T00:00:00.000Z' },
+			accepted: null,
+			createdAt: '2026-09-05T00:00:00.000Z',
+		}),
+	)
+
+	const refused = failed(created.dir, 'run', 'auth-api-k7f2')
+	expect(refused).toContain('session-ui-m3q8')
+	expect(refused).toContain('Bob')
+	expect(refused).toContain('--anyway')
+	// Nothing was cut: the refusal happens before the worktree.
+	expect(created.git('branch', '--list', 'sober/auth-api-k7f2')).toBe('')
+
+	expect(sober(created.dir, 'run', 'auth-api-k7f2', '--anyway')).toContain('finished')
+})
+
+test('accepting starts what was approved and queued behind it', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+
+	// A downstream node, approved ahead of time, with its own files.
+	writeFileSync(
+		join(created.dir, '.sober/nodes/session-ui-m3q8.json'),
+		JSON.stringify({
+			title: 'The session panel',
+			description: '',
+			notes: '',
+			dependsOn: ['auth-api-k7f2'],
+			decisions: [],
+			files: ['src/ui/**'],
+			brief: null,
+			outcome: null,
+			assignee: null,
+			claim: null,
+			accepted: null,
+			createdAt: '2026-09-05T00:00:00.000Z',
+		}),
+	)
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	for (const node of ['auth-api-k7f2', 'session-ui-m3q8'])
+		sober(created.dir, 'brief', node, '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	sober(created.dir, 'approve', 'session-ui-m3q8', '--queue')
+
+	process.env.FAKE_HOST_COMMIT = 'src/auth/token.ts'
+	sober(created.dir, 'run', 'auth-api-k7f2')
+
+	const accepted = sober(created.dir, 'accept', 'auth-api-k7f2')
+	expect(accepted).toContain('auth-api-k7f2 is done')
+	expect(accepted).toContain('1 queued node starting')
+	expect(accepted).toContain('session-ui-m3q8 finished')
+})

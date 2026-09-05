@@ -16,7 +16,10 @@ const said = (overlaps: readonly Overlap[]): string =>
 	overlaps.length === 0
 		? ''
 		: `\n\nHeading for the same files, and not blocked:\n${overlaps
-				.map((overlap) => `- ${overlap.id} (${overlap.by}): ${overlap.files.join(', ')}`)
+				.map(
+					(overlap) =>
+						`- ${overlap.id} (${overlap.by ?? 'not started yet'}): ${overlap.files.join(', ')}`,
+				)
 				.join('\n')}`
 
 /**

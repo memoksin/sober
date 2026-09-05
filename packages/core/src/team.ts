@@ -10,7 +10,8 @@ import { readNode, readNodes, writeNode } from './records.js'
 export interface Overlap {
 	readonly id: string
 	readonly title: string
-	readonly by: string
+	/** Null when nobody has started it: it is going out in the same breath as this one. */
+	readonly by: string | null
 	/** The globs of *this* node that meet the other one's. */
 	readonly files: readonly string[]
 }
@@ -29,19 +30,52 @@ const touches = (left: string, right: string): boolean =>
  * SOBER says so without stopping either one (DESIGN §3.4). The warning is
  * about nodes, not people: two of one person's own parallel nodes are the
  * ordinary case, not the exotic one.
+ *
+ * A claim is what makes a node active. `alsoStarting` is the second way, and it
+ * is what makes the warning fire on one person's own wave: those nodes are not
+ * claimed yet because nothing has started them — they are about to be, in the
+ * same command (`PR-05-06`).
  */
-export const overlaps = (nodes: ReadonlyMap<string, Node>, id: string): Overlap[] => {
+export const overlaps = (
+	nodes: ReadonlyMap<string, Node>,
+	id: string,
+	alsoStarting: readonly string[] = [],
+): Overlap[] => {
 	const mine = nodes.get(id)
 	if (mine === undefined) return []
 
 	const found: Overlap[] = []
 	for (const [other, node] of nodes) {
-		if (other === id || node.claim === null || node.accepted !== null) continue
+		const active = node.claim !== null || alsoStarting.includes(other)
+		if (other === id || !active || node.accepted !== null) continue
 		const shared = mine.files.filter((glob) => node.files.some((theirs) => touches(glob, theirs)))
 		if (shared.length > 0)
-			found.push({ id: other, title: node.title, by: node.claim.by, files: shared })
+			found.push({ id: other, title: node.title, by: node.claim?.by ?? null, files: shared })
 	}
 	return found.sort((left, right) => left.id.localeCompare(right.id))
+}
+
+/**
+ * The confirmation §3.4 asks for, in the only shape a surface that never prompts
+ * has: the run is refused once, with the overlap named, and the human says go.
+ * It is not a block — it is the same thing a dialog would be, spread over two
+ * commands. The automatic consequence is the queue's (§5.3, ADR 0017): nothing
+ * carrying this ever starts unattended.
+ */
+export class OverlapError extends SoberError {
+	constructor(
+		readonly node: string,
+		readonly overlaps: readonly Overlap[],
+	) {
+		super(
+			'overlap',
+			`${node} is heading for files ${overlaps
+				.map((one) => `${one.id}${one.by === null ? '' : ` (${one.by})`}`)
+				.join(', ')} ${overlaps.length === 1 ? 'is' : 'are'} also heading for: ${[
+				...new Set(overlaps.flatMap((one) => one.files)),
+			].join(', ')} — start it anyway if you meant to`,
+		)
+	}
 }
 
 export interface Claimed {

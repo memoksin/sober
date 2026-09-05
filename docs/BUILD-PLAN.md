@@ -62,6 +62,8 @@ Nine steps. Green means the product exists. M2 and M3's gates are the same scrip
 
 **Run on 2026-09-04, green.** `pnpm gate:m1` prepares it; `M1-GATE.md` records what it found — fourteen defects, none of which the suite could see against a faked host.
 
+M2's is `pnpm gate:m2`: the same nine steps with a teammate, on a **real private repository** — two clones, a real `gh`, and a real workflow, because a gate that fakes the thing it exists to prove is a demo. `M2-GATE.md` records what it finds.
+
 ---
 
 ## 4. Pace

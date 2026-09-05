@@ -50,6 +50,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		'Build',
 		[
 			['run <node...>', 'start the agent in the node’s own worktree'],
+			['run <node> --anyway', 'start it even though it meets another node’s files'],
 			['stop <node>', 'stop it; the work stays where it is'],
 			['logs <node>', 'what the agent said, from the last run'],
 		],
@@ -107,6 +108,7 @@ const options = {
 	decisions: { type: 'string' },
 	'depends-on': { type: 'string' },
 	queue: { type: 'boolean' },
+	anyway: { type: 'boolean' },
 	'no-push': { type: 'boolean' },
 	name: { type: 'string' },
 	role: { type: 'string' },
@@ -157,7 +159,7 @@ const main = async (): Promise<void> => {
 			return approve(need('node'), values.queue === true)
 		case 'run':
 			if (rest.length === 0) fail('which node? `sober status` shows what is ready')
-			return run(rest, values.base)
+			return run(rest, values.base, values.anyway === true)
 		case 'stop':
 			return stop(need('node'))
 		case 'logs':

@@ -736,3 +736,121 @@ test('the session’s review carries CI, and a host that could not be read is no
 	delete process.env.SOBER_GH
 	delete process.env.FAKE_GH_STATE
 })
+
+test('a run that meets another node’s files asks the human, and starts when they say so', async () => {
+	const { repo: created, paths } = await board()
+	let asked = ''
+	const client = await connect(created.dir, (message, choices) => {
+		if (message.includes('heading for')) asked = message
+		return choices[0] ?? null
+	})
+	await call(client, 'propose', {
+		nodes: [
+			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
+			{ key: 'ui', title: 'The session panel', files: ['src/auth/session.ts'] },
+		],
+	})
+	const ids = [...(await loadBoard(paths)).nodes.keys()]
+	const auth = ids.find((id) => id.startsWith('the-auth-api')) as string
+	const ui = ids.find((id) => id.startsWith('the-session-panel')) as string
+	for (const node of [auth, ui]) {
+		await call(client, 'write_brief', {
+			node,
+			approach: 'Write it.',
+			acceptance: [{ run: 'true', proves: 'it works' }],
+		})
+		await call(client, 'approve', { node })
+	}
+	await call(client, 'claim', { node: ui })
+
+	// The human is asked, and this one says yes — the confirmation is not a block.
+	expect(await call(client, 'run', { nodes: [auth], base: 'main' })).toContain('finished')
+	expect(asked).toContain('heading for')
+})
+
+test('a run the human declines is not started, and nothing was cut', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir, (message, choices) =>
+		message.includes('heading for') ? 'no' : (choices[0] ?? null),
+	)
+	await call(client, 'propose', {
+		nodes: [
+			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
+			{ key: 'ui', title: 'The session panel', files: ['src/auth/session.ts'] },
+		],
+	})
+	const ids = [...(await loadBoard(paths)).nodes.keys()]
+	const auth = ids.find((id) => id.startsWith('the-auth-api')) as string
+	const ui = ids.find((id) => id.startsWith('the-session-panel')) as string
+	await call(client, 'write_brief', {
+		node: auth,
+		approach: 'Write it.',
+		acceptance: [{ run: 'true', proves: 'it works' }],
+	})
+	await call(client, 'approve', { node: auth })
+	await call(client, 'claim', { node: ui })
+
+	expect(await call(client, 'run', { nodes: [auth], base: 'main' })).toContain('was not started')
+	expect(created.git('branch', '--list', `sober/${auth}`)).toBe('')
+})
+
+test('accepting starts what was approved and queued behind it, and says it did', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', {
+		nodes: [
+			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
+			{ key: 'ui', title: 'The session panel', files: ['src/ui/**'], dependsOn: ['auth'] },
+		],
+	})
+	const ids = [...(await loadBoard(paths)).nodes.keys()]
+	const auth = ids.find((id) => id.startsWith('the-auth-api')) as string
+	const ui = ids.find((id) => id.startsWith('the-session-panel')) as string
+	for (const node of [auth, ui])
+		await call(client, 'write_brief', {
+			node,
+			approach: 'Write it.',
+			acceptance: [{ run: 'true', proves: 'it works' }],
+		})
+	await call(client, 'approve', { node: auth })
+	await call(client, 'approve', { node: ui, queue: true })
+
+	process.env.FAKE_HOST_COMMIT = 'src/auth/api.ts'
+	await call(client, 'run', { nodes: [auth], base: 'main' })
+	const accepted = await call(client, 'accept', { node: auth, base: 'main' })
+	delete process.env.FAKE_HOST_COMMIT
+
+	expect(accepted).toContain('The queue moved')
+	expect(accepted).toContain(`${ui} finished`)
+})
+
+test('a wave asks once about every node it warned on, and starts them when the human agrees', async () => {
+	const { repo: created, paths } = await board()
+	let asked = 0
+	const client = await connect(created.dir, (message, choices) => {
+		if (message.includes('heading for')) asked += 1
+		return choices[0] ?? null
+	})
+	await call(client, 'propose', {
+		nodes: [
+			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
+			{ key: 'ui', title: 'The session panel', files: ['src/auth/session.ts'] },
+		],
+	})
+	const nodes = [...(await loadBoard(paths)).nodes.keys()]
+	for (const node of nodes) {
+		await call(client, 'write_brief', {
+			node,
+			approach: 'Write it.',
+			acceptance: [{ run: 'true', proves: 'it works' }],
+		})
+		await call(client, 'approve', { node })
+	}
+
+	// Both of them meet, so the wave starts neither until it has an answer — and
+	// one question covers the pair, because one window per node is how nobody
+	// reads any of them.
+	const ran = await call(client, 'run', { nodes, base: 'main' })
+	expect(asked).toBe(1)
+	for (const node of nodes) expect(ran).toContain(`${node}: finished`)
+})

@@ -123,7 +123,7 @@ export const release = async (node: string): Promise<void> => {
  * person's own parallel nodes are the ordinary case. It says so and stops
  * nothing — the prediction it reads is a prediction (D22).
  */
-export const warn = (overlaps: readonly Overlap[]): void => {
+export const warn = (overlaps: readonly Overlap[], harmless = true): void => {
 	if (overlaps.length === 0) return
 	say()
 	say(
@@ -133,11 +133,12 @@ export const warn = (overlaps: readonly Overlap[]): void => {
 		columns(
 			overlaps.map((overlap) => [
 				`  ${cyan(overlap.id)}`,
-				dim(overlap.by),
+				dim(overlap.by ?? 'not started yet'),
 				overlap.files.join(', '),
 			]),
 		).join('\n'),
 	)
+	if (!harmless) return
 	say()
 	say(dim('  Nothing is blocked. Two nodes on one file is one merge, done twice.'))
 }

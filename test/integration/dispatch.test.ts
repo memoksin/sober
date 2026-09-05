@@ -244,7 +244,9 @@ test('stopping a run that has already ended is not an error, and marks nothing',
 test('a wave stops queueing after the first run that does not finish', async () => {
 	const paths = await board({ concurrency: 1 })
 	process.env.FAKE_HOST_FAIL = '1'
-	await writeNode(paths, 'billing-ui-p3x9', aNode('Billing'))
+	// Its own files: two nodes heading for one file is §3.4's warning, and this
+	// test is about the halt, not about that.
+	await writeNode(paths, 'billing-ui-p3x9', { ...aNode('Billing'), files: ['src/billing.ts'] })
 
 	const results = await dispatchWave(
 		paths,

@@ -17,6 +17,7 @@ import {
 	openDecisions,
 	type Paths,
 	readFeedback,
+	readNodes,
 	rejectWork,
 	reviewNode,
 	statusOf,
@@ -288,4 +289,24 @@ test('a node with nothing committed cannot be accepted, and says what is waiting
 	// And nothing was recorded: the node is not done.
 	expect(statusOf(await loadBoard(paths), NODE)).not.toBe('done')
 	expect((await loadBoard(paths)).nodes.get(NODE)?.accepted).toBeNull()
+})
+
+test('accepting a node whose branch is gone says so, rather than reporting a git argument', async () => {
+	const paths = await board()
+	await work(paths)
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	// Reachable through a merge: `accepted` can come back null on a clone whose
+	// branch accept already deleted (ADR 0013).
+	const record = (await readNodes(paths)).records.get(NODE)
+	if (record === undefined) throw new Error(`${NODE} vanished`)
+	await writeNode(paths, NODE, { ...record, accepted: null })
+
+	const refused = await acceptWork(paths, NODE, {
+		by: 'memoksin',
+		base: 'main',
+		scan: 'clean',
+	}).catch((error: Error) => error.message)
+	expect(refused).toContain('no branch to merge')
+	expect(refused).not.toContain('rev-list')
 })

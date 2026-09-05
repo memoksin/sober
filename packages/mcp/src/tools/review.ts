@@ -12,6 +12,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
+import { drained } from '../queue.js'
 import { renderReview } from '../render.js'
 
 /**
@@ -89,7 +90,7 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 					? `merged into ${landed.base} as ${landed.commit.slice(0, 8)}`
 					: `pull request #${landed.pr.number} was marked ready and merged`
 			return text(
-				`${node} is done — ${where}.${freed.length > 0 ? ` ${freed.join(', ')} can move now.` : ''}`,
+				`${node} is done — ${where}.${freed.length > 0 ? ` ${freed.join(', ')} can move now.` : ''}${await drained(paths, ref)}`,
 			)
 		}),
 	)

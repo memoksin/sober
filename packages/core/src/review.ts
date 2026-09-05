@@ -120,6 +120,15 @@ export const acceptWork = async (
 	// This runs before the record is written, because the record is what makes
 	// the node done: the safe order below only helps when there is a merge to
 	// retry.
+	//
+	// The branch first, because `rev-list` on one that is not there is a git
+	// error about an ambiguous argument, and §8.7 asks for a sentence. It is
+	// reachable: accept deletes the branch, and a merge can put `accepted` back
+	// to null on a clone where the branch is already gone.
+	if (!(await refExists(paths.root, branchOf(node))))
+		throw new MergeRefusedError(
+			`${node} has no branch to merge — ${branchOf(node)} is not in this repository, so there is nothing here to land`,
+		)
 	const commits = await git(paths.root, 'rev-list', '--count', `${options.base}..${branchOf(node)}`)
 	if (commits.trim() === '0') {
 		const waiting = await uncommittedIn(paths, node)

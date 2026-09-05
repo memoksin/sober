@@ -11,20 +11,11 @@ export {
 	initBoard,
 } from './board.js'
 export { renderBrief } from './brief.js'
-export {
-	applySetting,
-	type Config,
-	DEFAULT_CONFIG,
-	type ReadConfig,
-	readConfig,
-	setSetting,
-	writeConfig,
-} from './config.js'
+export { applySetting, type Config, type ReadConfig, readConfig, setSetting } from './config.js'
 export {
 	ARCHIVE_FIELD,
 	type Choices,
 	type Conflict,
-	type FieldConflict,
 	type Side,
 } from './conflict.js'
 export {
@@ -41,33 +32,15 @@ export {
 	writeBrief,
 } from './decide.js'
 export { dispatch, dispatchWave, SetupFailedError, stopRun } from './dispatch.js'
-export { bind, CycleError, type Edges, unbound } from './edges.js'
-export {
-	AnsweredDecisionError,
-	type ErrorCode,
-	NotOnBoardError,
-	SoberError,
-	StillReferencedError,
-} from './errors.js'
-export { currentBranch, GitError, hasRemote, isRepo, showFromRef, whoami } from './git.js'
-export {
-	type Board,
-	cycleFrom,
-	type DanglingEdge,
-	dangling,
-	dependents,
-	findCycle,
-	loadBoard,
-	topological,
-} from './graph.js'
+export { bind, unbound } from './edges.js'
+export { SoberError } from './errors.js'
+export { currentBranch, isRepo, showFromRef, whoami } from './git.js'
+export { type Board, findCycle, loadBoard } from './graph.js'
 export { checkHost, HostError } from './host.js'
 export { newId } from './id.js'
 export {
-	appendEvent,
 	type Feedback,
-	type ReadLog,
 	readFeedback,
-	readLog,
 	readRunOutput,
 	readRuns,
 	runLog,
@@ -75,8 +48,7 @@ export {
 	writeRun,
 	writeRunPid,
 } from './local.js'
-export { LockBusyError, withLock } from './lock.js'
-export { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'
+export { type Merged, MergeRefusedError, mergeNode } from './merge.js'
 export { type Migrated, migrateBoard, needsMigration } from './migrate.js'
 export { findRoot, type Paths, paths } from './paths.js'
 export {
@@ -87,16 +59,14 @@ export {
 	publish,
 	pullRequestOf,
 } from './pr.js'
+export { type Queued, runQueue } from './queue.js'
 export type { BrokenRecord } from './read.js'
 export {
-	readArchivedDecisions,
 	readArchivedNodes,
-	readDecisions,
 	readNodes,
 	readProject,
 	writeDecision,
 	writeNode,
-	writeProject,
 } from './records.js'
 export {
 	acceptWork,
@@ -107,14 +77,7 @@ export {
 	rejectWork,
 	reviewNode,
 } from './review.js'
-export {
-	acceptNode,
-	finishRun,
-	type RunResult,
-	recordOutcome,
-	type StartedRun,
-	startRun,
-} from './run.js'
+export { acceptNode, finishRun, recordOutcome, startRun } from './run.js'
 export { type Finding, type ScanReport, scanNode } from './scan.js'
 export {
 	type Flags,
@@ -122,7 +85,6 @@ export {
 	lastRun,
 	openDecisions,
 	ready,
-	statuses,
 	statusOf,
 } from './status.js'
 export {
@@ -140,11 +102,11 @@ export {
 	type Claimed,
 	claimNode,
 	type Overlap,
+	OverlapError,
 	releaseNode,
 } from './team.js'
 export {
 	addWorktree,
-	branchOf,
 	DirtyWorktreeError,
 	listWorktrees,
 	removeWorktree,

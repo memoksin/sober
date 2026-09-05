@@ -17,8 +17,9 @@ import {
 } from './local.js'
 import type { Paths } from './paths.js'
 import { type Published, publish } from './pr.js'
-import { readNode } from './records.js'
+import { readNode, readNodes } from './records.js'
 import { finishRun, startRun } from './run.js'
+import { OverlapError, overlaps } from './team.js'
 import { addWorktree } from './worktree.js'
 
 /**
@@ -54,6 +55,10 @@ export interface DispatchOptions {
 	readonly prompt?: string
 	/** Called for every line the host writes, for a live tail (`PR-05-09`). */
 	readonly onLine?: (line: string) => void
+	/** The human saw the same-files warning and said go (§3.4). Never set by the queue. */
+	readonly anyway?: boolean
+	/** Nodes going out in the same command: unclaimed, and active all the same. */
+	readonly alsoStarting?: readonly string[]
 }
 
 export interface Dispatched {
@@ -72,6 +77,15 @@ export const dispatch = async (
 	node: string,
 	options: DispatchOptions,
 ): Promise<Dispatched> => {
+	// Before the worktree, the setup command and the invoice: two nodes heading
+	// for the same files are heading for the same merge, and §3.4 wants a human
+	// to have seen that before either one starts.
+	if (options.anyway !== true) {
+		const { records } = await readNodes(paths)
+		const found = overlaps(records, node, options.alsoStarting ?? [])
+		if (found.length > 0) throw new OverlapError(node, found)
+	}
+
 	const config = await settings(paths, options.base)
 
 	// Before anything starts, and in this order: a login that expired should be
@@ -216,9 +230,23 @@ export const dispatchWave = async (
 	base: string,
 ): Promise<readonly (Dispatched | SoberError)[]> => {
 	const config = await settings(paths, base)
-	const results: (Dispatched | SoberError)[] = []
+	// Dense from the start, so "nobody reached this one" is a value and not a
+	// hole every array method quietly skips.
+	const results: (Dispatched | SoberError | undefined)[] = Array.from({ length: wave.length })
 	let halted = false
 	let next = 0
+
+	// The wave counts as active against itself (§3.4): its members are not
+	// claimed yet, because nothing has started them. Refused up front rather than
+	// as they come up, so a wave never spends on its first node and then tells
+	// the human about a collision its second one was always going to have.
+	const members = wave.map((item) => item.node)
+	const { records } = await readNodes(paths)
+	for (const [index, item] of wave.entries()) {
+		if (item.options.anyway === true) continue
+		const found = overlaps(records, item.node, members)
+		if (found.length > 0) results[index] = new OverlapError(item.node, found)
+	}
 
 	const worker = async (): Promise<void> => {
 		for (;;) {
@@ -226,8 +254,13 @@ export const dispatchWave = async (
 			const index = next++
 			const item = wave[index]
 			if (item === undefined) return
+			// A warning is not a failed result, so it stops nothing but itself.
+			if (results[index] !== undefined) continue
 			try {
-				const done = await dispatch(paths, item.node, item.options)
+				const done = await dispatch(paths, item.node, {
+					...item.options,
+					alsoStarting: members,
+				})
 				results[index] = done
 				if (done.exit !== 'finished') halted = true
 			} catch (error) {
@@ -239,7 +272,11 @@ export const dispatchWave = async (
 
 	const workers = Math.min(config.dispatch.concurrency, wave.length)
 	await Promise.all(Array.from({ length: workers }, worker))
-	return results.filter((result) => result !== undefined)
+	// Truncated at the first index nobody reached, never compacted: a caller
+	// reads these against the wave it passed in, and dropping a hole from the
+	// middle would put one node's result under another node's name.
+	const stopped = results.indexOf(undefined)
+	return (stopped === -1 ? results : results.slice(0, stopped)) as (Dispatched | SoberError)[]
 }
 
 /**
