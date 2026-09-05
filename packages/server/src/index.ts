@@ -2,3 +2,4 @@
 // gives: the thing that ended v0's `core` was a surface nobody watched grow.
 
 export { COVERS, OPS, READS, type Route } from './routes.js'
+export { type Served, type ServeOptions, serve } from './serve.js'

@@ -1,9 +1,34 @@
 import { mkdtemp, rm } from 'node:fs/promises'
+import { request as rawRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { paths } from '@besober/core'
 import { afterAll, beforeAll, expect, test } from 'vitest'
-import { serve, type Served } from './serve.js'
+import { type Served, serve } from './serve.js'
+
+/**
+ * `fetch` refuses to set `Host` — it is a forbidden header — so the one test
+ * that is about `Host` cannot use it. This is the same request one line lower
+ * down the stack.
+ */
+const withHost = (path: string, host: string): Promise<number> =>
+	new Promise((resolve, reject) => {
+		const sent = rawRequest(
+			{
+				host: '127.0.0.1',
+				port: server.port,
+				path,
+				method: 'GET',
+				headers: { host, authorization: `Bearer ${server.token}` },
+			},
+			(response) => {
+				response.resume()
+				resolve(response.statusCode ?? 0)
+			},
+		)
+		sent.on('error', reject)
+		sent.end()
+	})
 
 let root = ''
 let server: Served
@@ -75,15 +100,11 @@ test('a token of the right length but the wrong bytes is still refused', async (
 })
 
 test('a request that arrives under someone else’s hostname is refused', async () => {
-	const response = await call('/read/board', { host: 'board.example.com' })
-
-	expect(response.status).toBe(403)
+	expect(await withHost('/read/board', 'board.example.com')).toBe(403)
 })
 
 test('localhost is a loopback name and is allowed through', async () => {
-	const response = await call('/read/board', { host: `localhost:${server.port}` })
-
-	expect(response.status).not.toBe(403)
+	expect(await withHost('/read/board', `localhost:${server.port}`)).not.toBe(403)
 })
 
 test('an operation nobody routes is not found', async () => {
@@ -125,11 +146,22 @@ test('a body that is not JSON at all is refused the same way', async () => {
 	expect(response.status).toBe(400)
 })
 
-test('a valid request reaches the route, and core refuses it for its own reason', async () => {
+test('a valid request reaches core, which reads an empty directory as an empty board', async () => {
 	const response = await call('/read/board')
 
-	// There is no board in a temp directory. What matters is that the refusal
-	// came from core rather than from the door: not 401, not 403, not 404.
+	// §8.4: one missing file does not take down the board, so a directory with
+	// no records reads as a board with no nodes rather than as a failure. What
+	// this proves is that the request got past the door and into core.
+	expect(response.status).toBe(200)
+	expect(await response.json()).toMatchObject({ nodes: [], decisions: [] })
+})
+
+test('a refusal core meant is a 409, not a 500 — the state said no, nothing broke', async () => {
+	const response = await call('/op/approve', {
+		method: 'POST',
+		body: { node: 'not-on-this-board-aaaa' },
+	})
+
 	expect(response.status).toBe(409)
 	expect((await response.json()).error).toEqual(expect.any(String))
 })
