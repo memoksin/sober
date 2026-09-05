@@ -3,6 +3,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
 	adoptBoard,
+	boardTravels,
 	initBoard,
 	type Paths,
 	readNodes,
@@ -286,4 +287,22 @@ test('a record from outside the board is never written to disk', async () => {
 	const theirs = await second(created.remote)
 	await adoptBoard(theirs, BRANCH)
 	expect(existsSync(join(theirs.root, '.git-hooks-payload'))).toBe(false)
+})
+
+test('a clone can be asked whether this repository already carries a board', async () => {
+	const { created, paths } = await board()
+
+	// The clone is made before anything is pushed: nothing travels yet, and the
+	// remote has no board branch to find.
+	const theirs = await second(created.remote)
+	expect(await boardTravels(theirs.root)).toBeNull()
+
+	await writeNode(paths, 'one-aaaa', node('One'))
+	await sync(paths, BRANCH)
+
+	// The second person's case, which is what M2's gate found: the only copy of
+	// the branch is on the remote, and the `.sober/` here holds no board.
+	expect(await boardTravels(theirs.root)).toBe(BRANCH)
+	// And the first person's, where the branch is a local ref.
+	expect(await boardTravels(paths.root)).toBe(BRANCH)
 })

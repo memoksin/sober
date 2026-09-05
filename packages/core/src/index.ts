@@ -89,6 +89,7 @@ export {
 } from './status.js'
 export {
 	adoptBoard,
+	boardTravels,
 	type OpenConflict,
 	openConflicts,
 	type Resolution,

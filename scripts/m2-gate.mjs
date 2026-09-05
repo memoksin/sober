@@ -202,8 +202,9 @@ ${bold('Part 2 — the second person, which is what M2 is')}
 ${step(10, `${bold('sober sync')}  ${dim('as Alice — the board goes to the sober-graph branch')}`)}
       ${dim('git ls-remote --heads origin   ·   nothing about it is on main')}
 
-${step(11, `${bold('sober sync')}  ${dim('as Bob — his clone has no board until this')}`)}
+${step(11, `${bold('sober init')}  ${dim('as Bob — it takes the team’s board, it does not make a second')}`)}
       ${bold('sober status')} ${dim('as Bob: the same graph, from the same records')}
+      ${dim('any other command in a clone with no board says which one takes it')}
 
 ${step(12, `${bold('sober contributors add bob')}  ${dim('· then')} ${bold('sober assign <node> bob')}`)}
       ${dim('assignment is a plan; claim is a fact. Both travel with the board.')}

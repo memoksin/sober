@@ -1,7 +1,7 @@
 import { access, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createBoardBranch, ensureAttributes, ensureGitignore } from './board.js'
-import { DEFAULT_CONFIG_TEXT, writeConfig } from './config.js'
+import { DEFAULT_CONFIG, DEFAULT_CONFIG_TEXT, writeConfig } from './config.js'
 import {
 	ARCHIVE_FIELD,
 	archivePathOf,
@@ -427,6 +427,20 @@ const apply = async (
  *
  * Null means there was nothing to adopt, and the caller creates a board.
  */
+/**
+ * Whether this repository already carries a board somebody else made, on the
+ * default board branch — the second person's case, before there is any local
+ * `.sober/` to read a branch name out of. It answers the branch so a surface can
+ * name it, and never touches anything.
+ */
+export const boardTravels = async (root: string): Promise<string | null> => {
+	const branch = DEFAULT_CONFIG.board.branch
+	if (await refExists(root, branch)) return branch
+	const remote = await remoteName(root)
+	if (remote === null) return null
+	return (await fetchBoard(root, remote, branch)) === null ? null : branch
+}
+
 export const adoptBoard = async (paths: Paths, branch: string): Promise<number | null> => {
 	const { root } = paths
 	const remote = await remoteName(root)

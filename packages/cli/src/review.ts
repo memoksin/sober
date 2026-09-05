@@ -33,7 +33,7 @@ export const review = async (node: string, base?: string, showDiff = false): Pro
 				? yellow(`${scan.findings.length} finding${scan.findings.length === 1 ? '' : 's'}`)
 				: red('the scan did not run')
 
-	say(`${cyan(bold(node))}  ${dim(found.exit ?? 'not run')}`)
+	say(`${cyan(bold(node))}  ${dim(found.accepted === null ? (found.exit ?? 'not run') : 'done')}`)
 	say()
 	say(`  ${head}   ${dim(`·  rules: ${scan.ruleSet}  ·  ${found.files.length} file(s)`)}`)
 	say()
@@ -75,21 +75,31 @@ export const review = async (node: string, base?: string, showDiff = false): Pro
 		)
 	}
 
-	say()
-	say(columns(found.files.map((file) => [`  ${blue(file)}`])).join('\n'))
-	if (showDiff) {
+	if (found.files.length > 0) {
 		say()
-		say(found.diff)
-	} else {
+		say(columns(found.files.map((file) => [`  ${blue(file)}`])).join('\n'))
+	}
+	// An empty diff is zero lines, never one. `''.split('\n')` is `['']`, and the
+	// case is ordinary: accept deletes the branch, so every review after one has
+	// nothing left to read.
+	if (found.diff !== '') {
 		say()
 		say(
-			dim(
-				`  the diff is ${found.diff.split('\n').length} lines — see it with \`sober review ${node} --diff\``,
-			),
+			showDiff
+				? found.diff
+				: dim(
+						`  the diff is ${found.diff.split('\n').length} lines — see it with \`sober review ${node} --diff\``,
+					),
 		)
 	}
 	say()
-	say(dim(`  sober accept ${node}   ·   sober reject ${node} -m "what was wrong"`))
+	say(
+		found.accepted === null
+			? dim(`  sober accept ${node}   ·   sober reject ${node} -m "what was wrong"`)
+			: dim(
+					`  accepted by ${found.accepted.by} on ${found.accepted.at.slice(0, 10)}, with the scan reading "${found.accepted.scan}"`,
+				),
+	)
 }
 
 /**

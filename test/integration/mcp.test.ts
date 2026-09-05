@@ -822,6 +822,13 @@ test('accepting starts what was approved and queued behind it, and says it did',
 
 	expect(accepted).toContain('The queue moved')
 	expect(accepted).toContain(`${ui} finished`)
+
+	// And reading it back is a record, not a decision waiting to be made — found
+	// in M2's gate, where a node accepted from a session still read as reviewable.
+	const read = await call(client, 'review', { node: auth, base: 'main' })
+	expect(read).toContain('done — accepted by')
+	expect(read).toContain('nothing here to accept or reject')
+	expect(read).not.toContain('The diff is 1 lines')
 })
 
 test('a wave asks once about every node it warned on, and starts them when the human agrees', async () => {

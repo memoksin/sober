@@ -1,4 +1,4 @@
-import type { Handle, ScanResult } from '@besober/schema'
+import type { Accepted, Handle, ScanResult } from '@besober/schema'
 import { DEFAULT_CONFIG, readConfig } from './config.js'
 import { git, refExists } from './git.js'
 import { type Board, loadBoard } from './graph.js'
@@ -37,6 +37,13 @@ export interface Review {
 	 * that did nothing (found in the M1 gate).
 	 */
 	readonly uncommitted: readonly string[]
+	/**
+	 * Set once the node is done. A review of accepted work is a record of what
+	 * was accepted, not a decision waiting to be made — found in M2's gate, where
+	 * a node accepted from a session still read as reviewable in the terminal and
+	 * offered an accept that then had no branch to merge.
+	 */
+	readonly accepted: Accepted | null
 }
 
 export const reviewNode = async (
@@ -70,6 +77,7 @@ export const reviewNode = async (
 		ci: await checksOf(paths, node),
 		pr: await pullRequestOf(paths, node),
 		uncommitted: await uncommittedIn(paths, node),
+		accepted: record.accepted,
 	}
 }
 

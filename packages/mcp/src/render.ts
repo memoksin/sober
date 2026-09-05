@@ -129,7 +129,9 @@ const ci = (checks: Review['ci']): string => {
 export const renderReview = (review: Review, showDiff: boolean): string => {
 	const scan = review.scan
 	const lines = [
-		`# ${review.node}  (last run: ${review.exit ?? 'not run'})`,
+		review.accepted === null
+			? `# ${review.node}  (last run: ${review.exit ?? 'not run'})`
+			: `# ${review.node}  (done — accepted by ${review.accepted.by} on ${review.accepted.at.slice(0, 10)}, scan: ${review.accepted.scan})`,
 		'',
 		`## Scan: ${scan.result === 'clean' ? 'clean' : scan.result === 'findings' ? `${scan.findings.length} finding(s)` : 'DID NOT RUN'}`,
 		`rules: ${scan.ruleSet}   files: ${review.files.length}`,
@@ -163,11 +165,16 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 	}
 
 	lines.push('', '## Files', ...review.files.map((file) => `- ${file}`))
-	lines.push(
-		'',
-		showDiff
-			? `## Diff\n\n${review.diff}`
-			: `The diff is ${review.diff.split('\n').length} lines. Ask for it with diff: true.`,
-	)
+	// An empty diff is zero lines, never one: accept deletes the branch, so every
+	// review after one has nothing left to read.
+	if (review.diff !== '')
+		lines.push(
+			'',
+			showDiff
+				? `## Diff\n\n${review.diff}`
+				: `The diff is ${review.diff.split('\n').length} lines. Ask for it with diff: true.`,
+		)
+	if (review.accepted !== null)
+		lines.push('', 'This node is already done. There is nothing here to accept or reject.')
 	return lines.join('\n')
 }

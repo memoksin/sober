@@ -318,3 +318,42 @@ test('accepting starts what was approved and queued behind it', () => {
 	expect(accepted).toContain('1 queued node starting')
 	expect(accepted).toContain('session-ui-m3q8 finished')
 })
+
+test('a review of a node already accepted says so, and offers no second accept', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	process.env.FAKE_HOST_COMMIT = 'src/auth/token.ts'
+	sober(created.dir, 'run', 'auth-api-k7f2')
+	sober(created.dir, 'accept', 'auth-api-k7f2')
+
+	const read = sober(created.dir, 'review', 'auth-api-k7f2')
+	expect(read).toContain('done')
+	expect(read).not.toContain('sober accept auth-api-k7f2   ·')
+	// The branch went with the accept: no diff, and never "the diff is 1 lines".
+	expect(read).not.toContain('the diff is')
+})
+
+test('a clone that has no board yet is told which command takes the team’s', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	created.git('add', '-A')
+	created.git('commit', '-m', 'chore: sober')
+	created.git('push', '-q', '-u', 'origin', 'main')
+	sober(created.dir, 'sync')
+
+	const bob = join(dirname(created.dir), 'bob')
+	execFileSync('git', ['clone', '-q', created.remote, bob])
+
+	const said = failed(bob, 'status')
+	expect(said).toContain('sober init')
+	expect(said).toContain('sober-graph')
+	expect(said).not.toContain('run `sober init` at the root of your repository')
+})

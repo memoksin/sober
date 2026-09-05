@@ -310,3 +310,15 @@ test('accepting a node whose branch is gone says so, rather than reporting a git
 	expect(refused).toContain('no branch to merge')
 	expect(refused).not.toContain('rev-list')
 })
+
+test('a review of an accepted node carries the acceptance, so a surface can say it is done', async () => {
+	const paths = await board()
+	await work(paths)
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	const found = await reviewNode(paths, NODE, 'main')
+	expect(found?.accepted).toMatchObject({ by: 'memoksin', scan: 'clean' })
+	// The branch is gone with the accept, so there is no diff left to read —
+	// and an empty diff is zero lines, never one.
+	expect(found?.diff).toBe('')
+})

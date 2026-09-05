@@ -62,6 +62,9 @@ One existing test went red on the way and was right to: `dispatch.test.ts`'s wav
 | 17 | A wave asks **once** for every node it warned on | `mcp.test.ts:a wave asks once about every node it warned on` | integration | PASS |
 | 18 | The session's `accept` reports the queue too | `mcp.test.ts:accepting starts what was approved and queued behind it` | integration | PASS |
 | 19 | Accepting a node whose branch is gone says so rather than reporting a git argument | `review.test.ts:accepting a node whose branch is gone says so` | integration | PASS |
+| 20 | A repository whose board travels can be asked so, from a clone that has none of it | `board.test.ts:a clone can be asked whether this repository already carries a board` | integration | PASS |
+| 21 | A clone with a `.sober/` and no board is refused, and told which command takes the team's | `cli.test.ts:a clone that has no board yet is told which command takes the team’s` | integration | PASS |
+| 22 | A review of an accepted node says done, offers no second accept, and prints no diff line | `cli.test.ts:a review of a node already accepted says so` · `mcp.test.ts:accepting starts what was approved…` · `review.test.ts:a review of an accepted node carries the acceptance` | integration | PASS |
 
 ## Found by hand, not by the suite
 
@@ -70,6 +73,35 @@ Three, all from driving the built CLI against a scratch repository — the metho
 1. **The refusal contradicted itself.** The overlap warning ends with "Nothing is blocked", which is true at claim time and false two lines above "was not started". The footer is now the caller's.
 2. **The queue started a teammate's claimed node.** `invoice-p2r4`, claimed by Bob, queued, ready — Alice's `accept` picked it up and would have cut the worktree and spent the money on her machine. Rule 4 in ADR 0032, with two tests.
 3. **`accept` on a node whose branch is gone printed `fatal: ambiguous argument`.** Reachable through a merge that puts `accepted` back to null on a clone where accept already deleted the branch. It is a sentence now (§8.7), and the test says so by asserting the message does *not* contain `rev-list`.
+
+## Found by the gate itself, on its first drive
+
+M2's gate was driven on a real private repository — `sober init`, a session that
+planned three nodes and answered two decisions, a run, a draft pull request with
+Actions green on it, and an accept from inside the session. Three defects, all in
+the terminal after work done in the session:
+
+1. **A clone with a `.sober/` and no board rendered as an empty board.**
+    `.gitignore` keeps `config.jsonc` tracked and the records off the base branch
+    (§1.2), so the second person's clone has the directory and none of the graph.
+    `findRoot` found it, every command opened it, and `sober status` printed a
+    board with no nodes — §8.4's failure with the whole board missing rather than
+    one record. Refused now, by the check `init` already makes.
+2. **The refusal named the wrong command.** "run `sober init` at the root of your
+    repository" is right for a repository with no board and wrong for a clone of
+    one that has: it reads as *make a new board*, which is the single thing that
+    puts two boards on one repository. A clone whose repository carries a board on
+    its branch now gets its own sentence, and the gate's own step 11 said
+    `sober sync` — the teammate ran it four times. Fixed in both places.
+3. **A node accepted from a session still read as reviewable in the terminal.**
+    `sober review` showed the run's exit rather than the node's status, offered
+    `sober accept` on a done node, and reported "the diff is 1 lines" for an empty
+    string. It says `done`, names who accepted it and when, and prints no diff
+    line when there is no diff. Both surfaces.
+
+The accept that followed the third refused with the sentence added earlier in this
+session — "has no branch to merge" — which is the fix working and not a reason to
+leave the review that offered it.
 
 ## Coverage
 
@@ -84,5 +116,5 @@ mcp: 93.7% (baseline 93.7%)
 
 ## Known gaps
 
-- **The gate itself has not been run.** `scripts/m2-gate.mjs` prepares it; driving it needs a real GitHub account and real agent runs, which is the user's to spend. `docs/M2-GATE.md` is deliberately not written yet: it records what a run found, and inventing it would be the one thing this document is for preventing.
+- **The gate has been driven as far as step 12 and no further.** Part 1's nine steps ran green on a real repository with real CI; part 2 stopped at the teammate joining. `docs/M2-GATE.md` is written when a full drive finishes — it records what a run found, and writing it from a partial one would be the thing this document exists to prevent.
 - The overlap test is still `picomatch` either-way matching, unchanged from S3 and still carrying its `ponytail:` comment. `src/**` against `**/session.ts` is not caught, and no board has produced a miss worth the machinery.

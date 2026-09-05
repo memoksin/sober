@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import {
 	adoptBoard,
 	applySetting,
+	boardTravels,
 	createBoardBranch,
 	currentBranch,
 	detectSetup,
@@ -25,8 +26,12 @@ import { bold, columns, dim, fail, green, refuse, say, yellow } from './out.js'
  */
 export const openBoard = async (): Promise<Paths> => {
 	const root = findRoot(process.cwd())
-	if (root === null)
-		return fail('there is no board here — run `sober init` at the root of your repository')
+	// A `.sober/` is not a board. `.gitignore` keeps `config.jsonc` tracked and
+	// the records off the base branch (§1.2), so a fresh clone has the directory
+	// and none of the graph — and rendering that as an empty board is §8.4's
+	// failure with the whole board missing. Found in M2's gate.
+	if (root === null || (await readProject(resolve(root))).kind === 'missing')
+		return fail(await noBoard(root ?? process.cwd()))
 
 	const paths = resolve(root)
 	const migrated = await migrateBoard(paths).catch(refuse)
@@ -35,6 +40,23 @@ export const openBoard = async (): Promise<Paths> => {
 			`${yellow('·')} board brought forward from schema ${migrated.from} to ${migrated.to} — ${migrated.records} record${migrated.records === 1 ? '' : 's'} rewritten, sync to share it`,
 		)
 	return paths
+}
+
+/**
+ * Two ways to have no board, and they need different sentences (§8.7). A fresh
+ * clone of a repository that already has one is the second person joining, and
+ * `init` takes the board rather than making a second — but "run `sober init`"
+ * with no more than that reads as "start a new one", which is the one thing
+ * they must not do. Found in M2's gate: the teammate ran `sync` four times.
+ */
+const noBoard = async (root: string): Promise<string> => {
+	if (!(await isRepo(root)))
+		return 'there is no board here — run `sober init` at the root of your repository'
+
+	const branch = await boardTravels(root)
+	return branch === null
+		? 'there is no board here — run `sober init` at the root of your repository'
+		: `this repository's board is on ${branch} and is not in this clone yet — \`sober init\` takes it, and does not make a second one`
 }
 
 export const settingsOf = async (paths: Paths) => {
