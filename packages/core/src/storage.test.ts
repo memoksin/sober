@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SCHEMA_VERSION } from '@besober/schema'
@@ -7,6 +7,7 @@ import { initBoard } from './board.js'
 import { DEFAULT_CONFIG, parseConfig, readConfig, setSetting } from './config.js'
 import { findRoot, paths, recordFile } from './paths.js'
 import { readNodes, readProject, writeNode } from './records.js'
+import { tmpRoot } from './tmp.fixture.js'
 import { writeRecord } from './write.js'
 
 let root: string
@@ -27,7 +28,7 @@ const node = (title: string) => ({
 })
 
 beforeEach(async () => {
-	root = await mkdtemp(join(tmpdir(), 'sober-storage-'))
+	root = await tmpRoot('sober-storage-')
 })
 
 test('init creates a board, and running it again leaves it alone', async () => {

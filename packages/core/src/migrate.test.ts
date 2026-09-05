@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SCHEMA_VERSION } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
 import { migrateBoard } from './migrate.js'
 import { type Paths, paths } from './paths.js'
 import { readNodes } from './records.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 let root: string
 let board: Paths
@@ -25,7 +25,7 @@ const v1Node = {
 }
 
 beforeEach(async () => {
-	root = await mkdtemp(join(tmpdir(), 'sober-migrate-'))
+	root = await tmpRoot('sober-migrate-')
 	board = paths(root)
 	await mkdir(board.nodes, { recursive: true })
 	await mkdir(board.archivedNodes, { recursive: true })
@@ -86,7 +86,7 @@ test('a board from a newer SOBER is refused, because writing it would drop what 
 })
 
 test('a repository with no board is nothing to migrate', async () => {
-	expect(await migrateBoard(paths(await mkdtemp(join(tmpdir(), 'sober-empty-'))))).toEqual({
+	expect(await migrateBoard(paths(await tmpRoot('sober-empty-')))).toEqual({
 		kind: 'no-board',
 	})
 })

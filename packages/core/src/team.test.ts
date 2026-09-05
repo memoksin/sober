@@ -1,6 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { writeFile } from 'node:fs/promises'
 import type { Node } from '@besober/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { initBoard } from './board.js'
@@ -9,6 +7,7 @@ import type { Paths } from './paths.js'
 import { aNode } from './records.fixture.js'
 import { readNode, writeNode } from './records.js'
 import { assignNode, claimNode, overlaps, releaseNode } from './team.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 const claimed = (by: string, files: string[], rest: Partial<Node> = {}): Node =>
 	aNode({ claim: { by, at: '2026-09-05T09:00:00.000Z' }, files, ...rest })
@@ -86,7 +85,7 @@ describe('on a board', () => {
 	let paths: Paths
 
 	beforeEach(async () => {
-		const root = await mkdtemp(join(tmpdir(), 'sober-team-'))
+		const root = await tmpRoot('sober-team-')
 		paths = (await initBoard(root, { title: 'Acme', intent: '', constraints: [] })).paths
 		await writeNode(paths, 'auth-api-k7f2', aNode({ title: 'The auth API', files: ['src/**'] }))
 	})

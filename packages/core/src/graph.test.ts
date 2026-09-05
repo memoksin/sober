@@ -1,6 +1,3 @@
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { Node } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
 import { initBoard } from './board.js'
@@ -9,6 +6,7 @@ import { writeRun } from './local.js'
 import type { Paths } from './paths.js'
 import { aDecision, aNode, aRun } from './records.fixture.js'
 import { writeDecision, writeNode } from './records.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 const nodeMap = (entries: Record<string, string[]>): Map<string, Node> =>
 	new Map(Object.entries(entries).map(([id, dependsOn]) => [id, aNode({ dependsOn })]))
@@ -16,7 +14,7 @@ const nodeMap = (entries: Record<string, string[]>): Map<string, Node> =>
 let paths: Paths
 
 beforeEach(async () => {
-	const root = await mkdtemp(join(tmpdir(), 'sober-graph-'))
+	const root = await tmpRoot('sober-graph-')
 	paths = (await initBoard(root, { title: 'Acme', intent: 'ship', constraints: [] })).paths
 })
 
