@@ -127,6 +127,18 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
 
+  packages/server:
+    dependencies:
+      '@besober/core':
+        specifier: workspace:*
+        version: link:../core
+      '@besober/schema':
+        specifier: workspace:*
+        version: link:../schema
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+
   packages/tsconfig: {}
 
 packages:
