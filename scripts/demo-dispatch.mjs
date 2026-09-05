@@ -78,6 +78,8 @@ const board = async (settings = {}) => {
 		files: ['src/auth.ts'],
 		brief: null,
 		outcome: null,
+		assignee: null,
+		claim: null,
 		accepted: null,
 		createdAt: new Date().toISOString(),
 	})

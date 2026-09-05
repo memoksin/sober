@@ -40,7 +40,7 @@ const board = async (): Promise<{ repo: TempRepo; paths: Paths }> => {
 	created.git('add', 'README.md', '.gitignore')
 	created.git('commit', '-m', 'chore: first')
 	const { paths } = await initBoard(created.dir, { title: 'Acme', intent: 'ship', constraints: [] })
-	created.git('add', '.gitignore', '.sober/config.jsonc')
+	created.git('add', '.gitignore', '.gitattributes', '.sober/config.jsonc')
 	created.git('commit', '-m', 'chore: sober')
 	return { repo: created, paths }
 }

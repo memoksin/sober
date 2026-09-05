@@ -30,6 +30,20 @@ export const gitWithEnv = async (
 	cwd: string,
 	env: Readonly<Record<string, string>>,
 	args: readonly string[],
+): Promise<string> => (await exec(cwd, env, args)).trimEnd()
+
+/**
+ * The same call, untrimmed. A blob's bytes are its bytes: records end in a
+ * newline, and a sync that trimmed one would write back a file that no longer
+ * matches the object it came from — every later sync would see a change that
+ * nobody made.
+ */
+export const gitVerbatim = (cwd: string, ...args: string[]): Promise<string> => exec(cwd, {}, args)
+
+const exec = async (
+	cwd: string,
+	env: Readonly<Record<string, string>>,
+	args: readonly string[],
 ): Promise<string> => {
 	try {
 		const { stdout } = await run('git', [...args], {
@@ -38,7 +52,7 @@ export const gitWithEnv = async (
 			maxBuffer: 32 * 1024 * 1024,
 			env: { ...process.env, ...env },
 		})
-		return stdout.trimEnd()
+		return stdout
 	} catch (error) {
 		throw new GitError(args, (error as { stderr?: string }).stderr ?? String(error))
 	}
@@ -65,8 +79,28 @@ export const isRepo = async (dir: string): Promise<boolean> => {
 export const currentBranch = (dir: string): Promise<string> =>
 	git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')
 
-export const hasRemote = async (dir: string): Promise<boolean> =>
-	(await git(dir, 'remote')).length > 0
+/**
+ * The remote the board travels through. SOBER does not ask which one: a
+ * repository with a second remote is rarer than a repository whose remote is
+ * not called `origin`, and hardcoding the name would fail the second case
+ * silently.
+ */
+export const remoteName = async (dir: string): Promise<string | null> => {
+	const first = (await git(dir, 'remote')).split('\n')[0]?.trim()
+	return first === undefined || first === '' ? null : first
+}
+
+export const hasRemote = async (dir: string): Promise<boolean> => (await remoteName(dir)) !== null
+
+/** True when `maybe` is already contained in `of` — the question a pull asks. */
+export const isAncestor = async (dir: string, maybe: string, of: string): Promise<boolean> => {
+	try {
+		await git(dir, 'merge-base', '--is-ancestor', maybe, of)
+		return true
+	} catch {
+		return false
+	}
+}
 
 export const refExists = async (dir: string, ref: string): Promise<boolean> => {
 	try {

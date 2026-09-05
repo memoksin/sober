@@ -62,6 +62,8 @@ Nine steps. Green means the product exists. M2 and M3's gates are the same scrip
 
 **Run on 2026-09-04, green.** `pnpm gate:m1` prepares it; `M1-GATE.md` records what it found — fourteen defects, none of which the suite could see against a faked host.
 
+M2's is `pnpm gate:m2`: the same nine steps with a teammate, on a **real private repository** — two clones, a real `gh`, and a real workflow, because a gate that fakes the thing it exists to prove is a demo. `M2-GATE.md` records what it finds.
+
 ---
 
 ## 4. Pace
@@ -183,7 +185,7 @@ Growing the surface now means updating a snapshot in the same PR, where it is vi
 
 Three **alarms** beside the ratchets (ADR 0023). An alarm warns and asks for an ADR; it does not fail the build:
 
-- `core` exports > 90 (ADR 0028 — the number moves with the number of consumers, by ADR; the surface snapshot above is the guard that actually catches growth).
+- `core` exports > 100 (ADR 0028, raised for M2 by ADR 0029 — the number moves with the number of consumers, by ADR; the surface snapshot above is the guard that actually catches growth).
 - `apps/dashboard` lines > 1.5 × `packages/core` lines. v0's ratio was 0.67; the problem was that the screens came before the loop closed, and this is the only number that would have shown the phase running away.
 - A phase past 1.5 × its estimate: rewrite the phase gate before continuing.
 

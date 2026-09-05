@@ -5,7 +5,9 @@ import {
 	bind as bindEdges,
 	dispatch,
 	dispatchWave,
+	OverlapError,
 	openDecisions,
+	type Published,
 	readRunOutput,
 	renderBrief,
 	SoberError,
@@ -17,7 +19,22 @@ import {
 } from '@besober/core'
 import { Brief } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
-import { blue, bold, cyan, dim, fail, green, magenta, red, say, spinner, yellow } from './out.js'
+import {
+	blue,
+	bold,
+	cyan,
+	dim,
+	fail,
+	green,
+	magenta,
+	red,
+	refuse,
+	say,
+	spinner,
+	yellow,
+} from './out.js'
+import { drain } from './queue.js'
+import { warn } from './team.js'
 
 /**
  * A tool call, a sentence and an ending do not read alike, so they do not look
@@ -36,12 +53,6 @@ const mark = (kind: string): string => {
 	const [glyph, colour] = TAIL[kind] ?? ['·', dim]
 	return colour(glyph)
 }
-
-/** Every command that writes turns a refusal into a sentence, never a stack trace (§8.7). */
-export const refuse = (error: unknown): never =>
-	error instanceof SoberError
-		? fail(error.message)
-		: fail(String((error as Error).message ?? error))
 
 export const decisions = async (): Promise<void> => {
 	const paths = await openBoard()
@@ -87,6 +98,9 @@ export const decide = async (id: string, option: string, why?: string): Promise<
 	} catch (error) {
 		refuse(error)
 	}
+	// The other thing that makes a node ready, and so the other place the queue
+	// is read (D26).
+	await drain(paths, await baseOf(paths))
 }
 
 export const brief = async (node: string, write?: string): Promise<void> => {
@@ -145,7 +159,11 @@ export const approve = async (node: string, queue: boolean): Promise<void> => {
  * Dispatch, with the tail of the agent's output as it arrives (`PR-05-09`).
  * Read-only: watching a run is not steering it.
  */
-export const run = async (nodes: readonly string[], base?: string): Promise<void> => {
+export const run = async (
+	nodes: readonly string[],
+	base?: string,
+	anyway = false,
+): Promise<void> => {
 	const paths = await openBoard()
 	const ref = await baseOf(paths, base)
 	const board = await readBoard(paths)
@@ -164,7 +182,7 @@ export const run = async (nodes: readonly string[], base?: string): Promise<void
 	// Several nodes are a wave: they run to `dispatch.concurrency` and the chain
 	// stops at the first that does not finish (§5.3, `PR-05-08`). One node keeps
 	// the live tail, because with two the two outputs interleave into noise.
-	if (nodes.length > 1) return wave(paths, nodes, ref)
+	if (nodes.length > 1) return wave(paths, nodes, ref, anyway)
 
 	for (const node of nodes) {
 		say(`${cyan(bold(node))} ${dim(`on ${ref}`)}`)
@@ -172,6 +190,7 @@ export const run = async (nodes: readonly string[], base?: string): Promise<void
 		try {
 			const result = await dispatch(paths, node, {
 				base: ref,
+				anyway,
 				onLine: (line) => {
 					const [rendered] = tail(line)
 					if (rendered === undefined) return
@@ -185,17 +204,46 @@ export const run = async (nodes: readonly string[], base?: string): Promise<void
 					? `${green('✓')} ${node} finished — review it with \`sober review ${node}\``
 					: `${result.exit === 'stopped' ? yellow('·') : red('×')} ${node} ${result.exit}${result.error === null ? '' : `: ${result.error}`}`,
 			)
+			opened(result.pr)
 		} catch (error) {
 			spin.stop()
+			if (error instanceof OverlapError) return collides(error)
 			refuse(error)
 		}
 	}
+}
+
+/**
+ * The confirmation §3.4 asks for, on a surface that never prompts: the overlap
+ * is shown, and the human answers by running the command again. Nothing is
+ * blocked — the second command is the confirmation, not an appeal.
+ */
+const collides = (error: OverlapError): void => {
+	warn(error.overlaps, false)
+	say()
+	say(`${yellow('·')} ${cyan(error.node)} was not started — nothing was cut and nothing was spent`)
+	say(dim(`  Start it anyway if you meant to:  sober run ${error.node} --anyway`))
+	process.exitCode = 1
+}
+
+/**
+ * The pull request is a mechanism, not a surface (§6.1) — so it is one line,
+ * and a step that did not happen says why rather than passing in silence.
+ */
+const opened = (pr: Published | null): void => {
+	if (pr === null) return
+	if (pr.kind === 'skipped') {
+		say(dim(`  no pull request: ${pr.reason}`))
+		return
+	}
+	say(dim(`  draft #${pr.pr.number} ${pr.kind === 'opened' ? 'opened' : 'updated'} — ${pr.pr.url}`))
 }
 
 const wave = async (
 	paths: Awaited<ReturnType<typeof openBoard>>,
 	nodes: readonly string[],
 	base: string,
+	anyway: boolean,
 ): Promise<void> => {
 	say(dim(`${nodes.length} nodes on ${base}, up to the concurrency limit`))
 	// A wave has no tail — two outputs interleave into noise — so the spinner is
@@ -203,12 +251,18 @@ const wave = async (
 	const spin = spinner(`${nodes.length} nodes`)
 	const results = await dispatchWave(
 		paths,
-		nodes.map((node) => ({ node, options: { base } })),
+		nodes.map((node) => ({ node, options: { base, anyway } })),
 		base,
 	).finally(() => spin.stop())
 
+	let refused = 0
 	for (const [index, result] of results.entries()) {
 		const node = nodes[index] ?? ''
+		if (result instanceof OverlapError) {
+			refused += 1
+			say(`${yellow('·')} ${node} was not started: ${result.message}`)
+			continue
+		}
 		if (result instanceof SoberError) {
 			say(`${red('×')} ${node}: ${result.message}`)
 			continue
@@ -225,6 +279,8 @@ const wave = async (
 				'  the rest of the wave was not started — nothing is built on a result you have not seen',
 			),
 		)
+	if (refused > 0)
+		say(dim(`  run the wave again with --anyway to start ${refused === 1 ? 'it' : 'them'} too`))
 }
 
 export const stop = async (node: string): Promise<void> => {

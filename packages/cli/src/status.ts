@@ -53,6 +53,7 @@ export const status = async (only?: string): Promise<void> => {
 			`  ${(COLOUR[state] ?? dim)(state)}`,
 			cyan(id),
 			node?.title ?? '',
+			who(node),
 			flags.lastRunFailed ? red('last run failed') : waiting(board, id),
 		]
 	})
@@ -74,6 +75,21 @@ export const status = async (only?: string): Promise<void> => {
 		say(bold(`${open.length} decision${open.length === 1 ? '' : 's'} waiting on you`))
 		say(columns(open.map(([id, decision]) => [`  ${magenta(id)}`, decision.question])).join('\n'))
 	}
+}
+
+/**
+ * Who is on it. A claim is a fact and an assignment is a plan (§3.3), so the
+ * two never read the same: one is a name, the other is a name it is heading to.
+ */
+const who = (
+	node: { claim: { by: string } | null; assignee: string | null } | undefined,
+): string => {
+	if (node?.claim == null) return node?.assignee == null ? '' : dim(`→ ${node.assignee}`)
+	// Someone else doing what was planned for another person is the one thing
+	// here a reader has to see; hiding the plan behind the fact loses it.
+	const plan =
+		node.assignee != null && node.assignee !== node.claim.by ? ` (for ${node.assignee})` : ''
+	return dim(`@${node.claim.by}${plan}`)
 }
 
 /** The one thing a reader wants beside a held or blocked node: what it is waiting for. */

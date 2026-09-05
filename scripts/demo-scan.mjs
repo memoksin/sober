@@ -48,6 +48,8 @@ const board = async ({ declared = ['src/auth/**'], rc, extra } = {}) => {
 		files: declared,
 		brief: null,
 		outcome: null,
+		assignee: null,
+		claim: null,
 		accepted: null,
 		createdAt: new Date().toISOString(),
 	})

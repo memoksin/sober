@@ -21,6 +21,8 @@ export const ERROR_CODES = [
 	'no-brief',
 	'no-board',
 	'cycle',
+	'schema',
+	'overlap',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

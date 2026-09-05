@@ -10,22 +10,35 @@ const node = {
 	files: ['src/auth/**', 'src/middleware/session.ts'],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
 	createdAt: '2026-08-27T09:00:00Z',
 }
 
-test('parses the M1 node record', () => {
+test('parses the node record', () => {
 	expect(Node.parse(node)).toEqual(node)
 })
 
-test('assignee is not an M1 field', () => {
-	expect(Node.safeParse({ ...node, assignee: 'memoksin' }).success).toBe(false)
+test('assignee is a handle, or nobody', () => {
+	expect(Node.parse({ ...node, assignee: 'memoksin' }).assignee).toBe('memoksin')
+	expect(Node.safeParse({ ...node, assignee: '' }).success).toBe(false)
 })
 
-test('claim is not an M1 field', () => {
+test('a claim says who is working on it, and since when', () => {
 	const claim = { by: 'memoksin', at: '2026-08-27T11:00:00Z' }
 
-	expect(Node.safeParse({ ...node, claim }).success).toBe(false)
+	expect(Node.parse({ ...node, claim }).claim).toEqual(claim)
+})
+
+test('a claim without a time is not a claim', () => {
+	expect(Node.safeParse({ ...node, claim: { by: 'memoksin' } }).success).toBe(false)
+})
+
+test('a board written before the team existed is not a node — it is migrated first', () => {
+	const { assignee, claim, ...v1 } = node
+
+	expect(Node.safeParse(v1).success).toBe(false)
 })
 
 test('there is no updatedAt — git log answers when this changed', () => {

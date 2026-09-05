@@ -1,3 +1,5 @@
+import { SoberError } from '@besober/core'
+
 /**
  * Everything the CLI prints goes through here. Colour is off when the output is
  * not a terminal, so a pipe gets text and a person gets a readable screen — the
@@ -29,6 +31,12 @@ export const fail = (message: string): never => {
 	process.stderr.write(`${red('×')} ${message}\n`)
 	process.exit(1)
 }
+
+/** Every command that writes turns a refusal into a sentence, never a stack trace (§8.7). */
+export const refuse = (error: unknown): never =>
+	error instanceof SoberError
+		? fail(error.message)
+		: fail(String((error as Error).message ?? error))
 
 export const columns = (rows: readonly (readonly string[])[]): string[] => {
 	const widths = rows.reduce<number[]>((widest, row) => {

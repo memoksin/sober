@@ -12,6 +12,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
+import { drained } from '../queue.js'
 import { renderReview } from '../render.js'
 
 /**
@@ -73,7 +74,7 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 			)
 			if (!yes) return text('Not accepted. Nothing was merged and nothing was deleted.')
 
-			const merged = await acceptWork(paths, node, {
+			const landed = await acceptWork(paths, node, {
 				by: await whoami(paths.root),
 				base: ref,
 				// Recorded as it read at the moment a human accepted, including
@@ -84,10 +85,12 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 			const freed = [...after.nodes]
 				.filter(([, record]) => record.dependsOn.includes(node))
 				.map(([id]) => id)
+			const where =
+				landed.kind === 'merged'
+					? `merged into ${landed.base} as ${landed.commit.slice(0, 8)}`
+					: `pull request #${landed.pr.number} was marked ready and merged`
 			return text(
-				`${node} is done — merged into ${merged.base} as ${merged.commit.slice(0, 8)}.${
-					freed.length > 0 ? ` ${freed.join(', ')} can move now.` : ''
-				}`,
+				`${node} is done — ${where}.${freed.length > 0 ? ` ${freed.join(', ')} can move now.` : ''}${await drained(paths, ref)}`,
 			)
 		}),
 	)

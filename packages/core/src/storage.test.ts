@@ -20,6 +20,8 @@ const node = (title: string) => ({
 	files: [],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
 	createdAt: '2026-09-04T00:00:00.000Z',
 })

@@ -60,10 +60,17 @@ If a conflict appears, **the push does not happen**. Conflicts are resolved in t
 Default git behaviour is the opposite of that promise: a conflicted text file gets `<<<<<<<` written into it, and every SOBER surface parses these files. One `.gitattributes` block prevents it (ADR 0013):
 
 ```
-.sober/nodes/*.json     merge=binary -text
-.sober/decisions/*.json merge=binary -text
-.sober/archive/*.json   merge=binary -text
+.sober/project.json            merge=binary -text
+.sober/contributors.json       merge=binary -text
+.sober/nodes/*.json            merge=binary -text
+.sober/decisions/*.json        merge=binary -text
+.sober/archive/nodes/*.json    merge=binary -text
+.sober/archive/decisions/*.json merge=binary -text
 ```
+
+`sober init` writes that block, and adds it to a `.gitattributes` a project
+already has rather than replacing one. The archive is two directories, not one
+flat `archive/`, for the reason §8.4 gives.
 
 `merge=binary` stops git attempting a textual merge. The working-tree file stays as ours, no markers are written, and the path is recorded unmerged with all three versions available in the index. `-text` stops line-ending conversion, which on Windows would otherwise produce phantom diffs and turn a merged file into a conflict on every line.
 
@@ -80,6 +87,21 @@ Whole-record choice is also lossy. If one person edits a node's `notes` while an
 
 In that example nothing is asked and nothing is lost.
 
+Both surfaces ask the same question in M2. The CLI never prompts — `sober sync`
+names the records and stops, `sober resolve <record>` shows the two versions,
+and `sober resolve <record> <field>=ours` is the answer, exactly the shape
+`sober decide` already has (§4: the CLI is the scriptable surface as well as a
+human one). A session asks through elicitation: **one form per record, one enum
+per conflicted field**, so a record with three questions is one window rather
+than three.
+
+Answers to a merge with several conflicted records are held in
+`local/merge.json` until the last one arrives, and the merge lands on it. That
+file is disposable like everything else under `local/` — losing it loses no
+record, the questions are simply asked again (§1.4). It is dropped the moment
+either side moves, because answers to a merge that no longer exists are not
+answers.
+
 #### Archive against edit
 
 Archiving is a rename, so a node archived on one side and edited on the other is a different kind of conflict with a different question: "this node was archived by someone else while you edited it — keep the archive, or restore it?"
@@ -90,7 +112,12 @@ One file per entity reduces conflicts, and that is exactly what makes this possi
 
 §8.3 refuses a severing delete and §3.6 refuses a cycle-closing edge, but both run locally at edit time. A merge is the other edge, and §3.6's own sentence names the cost of missing it: enforcing at the edge is one check, detecting later is a class of bug.
 
-So a **validation pass runs after the merge and before the commit** — dangling references and cycles. The merge completes locally, so no work is lost, and the push is blocked until the findings are resolved. That reuses the gate `PR-07-02` already defines rather than adding one.
+So a **validation pass runs over the merged board** — dangling references and cycles. The merge completes locally, so no work is lost, and the push is blocked until the findings are resolved. That reuses the gate `PR-07-02` already defines rather than adding one.
+
+"Blocked until resolved" is a state, not a moment: the check runs before every
+push that has something to send, not only on the sync that merged. Checking only
+at the merge would block one sync and wave the same broken board through on the
+next one.
 
 All of this needs real git state to exercise. It is the highest-risk code in `core`, and ADR 0014 exists for it.
 
@@ -304,14 +331,14 @@ It is not a node, because it is not work. It is not in `config.jsonc`, because c
 }
 ```
 
-Ids are a slug plus a short random suffix, so two machines adding the same title never produce the same file (ADR 0020). There is no `updatedAt`: "when did this change" is `git log` on the file. `createdAt` stays because it is written once and never conflicts. Fields marked **M2** below are added to the schema when M2 opens, not before.
+Ids are a slug plus a short random suffix, so two machines adding the same title never produce the same file (ADR 0020). There is no `updatedAt`: "when did this change" is `git log` on the file. `createdAt` stays because it is written once and never conflicts.
 
 - `decisions` — every decision binding this node. Any open one holds it (§2.2).
 - `files` — the files this node is expected to touch, as plain globs matched by `picomatch` (ADR 0021). The agent proposes them at decomposition and the human corrects them (D22). It is a **prediction**, refined when the brief is rendered. It feeds two things: the same-files warning (§3.4) and one of the scan's signals (§6.2). It is not a contract enforced before the work runs.
 - `brief` — null until rendered. Holds only the agent-written approach and its approval — `{ approach, approval: { by, at, queue } | null }` (ADR 0021); the rest of a brief is rendered from the records at read time (§3.7).
 - `outcome` — a short summary of what the finishing agent did, written at the end of a run. Downstream briefs carry it (§3.7).
-- `assignee` — a contributor handle, or null. Set by a human. **M2.**
-- `claim` — who is actually working on it, and since when. Set when work starts. **M2.**
+- `assignee` — a contributor handle, or null. Set by a human, and refused for a handle the project does not hold (ADR 0030).
+- `claim` — who is actually working on it, and since when. Written by `sober claim` and again when a run starts (ADR 0030).
 - `accepted` — the record of a human accepting the result: `{ by, at, flagged, scan }` (ADR 0021). Its presence is what makes a node finished; there is no `done` boolean to forget to set. `flagged` records whether the node was flagged when it was accepted (§2.8); `scan` records whether the scan was clean, had findings, or did not run (§6.2).
 
 Title and description are always visible in the panel; notes, brief, and decisions are collapsed by default (`PR-01-07`), and every field is editable in place (`PR-01-08`).
@@ -341,7 +368,7 @@ Two things are deliberately not statuses:
 - **Archived** is a location — the file lives in `.sober/archive/`. A status would have to be kept in step with the file's whereabouts, and would eventually disagree with it.
 - **Flagged** — a node whose bound decision changed after its brief was approved (§2.8) — is a flag. It does not reopen or stop the node, so it cannot be a status without lying about what happened. Same for "the last run failed" (§8.1).
 
-### 3.3 Contributors, assignment and claim — M2
+### 3.3 Contributors, assignment and claim
 
 `.sober/contributors.json` — who is on the project, and what each one works on:
 
@@ -360,6 +387,8 @@ Two things are deliberately not statuses:
 
 Board state, not configuration: it syncs with the graph, because the team is a property of the project rather than of one machine.
 
+Someone is put on the project by hand — `sober contributors add <handle>`, or the same tool in a session. Nobody is added by acting: a list that fills itself is a list nobody curates, and neither `role` nor `focus` can be read off a git config (ADR 0030).
+
 **Assignment** is a human handing a node to a contributor ahead of time. **Claim** is whoever actually starts it. They are separate fields because they answer different questions — one is a plan, the other is a fact.
 
 A claim is a **signal, not a lock** (D23, ADR 0005). SOBER warns; it never blocks. Enforcing exclusivity would need an authority SOBER does not have and does not want: the git host already decides who can push to the board branch, and an outside contributor forks and opens a pull request like anywhere else.
@@ -374,7 +403,7 @@ The warning is about **nodes, not people**. An earlier requirement scoped it to 
 
 So it fires at two moments:
 
-- at **claim** time, when a teammate takes a node someone else is heading for (M2);
+- at **claim** time, when a teammate takes a node someone else is heading for. Two globs overlap when either matches the other read as a path — enough for `src/auth/**` against `src/auth/session.ts`, and honest about what a prediction can carry;
 - at **dispatch** time, on any wave, including a single user's own — and there it asks for a confirmation before starting.
 
 The confirmation is not a block. It is the shape §2.8 already uses for an expensive action with a foreseeable outcome: show it, then let the human proceed. It also has one automatic consequence — an overlapping node is never dispatched unattended by "approve and queue" (§5.3), because the confirmation needs a human.
@@ -574,7 +603,7 @@ Nothing lands without a human (`SCOPE.md` MUST #5). An agent can neither merge i
 
 Review is available on all three surfaces (§4). In M1 that means the session and the CLI; the dashboard's single review screen is M3.
 
-### 6.1 The pull request is a mechanism, not a surface — M2
+### 6.1 The pull request is a mechanism, not a surface
 
 When a run finishes, its branch is pushed and a **draft** pull request is opened (D32). CI then runs before a human looks, which is the whole point: human attention should not be spent on a diff that does not compile. v0 learned this and got it right; what it got wrong was letting the review itself move to the git host.
 
@@ -582,9 +611,15 @@ So the pull request is opened, and the review stays in SOBER. One screen carries
 
 One pull request per node, not per attempt (§5.0). Draft matters: a draft pull request asks nobody to review anything. Opening it is still an outward-facing action that pushes agent output to a remote, so it is a documented config setting (`dispatch.draftPr`), on by default when a remote exists, and never a silent one.
 
+The host is talked to through its own CLI, `gh`, as a subprocess — the same shape as the agent host (§5.1), and for the same reason: SOBER never asks for a token and never holds one (ADR 0031). `SOBER_GH` names the executable when it is not on the PATH. A branch that holds no commit past its base opens nothing: there is no diff for CI to run and none for anyone to read.
+
+CI is read at review time, never cached and never waited for. "Still running" is a true answer; **"could not be read" is not "passing"**, and the line is rendered even when the pull request itself could not be read — a CI line that disappears reads as a clean one.
+
 ### 6.0 Review is checks, not reading — ADR 0022
 
 The brief carries an `acceptance` section, approved with it (§3.7). A run ends with `dispatch.verify`, read from the base like `dispatch.setup` (§5.2). The review renders, in order: verification, the scan (§6.2), CI when there is one, the files-outside-declared signal, the `outcome` summary. The diff renders on request.
+
+`dispatch.verify` and every acceptance criterion run **in the node's worktree, after the agent exits**, and their exit codes land on the run record. A run that did not finish is not verified: there is nothing to verify.
 
 A node whose verification, scan and CI are all clean is **green**. Green nodes are accepted together — `sober accept --green` in M1, one list on the review screen in M3. A node that is not green takes the single-node path below. The human performs every accept; nothing lands by itself.
 
@@ -616,7 +651,7 @@ Two other things render in the same place: the flag from §2.8, when the node wa
 
 ### 6.3 Accept
 
-Configurable, because projects differ (D33): a local merge, or marking the pull request ready and merging it. A protected main cannot take a local merge; a repo with no remote cannot take a pull request, which is M1's default.
+Configurable, because projects differ (D33): `dispatch.accept` is `merge` or `pull-request`, and it defaults to `merge`. A protected main cannot take a local merge; a repo with no remote cannot take a pull request. Detecting which and switching silently was rejected: accept is the one irreversible command in the product, and it must not change behaviour because somebody added a remote (ADR 0031).
 
 Either way the node's `accepted` record is written, which is what makes it `done` (§3.2), and its `outcome` summary is recorded for downstream briefs (§3.7). The worktree is removed (§8.2).
 
@@ -722,7 +757,9 @@ The same rule covers a torn line in the local log (§1.4).
 `project.json` carries the schema version the board was written with (D42).
 
 - An **older** SOBER seeing a newer board refuses to open it and says to upgrade.
-- A **newer** SOBER reads an older board and migrates it when needed.
+- A **newer** SOBER reads an older board and migrates it when needed — in the CLI, which brings the board forward on its way in and says in one line what it rewrote. The MCP server does not migrate: it may not write to stdout, so it refuses and names the surface that can (ADR 0030).
+
+A migrated record is written back through the current schema, so its field order matches every other record's. Bytes that differ only by key order are a whole-file diff to git and a phantom change to the field-level merge (§1.2.1).
 
 Refusing to read is the only safe direction. A version that does not understand a field drops it on write, and on a shared board that is silent data loss for everyone else.
 

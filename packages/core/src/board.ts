@@ -19,6 +19,25 @@ export const GITIGNORE_BLOCK = `# SOBER: the board travels on its own branch, an
 !.sober/config.jsonc
 `
 
+/**
+ * Git's default for a conflicted text file is to write `<<<<<<<` into it, and
+ * every SOBER surface parses these files — so the promise that no marker ever
+ * reaches one is kept here, in a configuration file, not in code (ADR 0013).
+ *
+ * `merge=binary` leaves the working-tree file as ours and records the path
+ * unmerged with all three versions in the index, which is what the field-level
+ * merge reads. `-text` stops line-ending conversion, which on Windows would
+ * otherwise turn a merged record into a conflict on every line.
+ */
+export const ATTRIBUTES_BLOCK = `# SOBER: board records are merged field by field by SOBER, never by git (DESIGN §1.2.1).
+.sober/project.json merge=binary -text
+.sober/contributors.json merge=binary -text
+.sober/nodes/*.json merge=binary -text
+.sober/decisions/*.json merge=binary -text
+.sober/archive/nodes/*.json merge=binary -text
+.sober/archive/decisions/*.json merge=binary -text
+`
+
 export interface InitResult {
 	readonly paths: Paths
 	/** False when a board was already here — init never overwrites one. */
@@ -43,24 +62,33 @@ export const initBoard = async (
 	await writeConfig(paths, DEFAULT_CONFIG_TEXT)
 	await writeProject(paths, { schemaVersion: SCHEMA_VERSION, ...project })
 	await ensureGitignore(root)
+	await ensureAttributes(root)
 	return { paths, created: true }
 }
 
 /** Nothing else in the design works without these entries (DESIGN §1.2). */
-export const ensureGitignore = async (root: string): Promise<void> => {
-	const file = join(root, '.gitignore')
+export const ensureGitignore = (root: string): Promise<void> =>
+	appendBlock(join(root, '.gitignore'), '.sober/*', GITIGNORE_BLOCK)
+
+/** The other half of the same promise: no conflict marker ever lands in a record. */
+export const ensureAttributes = (root: string): Promise<void> =>
+	appendBlock(join(root, '.gitattributes'), '.sober/nodes/*.json', ATTRIBUTES_BLOCK)
+
+/**
+ * Appends a block to a file the project also owns, once. Both files may already
+ * carry a user's own rules, so this never rewrites one — it looks for a line the
+ * block cannot be without and adds nothing if it is there.
+ */
+const appendBlock = async (file: string, marker: string, block: string): Promise<void> => {
 	let current = ''
 	try {
 		current = await readFile(file, 'utf8')
 	} catch (error) {
 		if ((error as { code?: string }).code !== 'ENOENT') throw error
 	}
-	if (current.includes('.sober/*')) return
+	if (current.includes(marker)) return
 	const separator = current.length === 0 || current.endsWith('\n') ? '' : '\n'
-	await writeAtomic(
-		file,
-		`${current}${separator}${current.length === 0 ? '' : '\n'}${GITIGNORE_BLOCK}`,
-	)
+	await writeAtomic(file, `${current}${separator}${current.length === 0 ? '' : '\n'}${block}`)
 }
 
 /**

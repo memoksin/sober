@@ -13,6 +13,8 @@ export const aNode = (overrides: Partial<Node> = {}): Node => ({
 	files: [],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
 	createdAt: AT,
 	...overrides,

@@ -17,6 +17,7 @@ import {
 	openDecisions,
 	type Paths,
 	readFeedback,
+	readNodes,
 	rejectWork,
 	reviewNode,
 	statusOf,
@@ -71,6 +72,8 @@ const board = async (): Promise<Paths> => {
 		files: ['src/auth/**'],
 		brief: null,
 		outcome: null,
+		assignee: null,
+		claim: null,
 		accepted: null,
 		createdAt: AT,
 	})
@@ -286,4 +289,36 @@ test('a node with nothing committed cannot be accepted, and says what is waiting
 	// And nothing was recorded: the node is not done.
 	expect(statusOf(await loadBoard(paths), NODE)).not.toBe('done')
 	expect((await loadBoard(paths)).nodes.get(NODE)?.accepted).toBeNull()
+})
+
+test('accepting a node whose branch is gone says so, rather than reporting a git argument', async () => {
+	const paths = await board()
+	await work(paths)
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	// Reachable through a merge: `accepted` can come back null on a clone whose
+	// branch accept already deleted (ADR 0013).
+	const record = (await readNodes(paths)).records.get(NODE)
+	if (record === undefined) throw new Error(`${NODE} vanished`)
+	await writeNode(paths, NODE, { ...record, accepted: null })
+
+	const refused = await acceptWork(paths, NODE, {
+		by: 'memoksin',
+		base: 'main',
+		scan: 'clean',
+	}).catch((error: Error) => error.message)
+	expect(refused).toContain('no branch to merge')
+	expect(refused).not.toContain('rev-list')
+})
+
+test('a review of an accepted node carries the acceptance, so a surface can say it is done', async () => {
+	const paths = await board()
+	await work(paths)
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	const found = await reviewNode(paths, NODE, 'main')
+	expect(found?.accepted).toMatchObject({ by: 'memoksin', scan: 'clean' })
+	// The branch is gone with the accept, so there is no diff left to read —
+	// and an empty diff is zero lines, never one.
+	expect(found?.diff).toBe('')
 })

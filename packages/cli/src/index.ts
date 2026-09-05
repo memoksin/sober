@@ -2,8 +2,11 @@ import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import { init } from './board.js'
 import { bold, columns, dim, fail, say } from './out.js'
-import { accept, archive, reject, review } from './review.js'
+import { listConflicts, resolve } from './resolve.js'
+import { accept, acceptGreen, archive, reject, review } from './review.js'
 import { status } from './status.js'
+import { sync } from './sync.js'
+import { assign, claim, contributors, release } from './team.js'
 import { approve, bind, brief, decide, decisions, logs, run, stop } from './work.js'
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
@@ -47,6 +50,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		'Build',
 		[
 			['run <node...>', 'start the agent in the node’s own worktree'],
+			['run <node> --anyway', 'start it even though it meets another node’s files'],
 			['stop <node>', 'stop it; the work stays where it is'],
 			['logs <node>', 'what the agent said, from the last run'],
 		],
@@ -56,7 +60,24 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['review <node>', 'the scan, the criteria, and the diff'],
 			['accept <node>', 'land it — merge, and the node is done'],
+			['accept --green', 'land every node whose checks are all clean'],
 			['reject <node> -m "…"', 'send it back with what was wrong'],
+		],
+	],
+	[
+		'Share',
+		[
+			['sync [--no-push]', 'take in the team’s board, then send yours'],
+			['resolve [record] [field=side]', 'answer what the merge could not'],
+		],
+	],
+	[
+		'Team',
+		[
+			['contributors [add|remove] <handle>', 'who is on this project'],
+			['assign <node> [handle]', 'hand a node to someone, or to nobody'],
+			['claim <node>', 'say you are on it — a signal, never a lock'],
+			['release <node>', 'give it back'],
 		],
 	],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
@@ -87,7 +108,13 @@ const options = {
 	decisions: { type: 'string' },
 	'depends-on': { type: 'string' },
 	queue: { type: 'boolean' },
+	anyway: { type: 'boolean' },
+	'no-push': { type: 'boolean' },
+	name: { type: 'string' },
+	role: { type: 'string' },
+	focus: { type: 'string' },
 	clean: { type: 'boolean' },
+	green: { type: 'boolean' },
 	diff: { type: 'boolean' },
 	version: { type: 'boolean', short: 'v' },
 	help: { type: 'boolean', short: 'h' },
@@ -132,7 +159,7 @@ const main = async (): Promise<void> => {
 			return approve(need('node'), values.queue === true)
 		case 'run':
 			if (rest.length === 0) fail('which node? `sober status` shows what is ready')
-			return run(rest, values.base)
+			return run(rest, values.base, values.anyway === true)
 		case 'stop':
 			return stop(need('node'))
 		case 'logs':
@@ -140,12 +167,28 @@ const main = async (): Promise<void> => {
 		case 'review':
 			return review(need('node'), values.base, values.diff === true)
 		case 'accept':
-			return accept(need('node'), values.base)
+			return values.green === true ? acceptGreen(values.base) : accept(need('node'), values.base)
 		case 'reject': {
 			const node = need('node')
 			const text = values.message ?? fail('say what was wrong: sober reject <node> -m "…"')
 			return reject(node, text, values.clean === true, values.base)
 		}
+		case 'sync':
+			return sync(values['no-push'] === true)
+		case 'resolve':
+			return rest.length === 0 ? listConflicts() : resolve(rest[0] as string, rest.slice(1))
+		case 'contributors':
+			return contributors(rest[0], rest[1], {
+				name: values.name,
+				role: values.role,
+				focus: values.focus,
+			})
+		case 'assign':
+			return assign(need('node'), rest[1] ?? null)
+		case 'claim':
+			return claim(need('node'))
+		case 'release':
+			return release(need('node'))
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'mcp': {

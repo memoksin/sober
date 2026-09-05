@@ -4,6 +4,7 @@ import {
 	approveBrief,
 	bind,
 	createBoardBranch,
+	currentBranch,
 	detectSetup,
 	findCycle,
 	findRoot,
@@ -23,6 +24,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { askChoice, askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
+import { drained } from '../queue.js'
 import { renderBoard, renderDecisions } from '../render.js'
 
 const CriterionInput = z.object({
@@ -164,6 +166,8 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 						files: node.files,
 						brief: null,
 						outcome: null,
+						assignee: null,
+						claim: null,
 						accepted: null,
 						createdAt: at,
 					},
@@ -338,7 +342,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				.filter(([id, node]) => node.decisions.includes(decision) && id !== undefined)
 				.map(([id]) => id)
 			return text(
-				`${decision} is answered: ${answered.answer?.option}. It no longer holds ${freed.join(', ') || 'any node'}.`,
+				`${decision} is answered: ${answered.answer?.option}. It no longer holds ${freed.join(', ') || 'any node'}.${await drained(paths, await currentBranch(paths.root))}`,
 			)
 		}),
 	)
