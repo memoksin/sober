@@ -100,3 +100,38 @@ test('a server that is gone says so, rather than repeating fetch’s words', asy
 
 	await expect(wire('4f3a', dead).read('projection')).rejects.toThrow(/stopped|not running/i)
 })
+
+test('an operation posts JSON to its own route, with the token', async () => {
+	const seen: [string, RequestInit | undefined][] = []
+	const fetcher = (async (url: string, init?: RequestInit) => {
+		seen.push([url, init])
+		return new Response(JSON.stringify({ answered: true }), { status: 200 })
+	}) as unknown as typeof fetch
+
+	const answered = await wire('t0ken', fetcher).op('decide', { decision: 'd1', option: 'redis' })
+
+	expect(answered).toEqual({ answered: true })
+	expect(seen[0]?.[0]).toBe('/op/decide')
+	expect(seen[0]?.[1]?.method).toBe('POST')
+	expect(seen[0]?.[1]?.body).toBe('{"decision":"d1","option":"redis"}')
+	expect(new Headers(seen[0]?.[1]?.headers).get('authorization')).toBe('Bearer t0ken')
+})
+
+test('a refused operation throws what the server wrote, not its status code', async () => {
+	// `decide` on an answered decision comes back 409 with a paragraph a person
+	// can act on. A screen that renders "409" has thrown that away.
+	const fetcher = (async () =>
+		new Response(JSON.stringify({ error: 'already answered — every brief would be withdrawn' }), {
+			status: 409,
+		})) as unknown as typeof fetch
+
+	await expect(wire('t', fetcher).op('decide', {})).rejects.toThrow('every brief would be withdrawn')
+})
+
+test('an operation against a server that has gone says the command stopped', async () => {
+	const fetcher = (async () => {
+		throw new TypeError('Failed to fetch')
+	}) as unknown as typeof fetch
+
+	await expect(wire('t', fetcher).op('decide', {})).rejects.toThrow('`sober dashboard` is no longer')
+})
