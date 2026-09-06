@@ -21,6 +21,21 @@ const LOOPBACK = new Set([HOST, 'localhost', '[::1]', '::1'])
  */
 const MAX_BODY = 1_000_000
 
+/**
+ * What a browser gets at `/` until S2 puts the canvas there. It names the
+ * server, says why there is nothing to look at, and carries no board.
+ */
+const GREETING = [
+	'SOBER — the board is served here.',
+	'',
+	'There is no screen yet: this is the wire contract, and the canvas arrives',
+	'with the next session. Everything under /read and /op wants the token that',
+	'`sober dashboard` printed, as `Authorization: Bearer <token>`.',
+	'',
+	'A new token is minted every time the command starts.',
+	'',
+].join('\n')
+
 export interface Served {
 	readonly url: string
 	readonly port: number
@@ -37,7 +52,10 @@ export interface ServeOptions {
 const json = (response: ServerResponse, status: number, body: unknown): void => {
 	const text = JSON.stringify(body)
 	response.writeHead(status, {
-		'content-type': 'application/json',
+		// The charset is not decoration. Without it a client is free to read the
+		// bytes as latin-1, and the first person to see this read an em dash as
+		// `â€”` in a message that was trying to help them.
+		'content-type': 'application/json; charset=utf-8',
 		'content-length': Buffer.byteLength(text),
 		// Nothing here is for a browser to reuse, and a stale board is worse
 		// than a second request.
@@ -138,6 +156,26 @@ export const serve = async ({ paths, port = 0 }: ServeOptions): Promise<Served> 
 	const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
 		if (!isLoopbackHost(request)) return fail(response, 403, 'this server answers on loopback only')
 
+		const url = new URL(request.url ?? '/', `http://${HOST}`)
+
+		// The one unauthenticated path, and it exists because of what the
+		// command prints: a person is handed an address, and a browser opening
+		// it sends no `Authorization` header. Before this, the only URL anybody
+		// was given answered with a 401 about a token they had never been asked
+		// for.
+		//
+		// It carries no board, so there is nothing here for a rebound page to
+		// read — and the loopback host check above still applies. In S2 this
+		// becomes the client's entry point.
+		if (url.pathname === '/' && (request.method ?? 'GET') === 'GET') {
+			response.writeHead(200, {
+				'content-type': 'text/plain; charset=utf-8',
+				'cache-control': 'no-store',
+			})
+			response.end(GREETING)
+			return
+		}
+
 		// Two refusals, not one. "Missing or wrong" is true and useless: the two
 		// causes have different fixes, and the second one — a token from a
 		// previous `sober dashboard` — is invisible unless the message says so.
@@ -151,7 +189,6 @@ export const serve = async ({ paths, port = 0 }: ServeOptions): Promise<Served> 
 				'that is not this server’s token — a new one is minted every time `sober dashboard` starts',
 			)
 
-		const url = new URL(request.url ?? '/', `http://${HOST}`)
 		const match = routed(url.pathname)
 		if (match === null || match.route === undefined)
 			return fail(response, 404, `nothing is routed at ${url.pathname}`)

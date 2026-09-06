@@ -119,6 +119,40 @@ test('localhost is a loopback name and is allowed through', async () => {
 	expect(await withHost('/read/board', `localhost:${server.port}`)).not.toBe(403)
 })
 
+test('the address it prints opens in a browser, which sends no token', async () => {
+	// A browser attaches no `Authorization` header, so the one URL a person is
+	// handed has to answer without one. It is the only unauthenticated route,
+	// and it is still behind the loopback host check.
+	const response = await fetch(server.url)
+
+	expect(response.status).toBe(200)
+	expect(response.headers.get('content-type')).toMatch(/charset=utf-8/i)
+	expect(await response.text()).toMatch(/SOBER/)
+})
+
+test('the page a browser gets carries no board', async () => {
+	const text = await (await fetch(server.url)).text()
+
+	for (const leak of ['nodes', 'decisions', 'project', server.token]) {
+		expect(text, leak).not.toContain(leak)
+	}
+})
+
+test('the open door is exactly one path — everything else still wants a token', async () => {
+	for (const path of ['/read/board', '/read/projection', '/op/archive', '/index.html', '/read/']) {
+		const response = await fetch(new URL(path, server.url))
+
+		expect(response.status, path).not.toBe(200)
+	}
+})
+
+test('every JSON answer says it is UTF-8, so an em dash is an em dash', async () => {
+	const response = await call('/read/board', { token: null })
+
+	expect(response.headers.get('content-type')).toMatch(/charset=utf-8/i)
+	expect((await response.json()).error).toContain('—')
+})
+
 test('an operation nobody routes is not found', async () => {
 	const response = await call('/op/delete_everything', { method: 'POST', body: {} })
 
