@@ -12,6 +12,7 @@ import {
 	archiveDecision,
 	createBoardBranch,
 	detectSetup,
+	dismissFlag,
 	initBoard,
 	loadBoard,
 	NoBriefError,
@@ -77,6 +78,7 @@ const board = async (): Promise<Paths> => {
 		assignee: null,
 		claim: null,
 		accepted: null,
+		dismissal: null,
 		createdAt: AT,
 	})
 	created.git('add', '-A')
@@ -347,4 +349,75 @@ test('a review of an accepted node carries the acceptance, so a surface can say 
 	// The branch is gone with the accept, so there is no diff left to read —
 	// and an empty diff is zero lines, never one.
 	expect(found?.diff).toBe('')
+})
+
+/**
+ * DESIGN §2.8's sentence, end to end: the flag renders in the review, and if
+ * the human accepts anyway the `accepted` record says so. That record is what
+ * puts a finished node in §7.2's stale list rather than letting the flag end
+ * at the accept.
+ *
+ * The path is a real one, not a fixture: `approveBrief` does not require a
+ * node's decisions to be answered, so a brief approved while the node is `held`
+ * and answered afterwards is flagged today — with no impact preview needed.
+ */
+test('a flag reaches the review, and survives being accepted anyway', async () => {
+	const paths = await board()
+	await writeBrief(paths, NODE, {
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await approveBrief(paths, NODE, { by: 'memoksin' })
+	await work(paths)
+
+	// Before the answer moves, there is nothing stale about it.
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(false)
+
+	await answerDecision(paths, DECISION, { option: 'redis', by: 'memoksin' })
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
+
+	const found = await reviewNode(paths, NODE, 'main')
+	await acceptWork(paths, NODE, {
+		by: 'memoksin',
+		base: 'main',
+		scan: found?.scan.result ?? 'did-not-run',
+		flagged: found?.flagged ?? false,
+	})
+
+	const record = (await loadBoard(paths)).nodes.get(NODE)
+	expect(record?.accepted?.flagged).toBe(true)
+	// Still flagged after the accept: that is what §7.2's list is made of.
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
+})
+
+test('dismissing a flag settles that answer, and the next change raises it again', async () => {
+	const paths = await board()
+	await writeBrief(paths, NODE, {
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await approveBrief(paths, NODE, { by: 'memoksin' })
+	await answerDecision(paths, DECISION, { option: 'redis', by: 'memoksin' })
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
+
+	await dismissFlag(paths, NODE, {
+		by: 'memoksin',
+		reason: 'The endpoints never read the session store.',
+	})
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(false)
+
+	// A second change to the same decision is a change nobody has judged. Editing
+	// an answered decision is still refused (ADR 0015), so the record is moved
+	// the way an impact-previewed edit will move it.
+	const record = (await loadBoard(paths)).decisions.get(DECISION)
+	await writeDecision(paths, DECISION, {
+		...(record as NonNullable<typeof record>),
+		answer: {
+			option: 'cookie',
+			rationale: '',
+			by: 'memoksin',
+			at: new Date(Date.now() + 1000).toISOString(),
+		},
+	})
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
 })

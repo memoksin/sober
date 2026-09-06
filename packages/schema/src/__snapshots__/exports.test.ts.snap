@@ -17,6 +17,7 @@ exports[`schema exports nothing new without a reviewer seeing it 1`] = `
   "Decision",
   "Delta",
   "Digest",
+  "Dismissal",
   "Handle",
   "ID_PATTERN",
   "Id",

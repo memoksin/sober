@@ -11,6 +11,30 @@ export interface Point {
 	readonly y: number
 }
 
+/** What the board is narrowed to before it is drawn. */
+export interface View {
+	/** Finished work is off by default — after a few weeks it is most of a board. */
+	readonly withDone: boolean
+	/** §7.2's list: the canvas narrowed to the nodes whose decision moved. */
+	readonly onlyFlagged: boolean
+}
+
+/**
+ * A view filter, not a server one (ADR 0016): filtering on the server would
+ * make "show me everything" a second request.
+ *
+ * The flagged view ignores the done filter on purpose. A flagged node is
+ * usually a finished one (§2.8), so hiding done work would empty the list the
+ * reader just asked for.
+ */
+export const visible = (projection: Projection, view: View): Projection => ({
+	nodes: projection.nodes.filter(
+		(node) =>
+			(view.onlyFlagged ? node.flagged : true) &&
+			(view.withDone || view.onlyFlagged || node.status !== 'done'),
+	),
+})
+
 /**
  * The slim projection (ADR 0008) as a graph. Edges are the `dependsOn` lists —
  * there is no separate edge list, because a graph that carries both can

@@ -13,6 +13,7 @@ const node = {
 	assignee: null,
 	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: '2026-08-27T09:00:00Z',
 }
 
@@ -64,4 +65,17 @@ test('accepted records the scan result, so a scan that did not run is never drop
 
 	expect(Node.parse({ ...node, accepted }).accepted?.scan).toBe('did-not-run')
 	expect(Node.safeParse({ ...node, accepted: { ...accepted, scan: 'ok' } }).success).toBe(false)
+})
+
+test('a dismissal keeps who judged the flag, when, and why (DESIGN §7.2)', () => {
+	const dismissal = {
+		by: 'memoksin',
+		at: '2026-08-27T12:00:00Z',
+		reason: 'The endpoints never read the session store.',
+	}
+
+	expect(Node.parse({ ...node, dismissal }).dismissal).toEqual(dismissal)
+	// The reason is the record. A dismissal without one is a mute button, and
+	// §7.2 asks for a judgement that is kept.
+	expect(Node.safeParse({ ...node, dismissal: { ...dismissal, reason: '' } }).success).toBe(false)
 })

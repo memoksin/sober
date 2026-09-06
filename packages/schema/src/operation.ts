@@ -42,6 +42,12 @@ export const OPERATIONS = [
 	'assign',
 	'claim',
 	'release',
+	// DESIGN §7.2's three, and each one is a different act rather than three
+	// spellings of one. `reopen` only clears what made a node done — running it
+	// is still `run`, because approving and starting have never been one step.
+	'dismiss',
+	'reopen',
+	'create_node',
 ] as const
 
 export type Operation = (typeof OPERATIONS)[number]
@@ -57,6 +63,12 @@ export type Operation = (typeof OPERATIONS)[number]
  * never costs a human an ability; it is not a promise that every surface grows
  * a model. In v1 that means the host session, and the dashboard does not plan —
  * `BUILD-PLAN.md` §2 lists M3's screens and no planning screen is among them.
+ *
+ * `create_node` above is not the thin end of this. Opening one node with a
+ * title and its edges is data entry; `propose` returns a set of nodes, the
+ * edges between them and the decisions each one introduces, against the code as
+ * it is now. The first needs a person who knows what they want, the second
+ * needs a model — which is the line ADR 0009 drew.
  */
 export const AGENT_OPERATIONS = ['propose', 'open_decision'] as const
 

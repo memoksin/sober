@@ -10,7 +10,7 @@ import { checksOf, pullRequestOf, readyAndMerge } from './pr.js'
 import { readNode } from './records.js'
 import { acceptNode } from './run.js'
 import { scanNode } from './scan.js'
-import { lastRun, statusOf } from './status.js'
+import { flagsOf, lastRun, statusOf } from './status.js'
 import { branchOf, removeWorktree, resetToBase, worktreeOf } from './worktree.js'
 
 export const reviewNode = async (
@@ -45,6 +45,10 @@ export const reviewNode = async (
 		pr: await pullRequestOf(paths, node),
 		uncommitted: await uncommittedIn(paths, node),
 		accepted: record.accepted,
+		// §2.8: the flag renders above the diff, beside the findings. Read here
+		// rather than by each surface, so the browser — which cannot import
+		// `core` — is looking at the same derivation as the terminal.
+		flagged: flagsOf(board, node).flagged,
 	}
 }
 

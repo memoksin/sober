@@ -75,6 +75,7 @@ const board = (
 		title,
 		status: status as Projection['nodes'][number]['status'],
 		dependsOn,
+		flagged: false,
 	})),
 })
 

@@ -59,7 +59,12 @@ test('every field a migrated record already had survives the move', async () => 
 
 	const { records, broken } = await readNodes(board)
 	expect(broken).toEqual([])
-	expect(records.get('auth-api-k7f2')).toEqual({ ...v1Node, assignee: null, claim: null })
+	expect(records.get('auth-api-k7f2')).toEqual({
+		...v1Node,
+		assignee: null,
+		claim: null,
+		dismissal: null,
+	})
 })
 
 test('archived records are migrated too — one restored must still parse', async () => {
@@ -70,7 +75,7 @@ test('archived records are migrated too — one restored must still parse', asyn
 	const archived = JSON.parse(
 		await readFile(join(board.archivedNodes, 'old-idea-m3q8.json'), 'utf8'),
 	)
-	expect(archived).toMatchObject({ assignee: null, claim: null })
+	expect(archived).toMatchObject({ assignee: null, claim: null, dismissal: null })
 })
 
 test('a board already at this version is left alone', async () => {
@@ -104,6 +109,7 @@ test('a migrated record is written in schema order, so it is not a whole-file di
 		'assignee',
 		'claim',
 		'accepted',
+		'dismissal',
 		'createdAt',
 	])
 })

@@ -6,9 +6,10 @@ const projected = {
 	title: 'The auth API',
 	status: 'ready',
 	dependsOn: ['schema-records-m3p1'],
+	flagged: false,
 }
 
-test('a projected node carries the four things the canvas draws', () => {
+test('a projected node carries the five things the canvas draws', () => {
 	expect(ProjectedNode.parse(projected)).toEqual(projected)
 })
 
@@ -28,6 +29,17 @@ test('status is one of the eight, because the canvas colours by it', () => {
 test('a node with no dependency sends an empty list, never a missing field', () => {
 	expect(ProjectedNode.safeParse({ ...projected, dependsOn: [] }).success).toBe(true)
 	const { dependsOn: _, ...without } = projected
+	expect(ProjectedNode.safeParse(without).success).toBe(false)
+})
+
+/**
+ * §7.2's list is the canvas narrowed to the flagged nodes, so the canvas has to
+ * be told which they are. Absent is not "false": a projection built by a build
+ * that forgot the derivation would draw a board where nothing is ever flagged.
+ */
+test('a projected node says whether it is flagged, and never omits it', () => {
+	expect(ProjectedNode.parse({ ...projected, flagged: true }).flagged).toBe(true)
+	const { flagged: _, ...without } = projected
 	expect(ProjectedNode.safeParse(without).success).toBe(false)
 })
 

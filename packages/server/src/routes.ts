@@ -7,9 +7,12 @@ import {
 	assignNode,
 	bind,
 	claimNode,
+	createNode,
 	currentBranch,
 	digest,
+	dismissFlag,
 	dispatch,
+	flagsOf,
 	initBoard,
 	loadBoard,
 	NotOnBoardError,
@@ -17,6 +20,7 @@ import {
 	rejectWork,
 	releaseNode,
 	removeContributor,
+	reopenNode,
 	resolveConflict,
 	reviewNode,
 	statusOf,
@@ -135,6 +139,10 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 				by: await whoami(paths.root),
 				base: ref,
 				scan: found.scan.result,
+				// §2.8: if the human accepts a flagged node anyway, the `accepted`
+				// record says so — which is what puts it in §7.2's stale list with
+				// its three actions rather than letting the flag end at the accept.
+				flagged: found.flagged,
 			})
 		},
 	),
@@ -197,6 +205,30 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 	release: route(node, async (paths, { node: id }) => ({
 		released: await releaseNode(paths, id),
 	})),
+
+	// DESIGN §7.2's three. None of them runs anything: a decision change can
+	// reach thirty nodes, and re-running them unasked is what the impact preview
+	// exists to prevent (D37).
+	dismiss: route(
+		z.strictObject({ node: Id, reason: z.string().min(1) }),
+		async (paths, { node: id, reason }) =>
+			dismissFlag(paths, id, { by: await whoami(paths.root), reason }),
+	),
+
+	reopen: route(node, async (paths, { node: id }) =>
+		reopenNode(paths, id, await whoami(paths.root)),
+	),
+
+	create_node: route(
+		z.strictObject({
+			title: z.string().min(1),
+			description: z.string().optional(),
+			dependsOn: z.array(Id).optional(),
+			decisions: z.array(Id).optional(),
+			files: z.array(z.string().min(1)).optional(),
+		}),
+		async (paths, opening) => createNode(paths, { ...opening, by: await whoami(paths.root) }),
+	),
 }
 
 /**
@@ -228,7 +260,15 @@ export const READS: Readonly<Record<string, Route>> = {
 			const status = statusOf(board, id)
 			return status === null
 				? []
-				: [{ id, title: record.title, status, dependsOn: [...record.dependsOn] }]
+				: [
+						{
+							id,
+							title: record.title,
+							status,
+							dependsOn: [...record.dependsOn],
+							flagged: flagsOf(board, id).flagged,
+						},
+					]
 		})
 		return { nodes }
 	}),

@@ -50,6 +50,7 @@ const aNode = (fields: Record<string, unknown>) => ({
 	assignee: null,
 	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: '2026-09-05T00:00:00.000Z',
 	...fields,
 })

@@ -29,6 +29,13 @@ const MIGRATIONS: readonly Migration[] = [
 		// spread order leaves a value already there alone.
 		node: (record) => ({ assignee: null, claim: null, ...record }),
 	},
+	{
+		to: 3,
+		// M3 gave the node a dismissal (DESIGN §7.2). Nothing was ever dismissed
+		// on a board written before the flag had actions, so every node starts
+		// with the flag unjudged.
+		node: (record) => ({ dismissal: null, ...record }),
+	},
 ]
 
 export type Migrated =

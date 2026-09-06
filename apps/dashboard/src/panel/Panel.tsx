@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Action, BoardRead } from './data.js'
 import { actions, held } from './data.js'
+import { Flag } from './Flag.js'
 
 /**
  * One node, in full. The canvas answers "what is here and what touches what";
@@ -14,17 +15,30 @@ import { actions, held } from './data.js'
 export const Panel = ({
 	board,
 	id,
+	flagged,
 	onClose,
 	onPick,
 	onDecide,
 	onDo,
+	onDismiss,
+	onReopen,
+	onOpen,
 }: {
 	readonly board: BoardRead
 	readonly id: string
+	/**
+	 * Derived by `core` and read off the projection the canvas already polls
+	 * (§2.8). Not on the record — a flag is two timestamps compared, and a
+	 * second derivation in the browser is a second answer.
+	 */
+	readonly flagged: boolean
 	readonly onClose: () => void
 	readonly onPick: (id: string) => void
 	readonly onDecide: (id: string) => void
 	readonly onDo: (action: Action['does']) => Promise<void>
+	readonly onDismiss: (reason: string) => Promise<void>
+	readonly onReopen: () => Promise<void>
+	readonly onOpen: (title: string) => Promise<void>
 }): React.JSX.Element => {
 	const node = board.nodes.find((one) => one.id === id)
 
@@ -60,6 +74,18 @@ export const Panel = ({
 							×
 						</button>
 					</header>
+
+					{/*
+					  Above the ordinary actions, because it is the reason the
+					  ordinary ones may be the wrong thing to do (§7.2).
+					*/}
+					<Flag
+						flagged={flagged}
+						dismissal={node.dismissal}
+						onDismiss={onDismiss}
+						onReopen={onReopen}
+						onOpen={onOpen}
+					/>
 
 					<Doing status={node.status} onDo={onDo} />
 

@@ -12,9 +12,17 @@ import { lines } from './data.js'
  */
 export const Digest = ({
 	digest,
+	onOnlyFlagged,
 	onClose,
 }: {
 	readonly digest: Read
+	/**
+	 * §7.2 speaks of a list, and the canvas already draws every one of these
+	 * nodes. So the list is the canvas narrowed to them rather than a sixth
+	 * screen: the count is the way in, and the panel is where the three actions
+	 * are.
+	 */
+	readonly onOnlyFlagged: () => void
 	readonly onClose: () => void
 }): React.JSX.Element => (
 	<section
@@ -23,11 +31,22 @@ export const Digest = ({
 	>
 		<span className="text-[var(--ink-faint)] text-xs tracking-widest">SINCE YOU LAST LOOKED</span>
 
-		{lines(digest).map((line) => (
-			<span key={line.kind} className="text-[var(--ink)] text-xs tabular-nums">
-				{line.text}
-			</span>
-		))}
+		{lines(digest).map((line) =>
+			line.kind === 'flagged' ? (
+				<button
+					key={line.kind}
+					type="button"
+					onClick={onOnlyFlagged}
+					className="rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[var(--ink)] text-xs tabular-nums underline decoration-[var(--ink-faint)] underline-offset-2 hover:bg-[var(--surface)]"
+				>
+					{line.text}
+				</button>
+			) : (
+				<span key={line.kind} className="text-[var(--ink)] text-xs tabular-nums">
+					{line.text}
+				</span>
+			),
+		)}
 
 		{/*
 		  The remote half failing is said, never dropped. "Nothing changed" and

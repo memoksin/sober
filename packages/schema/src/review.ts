@@ -92,4 +92,12 @@ export interface Review {
 	 * offered an accept that then had no branch to merge.
 	 */
 	readonly accepted: Accepted | null
+	/**
+	 * A bound decision moved after this node's brief was approved (§2.8). It
+	 * renders above the diff, beside the scan findings, because it is the same
+	 * kind of fact: a reason the diff below is not the whole story. If the human
+	 * accepts anyway the `accepted` record says so, and the flag survives that
+	 * transition into §7.2's stale list.
+	 */
+	readonly flagged: boolean
 }

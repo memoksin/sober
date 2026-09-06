@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { BoardRead } from './data.js'
-import { actions, held, offer } from './data.js'
+import { actions, asksFor, FLAG_ACTIONS, flagOp, held, offer } from './data.js'
 
 const AT = '2026-09-06T00:00:00.000Z'
 
@@ -17,6 +17,7 @@ const node = (id: string, over: Partial<BoardRead['nodes'][number]> = {}) => ({
 	assignee: null,
 	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: AT,
 	status: 'ready' as const,
 	waitingOn: [],
@@ -148,4 +149,33 @@ test('done offers the review and never a second accept', () => {
 
 test('a status the board could not derive offers nothing', () => {
 	expect(actions(null)).toEqual([])
+})
+
+/**
+ * DESIGN §7.2's three, as a fact rather than as markup. Two of them take words
+ * before they act: a dismissal without a reason is a mute button, and a node
+ * with no title cannot be read.
+ */
+test('the three things a flagged node offers, and which of them ask first', () => {
+	expect(FLAG_ACTIONS.map((action) => action.does)).toEqual(['dismiss', 'reopen', 'open'])
+
+	expect(asksFor('dismiss')?.title).toBe('Why it is fine')
+	expect(asksFor('open')?.title).toBe('What the fix is')
+	// Reopening acts on the click. It does not run the node either — approving
+	// and starting have never been one step.
+	expect(asksFor('reopen')).toBeNull()
+})
+
+test('each of the three is its own operation on the wire, and the fix says what it fixes', () => {
+	expect(flagOp('auth-api-k7f2', 'dismiss', 'Fine as it is.')).toEqual([
+		'dismiss',
+		{ node: 'auth-api-k7f2', reason: 'Fine as it is.' },
+	])
+	// Reopening carries no words, and it is not `run`: it clears what made the
+	// node done and stops there (§7.2).
+	expect(flagOp('auth-api-k7f2', 'reopen', '')).toEqual(['reopen', { node: 'auth-api-k7f2' }])
+	expect(flagOp('auth-api-k7f2', 'open', 'Re-read the store')).toEqual([
+		'create_node',
+		{ title: 'Re-read the store', dependsOn: ['auth-api-k7f2'] },
+	])
 })

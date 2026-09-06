@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { SCHEMA_VERSION } from '@besober/schema'
 import { afterEach, beforeAll, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
 
@@ -54,6 +55,7 @@ const v1Node = (title: string, files: string[]) => ({
 	brief: null,
 	outcome: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: AT,
 })
 
@@ -204,12 +206,19 @@ test('a board written by an older SOBER is brought forward on the way in, and sa
 	)
 
 	const said = sober(dir, 'status')
-	expect(said).toContain('schema 1 to 2')
+	// Read from the schema rather than written out: the chain runs every step
+	// between, so a version bump is not a hand-edit here.
+	expect(said).toContain(`schema 1 to ${SCHEMA_VERSION}`)
 	expect(said).toContain('1 record rewritten')
 	expect(said).toContain('The auth API')
 
 	const record = JSON.parse(readFileSync(join(dir, '.sober/nodes/auth-api-k7f2.json'), 'utf8'))
-	expect(record).toMatchObject({ assignee: null, claim: null, files: ['src/auth/**'] })
+	expect(record).toMatchObject({
+		assignee: null,
+		claim: null,
+		dismissal: null,
+		files: ['src/auth/**'],
+	})
 	// Brought forward once: the second command has nothing to say about it.
 	expect(sober(dir, 'status')).not.toContain('schema 1')
 })

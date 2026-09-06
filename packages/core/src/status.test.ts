@@ -239,3 +239,50 @@ test('an unapproved brief cannot be stale, and neither can an unbound decision',
 	const unbound = { ...board({ a: aNode({ brief: approved }) }), decisions: moved }
 	expect(flagsOf(unbound, 'a').flagged).toBe(false)
 })
+
+/**
+ * DESIGN §7.2: a dismissal is a judgement about the change as it stood, not a
+ * mute button. §2.8's whole argument is about a change nothing on the board
+ * knew about — so a *later* answer to the same decision is a second such
+ * change, and it flags again. A dismissal that cleared the flag outright would
+ * make the second change the silent one §2.8 exists to prevent.
+ */
+test('a dismissal settles the answer it was written against, and not the next one', () => {
+	const dismissed = '2026-09-04T02:00:00.000Z'
+	const withAnswerAt = (at: string): Board => ({
+		...board({
+			a: aNode({
+				brief: approved,
+				decisions: ['auth-model-k7f2'],
+				dismissal: { by: 'memoksin', at: dismissed, reason: 'The endpoints do not read it.' },
+			}),
+		}),
+		decisions: new Map([['auth-model-k7f2', aDecision({ answer: { ...answer, at } })]]),
+	})
+
+	// The change that was dismissed.
+	expect(flagsOf(withAnswerAt('2026-09-04T01:00:00.000Z'), 'a').flagged).toBe(false)
+	// A change after the dismissal is a change nobody has judged yet.
+	expect(flagsOf(withAnswerAt('2026-09-04T03:00:00.000Z'), 'a').flagged).toBe(true)
+})
+
+/**
+ * The watermark is the later of the two, not the dismissal alone. §2.8's first
+ * row withdraws brief approval and the brief is approved again; an approval
+ * after a dismissal is the newer statement about what this node was built
+ * against.
+ */
+test('a brief re-approved after a dismissal is what the flag is measured from', () => {
+	const node = aNode({
+		brief: { ...approved, approval: { ...approval, at: '2026-09-04T04:00:00.000Z' } },
+		decisions: ['auth-model-k7f2'],
+		dismissal: { by: 'memoksin', at: '2026-09-04T02:00:00.000Z', reason: 'Fine as it is.' },
+	})
+	const moved = (at: string): Board => ({
+		...board({ a: node }),
+		decisions: new Map([['auth-model-k7f2', aDecision({ answer: { ...answer, at } })]]),
+	})
+
+	expect(flagsOf(moved('2026-09-04T03:00:00.000Z'), 'a').flagged).toBe(false)
+	expect(flagsOf(moved('2026-09-04T05:00:00.000Z'), 'a').flagged).toBe(true)
+})

@@ -106,6 +106,73 @@ export const offer = (decision: Decision): Offer => {
 	}
 }
 
+/**
+ * DESIGN §7.2's three actions on a flagged node. Beside `actions` below rather
+ * than inside the component, for the same reason that one is here: what a
+ * person may do with a node is a fact about the board, and a fact rendered by
+ * one screen is a fact that can be tested without one.
+ *
+ * Two of the three take words first. A dismissal without a reason is a mute
+ * button and §7.2 keeps the judgement; a node with no title cannot be read.
+ */
+export interface FlagAction {
+	readonly does: 'dismiss' | 'reopen' | 'open'
+	readonly label: string
+	/** What to ask for before acting, or null when the action needs no words. */
+	readonly asks: {
+		readonly title: string
+		readonly placeholder: string
+		readonly go: string
+	} | null
+}
+
+export const FLAG_ACTIONS: readonly FlagAction[] = [
+	{
+		does: 'dismiss',
+		label: 'It is fine anyway',
+		asks: {
+			title: 'Why it is fine',
+			placeholder: 'Kept on the node, so a teammate reads the judgement rather than the flag.',
+			go: 'Set it aside',
+		},
+	},
+	// Reopening does not run it. Approving and starting have never been one
+	// step, and a reopen that dispatched would be the automatic re-run §7.2
+	// refuses with a click in front of it.
+	{ does: 'reopen', label: 'Run it again', asks: null },
+	{
+		does: 'open',
+		label: 'Open a node for the fix',
+		asks: {
+			title: 'What the fix is',
+			placeholder: 'A title. The new node depends on this one and arrives with no brief.',
+			go: 'Open it',
+		},
+	},
+]
+
+/** What to ask for before an action can act. Null when it needs no words. */
+export const asksFor = (does: FlagAction['does']): FlagAction['asks'] =>
+	FLAG_ACTIONS.find((action) => action.does === does)?.asks ?? null
+
+/**
+ * Which operation each action is, and what it carries. Here rather than in the
+ * component for `actions`' reason: what a button does to the board is a fact
+ * about the board.
+ *
+ * `open` binds the new node to the one it corrects. A fix that does not say
+ * what it is fixing is a node nobody can place a week later.
+ */
+export const flagOp = (
+	node: string,
+	does: FlagAction['does'],
+	words: string,
+): readonly [string, Record<string, unknown>] => {
+	if (does === 'dismiss') return ['dismiss', { node, reason: words }]
+	if (does === 'reopen') return ['reopen', { node }]
+	return ['create_node', { title: words, dependsOn: [node] }]
+}
+
 export interface Action {
 	/** An operation on the wire, or `review`, which opens a screen. */
 	readonly does: 'approve' | 'run' | 'stop' | 'review'

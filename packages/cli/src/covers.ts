@@ -32,4 +32,9 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	assign: 'assign',
 	claim: 'claim',
 	release: 'release',
+	// DESIGN §7.2's three. `open` rather than `create`: the command line names
+	// what a person does, and nobody says they are creating a node.
+	dismiss: 'dismiss',
+	reopen: 'reopen',
+	create_node: 'open',
 }

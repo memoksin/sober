@@ -89,6 +89,7 @@ const seed = (dir: string) => {
 			assignee: null,
 			claim: null,
 			accepted: null,
+			dismissal: null,
 			createdAt: at,
 		}),
 	)
@@ -264,6 +265,7 @@ test('a node heading for a claimed node’s files is refused, and the second com
 			assignee: null,
 			claim: { by: 'Bob', at: '2026-09-05T00:00:00.000Z' },
 			accepted: null,
+			dismissal: null,
 			createdAt: '2026-09-05T00:00:00.000Z',
 		}),
 	)
@@ -300,6 +302,7 @@ test('accepting starts what was approved and queued behind it', () => {
 			assignee: null,
 			claim: null,
 			accepted: null,
+			dismissal: null,
 			createdAt: '2026-09-05T00:00:00.000Z',
 		}),
 	)

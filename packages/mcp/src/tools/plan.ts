@@ -169,6 +169,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 						assignee: null,
 						claim: null,
 						accepted: null,
+						dismissal: null,
 						createdAt: at,
 					},
 				])

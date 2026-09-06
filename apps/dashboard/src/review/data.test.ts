@@ -13,6 +13,7 @@ const review = (over: Partial<Review> = {}): Review => ({
 	exit: 'finished',
 	acceptance: [{ run: 'pnpm test', proves: 'The endpoints answer.' }],
 	ci: { kind: 'none' },
+	flagged: false,
 	pr: null,
 	uncommitted: [],
 	accepted: null,

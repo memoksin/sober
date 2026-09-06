@@ -16,6 +16,7 @@ export const aNode = (overrides: Partial<Node> = {}): Node => ({
 	assignee: null,
 	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: AT,
 	...overrides,
 })

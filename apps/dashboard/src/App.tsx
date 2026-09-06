@@ -1,10 +1,12 @@
 import type { Digest as DigestRead, Projection, Review } from '@besober/schema'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
+import { visible } from './canvas/graph.js'
 import { Digest } from './digest/Digest.js'
 import { worthShowing } from './digest/data.js'
 import { DecisionScreen } from './panel/Decision.js'
-import type { Action, BoardRead } from './panel/data.js'
+import type { Action, BoardRead, FlagAction } from './panel/data.js'
+import { flagOp } from './panel/data.js'
 import { Panel } from './panel/Panel.js'
 import { ReviewScreen } from './review/Review.js'
 import { wire } from './wire.js'
@@ -25,6 +27,9 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [deciding, setDeciding] = useState<string | null>(null)
 	const [reviewing, setReviewing] = useState<Review | null>(null)
 	const [digest, setDigest] = useState<DigestRead | null>(null)
+	// §7.2's list, as a view over the canvas rather than a sixth screen. The
+	// nodes are already drawn; what was missing is which of them are flagged.
+	const [onlyFlagged, setOnlyFlagged] = useState(false)
 
 	// The full board is only read while something is open. The canvas needs the
 	// slim projection every couple of seconds (ADR 0008); a drawer that is not
@@ -155,6 +160,22 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		[token, refresh],
 	)
 
+	/**
+	 * §7.2's three actions. None of them runs anything: one decision change can
+	 * reach thirty nodes, and re-running them unasked is what the impact preview
+	 * exists to prevent (D37). Reopening leaves the node `ready` and the panel's
+	 * ordinary Run button is what starts it.
+	 */
+	const onFlag = useCallback(
+		async (node: string, does: FlagAction['does'], words = ''): Promise<void> => {
+			if (token === null) return
+			const [operation, body] = flagOp(node, does, words)
+			await wire(token).op(operation, body)
+			await refresh()
+		},
+		[token, refresh],
+	)
+
 	const settle = useCallback(
 		async (how: 'accept' | 'reject', text?: string): Promise<void> => {
 			if (token === null || reviewing === null) return
@@ -173,11 +194,8 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	// weeks that is most of what is on it (ADR 0039 §1 — done is the one status
 	// whose colour inverts between themes, because it is the one that recedes).
 	const shown = useMemo<Projection | null>(
-		() =>
-			projection === null || withDone
-				? projection
-				: { nodes: projection.nodes.filter((node) => node.status !== 'done') },
-		[projection, withDone],
+		() => (projection === null ? null : visible(projection, { withDone, onlyFlagged })),
+		[projection, withDone, onlyFlagged],
 	)
 
 	if (token === null) return <Adrift />
@@ -210,7 +228,23 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				</button>
 			</header>
 
-			{digest !== null && <Digest digest={digest} onClose={() => setDigest(null)} />}
+			{digest !== null && (
+				<Digest
+					digest={digest}
+					onOnlyFlagged={() => setOnlyFlagged(true)}
+					onClose={() => setDigest(null)}
+				/>
+			)}
+
+			{onlyFlagged && (
+				<button
+					type="button"
+					onClick={() => setOnlyFlagged(false)}
+					className="shrink-0 border-[var(--line)] border-b bg-[var(--raised)] px-4 py-1.5 text-left text-[var(--ink-dim)] text-xs hover:text-[var(--ink)]"
+				>
+					Showing only flagged nodes · show the whole board
+				</button>
+			)}
 
 			{failure !== null && (
 				<p className="shrink-0 border-[var(--line)] border-b bg-[var(--surface)] px-4 py-1.5 text-[var(--danger)] text-xs">
@@ -225,10 +259,14 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 					<Panel
 						board={board}
 						id={picked}
+						flagged={projection?.nodes.find((one) => one.id === picked)?.flagged ?? false}
 						onClose={() => setPicked(null)}
 						onPick={setPicked}
 						onDecide={setDeciding}
 						onDo={(does) => doTo(picked, does)}
+						onDismiss={(reason) => onFlag(picked, 'dismiss', reason)}
+						onReopen={() => onFlag(picked, 'reopen')}
+						onOpen={(title) => onFlag(picked, 'open', title)}
 					/>
 				)}
 

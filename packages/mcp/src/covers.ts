@@ -36,4 +36,9 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	assign: 'assign',
 	claim: 'claim',
 	release: 'claim',
+	// DESIGN §7.2's three. `open_node`, not `open`: a session already has
+	// `propose`, and the two are told apart by what they take.
+	dismiss: 'dismiss',
+	reopen: 'reopen',
+	create_node: 'open_node',
 }

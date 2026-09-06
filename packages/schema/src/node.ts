@@ -21,6 +21,28 @@ export const Accepted = z.strictObject({
 
 export type Accepted = z.infer<typeof Accepted>
 
+/**
+ * A flag, judged and set aside (DESIGN §7.2). The reason is the record: "the
+ * answer changed and this node is fine anyway" is a judgement, and §7.2 says it
+ * is kept rather than lost.
+ *
+ * `at` is a watermark, not a switch. The flag is derived from two timestamps
+ * (§2.8), so a dismissal settles the change it was written against and a later
+ * answer to the same decision flags the node again — which is the case §2.8's
+ * whole argument is about: a change nothing on the board knew about.
+ *
+ * Git-tracked rather than local, because the flag is git-tracked. Derived on
+ * every clone from records every clone holds, a dismissal kept in `local/`
+ * would leave every teammate re-judging a change one of them already judged.
+ */
+export const Dismissal = z.strictObject({
+	by: Handle,
+	at: Timestamp,
+	reason: z.string().min(1),
+})
+
+export type Dismissal = z.infer<typeof Dismissal>
+
 /** Who is actually working on a node, and since when (DESIGN §3.3). */
 export const Claim = z.strictObject({
 	by: Handle,
@@ -53,6 +75,10 @@ export const Node = z.strictObject({
 	assignee: Handle.nullable(),
 	claim: Claim.nullable(),
 	accepted: Accepted.nullable(),
+	// §7.2's first action. Beside `accepted` rather than inside it: a flag can
+	// be dismissed on a node that is still `in-review`, and §2.8 is explicit
+	// that the flag is not only a finished node's.
+	dismissal: Dismissal.nullable(),
 	createdAt: Timestamp,
 })
 

@@ -24,6 +24,11 @@ export const ERROR_CODES = [
 	'cycle',
 	'schema',
 	'overlap',
+	// DESIGN §7.2's three actions, each with the one state it refuses. Named
+	// for what is missing, like `no-brief` and `no-board` above.
+	'no-reason',
+	'no-title',
+	'not-finished',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

@@ -26,4 +26,13 @@ export default defineConfig({
 	server: {
 		proxy: { '/read': SERVER, '/op': SERVER },
 	},
+	test: {
+		// Most of what this app is worth testing is logic with no DOM in it (the
+		// projection becoming elements, what a status permits, what a flag
+		// offers), and those files need nothing here. What does need a DOM is the
+		// handful of components that hold a decision: a dismissal that refuses to
+		// send without a reason is a rule, and a rule rendered by markup is still
+		// a rule.
+		environment: 'happy-dom',
+	},
 })

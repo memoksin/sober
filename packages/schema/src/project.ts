@@ -14,4 +14,4 @@ export const Project = z.strictObject({
 export type Project = z.infer<typeof Project>
 
 /** The version a board carries. M2 gave the node an assignee and a claim. */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3

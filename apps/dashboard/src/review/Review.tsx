@@ -88,6 +88,22 @@ export const ReviewScreen = ({
 					</p>
 				))}
 
+				{/*
+				  §2.8: the flag renders here, beside the scan findings and above
+				  the diff, because it is the same kind of fact — a reason the diff
+				  below is not the whole story. Accepting anyway is allowed and the
+				  `accepted` record says so; the flag survives into §7.2's list.
+				*/}
+				{review.flagged && (
+					<p
+						className="text-[length:var(--text-sm)] leading-[var(--leading-prose)]"
+						style={{ color: 'var(--danger)' }}
+					>
+						A decision this node binds was answered after its brief was approved. The work below was
+						built against the earlier answer.
+					</p>
+				)}
+
 				{ci !== null && (
 					<p className="text-[length:var(--text-sm)]" style={{ color: COLOUR[ci.tone] }}>
 						{ci.text}

@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import { init, openBoard } from './board.js'
+import { dismiss, open, reopen } from './flag.js'
 import { widen } from './name.js'
 import { bold, columns, dim, fail, say } from './out.js'
 import { listConflicts, resolve } from './resolve.js'
@@ -81,6 +82,14 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['release <node>', 'give it back'],
 		],
 	],
+	[
+		'When a decision moved',
+		[
+			['dismiss <node> -m "…"', 'the answer changed and this node is fine anyway'],
+			['reopen <node>', 'un-finish it, so it can run again'],
+			['open --title "…"', 'a new node carrying the fix'],
+		],
+	],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
 	['On a screen', [['dashboard', 'serve the board in a browser — Ctrl-C stops it and its runs']]],
 	['In a session', [['mcp', 'serve SOBER’s tools to a host — the plugin starts this']]],
@@ -118,6 +127,8 @@ const NAMES_A_RECORD = new Set([
 	'claim',
 	'release',
 	'archive',
+	'dismiss',
+	'reopen',
 ])
 
 const options = {
@@ -222,6 +233,17 @@ const main = async (): Promise<void> => {
 			return claim(need('node'))
 		case 'release':
 			return release(need('node'))
+		case 'dismiss': {
+			const node = need('node')
+			const reason = values.message ?? fail('say why it is fine: sober dismiss <node> -m "…"')
+			return dismiss(node, reason)
+		}
+		case 'reopen':
+			return reopen(need('node'))
+		case 'open': {
+			const title = values.title ?? fail('what is it? sober open --title "…"')
+			return open(title, { decisions: values.decisions, dependsOn: values['depends-on'] })
+		}
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'dashboard': {

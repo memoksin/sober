@@ -188,6 +188,7 @@ test('the board a panel reads says what each node is waiting for', async () => {
 		assignee: null,
 		claim: null,
 		accepted: null,
+		dismissal: null,
 		createdAt: at,
 	})
 	await writeNode(there, 'billing-api-m3q8', {
@@ -202,6 +203,7 @@ test('the board a panel reads says what each node is waiting for', async () => {
 		assignee: null,
 		claim: null,
 		accepted: null,
+		dismissal: null,
 		createdAt: at,
 	})
 
@@ -260,6 +262,7 @@ test('the digest is served, and its two halves arrive separately', async () => {
 		assignee: null,
 		claim: null,
 		accepted: null,
+		dismissal: null,
 		createdAt: at,
 	})
 
@@ -294,4 +297,147 @@ test('the digest fetches only when the caller asks it to', async () => {
 	// A query string is text, and text that is neither is not a boolean the
 	// route guesses at.
 	expect((await get('digest', '?fetch=maybe')).status).toBe(400)
+})
+
+/**
+ * DESIGN §7.2, over the wire. The flag itself is derived in `core` and proven
+ * there; what this asks is whether the three actions reach it and whether the
+ * projection the canvas polls says which nodes to draw them on.
+ */
+const flaggedBoard = async (
+	accepted: { by: string; at: string; flagged: boolean; scan: 'clean' } | null = null,
+): Promise<ReturnType<typeof paths>> => {
+	const there = paths((repo as TempRepo).dir)
+	const at = '2026-09-06T00:00:00.000Z'
+
+	await writeDecision(there, 'auth-model-k7f2', {
+		category: 'state',
+		question: 'Where does session state live?',
+		options: [
+			{ id: 'cookie', label: 'Cookie', reason: 'No server state', costLater: 'Size limits' },
+			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
+		],
+		suggested: null,
+		// After the approval below: §2.8's flag is a bound decision that moved
+		// once the brief was already approved against the earlier answer.
+		answer: { option: 'cookie', rationale: '', by: 'Ada', at: '2026-09-06T02:00:00.000Z' },
+		createdAt: at,
+	})
+	await writeNode(there, 'auth-api-k7f2', {
+		title: 'Session endpoints',
+		description: '',
+		notes: '',
+		dependsOn: [],
+		decisions: ['auth-model-k7f2'],
+		files: [],
+		brief: {
+			approach: 'Write the endpoints.',
+			acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
+			approval: { by: 'Ada', at: '2026-09-06T01:00:00.000Z', queue: false },
+		},
+		outcome: null,
+		assignee: null,
+		claim: null,
+		accepted,
+		dismissal: null,
+		createdAt: at,
+	})
+	return there
+}
+
+test('the canvas is told which nodes are flagged, so §7.2’s list is the board narrowed', async () => {
+	repo = board()
+	server = await serve({ paths: await flaggedBoard() })
+
+	const seen = (await (await get('projection')).json()) as {
+		nodes: { id: string; flagged: boolean }[]
+	}
+	expect(seen.nodes.find((node) => node.id === 'auth-api-k7f2')?.flagged).toBe(true)
+})
+
+test('dismissing keeps the reason, and settles the answer it was written against', async () => {
+	repo = board()
+	server = await serve({ paths: await flaggedBoard() })
+
+	const refused = await post('dismiss', { node: 'auth-api-k7f2', reason: '' })
+	expect(refused.status).toBe(400)
+
+	const done = await post('dismiss', {
+		node: 'auth-api-k7f2',
+		reason: 'The endpoints never read the session store.',
+	})
+	expect(done.status).toBe(200)
+	expect((await done.json()) as { dismissal: { reason: string } }).toMatchObject({
+		dismissal: { reason: 'The endpoints never read the session store.' },
+	})
+
+	// The flag is off the canvas, because the change it named has been judged.
+	const seen = (await (await get('projection')).json()) as {
+		nodes: { id: string; flagged: boolean }[]
+	}
+	expect(seen.nodes.find((node) => node.id === 'auth-api-k7f2')?.flagged).toBe(false)
+})
+
+test('reopening un-finishes a node and refuses one that was never finished', async () => {
+	repo = board()
+	server = await serve({ paths: await flaggedBoard() })
+
+	// Nothing has been accepted, so there is nothing to reopen — and the refusal
+	// is a state refusal rather than a crash (409, not 500).
+	expect((await post('reopen', { node: 'auth-api-k7f2' })).status).toBe(409)
+	await server.close()
+
+	repo.cleanup()
+	repo = board()
+	server = await serve({
+		paths: await flaggedBoard({
+			by: 'Ada',
+			at: '2026-09-06T03:00:00.000Z',
+			// §2.8: the human accepted anyway, and the record says so. That is
+			// what puts the node in §7.2's list rather than ending the flag.
+			flagged: true,
+			scan: 'clean',
+		}),
+	})
+
+	expect((await post('reopen', { node: 'auth-api-k7f2' })).status).toBe(200)
+	const after = (await (await get('projection')).json()) as {
+		nodes: { id: string; status: string }[]
+	}
+	// Back in the loop with its brief still approved — reopening does not run it.
+	expect(after.nodes.find((node) => node.id === 'auth-api-k7f2')?.status).toBe('ready')
+})
+
+test('a node opened for the fix arrives with no brief, bound to what it corrects', async () => {
+	repo = board()
+	// The node it corrects is finished, which is §7.2's case: the fix is opened
+	// beside work that already landed, not in front of work still running.
+	server = await serve({
+		paths: await flaggedBoard({
+			by: 'Ada',
+			at: '2026-09-06T03:00:00.000Z',
+			flagged: true,
+			scan: 'clean',
+		}),
+	})
+
+	const made = await post('create_node', {
+		title: 'Re-read the session store',
+		dependsOn: ['auth-api-k7f2'],
+	})
+	expect(made.status).toBe(200)
+	const { id } = (await made.json()) as { id: string }
+
+	const seen = (await (await get('board')).json()) as {
+		nodes: { id: string; status: string; brief: unknown; dependsOn: string[] }[]
+	}
+	const opened = seen.nodes.find((node) => node.id === id)
+	// Nothing runs without an approved brief (§3.2), and a node opened to fix a
+	// mistake is the last one that should skip being read.
+	expect(opened?.brief).toBeNull()
+	expect(opened?.status).toBe('needs-brief')
+	expect(opened?.dependsOn).toEqual(['auth-api-k7f2'])
+
+	// A dependency the board does not hold is refused, not written.
+	expect((await post('create_node', { title: 'A fix', dependsOn: ['gone-x9y8'] })).status).toBe(409)
 })

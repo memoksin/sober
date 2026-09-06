@@ -90,15 +90,24 @@ export const flagsOf = (board: Board, id: string): Flags => ({
  *
  * An answer written at the same instant as the approval is not a change: a
  * brief is rendered from the answers it was approved against.
+ *
+ * A dismissal moves the mark forward rather than clearing the flag (§7.2): the
+ * change it judged is settled, and the next one is a change nobody has judged.
+ * The later of the two is the mark, because §2.8's first row withdraws brief
+ * approval and it is approved again — an approval after a dismissal is the
+ * newer statement about what this node was built against.
  */
 const stale = (board: Board, id: string): boolean => {
 	const node = board.nodes.get(id)
 	const approved = node?.brief?.approval
 	if (node === undefined || approved == null) return false
 
+	const judged =
+		node.dismissal !== null && node.dismissal.at > approved.at ? node.dismissal.at : approved.at
+
 	return node.decisions.some((decision) => {
 		const answered = board.decisions.get(decision)?.answer?.at
-		return answered !== undefined && answered > approved.at
+		return answered !== undefined && answered > judged
 	})
 }
 

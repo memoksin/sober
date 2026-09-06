@@ -1,16 +1,23 @@
 import type { Projection } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { drift, elementsOf, glow, pack, tow } from './graph.js'
+import { drift, elementsOf, glow, pack, tow, visible } from './graph.js'
 
 const board: Projection = {
 	nodes: [
-		{ id: 'auth-api-k7f2', title: 'The auth API', status: 'ready', dependsOn: [] },
-		{ id: 'schema-records-m3p1', title: 'Records', status: 'done', dependsOn: ['auth-api-k7f2'] },
+		{ id: 'auth-api-k7f2', title: 'The auth API', status: 'ready', dependsOn: [], flagged: false },
+		{
+			id: 'schema-records-m3p1',
+			title: 'Records',
+			status: 'done',
+			dependsOn: ['auth-api-k7f2'],
+			flagged: false,
+		},
 		{
 			id: 'invoice-total-abcd',
 			title: 'Invoice total',
 			status: 'blocked',
 			dependsOn: ['auth-api-k7f2', 'schema-records-m3p1'],
+			flagged: false,
 		},
 	],
 }
@@ -41,7 +48,15 @@ test('a dependency on a node that is not here is dropped rather than drawn into 
 	// Cytoscape throws on an edge with no endpoint, so one bad record would
 	// take down the whole canvas.
 	const dangling: Projection = {
-		nodes: [{ id: 'lonely-aaaa', title: 'Lonely', status: 'ready', dependsOn: ['gone-bbbb'] }],
+		nodes: [
+			{
+				id: 'lonely-aaaa',
+				title: 'Lonely',
+				status: 'ready',
+				dependsOn: ['gone-bbbb'],
+				flagged: false,
+			},
+		],
 	}
 
 	expect(elementsOf(dangling).filter((e) => e.group === 'edges')).toEqual([])
@@ -86,6 +101,7 @@ const linked = (nodes: readonly (readonly [string, readonly string[]])[]): Proje
 		title: id.toUpperCase(),
 		status: 'ready',
 		dependsOn: [...dependsOn],
+		flagged: false,
 	})),
 })
 
@@ -320,4 +336,31 @@ test('it returns new positions and leaves the ones it was given alone', () => {
 	tow(before, chain(), { since: line, slack: 60, held: 'a', ease: 1 })
 
 	expect(before).toEqual(snapshot)
+})
+
+/**
+ * §7.2's list is the canvas narrowed, not a sixth screen. Both filters are
+ * views (ADR 0016): filtering on the server would make "show me everything" a
+ * second request.
+ */
+test('the flagged view keeps finished work, because a flagged node is usually finished', () => {
+	const board: Projection = {
+		nodes: [
+			{ id: 'done-aaaa', title: 'Done', status: 'done', dependsOn: [], flagged: true },
+			{ id: 'ready-bbbb', title: 'Ready', status: 'ready', dependsOn: [], flagged: false },
+		],
+	}
+
+	// Done is off by default, so the plain board hides the flagged node.
+	expect(visible(board, { withDone: false, onlyFlagged: false }).nodes.map((n) => n.id)).toEqual([
+		'ready-bbbb',
+	])
+
+	// Asking for the flagged ones has to show it anyway — §2.8's flag is mostly
+	// a finished node's, and a list that hides them is an empty list.
+	expect(visible(board, { withDone: false, onlyFlagged: true }).nodes.map((n) => n.id)).toEqual([
+		'done-aaaa',
+	])
+
+	expect(visible(board, { withDone: true, onlyFlagged: false }).nodes).toHaveLength(2)
 })

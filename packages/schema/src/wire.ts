@@ -22,6 +22,16 @@ export const ProjectedNode = z.strictObject({
 	title: z.string().min(1),
 	status: z.enum(STATUSES),
 	dependsOn: z.array(Id),
+	/**
+	 * A bound decision moved after this node's brief was approved (§2.8). One
+	 * boolean rather than the ids it was derived from: §7.2's list is which
+	 * nodes, and the canvas is where the reader already is.
+	 *
+	 * It is here rather than only in the digest because the digest is read once,
+	 * when the board is opened. Dismissing a flag has to take the node out of
+	 * the list without a reload, and the projection is what the canvas polls.
+	 */
+	flagged: z.boolean(),
 })
 
 export type ProjectedNode = z.infer<typeof ProjectedNode>

@@ -4,9 +4,11 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
 	test: {
 		projects: [
-			// The dashboard's own tests are the canvas's logic, and logic needs no
-			// DOM: the projection becomes elements, the drag constraint moves
-			// positions, the glow is a string. The React around them is glue.
+			// Most of the dashboard's tests are logic and need no DOM: the
+			// projection becomes elements, the drag constraint moves positions,
+			// the glow is a string. The components that hold a rule do need one —
+			// a dismissal that refuses to send without a reason is a rule (ADR
+			// 0043) — so the project sets `happy-dom` in its own vite config.
 			'apps/*',
 			'packages/*',
 			{

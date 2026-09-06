@@ -3,10 +3,13 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+	acceptNode,
 	addWorktree,
 	adoptBoard,
+	flagsOf,
 	initBoard,
 	loadBoard,
+	type Paths,
 	publish,
 	paths as resolve,
 	setSetting,
@@ -155,11 +158,14 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'contributors',
 			'decide',
 			'decisions',
+			'dismiss',
 			'init',
 			'logs',
 			'open_decision',
+			'open_node',
 			'propose',
 			'reject',
+			'reopen',
 			'review',
 			'run',
 			'stop',
@@ -396,7 +402,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(21)
+		expect((await client.listTools()).tools.length).toBe(24)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -860,4 +866,91 @@ test('a wave asks once about every node it warned on, and starts them when the h
 	const ran = await call(client, 'run', { nodes, base: 'main' })
 	expect(asked).toBe(1)
 	for (const node of nodes) expect(ran).toContain(`${node}: finished`)
+})
+
+/**
+ * DESIGN §7.2's three actions, in a session. The flag itself is `core`'s and
+ * proven there; what this asks is whether a host can reach all three — the
+ * `PR-09-08` promise that choosing a surface never costs a human an ability.
+ */
+const flagged = async (client: Client, paths: Paths): Promise<string> => {
+	await call(client, 'propose', PROPOSAL)
+	const board = await loadBoard(paths)
+	const node = [...board.nodes].find(([, one]) => one.title === 'The auth API')?.[0] ?? ''
+
+	await call(client, 'write_brief', {
+		node,
+		approach: 'Write the endpoints.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	// Approving does not require the decision to be answered, so answering it
+	// afterwards is a real user path rather than a fixture (§2.8).
+	await call(client, 'approve', { node })
+	await call(client, 'decide', { decision: [...board.decisions.keys()][0] ?? '' })
+	expect(flagsOf(await loadBoard(paths), node).flagged).toBe(true)
+	return node
+}
+
+test('a session can set a flag aside, and the reason is what is kept', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	const node = await flagged(client, paths)
+
+	const done = await call(client, 'dismiss', {
+		node,
+		reason: 'The endpoints never read the session store.',
+	})
+	expect(done).toContain('no longer flagged')
+
+	const record = (await loadBoard(paths)).nodes.get(node)
+	expect(record?.dismissal?.reason).toBe('The endpoints never read the session store.')
+	// A dismissal settles the change it judged; it does not clear the flag.
+	expect(flagsOf(await loadBoard(paths), node).flagged).toBe(false)
+})
+
+test('a session reopens a finished node, and reopening does not run it', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	const node = await flagged(client, paths)
+
+	// Nothing has been accepted yet, and the refusal is a sentence rather than a
+	// protocol error (§8.7).
+	expect(await call(client, 'reopen', { node })).toContain('not finished')
+
+	await acceptNode(paths, node, {
+		by: 'memoksin',
+		at: '2026-09-06T03:00:00.000Z',
+		flagged: true,
+		scan: 'clean',
+	})
+	expect(statusOf(await loadBoard(paths), node)).toBe('done')
+
+	expect(await call(client, 'reopen', { node })).toContain('back in the loop')
+	// Its brief is still approved, so it lands on `ready` — and nothing started.
+	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
+})
+
+test('a session opens one node for the fix, and it is not a plan', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	const node = await flagged(client, paths)
+
+	const made = await call(client, 'open_node', {
+		title: 'Re-read the session store',
+		dependsOn: [node],
+	})
+	expect(made).toContain('needs a brief')
+
+	const opened = [...(await loadBoard(paths)).nodes].find(
+		([, one]) => one.title === 'Re-read the session store',
+	)
+	expect(opened?.[1].brief).toBeNull()
+	expect(opened?.[1].dependsOn).toEqual([node])
+
+	// A dependency the board does not hold is refused in a sentence, and nothing
+	// is written.
+	expect(await call(client, 'open_node', { title: 'A fix', dependsOn: ['gone-x9y8'] })).toContain(
+		'not on this board',
+	)
+	expect((await loadBoard(paths)).nodes.size).toBe(3)
 })

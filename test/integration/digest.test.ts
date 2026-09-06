@@ -47,6 +47,7 @@ const node = (title: string, accepted: Accepted | null = null) => ({
 	assignee: null,
 	claim: null,
 	accepted,
+	dismissal: null,
 	createdAt: AT,
 })
 

@@ -41,6 +41,7 @@ const node = (over: Record<string, unknown>) => ({
 	assignee: null,
 	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: AT,
 	...over,
 })
