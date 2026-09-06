@@ -109,6 +109,40 @@ toggle in v1: the page follows the operating system and `data-theme` overrides
 it, so adding a toggle later is one line. Retrofitting a second theme across
 five screens is not.
 
+### 6. Hover grows the node and blooms it in its own colour
+
+Added on review of the proof, before any screen existed.
+
+A hovered node grows to **1.2× over 130ms, ease-out**, and takes an
+**underlay bloom in its own status colour** at 0.32 opacity with 9px of
+padding. Nothing new is introduced by the bloom: it is the same signal, louder,
+so §2 holds — a glow in a colour the node does not already carry would be
+decoration.
+
+**Only the pointed-at node.** Its neighbourhood keeps the treatment it already
+had, staying lit while everything else fades. This is a design choice and a
+performance one at once: Cytoscape's own guidance is that a
+`transition-property` belongs on the states that want to animate and never on
+the default style, and a neighbourhood of twenty growing nodes on a 200-node
+board is exactly the case that warning is about. One gesture, one animation.
+
+**Selection blooms too, and quieter** — 0.22 opacity, 7px — because a selected
+node is the anchor while the panel is open. It is context rather than the
+pointer, and it should not compete with wherever the pointer goes next.
+
+**The bloom is theme-aware.** A glow is a dark-ground idiom; on light it reads
+as a smudge, so the same emphasis arrives as a tighter, denser ring — 6px at
+0.22 rather than 9px at 0.32.
+
+**`prefers-reduced-motion` keeps the bloom and drops the growth.** The size
+change is the part that moves; the emphasis is the part that informs. Someone
+who has asked for less motion should still be able to see what they are
+pointing at.
+
+The mechanism is `underlay-color` / `underlay-padding` / `underlay-opacity`
+mapped from the node's status, with `transition-property` declared on the hover
+and selection classes only.
+
 ## Consequences
 
 - `apps/dashboard/src/theme.css` is S2's first file and is written from the
