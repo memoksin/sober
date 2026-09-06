@@ -11,6 +11,7 @@ import {
 	dispatch,
 	initBoard,
 	loadBoard,
+	NotOnBoardError,
 	type Paths,
 	rejectWork,
 	releaseNode,
@@ -124,7 +125,9 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 		async (paths, { node: id, base }) => {
 			const ref = await baseOf(paths, base)
 			const found = await reviewNode(paths, id, ref)
-			if (found === null) throw new Error(`${id} is not on this board`)
+			// A `SoberError`, not an `Error`: the state said no, nothing broke,
+			// and the difference is a 409 against a 500 on the wire.
+			if (found === null) throw new NotOnBoardError('node', id)
 			return acceptWork(paths, id, {
 				by: await whoami(paths.root),
 				base: ref,

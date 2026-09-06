@@ -10,6 +10,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "MergeRefusedError",
   "NoBriefError",
   "NoSuchOptionError",
+  "NotOnBoardError",
   "OverlapError",
   "SetupFailedError",
   "SoberError",

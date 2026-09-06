@@ -1,11 +1,13 @@
 import type { Accepted, Handle, ScanResult } from '@besober/schema'
 import { DEFAULT_CONFIG, readConfig } from './config.js'
+import { NotOnBoardError } from './errors.js'
 import { git, refExists } from './git.js'
 import { type Board, loadBoard } from './graph.js'
 import { appendEvent, type Feedback, writeFeedback } from './local.js'
 import { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'
 import type { Paths } from './paths.js'
 import { type Checks, checksOf, type PullRequest, pullRequestOf, readyAndMerge } from './pr.js'
+import { readNode } from './records.js'
 import { acceptNode } from './run.js'
 import { type ScanReport, scanNode } from './scan.js'
 import { lastRun, statusOf } from './status.js'
@@ -223,6 +225,13 @@ export const rejectWork = async (
 	node: string,
 	options: RejectOptions,
 ): Promise<Feedback> => {
+	// The CLI never reached this without a node, because `widen` refuses an
+	// unknown id before the command runs. The wire does, and wrote a feedback
+	// record for a node that does not exist — local state describing nothing.
+	// The guard belongs here rather than in each surface: found by the server's
+	// route in phase 5.
+	if ((await readNode(paths, node)).kind !== 'ok') throw new NotOnBoardError('node', node)
+
 	const feedback: Feedback = {
 		at: new Date().toISOString(),
 		by: options.by,

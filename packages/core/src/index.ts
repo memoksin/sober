@@ -35,7 +35,11 @@ export {
 } from './decide.js'
 export { dispatch, dispatchWave, SetupFailedError, stopRun } from './dispatch.js'
 export { bind, unbound } from './edges.js'
-export { SoberError } from './errors.js'
+// `NotOnBoardError` came off this barrel in ADR 0033's deletion pass and comes
+// back here, which is the shape that ADR predicted: a name returns in the pull
+// request that needs it. `packages/server` needs it to answer a 409 rather than
+// a 500 when a route names a node that is not there.
+export { NotOnBoardError, SoberError } from './errors.js'
 export { currentBranch, isRepo, showFromRef, whoami } from './git.js'
 export { type Board, findCycle, loadBoard } from './graph.js'
 export { checkHost, HostError } from './host.js'
