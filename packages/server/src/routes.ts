@@ -21,6 +21,7 @@ import {
 	statusOf,
 	stopRun,
 	sync,
+	waitingOn,
 	whoami,
 	writeBrief,
 } from '@besober/core'
@@ -237,6 +238,9 @@ export const READS: Readonly<Record<string, Route>> = {
 				id,
 				...record,
 				status: statusOf(board, id),
+				// The panel's question, answered here because the browser cannot
+				// import `core` and a second derivation is a second answer.
+				waitingOn: waitingOn(board, id),
 			})),
 			decisions: [...board.decisions].map(([id, record]) => ({
 				id,
