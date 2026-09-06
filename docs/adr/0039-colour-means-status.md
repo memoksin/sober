@@ -122,11 +122,17 @@ in its own status colour**. Nothing new is introduced by the bloom: it is the
 same signal, louder, so §2 holds — a glow in a colour the node does not already
 carry would be decoration.
 
-**The light reaches about 15% of a radius past the node's own edge.** It is a
-rim of light around a disc, not an aura around a region: at that reach the node
-is still obviously the subject, and on a board where several nodes sit close
-together the glows do not run into one another. Both blurs live inside that
-reach — two small steps rather than a tight one and a wide one.
+**The light reaches 25% of a radius past the node's own edge**, and the number
+is a token rather than a pixel count. It is a rim of light around a disc rather
+than an aura around a region: the node stays the subject, and on a board where
+several sit close together the glows do not run into one another. Both blurs
+live inside that reach — two small steps rather than a tight one and a wide one.
+
+The reach is a *fraction* for a reason found while tuning it. A pixel value
+means one glow at one node size, and nodes are not one size: `done` renders
+smaller, and the canvas zooms. Every surface that draws this computes the blur
+from the node's own radius, which is also what keeps a mock and the real
+renderer from disagreeing about a number nobody would notice was two numbers.
 
 **No glow comes from Cytoscape at all**, and the reason took three attempts to
 find. An underlay is a solid shape drawn around the element's bounding box.
