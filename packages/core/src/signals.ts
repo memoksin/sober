@@ -1,28 +1,18 @@
+import type { Signal } from '@besober/schema'
 import picomatch from 'picomatch'
 import type { AddedFile } from './diff.js'
 
 /**
- * The six named signals of ADR 0011. "Injection-shaped changes" was the earlier
- * wording and could not be kept: a real injection analyser needs one rule set
- * per language a user might write in. A named short list keeps a promise the
- * product can keep, and what the scan does **not** catch is documented beside
- * what it does.
+ * The rules behind the six named signals of ADR 0011. The names are a
+ * vocabulary every surface renders, so they live in `schema`; the looking is
+ * here, because it reads a diff.
  *
- * Every rule here is language-agnostic and reads one added line at a time. None
- * of them is a proof — each is a reason for a human to look, which is the whole
- * job of the panel above the diff (§6.2).
+ * Every rule is language-agnostic and reads one added line at a time. None of
+ * them is a proof — each is a reason for a human to look, which is the whole
+ * job of the panel above the diff (§6.2). "Injection-shaped changes" was the
+ * earlier wording and could not be kept: a real injection analyser needs one
+ * rule set per language a user might write in.
  */
-export const SIGNALS = [
-	'dependency-added',
-	'undeclared-file',
-	'dynamic-code',
-	'shell-from-variable',
-	'tls-disabled',
-	'hardcoded-address',
-] as const
-
-export type Signal = (typeof SIGNALS)[number]
-
 export interface SignalFinding {
 	readonly signal: Signal
 	readonly file: string

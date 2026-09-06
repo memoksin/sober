@@ -18,6 +18,15 @@ export {
 	type Operation,
 } from './operation.js'
 export { Project, SCHEMA_VERSION } from './project.js'
+export {
+	type Checks,
+	type Finding,
+	type PullRequest,
+	type Review,
+	type ScanReport,
+	SIGNALS,
+	type Signal,
+} from './review.js'
 export { CommandResult, RUN_EXITS, Run, RunExit } from './run.js'
 export { STATUSES, type Status } from './status.js'
 export { ProjectedNode, Projection, Waiting, WireError } from './wire.js'

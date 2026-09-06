@@ -29,6 +29,7 @@ exports[`schema exports nothing new without a reviewer seeing it 1`] = `
   "RunExit",
   "SCAN_RESULTS",
   "SCHEMA_VERSION",
+  "SIGNALS",
   "STATUSES",
   "ScanResult",
   "Timestamp",

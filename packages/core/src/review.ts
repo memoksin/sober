@@ -1,4 +1,4 @@
-import type { Accepted, Handle, ScanResult } from '@besober/schema'
+import type { Handle, PullRequest, Review, ScanResult } from '@besober/schema'
 import { DEFAULT_CONFIG, readConfig } from './config.js'
 import { NotOnBoardError } from './errors.js'
 import { git, refExists } from './git.js'
@@ -6,47 +6,12 @@ import { type Board, loadBoard } from './graph.js'
 import { appendEvent, type Feedback, writeFeedback } from './local.js'
 import { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'
 import type { Paths } from './paths.js'
-import { type Checks, checksOf, type PullRequest, pullRequestOf, readyAndMerge } from './pr.js'
+import { checksOf, pullRequestOf, readyAndMerge } from './pr.js'
 import { readNode } from './records.js'
 import { acceptNode } from './run.js'
-import { type ScanReport, scanNode } from './scan.js'
+import { scanNode } from './scan.js'
 import { lastRun, statusOf } from './status.js'
 import { branchOf, removeWorktree, resetToBase, worktreeOf } from './worktree.js'
-
-/**
- * Review is checks, not reading (ADR 0022): what a surface shows is the scan,
- * the acceptance results and the diff — in that order, findings above the diff
- * and never beside it (§6.2). The same three surfaces call this one function,
- * so none of them can render a review the others cannot.
- */
-export interface Review {
-	readonly node: string
-	readonly scan: ScanReport
-	readonly diff: string
-	readonly files: readonly string[]
-	/** The run being reviewed, or null when nothing has run yet. */
-	readonly run: string | null
-	readonly exit: string | null
-	readonly acceptance: readonly { readonly run: string; readonly proves: string }[]
-	/** CI, when there is a pull request to read it from (§6.1). */
-	readonly ci: Checks
-	/** The node's draft pull request, when one was opened. */
-	readonly pr: PullRequest | null
-	/**
-	 * Work sitting in the worktree that was never committed. A diff against the
-	 * base cannot see it, so without this a review of an agent that wrote
-	 * everything and committed nothing reads exactly like a review of an agent
-	 * that did nothing (found in the M1 gate).
-	 */
-	readonly uncommitted: readonly string[]
-	/**
-	 * Set once the node is done. A review of accepted work is a record of what
-	 * was accepted, not a decision waiting to be made — found in M2's gate, where
-	 * a node accepted from a session still read as reviewable in the terminal and
-	 * offered an accept that then had no branch to merge.
-	 */
-	readonly accepted: Accepted | null
-}
 
 export const reviewNode = async (
 	paths: Paths,

@@ -5,11 +5,11 @@ import {
 	archiveNode,
 	greenNodes,
 	type Landed,
-	type Review,
 	rejectWork,
 	reviewNode,
 	whoami,
 } from '@besober/core'
+import type { Review } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, fail, green, red, refuse, say, yellow } from './out.js'
 import { drain } from './queue.js'

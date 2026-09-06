@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import type { Checks, PullRequest } from '@besober/schema'
 import { SoberError } from './errors.js'
 import { git, remoteName } from './git.js'
 import type { Paths } from './paths.js'
@@ -7,22 +8,6 @@ import { readNode } from './records.js'
 import { branchOf } from './worktree.js'
 
 const run = promisify(execFile)
-
-export interface PullRequest {
-	readonly number: number
-	readonly url: string
-	/** A draft asks nobody to review anything — which is why it is the default (§6.1). */
-	readonly draft: boolean
-	readonly branch: string
-}
-
-/** CI, when there is any. "Unavailable" is not "passing", for the scan's reason (§6.2). */
-export type Checks =
-	| { readonly kind: 'none' }
-	| { readonly kind: 'pending' }
-	| { readonly kind: 'passing' }
-	| { readonly kind: 'failing'; readonly failed: readonly string[] }
-	| { readonly kind: 'unavailable'; readonly reason: string }
 
 export type Published =
 	| { readonly kind: 'opened'; readonly pr: PullRequest }

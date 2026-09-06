@@ -58,10 +58,8 @@ export { type Merged, MergeRefusedError, mergeNode } from './merge.js'
 export { type Migrated, migrateBoard, needsMigration } from './migrate.js'
 export { findRoot, type Paths, paths } from './paths.js'
 export {
-	type Checks,
 	checksOf,
 	type Published,
-	type PullRequest,
 	publish,
 	pullRequestOf,
 } from './pr.js'
@@ -79,12 +77,11 @@ export {
 	type Green,
 	greenNodes,
 	type Landed,
-	type Review,
 	rejectWork,
 	reviewNode,
 } from './review.js'
 export { acceptNode, finishRun, recordOutcome, startRun } from './run.js'
-export { type Finding, type ScanReport, scanNode } from './scan.js'
+export { scanNode } from './scan.js'
 export {
 	type Flags,
 	flagsOf,

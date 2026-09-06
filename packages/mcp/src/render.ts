@@ -1,6 +1,6 @@
-import type { Board, Review } from '@besober/core'
+import type { Board } from '@besober/core'
 import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
-import type { Node } from '@besober/schema'
+import type { Node, Review } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 
 /**
