@@ -1,17 +1,17 @@
 import type { Projection } from '@besober/schema'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 import { useEffect, useRef } from 'react'
-import { drift, elementsOf, glow, type Point, pack, relax } from './graph.js'
+import { drift, elementsOf, glow, type Point, pack, tow } from './graph.js'
 import { type Resolve, sameShape, stylesheet } from './paint.js'
 
 /**
- * How much further apart than the drag found it an edge stretches before the
- * far node follows (ADR 0039 §7).
+ * How far the hand moves before anything follows it (ADR 0039 §7).
  *
- * Relative, not absolute. The absolute version was a length the placed layout
- * never satisfied — rings put connected nodes on chords, and on a real 39-node
- * board 38 of 45 edges opened longer than it — so every mousedown hauled two
- * thirds of the graph inward before the pointer had moved at all.
+ * A property of the hand, not of an edge. It was an edge's maximum length, and
+ * that was a number the placed layout never satisfied — rings put connected
+ * nodes on chords, and on a real 39-node board 38 of 45 edges opened longer
+ * than it — so the constraint had something to correct from the first frame
+ * anything was touched.
  *
  * Around half a node's spacing: far enough that a nudge is a nudge, close
  * enough that a real drag brings its neighbours.
@@ -36,8 +36,8 @@ const PERIOD = 7000
 const PIN_MS = 180
 
 /**
- * How much of the remaining slack a follower takes up per frame, and how long
- * it goes on catching up after the hand lets go. A fifth a frame is settled
+ * How much of the distance to its mark a follower closes per frame, and how
+ * long it goes on closing after the hand lets go. A fifth a frame is settled
  * inside half a second, which is where these two meet.
  */
 const TOW = 0.2
@@ -217,7 +217,7 @@ export const Canvas = ({
 					// currently is, so a position written underneath does not merely
 					// displace it once — the next delta lands on the displaced value
 					// and the node walks out from under the hand.
-					if (grabbing && id === grabbed) continue
+					if (held === id) continue
 
 					const by = drift(id, now, float())
 					const much = calm.get(id) ?? 1
@@ -226,24 +226,23 @@ export const Canvas = ({
 			})
 		}
 
-		// The node the pointer has hold of, and how many frames of catching up
-		// its followers still have coming. A follower that stops halfway because
-		// the hand stopped moving leaves the edge over its limit.
-		let grabbed: string | null = null
-		let grabbing = false
-		// The node whose drag the followers are answering, and where the board was
-		// when that drag began. Both null until the pointer actually moves.
+		// The node the pointer has hold of, where the board was when it took hold,
+		// and how many frames of catching up the followers still have coming after
+		// the hand lets go. A follower that stops because the hand stopped is worse
+		// than one that never moved.
 		let held: string | null = null
 		let since: ReadonlyMap<string, Point> | null = null
 		let coasting = 0
 
 		instance.on('grab', 'node', (event) => {
-			grabbed = (event.target as NodeSingular).id()
-			grabbing = true
+			held = (event.target as NodeSingular).id()
+			// The board as the hand found it. Every follower's mark is measured
+			// from here for the whole of this drag, which is what makes a press
+			// move nothing and a drag reversible.
+			since = new Map([...rest.current].map(([id, at]) => [id, { ...at }]))
+			coasting = Number.POSITIVE_INFINITY
 		})
 		instance.on('free', 'node', () => {
-			grabbing = false
-			grabbed = null
 			coasting = COAST_FRAMES
 		})
 
@@ -257,27 +256,19 @@ export const Canvas = ({
 			const much = calm.get(id) ?? 1
 			const at = node.position()
 			rest.current.set(id, { x: at.x - by.x * much, y: at.y - by.y * much })
-
-			// The first frame of a real drag, and not a moment sooner. `grab` fires
-			// on mousedown, so starting here is what keeps a plain click from
-			// pulling anything: a click grabs and frees without ever passing
-			// through this handler.
-			if (held !== id) {
-				held = id
-				since = new Map([...rest.current].map(([at_, point]) => [at_, { ...point }]))
-			}
-			coasting = Number.POSITIVE_INFINITY
 		})
 
 		let last = performance.now()
 		let frame = requestAnimationFrame(function tick(now) {
 			frame = requestAnimationFrame(tick)
 
-			// Relaxing here rather than on the drag event is what makes a
-			// follower lag: it closes a fraction of the gap per frame, and the
-			// frames keep coming after the hand has stopped.
+			// Towing here rather than on the drag event is what makes a follower
+			// lag: it closes a fraction of the distance per frame, and the frames
+			// keep coming after the hand has stopped. Running it while merely
+			// grabbed is safe — with the hand where it started, every mark is
+			// where the layout put it.
 			if (held !== null && since !== null) {
-				rest.current = relax(rest.current, wires.current, {
+				rest.current = tow(rest.current, wires.current, {
 					since,
 					slack: SLACK,
 					held,

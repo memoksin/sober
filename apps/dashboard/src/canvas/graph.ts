@@ -176,42 +176,42 @@ const hash = (id: string): number => {
 	return (h >>> 0) / 2 ** 32
 }
 
-export interface RelaxOptions {
-	/**
-	 * Where every node was when this drag began. An edge's limit is the length it
-	 * had here plus the slack, so the constraint is about what the drag stretched
-	 * rather than about a number the layout has to have satisfied.
-	 */
+export interface TowOptions {
+	/** Where every node was when the drag began. */
 	readonly since: ReadonlyMap<string, Point>
-	/** How much further apart than the drag found it an edge may be pulled. */
+	/** How far the hand moves before anything follows it. */
 	readonly slack: number
-	/** The node under the pointer. It never moves. */
+	/** The node under the pointer. It is wherever the pointer put it. */
 	readonly held: string
-	/** How far a pull travels. Three hops is enough; more is motion nobody asked for. */
-	readonly passes?: number
+	/** How much of the hand's movement each further hop passes on. */
+	readonly falloff?: number
+	/** How far the tow travels. Three hops; more is motion nobody asked for. */
+	readonly hops?: number
 	/**
-	 * How much of the remaining gap a follower closes in one call. 1 puts it on
-	 * the limit at once, which is a rod; a fraction is a tow. Called every frame
-	 * it converges, and it never overshoots because it only ever moves towards.
+	 * How much of the remaining distance a follower closes in one call. 1 lands
+	 * it on its mark at once, which is a rod; a fraction is a tow — the edge
+	 * stretches while the hand moves and comes back after it stops.
 	 */
 	readonly ease?: number
 }
 
 /**
- * An edge stretched across the window has stopped saying anything about
- * adjacency, which is the only thing this picture encodes, so past a point the
- * far node follows (ADR 0039 §7).
+ * Where the followers go while a node is being dragged (ADR 0039 §7).
  *
- * That point is per edge and relative: the length the drag found it at, plus
- * the slack. It was an absolute constant, which was wrong for a placed layout
- * and not merely tuned wrong — rings put connected nodes on chords, and on a
- * real 39-node board 38 of 45 edges opened longer than the constant. Every
- * mousedown hauled two thirds of the graph inward before the pointer moved.
+ * Every follower's mark is a pure function of one thing: how far the hand has
+ * moved since the drag began. Not of where anything currently is — which is
+ * what makes a press safe by construction rather than by threshold, and what
+ * makes dragging back put everything back.
  *
- * The pull starts at the hand and travels outward, one hop per pass. It is not
- * the limit enforced everywhere at once: that way the first drag of a session
- * tidies the whole board, and the far side rearranges itself while somebody is
- * looking at a node they never touched.
+ * It replaces a maximum edge length enforced every frame. That constraint only
+ * ever moved a follower closer and never let one out, so every frame it ran was
+ * a ratchet: a long press with a pixel of jitter hauled the board inward and
+ * kept it. The deeper fault was that the placed layout (ADR 0040) was never the
+ * constraint's fixed point, so there was always something for it to correct.
+ * `sober-v0` had no such problem because its resting state *was* the
+ * equilibrium of the function that ran during a drag.
+ *
+ * The hand's first `slack` pixels move nothing, so a nudge is a nudge.
  *
  * Positions are not board state (ADR 0016) — they live for the session and are
  * placed again when the board opens — which is what makes moving other
@@ -219,58 +219,76 @@ export interface RelaxOptions {
  *
  * New positions out; the ones handed in are not touched.
  */
-export const relax = (
+export const tow = (
 	positions: ReadonlyMap<string, Point>,
 	edges: readonly (readonly [string, string])[],
-	{ since, slack, held, passes = 3, ease = 1 }: RelaxOptions,
+	{ since, slack, held, falloff = 0.55, hops = 3, ease = 1 }: TowOptions,
 ): Map<string, Point> => {
 	const next = new Map([...positions].map(([id, at]) => [id, { ...at }]))
-	// What the wave has reached. Anything in here is an anchor for the next hop
-	// and never moves again, which is also what keeps the held node still.
-	const reached = new Set([held])
 
-	for (let pass = 0; pass < passes; pass++) {
-		let moved = false
+	const from = since.get(held)
+	const to = positions.get(held)
+	if (from === undefined || to === undefined) return next
 
-		for (const [from, to] of edges) {
-			// One end anchored and one end loose, or this edge is not the wave's
-			// business yet — edge order is whatever Cytoscape hands over, so the
-			// hop it belongs to is decided by the passes, not by the list.
-			const anchor = reached.has(from) ? from : reached.has(to) ? to : null
-			if (anchor === null || (reached.has(from) && reached.has(to))) continue
+	const dx = to.x - from.x
+	const dy = to.y - from.y
+	const reach = Math.hypot(dx, dy)
+	// Inside the slack the hand asks nothing of anyone, and their mark is where
+	// the layout put them. Not an early return: a drag that goes out and comes
+	// back inside the slack has to bring the followers back with it, and a
+	// function that stops reading the hand there is the ratchet again in
+	// miniature.
+	const carried = reach <= slack ? 0 : (reach - slack) / reach
 
-			const follower = anchor === from ? to : from
-			const still = next.get(anchor)
-			const loose = next.get(follower)
-			if (still === undefined || loose === undefined) continue
+	for (const [id, share] of shares(edges, held, hops, falloff)) {
+		const rest = since.get(id)
+		const now = next.get(id)
+		if (rest === undefined || now === undefined) continue
 
-			const dx = loose.x - still.x
-			const dy = loose.y - still.y
-			const distance = Math.hypot(dx, dy)
-			// Two nodes in the same place have no direction to be pulled along.
-			if (distance === 0) continue
-
-			// What the layout gave this edge, plus what a hand may stretch it by.
-			// An edge whose ends the drag has not separated has no limit to
-			// exceed, however long the layout drew it.
-			const was = span(since, from, to)
-			const max = (was ?? distance) + slack
-
-			if (distance > max) {
-				// Each edge is relaxed once per call — the passes carry the wave
-				// outward, they do not iterate the same edge — so the ease is the
-				// whole of what one frame closes.
-				const pull = ((distance - max) / distance) * ease
-				next.set(follower, { x: loose.x - dx * pull, y: loose.y - dy * pull })
-				moved = true
-			}
-			reached.add(follower)
-		}
-
-		if (!moved && pass > 0) break
+		const mark = { x: rest.x + dx * carried * share, y: rest.y + dy * carried * share }
+		next.set(id, {
+			x: now.x + (mark.x - now.x) * ease,
+			y: now.y + (mark.y - now.y) * ease,
+		})
 	}
 
 	return next
+}
+
+/**
+ * How much of the hand's movement each node answers, by how many hops it is
+ * from the hand. Breadth-first and undirected: which way a dependency points
+ * says nothing about which circle is pulled by which.
+ */
+const shares = (
+	edges: readonly (readonly [string, string])[],
+	held: string,
+	hops: number,
+	falloff: number,
+): Map<string, number> => {
+	const near = new Map<string, string[]>()
+	for (const [a, b] of edges) {
+		near.set(a, [...(near.get(a) ?? []), b])
+		near.set(b, [...(near.get(b) ?? []), a])
+	}
+
+	const share = new Map<string, number>()
+	let front = [held]
+	const seen = new Set([held])
+
+	for (let hop = 1; hop <= hops && front.length > 0; hop++) {
+		const nextFront: string[] = []
+		for (const id of front)
+			for (const neighbour of near.get(id) ?? []) {
+				if (seen.has(neighbour)) continue
+				seen.add(neighbour)
+				share.set(neighbour, falloff ** hop)
+				nextFront.push(neighbour)
+			}
+		front = nextFront
+	}
+
+	return share
 }
 
 export interface GlowOptions {
@@ -310,11 +328,4 @@ export const glow = (
 		`0 0 ${(reach * 1.1).toFixed(2)}px ${(reach * 0.3).toFixed(2)}px ${alpha(1)}, ` +
 		`0 0 ${(reach * 2.2).toFixed(2)}px 0 ${alpha(0.55)}`
 	)
-}
-
-/** How far apart two nodes were, or null when the snapshot does not hold both. */
-const span = (at: ReadonlyMap<string, Point>, from: string, to: string): number | null => {
-	const a = at.get(from)
-	const b = at.get(to)
-	return a === undefined || b === undefined ? null : Math.hypot(a.x - b.x, a.y - b.y)
 }

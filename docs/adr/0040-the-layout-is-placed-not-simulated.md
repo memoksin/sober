@@ -114,27 +114,46 @@ maximum length across every edge at once. Enforcing it everywhere meant the
 first drag of a session tidied the whole board: a person moved one node and the
 far side rearranged itself while they were looking somewhere else.
 
-**The limit is relative, and it took a second correction to get there.** §7's
-maximum was an absolute length — 170px, measured on ADR 0038's spike, where a
-force layout settles its edges short. Rings do not: they put connected nodes on
+**It took two corrections, and the second one was the real one.** §7's maximum
+was an absolute length — 170px, measured on ADR 0038's spike, where a force
+layout settles its edges short. Rings do not: they put connected nodes on
 chords, and on the 39-node board this ADR was written against, **38 of 45 edges
 open longer than that constant, the longest at 672px**. The constraint was not
 tuned wrong; it described a property the layout never had.
 
-What it cost was visible and was reported as a different bug. `grab` fires on
-mousedown, so clicking any node started the relaxation, found two thirds of the
-board already over the limit, and hauled it inward — a click that rearranged
-the graph.
+The first correction made the limit relative — the length the drag found the
+edge at, plus slack — and moved the trigger from `grab` to the first `drag`,
+because `grab` fires on mousedown. That fixed a click. It did not fix a press.
 
-So an edge's limit is now the length **the drag found it at**, plus 60px of
-slack, and the relaxation starts on the first `drag` event rather than on
-`grab`. A click grabs and frees without passing through that handler, so it
-moves nothing. A nudge inside the slack stretches the edge and moves nothing.
-Past the slack the far node comes.
+The reason is that the constraint was **a one-way ratchet**: it only ever moved
+a follower closer and never let one back out, and it ran on every frame the
+node was held. A hand resting on a node is not still — a pixel of jitter, and
+the hovered node's drift easing to zero, is enough to put an edge over its
+limit — and every frame that happened took a bite the next frame could not give
+back. Measured on the demo board: with nobody touching it, net movement toward
+a node across 35 nodes is noise; with one node pressed and jittered for two
+seconds it was +18.9px, and a real hand holds for longer than two seconds.
 
-Measured in the browser after the change, on the same board: a click moves a
-neighbour 3.4px, a 30px nudge moves it 3.1px — both of which are the float and
-not the pull — and a 580px drag brings it 543px.
+**`sober-v0` had none of this, and not because it was tuned better.** Its
+layout was a force simulation, and its resting state was the equilibrium of the
+same function that ran during a drag: springs at their rest length produce zero
+force, so a press moved nothing *by construction* rather than by threshold.
+Here the layout is placed by ring arithmetic and the constraint enforced
+something unrelated, so the layout was never the constraint's fixed point and
+there was always something for it to correct.
+
+So the constraint is gone and `tow` replaces it. **Every follower's position is
+a pure function of how far the hand has moved since the drag began** — not of
+where anything currently is. There is no state to accumulate in, so no number
+of frames changes a press; the first `slack` pixels of the hand move nothing,
+so a nudge is a nudge; and dragging back puts everything back, which the
+ratchet could never do. Followers still lag: each frame closes a fifth of the
+distance to its mark.
+
+Measured in the browser after the change, on the demo board: a two-second
+pressed-and-jittered node moves its neighbours no more than doing nothing at
+all does, a 500px drag brings the neighbour 161px, and returning the hand to
+where it started returns the neighbour to within 4px of where it was.
 
 **A follower is towed rather than welded.** The first version put the far node
 on the limit in the frame the limit was exceeded, which is a rod: the follower
