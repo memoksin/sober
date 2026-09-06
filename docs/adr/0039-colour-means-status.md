@@ -113,11 +113,27 @@ five screens is not.
 
 Added on review of the proof, before any screen existed.
 
-A hovered node grows to **1.2× over 130ms, ease-out**, and takes an
-**underlay bloom in its own status colour** at 0.32 opacity with 9px of
-padding. Nothing new is introduced by the bloom: it is the same signal, louder,
-so §2 holds — a glow in a colour the node does not already carry would be
-decoration.
+**Every node carries a rim** — 1.5px, in its own status colour lifted one step
+towards the ground's opposite. It gives a disc a defined edge and it separates
+two that overlap, which a flat fill does not, and it introduces no colour.
+
+A hovered node grows to **1.2× over 130ms, ease-out**, and takes a **soft bloom
+in its own status colour**. Nothing new is introduced by the bloom: it is the
+same signal, louder, so §2 holds — a glow in a colour the node does not already
+carry would be decoration.
+
+**The bloom is a blur, and it does not come from Cytoscape.** An underlay is a
+solid shape: it has a `shape` property, so it can follow the circle rather than
+the bounding box, but it has no blur, and a hard disc at low opacity is a halo
+rather than a glow. The bloom is therefore one DOM element behind the graph,
+positioned at the hovered node's rendered position and following pan, zoom and
+the node itself. One node is hovered at a time, so it costs one element and no
+per-node work. Two stacked blurs rather than one: a single blur reads as fog,
+two read as light.
+
+The selection halo stays a Cytoscape underlay, with `underlay-shape: ellipse`
+so that it follows the circle. Without that property it is drawn around the
+bounding box, which is what a square glow was.
 
 **Only the pointed-at node.** Its neighbourhood keeps the treatment it already
 had, staying lit while everything else fades. This is a design choice and a
@@ -139,9 +155,36 @@ change is the part that moves; the emphasis is the part that informs. Someone
 who has asked for less motion should still be able to see what they are
 pointing at.
 
-The mechanism is `underlay-color` / `underlay-padding` / `underlay-opacity`
-mapped from the node's status, with `transition-property` declared on the hover
-and selection classes only.
+`transition-property` is declared on the hover and selection classes only,
+never on the default node style. That is Cytoscape's own guidance and it is not
+a micro-optimisation: a transition in the default state makes the animation try
+to run far more often than the states that want it.
+
+### 7. An edge has a maximum length, and past it the far node follows
+
+Refines ADR 0016, which ruled that dragging moves a node and that positions are
+not board state.
+
+Dragging a node stretches its edges, and an edge stretched across the window
+has stopped saying anything about adjacency — which is the only thing this
+picture encodes. A dependency drawn as a line to somewhere off-screen is a line
+nobody can read.
+
+So an edge has a **maximum rendered length**, and a drag that would exceed it
+pulls the far node along instead. The constraint is relaxed over three passes
+per drag frame, so a pull travels a few hops out rather than stopping at the
+first neighbour; more passes than that is motion nobody asked for. The node
+under the pointer never moves — the person is holding it — and where neither
+end is held, both give half.
+
+This costs nothing to undo, which is what makes it safe: ADR 0016 already
+established that positions live for the session and the layout re-simulates
+when the board opens. Nothing here is saved, and nothing a teammate sees
+changes.
+
+It is not a physics engine and does not become one. A force layout that keeps
+running during a drag is the alternative, and it means a live simulation, an
+extension, and a graph that keeps moving after the hand stops.
 
 ## Consequences
 
