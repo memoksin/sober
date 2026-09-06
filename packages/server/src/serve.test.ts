@@ -80,17 +80,29 @@ test('two servers never share a token', async () => {
 	}
 })
 
-test('a request with no token is refused', async () => {
+test('a request with no token is refused, and says that is what was missing', async () => {
 	const response = await call('/read/board', { token: null })
 
 	expect(response.status).toBe(401)
-	expect(await response.json()).toEqual({ error: expect.any(String) })
+	expect((await response.json()).error).toMatch(/no .*token/i)
 })
 
-test('a request with the wrong token is refused', async () => {
+test('a request with the wrong token is refused, and says tokens do not survive a restart', async () => {
 	const response = await call('/read/board', { token: 'not-the-token' })
 
 	expect(response.status).toBe(401)
+	// The two ways to hold a wrong token are copying the label with it and
+	// restarting the server. The second is the one a message can fix.
+	expect((await response.json()).error).toMatch(/starts|restart/i)
+})
+
+test('a refusal never repeats the token back', async () => {
+	const wrong = 'not-the-token'
+	const response = await call('/read/board', { token: wrong })
+
+	const { error } = (await response.json()) as { error: string }
+	expect(error).not.toContain(wrong)
+	expect(error).not.toContain(server.token)
 })
 
 test('a token of the right length but the wrong bytes is still refused', async () => {

@@ -24,9 +24,16 @@ export const dashboard = async (port?: number): Promise<void> => {
 	const served = await serve({ paths, port })
 
 	say(`${green('✓')} the board is served at ${cyan(bold(served.url))}`)
-	say(`  ${dim('token')} ${served.token}`)
 	say()
-	say(dim('Ctrl-C stops it, and stops any run it started. Closing the browser does not.'))
+	// The token sits alone on its line. It was printed as `token <value>` for
+	// one commit, and the first person to use it copied the label with the
+	// value and got a 401 that blamed the token. A line whose whole content is
+	// the thing to copy cannot be copied wrong.
+	say(dim('  token, for a client that is not the browser:'))
+	say(`  ${served.token}`)
+	say()
+	say(dim('  A new token is minted every time this starts. The old one stops working.'))
+	say(dim('  Ctrl-C stops it, and stops any run it started. Closing the browser does not.'))
 
 	// Two signals, one exit. Without this the process leaves a listening socket
 	// behind on a terminal that has already gone.

@@ -138,9 +138,18 @@ export const serve = async ({ paths, port = 0 }: ServeOptions): Promise<Served> 
 	const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
 		if (!isLoopbackHost(request)) return fail(response, 403, 'this server answers on loopback only')
 
+		// Two refusals, not one. "Missing or wrong" is true and useless: the two
+		// causes have different fixes, and the second one — a token from a
+		// previous `sober dashboard` — is invisible unless the message says so.
 		const given = bearer(request)
-		if (given === null || !isToken(given, token))
-			return fail(response, 401, 'the dashboard token is missing or wrong')
+		if (given === null)
+			return fail(response, 401, 'no dashboard token was sent — Authorization: Bearer <token>')
+		if (!isToken(given, token))
+			return fail(
+				response,
+				401,
+				'that is not this server’s token — a new one is minted every time `sober dashboard` starts',
+			)
 
 		const url = new URL(request.url ?? '/', `http://${HOST}`)
 		const match = routed(url.pathname)
