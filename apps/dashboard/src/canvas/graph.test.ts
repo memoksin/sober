@@ -376,3 +376,82 @@ test('easing never pulls a follower past the limit', () => {
 		expect(positions.get('b')?.x).toBeGreaterThanOrEqual(100)
 	}
 })
+
+test('a node grabbed and not moved pulls nothing, however long its edges are', () => {
+	// The bug this replaces: `MAX_EDGE` was an absolute length the placed layout
+	// never satisfied — on a real 39-node board, 38 of 45 edges opened over it
+	// and the longest was 672px against a limit of 170. So the first mousedown
+	// anywhere hauled two thirds of the graph inward, with no drag at all.
+	const still = at([
+		['a', 0, 0],
+		['b', 600, 0],
+		['c', 900, 400],
+	])
+
+	const after = relax(still, [['a', 'b'], ['b', 'c']], { since: still, slack: 60, held: 'a' })
+
+	expect(after).toEqual(still)
+})
+
+test('a follower comes along only once the drag has stretched the edge past the slack', () => {
+	const since = at([
+		['a', 0, 0],
+		['b', 600, 0],
+	])
+
+	// Dragged 40px against 60px of slack: the edge stretches and nothing follows.
+	const inside = relax(at([['a', -40, 0], ['b', 600, 0]]), [['a', 'b']], {
+		since,
+		slack: 60,
+		held: 'a',
+	})
+	expect(inside.get('b')).toEqual({ x: 600, y: 0 })
+
+	// Dragged 200px: 140px past the slack, so `b` starts to come.
+	const past = relax(at([['a', -200, 0], ['b', 600, 0]]), [['a', 'b']], {
+		since,
+		slack: 60,
+		held: 'a',
+	})
+	expect(past.get('b')?.x).toBeLessThan(600)
+})
+
+test('the slack is measured from where the drag found the edge, not from a constant', () => {
+	// Two edges the layout placed at very different lengths. Dragging `a` by the
+	// same amount must treat them the same, or a long chord tows its follower
+	// from the first pixel and a short one never does.
+	const since = at([
+		['a', 0, 0],
+		['near', 100, 0],
+		['far', 0, 700],
+	])
+	const now = at([
+		['a', -100, -100],
+		['near', 100, 0],
+		['far', 0, 700],
+	])
+
+	const after = relax(now, [['a', 'near'], ['a', 'far']], { since, slack: 60, held: 'a' })
+
+	// Both edges grew by the same drag, and both are past the slack, so both
+	// followers move — the 700px one no further than the 100px one for it.
+	const near = after.get('near')
+	const far = after.get('far')
+	expect(near?.x).toBeLessThan(100)
+	expect(far?.y).toBeLessThan(700)
+})
+
+test('a node the drag has moved closer to never pushes its follower away', () => {
+	const since = at([
+		['a', 0, 0],
+		['b', 600, 0],
+	])
+
+	const after = relax(at([['a', 400, 0], ['b', 600, 0]]), [['a', 'b']], {
+		since,
+		slack: 60,
+		held: 'a',
+	})
+
+	expect(after.get('b')).toEqual({ x: 600, y: 0 })
+})
