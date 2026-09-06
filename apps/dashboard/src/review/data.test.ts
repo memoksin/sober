@@ -89,8 +89,8 @@ test('CI that could not be read is never a pass', () => {
 		tone: 'alarm',
 		text: 'CI could not be read — the host timed out',
 	})
-	expect(ciLine({ kind: 'passing' }).tone).toBe('clean')
-	expect(ciLine({ kind: 'pending' }).tone).toBe('warn')
+	expect(ciLine({ kind: 'passing' })?.tone).toBe('clean')
+	expect(ciLine({ kind: 'pending' })?.tone).toBe('warn')
 	expect(ciLine({ kind: 'failing', failed: ['build', 'test'] })).toEqual({
 		tone: 'alarm',
 		text: 'CI failed — build, test',

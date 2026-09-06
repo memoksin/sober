@@ -1,9 +1,10 @@
-import type { Projection } from '@besober/schema'
+import type { Projection, Review } from '@besober/schema'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
 import { DecisionScreen } from './panel/Decision.js'
-import type { BoardRead } from './panel/data.js'
+import type { Action, BoardRead } from './panel/data.js'
 import { Panel } from './panel/Panel.js'
+import { ReviewScreen } from './review/Review.js'
 import { wire } from './wire.js'
 
 /**
@@ -20,6 +21,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [withDone, setWithDone] = useState(false)
 	const [picked, setPicked] = useState<string | null>(null)
 	const [deciding, setDeciding] = useState<string | null>(null)
+	const [reviewing, setReviewing] = useState<Review | null>(null)
 
 	// The full board is only read while something is open. The canvas needs the
 	// slim projection every couple of seconds (ADR 0008); a drawer that is not
@@ -58,27 +60,75 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	useEffect(() => {
 		const back = (event: KeyboardEvent): void => {
 			if (event.key !== 'Escape') return
-			// One layer at a time: a decision opened from a node goes back to that
+			// One layer at a time: a screen opened from a node goes back to that
 			// node rather than clearing the board out from under it.
-			if (deciding !== null) setDeciding(null)
+			if (reviewing !== null) setReviewing(null)
+			else if (deciding !== null) setDeciding(null)
 			else setPicked(null)
 		}
 		addEventListener('keydown', back)
 		return () => removeEventListener('keydown', back)
-	}, [deciding])
+	}, [deciding, reviewing])
+
+	/**
+	 * What the board says now, after something changed it. Read rather than
+	 * patched: answering a decision or accepting work frees whatever was waiting
+	 * on it, and the board is the only thing that knows which.
+	 */
+	const refresh = useCallback(async (): Promise<void> => {
+		if (token === null) return
+		const surface = wire(token)
+		const [full, next] = await Promise.all([
+			surface.read<BoardRead>('board'),
+			surface.read<Projection>('projection'),
+		])
+		setBoard(full)
+		setProjection(next)
+	}, [token])
 
 	const answer = useCallback(
 		async (option: string, rationale: string): Promise<void> => {
 			if (token === null || deciding === null) return
-			const surface = wire(token)
-			await surface.op('decide', { decision: deciding, option, rationale })
-			// Read it back rather than patching what is on screen: the answer frees
-			// whatever was held by it, and the board is what knows which.
-			setBoard(await surface.read<BoardRead>('board'))
-			setProjection(await surface.read<Projection>('projection'))
+			await wire(token).op('decide', { decision: deciding, option, rationale })
+			await refresh()
 			setDeciding(null)
 		},
-		[token, deciding],
+		[token, deciding, refresh],
+	)
+
+	/**
+	 * Approve, run, stop — or open the review, which is a screen rather than an
+	 * operation. Nothing decides here what is allowed: `actions` offers only what
+	 * the status permits, and `core` is what refuses.
+	 */
+	const doTo = useCallback(
+		async (node: string, does: Action['does']): Promise<void> => {
+			if (token === null) return
+			const surface = wire(token)
+
+			if (does === 'review') {
+				setReviewing(await surface.read<Review>('review', { node }))
+				return
+			}
+
+			await surface.op(does, { node })
+			await refresh()
+		},
+		[token, refresh],
+	)
+
+	const settle = useCallback(
+		async (how: 'accept' | 'reject', text?: string): Promise<void> => {
+			if (token === null || reviewing === null) return
+			const surface = wire(token)
+			await surface.op(
+				how,
+				how === 'accept' ? { node: reviewing.node } : { node: reviewing.node, text },
+			)
+			await refresh()
+			setReviewing(null)
+		},
+		[token, reviewing, refresh],
 	)
 
 	// `done` is off by default: a board keeps its finished work, and after a few
@@ -138,6 +188,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 						onClose={() => setPicked(null)}
 						onPick={setPicked}
 						onDecide={setDeciding}
+						onDo={(does) => doTo(picked, does)}
 					/>
 				)}
 
@@ -147,6 +198,15 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 						id={deciding}
 						onClose={() => setDeciding(null)}
 						onAnswer={answer}
+					/>
+				)}
+
+				{reviewing !== null && (
+					<ReviewScreen
+						review={reviewing}
+						onClose={() => setReviewing(null)}
+						onAccept={() => settle('accept')}
+						onReject={(text) => settle('reject', text)}
 					/>
 				)}
 			</main>

@@ -1,5 +1,6 @@
-import type { BoardRead } from './data.js'
-import { held } from './data.js'
+import { useState } from 'react'
+import type { Action, BoardRead } from './data.js'
+import { actions, held } from './data.js'
 
 /**
  * One node, in full. The canvas answers "what is here and what touches what";
@@ -16,12 +17,14 @@ export const Panel = ({
 	onClose,
 	onPick,
 	onDecide,
+	onDo,
 }: {
 	readonly board: BoardRead
 	readonly id: string
 	readonly onClose: () => void
 	readonly onPick: (id: string) => void
 	readonly onDecide: (id: string) => void
+	readonly onDo: (action: Action['does']) => Promise<void>
 }): React.JSX.Element => {
 	const node = board.nodes.find((one) => one.id === id)
 
@@ -57,6 +60,8 @@ export const Panel = ({
 							×
 						</button>
 					</header>
+
+					<Doing status={node.status} onDo={onDo} />
 
 					<div className="flex flex-col gap-5 px-4 py-4">
 						{node.description !== '' && (
@@ -161,6 +166,63 @@ export const Panel = ({
 				</>
 			)}
 		</aside>
+	)
+}
+
+/**
+ * What this node can be moved on to next, from its status and nothing else.
+ * Directly under the title, because the panel is opened to read one thing and
+ * then do one thing, and hunting for the button is the part that makes a screen
+ * feel slower than a command.
+ */
+const Doing = ({
+	status,
+	onDo,
+}: {
+	readonly status: BoardRead['nodes'][number]['status']
+	readonly onDo: (does: Action['does']) => Promise<void>
+}): React.JSX.Element | null => {
+	const can = actions(status)
+	const [busy, setBusy] = useState<Action['does'] | null>(null)
+	const [refused, setRefused] = useState<string | null>(null)
+
+	if (can.length === 0) return null
+
+	const go = async (does: Action['does']): Promise<void> => {
+		setBusy(does)
+		setRefused(null)
+		try {
+			await onDo(does)
+		} catch (error) {
+			// `core` is what refuses, and it refuses in a sentence. A panel that
+			// swallowed it would leave a button that does nothing and says nothing.
+			setRefused(error instanceof Error ? error.message : String(error))
+		} finally {
+			setBusy(null)
+		}
+	}
+
+	return (
+		<div className="flex flex-col gap-2 border-[var(--line)] border-b px-4 py-3">
+			<div className="flex gap-2">
+				{can.map((action) => (
+					<button
+						key={action.does}
+						type="button"
+						onClick={() => void go(action.does)}
+						disabled={busy !== null}
+						className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:opacity-40"
+					>
+						{busy === action.does ? '…' : action.label}
+					</button>
+				))}
+			</div>
+			{refused !== null && (
+				<p className="text-[length:var(--text-sm)] text-[var(--danger)] leading-[var(--leading-prose)]">
+					{refused}
+				</p>
+			)}
+		</div>
 	)
 }
 
