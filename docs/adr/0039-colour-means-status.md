@@ -122,6 +122,12 @@ in its own status colour**. Nothing new is introduced by the bloom: it is the
 same signal, louder, so §2 holds — a glow in a colour the node does not already
 carry would be decoration.
 
+**The light reaches about 15% of a radius past the node's own edge.** It is a
+rim of light around a disc, not an aura around a region: at that reach the node
+is still obviously the subject, and on a board where several nodes sit close
+together the glows do not run into one another. Both blurs live inside that
+reach — two small steps rather than a tight one and a wide one.
+
 **No glow comes from Cytoscape at all**, and the reason took three attempts to
 find. An underlay is a solid shape drawn around the element's bounding box.
 `underlay-shape` is meant to make it follow the circle, but a build that does
@@ -135,6 +141,13 @@ positioned at the node's rendered position and following pan, zoom and the node
 itself. One node is hovered and one is selected, so it costs two elements and no
 per-node work. Two stacked blurs rather than one: a single blur reads as fog,
 two read as light.
+
+**Cytoscape ships a black overlay on `:active`**, and that was the third
+square — the only one nobody wrote. It is drawn around the bounding box while
+an element is held down, so it appeared on click and survived removing the
+underlay, which is why the rectangle kept coming back after each fix. It is
+switched off: the selection bloom is the feedback, and a default that draws a
+black rectangle on a dark ground is not.
 
 **Alpha belongs in the colour, never on the element**, and this is the second
 place the black came from. `opacity` on the glow element scales both blurs
