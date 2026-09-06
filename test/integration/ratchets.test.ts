@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
@@ -50,6 +50,42 @@ test('every source directory that exists is a directory the boundaries check rea
 	for (const dir of ['apps', 'packages', 'test']) {
 		if (!existsSync(join(repoRoot, dir))) continue
 		expect(script, `${dir}/ exists and \`pnpm boundaries\` does not read it`).toContain(dir)
+	}
+})
+
+/** Every workspace directory that holds source, whether or not it is a package. */
+const sourceDirectories = (): string[] =>
+	['apps', 'packages']
+		.filter((parent) => existsSync(join(repoRoot, parent)))
+		.flatMap((parent) =>
+			readdirSync(join(repoRoot, parent))
+				.map((name) => `${parent}/${name}`)
+				.filter((dir) => lines(dir) > 0),
+		)
+
+/**
+ * The boundaries test above, one directory over, and the same gap. The coverage
+ * ratchet groups a file by `/packages/<name>/`, so nothing under `apps/` has
+ * ever matched — and `pnpm coverage:update` cannot put it back, because a
+ * script that does not match a directory cannot report it missing either. The
+ * whole of the canvas was written with no floor under it and every run said
+ * green.
+ *
+ * Asserted against the baseline rather than against the script's regex: what
+ * matters is that a floor exists, not how the script arrives at it.
+ */
+test('every source directory that exists has a coverage floor', () => {
+	const baseline = JSON.parse(
+		readFileSync(join(repoRoot, 'coverage-baseline.json'), 'utf8'),
+	) as Record<string, number>
+	// The script's own exclusions: a types-and-Zod package produces tests
+	// written to reach a number (STRUCTURE.md).
+	const excluded = new Set(['schema', 'tsconfig'])
+
+	for (const dir of sourceDirectories()) {
+		const name = dir.split('/')[1] ?? ''
+		if (excluded.has(name)) continue
+		expect(baseline, `${dir} holds source and has no coverage floor`).toHaveProperty(name)
 	}
 })
 
