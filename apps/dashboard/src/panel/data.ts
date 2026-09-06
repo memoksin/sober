@@ -105,3 +105,41 @@ export const offer = (decision: Decision): Offer => {
 		refusal: null,
 	}
 }
+
+export interface Action {
+	/** An operation on the wire, or `review`, which opens a screen. */
+	readonly does: 'approve' | 'run' | 'stop' | 'review'
+	readonly label: string
+}
+
+/**
+ * What a person can do with this node right now, from its status and nothing
+ * else. Status is derived (DESIGN §3.2), so a button offered here cannot
+ * disagree with the board — which is the failure this exists to make
+ * impossible, and the one M2's gate found in the terminal: a node accepted from
+ * a session still read as reviewable and offered an accept that had no branch
+ * left to merge.
+ *
+ * Approving and running are never offered together. They are one step of the
+ * loop and two acts on the board, and a panel that offered both would be
+ * offering to start work nobody has read.
+ */
+export const actions = (status: Status | null): readonly Action[] => {
+	switch (status) {
+		case 'needs-approval':
+			return [{ does: 'approve', label: 'Approve the brief' }]
+		case 'ready':
+			return [{ does: 'run', label: 'Run' }]
+		case 'running':
+			return [{ does: 'stop', label: 'Stop' }]
+		case 'in-review':
+			return [{ does: 'review', label: 'Review' }]
+		// A review of accepted work is a record of what was accepted rather than
+		// a decision waiting to be made — still worth opening, never a second
+		// accept.
+		case 'done':
+			return [{ does: 'review', label: 'What was accepted' }]
+		default:
+			return []
+	}
+}
