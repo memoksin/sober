@@ -1,7 +1,8 @@
-# 0041 — The panel floats, and the decision stops you
+# 0041 — The panel floats, and the screens that stop you
 
 - **Status:** accepted
 - **Date:** 2026-09-06
+- **Covers:** the node panel, the decision screen and the review screen
 
 ## Context
 
@@ -72,6 +73,34 @@ The same is true of a decision nobody has opened. It has no options because
 options are generated in a session, against the code as it is now — so the
 screen says that, and does not offer an empty list.
 
+### The review is the second stopping screen, and it is wider
+
+It shares the decision screen's shell — a card in the middle, the board pushed
+back — because accepting work is the same kind of act as answering a question.
+It is 900px against the decision's 640, because four option cards read at 640
+and a diff does not.
+
+Its order is ADR 0022's argument made visible: the scan, then CI, then what you
+asked the work to prove, and the diff last and folded. A reviewer who reads
+every line to find the problem is doing the scan's job by hand.
+
+Turning work down asks for the note before it offers the button. The note is
+carried into the next run, which is the thing that makes rejecting cheaper than
+fixing by hand — and a "reject" that took no reason would throw that away.
+
+### A node's next step is one row under its title
+
+`actions` maps a derived status to what can be done with it, and nothing else
+decides. Approving and running are never offered together: they are one step of
+the loop and two acts on the board, and offering both is offering to start work
+nobody has read. A node that is `done` offers its review as a record and never
+a second accept — which M2's gate found in the terminal, where the second
+accept then had no branch left to merge.
+
+The panel does not decide what is allowed; it decides what to offer. `core` is
+still what refuses, and its sentence lands under the button rather than in a
+console.
+
 ### The full board is read only while something is open
 
 The canvas polls the slim projection every two seconds (ADR 0008, ADR 0036).
@@ -95,8 +124,10 @@ is what knows which.
   read: `held` resolving a wait into a question or a title, and `offer` saying
   what a decision offers. The rendering is verified by hand, which is what
   every phase-5 session ends with.
-- The decision screen is the first surface in SOBER that a person answers a
-  decision on without a terminal. That is one of the nine steps of the M3 gate.
+- Five of the M3 gate's nine steps are now reachable with no terminal:
+  approve a brief, start a run, read the review, accept or turn down, and watch
+  a downstream node come off `blocked`. What is left for later sessions is the
+  digest, the flagged-node flow and the impact preview.
 
 ## Alternatives rejected
 
