@@ -137,6 +137,42 @@ test('a package outside core that reaches for the filesystem fails the boundarie
 }, 120_000)
 
 /**
+ * The CLI inlines the built dashboard at build time (`packages/cli/build.mjs`
+ * reads `apps/dashboard/dist` into `__SOBER_CLIENT__`), and turbo's `^build`
+ * follows package dependencies and nothing else. `@besober/dashboard` was not
+ * one, so a change to the canvas rebuilt `apps/dashboard/dist` and then replayed
+ * `packages/cli` from a cache key that never mentioned it: `pnpm build` reported
+ * FULL TURBO and `sober dashboard` went on serving the client from before the
+ * change, with a fresh mtime on it to say otherwise.
+ *
+ * That cost three bug reports and two correct fixes that changed nothing a
+ * person could see — the canvas was fixed and the binary still held the old one.
+ * Read out of `build.mjs` rather than listed here, so the next directory the
+ * bundler learns to inline arrives with its own dependency or goes red.
+ */
+test('every app whose build output the CLI inlines is a dependency of the CLI', () => {
+	const build = readFileSync(join(repoRoot, 'packages/cli/build.mjs'), 'utf8')
+	const cli = JSON.parse(readFileSync(join(repoRoot, 'packages/cli/package.json'), 'utf8')) as {
+		dependencies?: Record<string, string>
+		devDependencies?: Record<string, string>
+	}
+	const declared = { ...cli.dependencies, ...cli.devDependencies }
+
+	const inlined = [...build.matchAll(/apps\/([\w-]+)\/dist/g)].map(([, name]) => name)
+	expect(inlined, 'build.mjs inlines no app — this test is measuring nothing').not.toHaveLength(0)
+
+	for (const app of inlined) {
+		const { name } = JSON.parse(
+			readFileSync(join(repoRoot, `apps/${app}/package.json`), 'utf8'),
+		) as { name: string }
+		expect(
+			declared,
+			`packages/cli/build.mjs inlines apps/${app}/dist and does not depend on ${name} — turbo will serve a stale one`,
+		).toHaveProperty(name)
+	}
+})
+
+/**
  * §7's second alarm. v0's ratio was 0.67 and the dashboard was still the thing
  * that ran away, because the problem was order rather than size — but this is
  * the one number that would have shown the phase running long while it was

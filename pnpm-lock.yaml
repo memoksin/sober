@@ -108,6 +108,9 @@ importers:
       '@besober/core':
         specifier: workspace:*
         version: link:../core
+      '@besober/dashboard':
+        specifier: workspace:*
+        version: link:../../apps/dashboard
       '@besober/mcp':
         specifier: workspace:*
         version: link:../mcp
