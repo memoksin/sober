@@ -1,6 +1,6 @@
 import type { Projection } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { elementsOf, glow, relax } from './graph.js'
+import { elementsOf, glow, pack, relax } from './graph.js'
 
 const board: Projection = {
 	nodes: [
@@ -90,18 +90,27 @@ test('the node under the pointer never moves — the person is holding it', () =
 	expect(after.get('a')).toEqual({ x: 0, y: 0 })
 })
 
-test('where neither end is held, both give half', () => {
+test('an edge with nothing to do with the held node is left where it is', () => {
+	// The pull starts at the hand and travels outward. Enforcing the limit
+	// everywhere at once means the first drag of the session tidies the whole
+	// board — the far side rearranges itself while you are looking at a node
+	// you did not touch.
+	const before = at([
+		['a', 0, 0],
+		['b', 300, 0],
+		['far', 900, 900],
+	])
+
 	const after = relax(
-		at([
-			['a', 0, 0],
-			['b', 300, 0],
-		]),
-		[['a', 'b']],
-		{ max: 100, held: 'someone-else' },
+		before,
+		[
+			['a', 'b'],
+			['b', 'far'],
+		],
+		{ max: 100, held: 'nothing-here' },
 	)
 
-	expect(after.get('a')?.x).toBeCloseTo(100)
-	expect(after.get('b')?.x).toBeCloseTo(200)
+	expect(after).toEqual(before)
 })
 
 test('a pull travels past the first neighbour', () => {
@@ -133,6 +142,26 @@ test('it returns new positions and leaves the ones it was given alone', () => {
 	relax(before, [['a', 'b']], { max: 100, held: 'a' })
 
 	expect(before).toEqual(snapshot)
+})
+
+test('the pull reaches a neighbour whose edge is listed before the one that moves it', () => {
+	// Edge order is whatever Cytoscape hands over. If the wave only travels in
+	// list order, half the graph is left behind on a board that reads b—c
+	// before a—b.
+	const after = relax(
+		at([
+			['a', 0, 0],
+			['b', 400, 0],
+			['c', 800, 0],
+		]),
+		[
+			['b', 'c'],
+			['a', 'b'],
+		],
+		{ max: 100, held: 'a' },
+	)
+
+	expect(after.get('c')?.x).toBeLessThan(800)
 })
 
 test('two nodes on top of each other do not divide by zero', () => {
@@ -170,4 +199,90 @@ test('the glow never fades towards transparent', () => {
 
 test('a power of zero is no light, not a black ring', () => {
 	expect(glow(10, 'var(--status-ready)', { extent: 0.45, power: 0 })).toBe('none')
+})
+
+const SPACING = 110
+
+const linked = (nodes: readonly (readonly [string, readonly string[]])[]): Projection => ({
+	nodes: nodes.map(([id, dependsOn]) => ({
+		id,
+		title: id.toUpperCase(),
+		status: 'ready',
+		dependsOn: [...dependsOn],
+	})),
+})
+
+const islands = (count: number) =>
+	linked(Array.from({ length: count }, (_, i) => [`n${i}`, []] as const))
+
+const apart = (positions: ReadonlyMap<string, { x: number; y: number }>): number => {
+	const all = [...positions.values()]
+	let least = Number.POSITIVE_INFINITY
+	for (let i = 0; i < all.length; i++)
+		for (let j = i + 1; j < all.length; j++) {
+			const a = all[i]
+			const b = all[j]
+			if (a === undefined || b === undefined) continue
+			least = Math.min(least, Math.hypot(a.x - b.x, a.y - b.y))
+		}
+	return least
+}
+
+test('every node is placed', () => {
+	expect(pack(islands(40), { spacing: SPACING }).size).toBe(40)
+})
+
+test('no two nodes are ever laid on top of each other', () => {
+	// The whole reason this exists. A simulation settles into overlaps and only
+	// separates them when something nudges it; rings cannot overlap, because
+	// each one is given exactly as many places as it has room for.
+	for (const count of [1, 2, 7, 40, 200]) {
+		const placed = pack(islands(count), { spacing: SPACING })
+		if (count > 1) expect(apart(placed), `${count} nodes`).toBeGreaterThanOrEqual(SPACING - 0.001)
+	}
+})
+
+test('it stays compact — 200 nodes fit in a square a screen could show', () => {
+	// A force layout on a board of islands spreads until `fit` has to zoom out
+	// past the point where a label can be read.
+	const placed = [...pack(islands(200), { spacing: SPACING }).values()]
+	const reach = Math.max(...placed.map((at) => Math.hypot(at.x, at.y)))
+
+	expect(reach).toBeLessThan(SPACING * 9)
+})
+
+test('nodes that depend on each other land near each other', () => {
+	// Rings are the shape; the order around them is the graph. Without it a
+	// chain becomes chords across the whole circle.
+	const chain = linked([
+		['a', []],
+		['b', ['a']],
+		['c', ['b']],
+		...Array.from({ length: 30 }, (_, i) => [`x${i}`, []] as const),
+	])
+	const placed = pack(chain, { spacing: SPACING })
+	const gap = (from: string, to: string) => {
+		const a = placed.get(from)
+		const b = placed.get(to)
+		return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : Number.POSITIVE_INFINITY
+	}
+
+	expect(gap('a', 'b')).toBeLessThan(SPACING * 2.2)
+	expect(gap('b', 'c')).toBeLessThan(SPACING * 2.2)
+})
+
+test('the same board is placed the same way twice', () => {
+	// Positions are not board state (ADR 0016), so they are recomputed on every
+	// open. Recomputed differently every time is a board that moves under you.
+	const twice = linked([
+		['a', []],
+		['b', ['a']],
+		['c', []],
+	])
+
+	expect(pack(twice, { spacing: SPACING })).toEqual(pack(twice, { spacing: SPACING }))
+})
+
+test('an empty board is placed nowhere, not at the origin', () => {
+	expect(pack({ nodes: [] }, { spacing: SPACING }).size).toBe(0)
 })
