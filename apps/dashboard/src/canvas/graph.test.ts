@@ -1,6 +1,6 @@
 import type { Projection } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { drift, elementsOf, glow, pack, relax } from './graph.js'
+import { drift, elementsOf, glow, pack, tow } from './graph.js'
 
 const board: Projection = {
 	nodes: [
@@ -53,178 +53,6 @@ test('an empty board is an empty canvas, not a failure', () => {
 
 const at = (entries: readonly [string, number, number][]) =>
 	new Map(entries.map(([id, x, y]) => [id, { x, y }]))
-
-test('an edge inside the slack is left alone', () => {
-	const since = at([
-		['a', 0, 0],
-		['b', 50, 0],
-	])
-	const before = at([
-		['a', -30, 0],
-		['b', 50, 0],
-	])
-
-	expect(relax(before, [['a', 'b']], { since, slack: 100, held: 'a' })).toEqual(before)
-})
-
-test('an edge past the slack pulls the far node back to exactly the limit', () => {
-	const after = relax(
-		at([
-			['a', -250, 0],
-			['b', 50, 0],
-		]),
-		[['a', 'b']],
-		{
-			since: at([
-				['a', 0, 0],
-				['b', 50, 0],
-			]),
-			slack: 100,
-			held: 'a',
-		},
-	)
-
-	// The edge was 50 and may be 150, so `b` lands 150 from where the hand is.
-	expect(after.get('b')?.x).toBeCloseTo(-100)
-	expect(after.get('b')?.y).toBeCloseTo(0)
-})
-
-test('the node under the pointer never moves — the person is holding it', () => {
-	const after = relax(
-		at([
-			['a', 0, 0],
-			['b', 300, 0],
-		]),
-		[['a', 'b']],
-		{
-			since: at([
-				['a', 0, 0],
-				['b', 50, 0],
-			]),
-			slack: 100,
-			held: 'a',
-		},
-	)
-
-	expect(after.get('a')).toEqual({ x: 0, y: 0 })
-})
-
-test('an edge with nothing to do with the held node is left where it is', () => {
-	// The pull starts at the hand and travels outward. Enforcing the limit
-	// everywhere at once means the first drag of the session tidies the whole
-	// board — the far side rearranges itself while you are looking at a node
-	// you did not touch.
-	const before = at([
-		['a', 0, 0],
-		['b', 300, 0],
-		['far', 900, 900],
-	])
-
-	const after = relax(
-		before,
-		[
-			['a', 'b'],
-			['b', 'far'],
-		],
-		{ since: before, slack: 100, held: 'nothing-here' },
-	)
-
-	expect(after).toEqual(before)
-})
-
-test('a pull travels past the first neighbour', () => {
-	// a—b—c in a line. Dragging `a` far away must move `c` too, or the constraint
-	// stops at one hop and the graph tears instead of following.
-	const after = relax(
-		at([
-			['a', 0, 0],
-			['b', 400, 0],
-			['c', 800, 0],
-		]),
-		[
-			['a', 'b'],
-			['b', 'c'],
-		],
-		{
-			since: at([
-				['a', 400, 0],
-				['b', 400, 0],
-				['c', 800, 0],
-			]),
-			slack: 100,
-			held: 'a',
-		},
-	)
-
-	expect(after.get('c')?.x).toBeLessThan(800)
-})
-
-test('it returns new positions and leaves the ones it was given alone', () => {
-	const before = at([
-		['a', 0, 0],
-		['b', 300, 0],
-	])
-	const snapshot = new Map([...before].map(([id, p]) => [id, { ...p }]))
-
-	relax(before, [['a', 'b']], {
-		since: at([
-			['a', 250, 0],
-			['b', 300, 0],
-		]),
-		slack: 100,
-		held: 'a',
-	})
-
-	expect(before).toEqual(snapshot)
-})
-
-test('the pull reaches a neighbour whose edge is listed before the one that moves it', () => {
-	// Edge order is whatever Cytoscape hands over. If the wave only travels in
-	// list order, half the graph is left behind on a board that reads b—c
-	// before a—b.
-	const after = relax(
-		at([
-			['a', 0, 0],
-			['b', 400, 0],
-			['c', 800, 0],
-		]),
-		[
-			['b', 'c'],
-			['a', 'b'],
-		],
-		{
-			since: at([
-				['a', 400, 0],
-				['b', 400, 0],
-				['c', 800, 0],
-			]),
-			slack: 100,
-			held: 'a',
-		},
-	)
-
-	expect(after.get('c')?.x).toBeLessThan(800)
-})
-
-test('two nodes on top of each other do not divide by zero', () => {
-	const after = relax(
-		at([
-			['a', 10, 10],
-			['b', 10, 10],
-		]),
-		[['a', 'b']],
-		{
-			since: at([
-				['a', 10, 10],
-				['b', 10, 10],
-			]),
-			slack: 100,
-			held: 'a',
-		},
-	)
-
-	expect(after.get('b')).toEqual({ x: 10, y: 10 })
-})
 
 test('the glow scales with the node rather than with a pixel count', () => {
 	const small = glow(8, 'var(--status-ready)', { extent: 0.45, power: 1 })
@@ -386,180 +214,110 @@ test('no amplitude is no motion, which is what reduced motion asks for', () => {
 	expect(drift('auth-api-k7f2', 9999, { amplitude: 0, period: 7000 })).toEqual({ x: 0, y: 0 })
 })
 
-test('easing closes part of the gap, not all of it', () => {
-	// A follower that snaps to the limit is on the end of a rod. Closing a
-	// fraction per frame is what makes it read as being towed.
-	const after = relax(
-		at([
-			['a', 0, 0],
-			['b', 300, 0],
-		]),
-		[['a', 'b']],
-		{
-			since: at([
-				['a', 200, 0],
-				['b', 300, 0],
-			]),
-			slack: 0,
-			held: 'a',
-			ease: 0.25,
-		},
-	)
+const chain = (): readonly (readonly [string, string])[] => [
+	['a', 'b'],
+	['b', 'c'],
+	['c', 'd'],
+	['d', 'e'],
+]
 
-	expect(after.get('b')?.x).toBeCloseTo(250)
+const line = at([
+	['a', 0, 0],
+	['b', 100, 0],
+	['c', 200, 0],
+	['d', 300, 0],
+	['e', 400, 0],
+])
+
+test('a hand that has not moved tows nothing, and no number of frames changes that', () => {
+	// The defect this replaces was a one-way constraint: it only ever pulled a
+	// follower closer, never let one back, and it ran on every frame the node was
+	// held. A long press with a pixel of jitter ratcheted the board inward and
+	// never gave it back. What replaces it has the resting layout as its fixed
+	// point, so a press is still by construction.
+	let positions = line
+	for (let frame = 0; frame < 200; frame++)
+		positions = tow(positions, chain(), { since: line, slack: 60, held: 'a' })
+
+	expect(positions).toEqual(line)
 })
 
-test('an eased follower arrives, given enough frames', () => {
-	// It has to converge on the limit and not merely approach it slowly: the
-	// pointer stops long before the eye does.
-	let positions = at([
-		['a', 0, 0],
-		['b', 900, 0],
-	])
-	for (let frame = 0; frame < 60; frame++)
-		positions = relax(positions, [['a', 'b']], {
-			since: at([
-				['a', 200, 0],
-				['b', 300, 0],
-			]),
-			slack: 0,
-			held: 'a',
-			ease: 0.25,
-		})
+test('a hand inside the slack tows nothing', () => {
+	const nudged = new Map(line).set('a', { x: -40, y: 0 })
 
-	expect(positions.get('b')?.x).toBeCloseTo(100, 1)
+	expect(tow(nudged, chain(), { since: line, slack: 60, held: 'a' })).toEqual(nudged)
 })
 
-test('easing never pulls a follower past the limit', () => {
-	// Overshoot on a chain is a whip, and a whip is the opposite of floating.
-	let positions = at([
-		['a', 0, 0],
-		['b', 400, 0],
-	])
-	for (let frame = 0; frame < 40; frame++) {
-		positions = relax(positions, [['a', 'b']], {
-			since: at([
-				['a', 200, 0],
-				['b', 300, 0],
-			]),
-			slack: 0,
-			held: 'a',
-			ease: 0.25,
-		})
-		expect(positions.get('b')?.x).toBeGreaterThanOrEqual(100)
-	}
+test('past the slack the neighbours follow, and further ones follow less', () => {
+	const dragged = new Map(line).set('a', { x: -260, y: 0 })
+	const after = tow(dragged, chain(), { since: line, slack: 60, held: 'a', ease: 1 })
+
+	const moved = (id: string) => (line.get(id)?.x ?? 0) - (after.get(id)?.x ?? 0)
+
+	expect(after.get('a')).toEqual({ x: -260, y: 0 })
+	expect(moved('b')).toBeGreaterThan(0)
+	expect(moved('b')).toBeGreaterThan(moved('c'))
+	expect(moved('c')).toBeGreaterThan(moved('d'))
 })
 
-test('a node grabbed and not moved pulls nothing, however long its edges are', () => {
-	// The bug this replaces: `MAX_EDGE` was an absolute length the placed layout
-	// never satisfied — on a real 39-node board, 38 of 45 edges opened over it
-	// and the longest was 672px against a limit of 170. So the first mousedown
-	// anywhere hauled two thirds of the graph inward, with no drag at all.
-	const still = at([
-		['a', 0, 0],
-		['b', 600, 0],
-		['c', 900, 400],
-	])
+test('the tow reverses — dragging back puts the followers back', () => {
+	// The property the ratchet did not have, and the one that makes a long press
+	// safe: every position is a function of where the hand is now, so there is
+	// no state to accumulate in.
+	const out = tow(new Map(line).set('a', { x: -400, y: 0 }), chain(), {
+		since: line,
+		slack: 60,
+		held: 'a',
+		ease: 1,
+	})
+	expect(out.get('b')?.x).toBeLessThan(100)
 
-	const after = relax(
-		still,
-		[
-			['a', 'b'],
-			['b', 'c'],
-		],
-		{ since: still, slack: 60, held: 'a' },
-	)
-
-	expect(after).toEqual(still)
+	const back = tow(new Map(out).set('a', { x: 0, y: 0 }), chain(), {
+		since: line,
+		slack: 60,
+		held: 'a',
+		ease: 1,
+	})
+	expect(back.get('b')?.x).toBeCloseTo(100)
 })
 
-test('a follower comes along only once the drag has stretched the edge past the slack', () => {
-	const since = at([
-		['a', 0, 0],
-		['b', 600, 0],
-	])
+test('the tow lags, and arrives when the frames keep coming', () => {
+	// A follower that lands on its mark in the frame the limit is crossed is a
+	// rod. It closes a fraction per frame instead, so the edge stretches while
+	// the hand moves and comes back after it stops.
+	const dragged = new Map(line).set('a', { x: -400, y: 0 })
 
-	// Dragged 40px against 60px of slack: the edge stretches and nothing follows.
-	const inside = relax(
-		at([
-			['a', -40, 0],
-			['b', 600, 0],
-		]),
-		[['a', 'b']],
-		{
-			since,
-			slack: 60,
-			held: 'a',
-		},
-	)
-	expect(inside.get('b')).toEqual({ x: 600, y: 0 })
+	const one = tow(dragged, chain(), { since: line, slack: 60, held: 'a', ease: 0.2 })
+	const settled = tow(dragged, chain(), { since: line, slack: 60, held: 'a', ease: 1 })
+	expect(one.get('b')?.x).toBeGreaterThan(settled.get('b')?.x ?? 0)
 
-	// Dragged 200px: 140px past the slack, so `b` starts to come.
-	const past = relax(
-		at([
-			['a', -200, 0],
-			['b', 600, 0],
-		]),
-		[['a', 'b']],
-		{
-			since,
-			slack: 60,
-			held: 'a',
-		},
-	)
-	expect(past.get('b')?.x).toBeLessThan(600)
+	let positions = dragged
+	for (let frame = 0; frame < 80; frame++)
+		positions = tow(positions, chain(), { since: line, slack: 60, held: 'a', ease: 0.2 })
+	expect(positions.get('b')?.x).toBeCloseTo(settled.get('b')?.x ?? 0, 1)
 })
 
-test('the slack is measured from where the drag found the edge, not from a constant', () => {
-	// Two edges the layout placed at very different lengths. Dragging `a` by the
-	// same amount must treat them the same, or a long chord tows its follower
-	// from the first pixel and a short one never does.
-	const since = at([
+test('a node the drag cannot reach is left exactly where it was', () => {
+	const island = at([
 		['a', 0, 0],
-		['near', 100, 0],
-		['far', 0, 700],
+		['b', 100, 0],
+		['far', 900, 900],
 	])
-	const now = at([
-		['a', -100, -100],
-		['near', 100, 0],
-		['far', 0, 700],
-	])
+	const after = tow(new Map(island).set('a', { x: -400, y: 0 }), [['a', 'b']], {
+		since: island,
+		slack: 60,
+		held: 'a',
+		ease: 1,
+	})
 
-	const after = relax(
-		now,
-		[
-			['a', 'near'],
-			['a', 'far'],
-		],
-		{ since, slack: 60, held: 'a' },
-	)
-
-	// Both edges grew by the same drag, and both are past the slack, so both
-	// followers move — the 700px one no further than the 100px one for it.
-	const near = after.get('near')
-	const far = after.get('far')
-	expect(near?.x).toBeLessThan(100)
-	expect(far?.y).toBeLessThan(700)
+	expect(after.get('far')).toEqual({ x: 900, y: 900 })
 })
 
-test('a node the drag has moved closer to never pushes its follower away', () => {
-	const since = at([
-		['a', 0, 0],
-		['b', 600, 0],
-	])
+test('it returns new positions and leaves the ones it was given alone', () => {
+	const before = new Map(line).set('a', { x: -400, y: 0 })
+	const snapshot = new Map([...before].map(([id, p]) => [id, { ...p }]))
 
-	const after = relax(
-		at([
-			['a', 400, 0],
-			['b', 600, 0],
-		]),
-		[['a', 'b']],
-		{
-			since,
-			slack: 60,
-			held: 'a',
-		},
-	)
+	tow(before, chain(), { since: line, slack: 60, held: 'a', ease: 1 })
 
-	expect(after.get('b')).toEqual({ x: 600, y: 0 })
+	expect(before).toEqual(snapshot)
 })
