@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net'
 import { type Paths, SoberError } from '@besober/core'
 import { z } from 'zod'
+import type { Client } from './client.js'
 import { OPS, READS, type Route } from './routes.js'
 
 /**
@@ -22,15 +23,15 @@ const LOOPBACK = new Set([HOST, 'localhost', '[::1]', '::1'])
 const MAX_BODY = 1_000_000
 
 /**
- * What a browser gets at `/` until S2 puts the canvas there. It names the
- * server, says why there is nothing to look at, and carries no board.
+ * What a browser gets at `/` when no dashboard was built into this binary —
+ * `pnpm dev`, or a test. It names the server and carries no board.
  */
 const GREETING = [
 	'SOBER — the board is served here.',
 	'',
-	'There is no screen yet: this is the wire contract, and the canvas arrives',
-	'with the next session. Everything under /read and /op wants the token that',
-	'`sober dashboard` printed, as `Authorization: Bearer <token>`.',
+	'No dashboard was built into this binary, so there is nothing to look at.',
+	'Everything under /read and /op wants the token that `sober dashboard`',
+	'printed, as `Authorization: Bearer <token>`.',
 	'',
 	'A new token is minted every time the command starts.',
 	'',
@@ -47,6 +48,8 @@ export interface ServeOptions {
 	readonly paths: Paths
 	/** Fixed port, for a caller that wants one. The default is whatever is free. */
 	readonly port?: number
+	/** The built dashboard. Without one, `/` explains itself in plain text. */
+	readonly client?: Client
 }
 
 const json = (response: ServerResponse, status: number, body: unknown): void => {
@@ -133,6 +136,45 @@ const message = (error: unknown): string => {
 	return error instanceof Error ? error.message : String(error)
 }
 
+/**
+ * The dashboard, or a sentence saying why there is none. Unauthenticated
+ * because it has to be: a browser handed a printed address sends no
+ * `Authorization` header, and neither does a `<script src>`. Nothing here is
+ * worth a token — the same bytes for everyone, no board, and no credential.
+ * The token reaches the page in the URL fragment, which a browser keeps to
+ * itself.
+ *
+ * A missing asset is a 404 rather than the page again. Serving index.html for
+ * every path is the usual single-page-app move, and it turns a mistyped script
+ * URL into HTML with a 200 and a syntax error in a file that does not exist.
+ */
+const page = (response: ServerResponse, pathname: string, client: Client | undefined): void => {
+	const asset = client?.[pathname === '/' ? '/index.html' : pathname]
+
+	if (asset !== undefined) {
+		response.writeHead(200, {
+			'content-type': asset.type,
+			'content-length': Buffer.byteLength(asset.body),
+			// The port changes on every start, so nothing here outlives its
+			// origin anyway — and a stale canvas is worse than a second request.
+			'cache-control': 'no-store',
+		})
+		response.end(asset.body)
+		return
+	}
+
+	if (client !== undefined || pathname !== '/') {
+		fail(response, 404, `nothing is routed at ${pathname}`)
+		return
+	}
+
+	response.writeHead(200, {
+		'content-type': 'text/plain; charset=utf-8',
+		'cache-control': 'no-store',
+	})
+	response.end(GREETING)
+}
+
 /** `/op/<name>` or `/read/<name>` — the path is the operation (ADR 0036). */
 const routed = (
 	pathname: string,
@@ -144,7 +186,7 @@ const routed = (
 	return null
 }
 
-export const serve = async ({ paths, port = 0 }: ServeOptions): Promise<Served> => {
+export const serve = async ({ paths, port = 0, client }: ServeOptions): Promise<Served> => {
 	const token = randomBytes(32).toString('hex')
 
 	const server: Server = createServer((request, response) => {
@@ -157,23 +199,16 @@ export const serve = async ({ paths, port = 0 }: ServeOptions): Promise<Served> 
 		if (!isLoopbackHost(request)) return fail(response, 403, 'this server answers on loopback only')
 
 		const url = new URL(request.url ?? '/', `http://${HOST}`)
+		const method = request.method ?? 'GET'
+		const match = routed(url.pathname)
 
-		// The one unauthenticated path, and it exists because of what the
-		// command prints: a person is handed an address, and a browser opening
-		// it sends no `Authorization` header. Before this, the only URL anybody
-		// was given answered with a 401 about a token they had never been asked
-		// for.
-		//
-		// It carries no board, so there is nothing here for a rebound page to
-		// read — and the loopback host check above still applies. In S2 this
-		// becomes the client's entry point.
-		if (url.pathname === '/' && (request.method ?? 'GET') === 'GET') {
-			response.writeHead(200, {
-				'content-type': 'text/plain; charset=utf-8',
-				'cache-control': 'no-store',
-			})
-			response.end(GREETING)
-			return
+		// Everything the wire answers is settled before the client is consulted,
+		// so an asset map cannot shadow a route whatever it happens to be keyed
+		// by — and the page below stays unauthenticated without widening what is
+		// reachable without a token.
+		if (match === null) {
+			if (method !== 'GET') return fail(response, 404, `nothing is routed at ${url.pathname}`)
+			return page(response, url.pathname, client)
 		}
 
 		// Two refusals, not one. "Missing or wrong" is true and useless: the two
@@ -189,11 +224,9 @@ export const serve = async ({ paths, port = 0 }: ServeOptions): Promise<Served> 
 				'that is not this server’s token — a new one is minted every time `sober dashboard` starts',
 			)
 
-		const match = routed(url.pathname)
-		if (match === null || match.route === undefined)
+		if (match.route === undefined)
 			return fail(response, 404, `nothing is routed at ${url.pathname}`)
 
-		const method = request.method ?? 'GET'
 		const wanted = match.kind === 'op' ? 'POST' : 'GET'
 		if (method !== wanted)
 			return fail(response, 405, `${url.pathname} is a ${wanted}, and this was a ${method}`)
