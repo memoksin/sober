@@ -122,18 +122,27 @@ in its own status colour**. Nothing new is introduced by the bloom: it is the
 same signal, louder, so §2 holds — a glow in a colour the node does not already
 carry would be decoration.
 
-**The bloom is a blur, and it does not come from Cytoscape.** An underlay is a
-solid shape: it has a `shape` property, so it can follow the circle rather than
-the bounding box, but it has no blur, and a hard disc at low opacity is a halo
-rather than a glow. The bloom is therefore one DOM element behind the graph,
-positioned at the hovered node's rendered position and following pan, zoom and
-the node itself. One node is hovered at a time, so it costs one element and no
+**No glow comes from Cytoscape at all**, and the reason took three attempts to
+find. An underlay is a solid shape drawn around the element's bounding box.
+`underlay-shape` is meant to make it follow the circle, but a build that does
+not know the property ignores it in silence and draws the rectangle anyway —
+so a square kept coming back with no error to explain it. An underlay also has
+no blur, so even when it does follow the circle it is a hard disc: a halo, not
+a glow.
+
+Both states therefore light through **one DOM element each, behind the graph**,
+positioned at the node's rendered position and following pan, zoom and the node
+itself. One node is hovered and one is selected, so it costs two elements and no
 per-node work. Two stacked blurs rather than one: a single blur reads as fog,
 two read as light.
 
-The selection halo stays a Cytoscape underlay, with `underlay-shape: ellipse`
-so that it follows the circle. Without that property it is drawn around the
-bounding box, which is what a square glow was.
+**Alpha belongs in the colour, never on the element**, and this is the second
+place the black came from. `opacity` on the glow element scales both blurs
+together and composites them as one layer, which turns a bright halo into a grey
+smear. `color-mix(…, transparent)` is the same trap in CSS: `transparent` is
+black at zero alpha, so mixing towards it drags a colour towards black and a
+glow fades to grey rather than to nothing. The colours carry their own alpha —
+`rgba()` where the source is hex, `oklch(from … / a)` where it is a token.
 
 **Only the pointed-at node.** Its neighbourhood keeps the treatment it already
 had, staying lit while everything else fades. This is a design choice and a
