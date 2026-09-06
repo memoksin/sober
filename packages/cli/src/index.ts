@@ -82,6 +82,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		],
 	],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
+	['On a screen', [['dashboard', 'serve the board in a browser — Ctrl-C stops it and its runs']]],
 	['In a session', [['mcp', 'serve SOBER’s tools to a host — the plugin starts this']]],
 ]
 
@@ -137,6 +138,7 @@ const options = {
 	clean: { type: 'boolean' },
 	green: { type: 'boolean' },
 	diff: { type: 'boolean' },
+	port: { type: 'string' },
 	version: { type: 'boolean', short: 'v' },
 	help: { type: 'boolean', short: 'h' },
 } as const
@@ -222,6 +224,12 @@ const main = async (): Promise<void> => {
 			return release(need('node'))
 		case 'archive':
 			return archive(need('node or decision'))
+		case 'dashboard': {
+			// Imported here rather than at the top so that every other command
+			// pays nothing for a server it does not start.
+			const { dashboard } = await import('./dashboard.js')
+			return dashboard(values.port === undefined ? undefined : Number(values.port))
+		}
 		case 'mcp': {
 			// The MCP server ships as a subcommand, not a second package: one
 			// install, one version, one changelog (ADR 0007). It speaks over

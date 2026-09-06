@@ -74,6 +74,9 @@ importers:
       '@besober/schema':
         specifier: workspace:*
         version: link:../schema
+      '@besober/server':
+        specifier: workspace:*
+        version: link:../server
       esbuild:
         specifier: ^0.28.0
         version: 0.28.2

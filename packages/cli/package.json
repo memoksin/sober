@@ -24,6 +24,7 @@
 		"@besober/core": "workspace:*",
 		"@besober/mcp": "workspace:*",
 		"@besober/schema": "workspace:*",
+		"@besober/server": "workspace:*",
 		"esbuild": "^0.28.0",
 		"publint": "^0.3.16"
 	},
