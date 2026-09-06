@@ -90,6 +90,8 @@ test('a package outside core that reaches for the filesystem fails the boundarie
 
 		expect(failed, 'depcruise passed a module that reads the filesystem outside core').toBe(true)
 		expect(output).toContain('only-core-touches-the-machine')
+		// Named, so this cannot pass on somebody else's violation.
+		expect(output).toContain('boundary-violation.probe.ts')
 	} finally {
 		rmSync(violation, { force: true })
 	}

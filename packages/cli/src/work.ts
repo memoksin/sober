@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import {
 	answerDecision,
 	approveBrief,
@@ -19,6 +18,7 @@ import {
 } from '@besober/core'
 import { Brief } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
+import { source } from './input.js'
 import {
 	blue,
 	bold,
@@ -109,8 +109,8 @@ export const brief = async (node: string, write?: string): Promise<void> => {
 	if (write !== undefined) {
 		// An agent in a host with no MCP server writes a brief through here
 		// (`PR-00-08`): the approach and the acceptance list, as JSON.
-		const source = write === '-' ? await stdin() : await readFile(write, 'utf8')
-		const parsed = Brief.omit({ approval: true }).safeParse(JSON.parse(source))
+		const text = await source(write)
+		const parsed = Brief.omit({ approval: true }).safeParse(JSON.parse(text))
 		if (!parsed.success)
 			return fail(`that is not a brief: ${parsed.error.issues[0]?.message ?? 'unreadable'}`)
 		try {
@@ -311,13 +311,6 @@ export const logs = async (node: string): Promise<void> => {
 			.map((line) => `  ${mark(line.kind)} ${line.text}`)
 			.join('\n'),
 	)
-}
-
-/** `-` is the pipe an agent uses: `… | sober brief <node> --write -`. */
-const stdin = async (): Promise<string> => {
-	const chunks: Buffer[] = []
-	for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
-	return Buffer.concat(chunks).toString('utf8')
 }
 
 /**
