@@ -1,6 +1,9 @@
 import type { Projection } from '@besober/schema'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
+import { DecisionScreen } from './panel/Decision.js'
+import type { BoardRead } from './panel/data.js'
+import { Panel } from './panel/Panel.js'
 import { wire } from './wire.js'
 
 /**
@@ -12,19 +15,31 @@ const POLL_MS = 2000
 
 export const App = ({ token }: { readonly token: string | null }): React.JSX.Element => {
 	const [projection, setProjection] = useState<Projection | null>(null)
+	const [board, setBoard] = useState<BoardRead | null>(null)
 	const [failure, setFailure] = useState<string | null>(null)
 	const [withDone, setWithDone] = useState(false)
+	const [picked, setPicked] = useState<string | null>(null)
+	const [deciding, setDeciding] = useState<string | null>(null)
+
+	// The full board is only read while something is open. The canvas needs the
+	// slim projection every couple of seconds (ADR 0008); a drawer that is not
+	// there needs nothing at all.
+	const open = picked !== null || deciding !== null
 
 	useEffect(() => {
 		if (token === null) return
-		const board = wire(token)
+		const surface = wire(token)
 		let stopped = false
 
 		const poll = async (): Promise<void> => {
 			try {
-				const next = await board.read<Projection>('projection')
+				const [next, full] = await Promise.all([
+					surface.read<Projection>('projection'),
+					open ? surface.read<BoardRead>('board') : Promise.resolve(null),
+				])
 				if (stopped) return
 				setProjection(next)
+				if (full !== null) setBoard(full)
 				setFailure(null)
 			} catch (error) {
 				if (!stopped) setFailure(error instanceof Error ? error.message : String(error))
@@ -37,7 +52,34 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			stopped = true
 			clearInterval(timer)
 		}
-	}, [token])
+	}, [token, open])
+
+	// One way out of everything, and the one a person tries first.
+	useEffect(() => {
+		const back = (event: KeyboardEvent): void => {
+			if (event.key !== 'Escape') return
+			// One layer at a time: a decision opened from a node goes back to that
+			// node rather than clearing the board out from under it.
+			if (deciding !== null) setDeciding(null)
+			else setPicked(null)
+		}
+		addEventListener('keydown', back)
+		return () => removeEventListener('keydown', back)
+	}, [deciding])
+
+	const answer = useCallback(
+		async (option: string, rationale: string): Promise<void> => {
+			if (token === null || deciding === null) return
+			const surface = wire(token)
+			await surface.op('decide', { decision: deciding, option, rationale })
+			// Read it back rather than patching what is on screen: the answer frees
+			// whatever was held by it, and the board is what knows which.
+			setBoard(await surface.read<BoardRead>('board'))
+			setProjection(await surface.read<Projection>('projection'))
+			setDeciding(null)
+		},
+		[token, deciding],
+	)
 
 	// `done` is off by default: a board keeps its finished work, and after a few
 	// weeks that is most of what is on it (ADR 0039 §1 — done is the one status
@@ -86,8 +128,27 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				</p>
 			)}
 
-			<main className="min-h-0 flex-1">
-				{shown === null ? <Waiting /> : <Canvas projection={shown} />}
+			<main className="relative min-h-0 flex-1">
+				{shown === null ? <Waiting /> : <Canvas projection={shown} onPick={setPicked} />}
+
+				{picked !== null && board !== null && (
+					<Panel
+						board={board}
+						id={picked}
+						onClose={() => setPicked(null)}
+						onPick={setPicked}
+						onDecide={setDeciding}
+					/>
+				)}
+
+				{deciding !== null && board !== null && (
+					<DecisionScreen
+						board={board}
+						id={deciding}
+						onClose={() => setDeciding(null)}
+						onAnswer={answer}
+					/>
+				)}
 			</main>
 		</div>
 	)

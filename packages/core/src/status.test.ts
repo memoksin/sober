@@ -164,8 +164,10 @@ test('a held node is waiting on the decisions nobody has answered', () => {
 test('a decision that was archived is still what the node waits on, and says so', () => {
 	// It is not in the open list, so without the flag the panel says "waiting on
 	// auth-model-k7f2" and nothing on the board ever offers to answer it.
-	const held = board({ a: aNode({ decisions: ['auth-model-k7f2'] }) }, {}, false)
-	held.archivedDecisions.add('auth-model-k7f2')
+	const held = {
+		...board({ a: aNode({ decisions: ['auth-model-k7f2'] }) }, {}, false),
+		archivedDecisions: new Set(['auth-model-k7f2']),
+	}
 
 	expect(waitingOn(held, 'a')).toEqual([
 		{ kind: 'decision', id: 'auth-model-k7f2', archived: true },

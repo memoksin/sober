@@ -1,5 +1,4 @@
 import { flagsOf, lastRun, openDecisions, statusOf, unbound, waitingOn } from '@besober/core'
-import { decisionState } from '@besober/schema'
 import { openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
 

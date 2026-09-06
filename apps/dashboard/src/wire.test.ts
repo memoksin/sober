@@ -125,7 +125,9 @@ test('a refused operation throws what the server wrote, not its status code', as
 			status: 409,
 		})) as unknown as typeof fetch
 
-	await expect(wire('t', fetcher).op('decide', {})).rejects.toThrow('every brief would be withdrawn')
+	await expect(wire('t', fetcher).op('decide', {})).rejects.toThrow(
+		'every brief would be withdrawn',
+	)
 })
 
 test('an operation against a server that has gone says the command stopped', async () => {
@@ -133,5 +135,7 @@ test('an operation against a server that has gone says the command stopped', asy
 		throw new TypeError('Failed to fetch')
 	}) as unknown as typeof fetch
 
-	await expect(wire('t', fetcher).op('decide', {})).rejects.toThrow('`sober dashboard` is no longer')
+	await expect(wire('t', fetcher).op('decide', {})).rejects.toThrow(
+		'`sober dashboard` is no longer',
+	)
 })

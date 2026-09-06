@@ -79,7 +79,14 @@ const resolver = (): Resolve => {
 const number = (name: string): number =>
 	Number(getComputedStyle(document.documentElement).getPropertyValue(name))
 
-export const Canvas = ({ projection }: { readonly projection: Projection }): React.JSX.Element => {
+export const Canvas = ({
+	projection,
+	onPick,
+}: {
+	readonly projection: Projection
+	/** A node was tapped, or the background was. Null is "nothing is selected". */
+	readonly onPick?: (id: string | null) => void
+}): React.JSX.Element => {
 	const box = useRef<HTMLDivElement>(null)
 	const bloom = useRef<HTMLDivElement>(null)
 	const cy = useRef<Core | null>(null)
@@ -91,6 +98,10 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 	// The edge list, kept rather than rebuilt: the drag constraint reads it on
 	// every frame, and it only changes when the graph does.
 	const wires = useRef<readonly (readonly [string, string])[]>([])
+	// Through a ref, so a new callback on every render does not tear down the
+	// instance and re-place every node on the board.
+	const pick = useRef(onPick)
+	pick.current = onPick
 
 	useEffect(() => {
 		const container = box.current
@@ -161,6 +172,15 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 			instance.elements().removeClass('faded traced')
 			dark()
 		})
+		// A tap opens the panel; a tap on nothing closes it. `tap` rather than
+		// Cytoscape's own `select`/`unselect`, because moving from one node to
+		// another fires both and their order decides whether the panel ends up
+		// showing the new node or nothing.
+		instance.on('tap', 'node', (event) => pick.current?.((event.target as NodeSingular).id()))
+		instance.on('tap', (event) => {
+			if (event.target === instance) pick.current?.(null)
+		})
+
 		instance.on('position', 'node.lit', (event) => light(event.target as NodeSingular))
 		// A pan or a zoom moves every node at once; following them all would be a
 		// frame budget spent on a halo nobody is looking at.

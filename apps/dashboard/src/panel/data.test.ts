@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
-import type { BoardRead } from './panel.js'
-import { held, offer } from './panel.js'
+import type { BoardRead } from './data.js'
+import { held, offer } from './data.js'
 
 const AT = '2026-09-06T00:00:00.000Z'
 
@@ -38,10 +38,12 @@ const decision = (id: string, over: Partial<BoardRead['decisions'][number]> = {}
 	...over,
 })
 
-const board = (
-	nodes: BoardRead['nodes'],
-	decisions: BoardRead['decisions'] = [],
-): BoardRead => ({ project: null, nodes, decisions, broken: [] })
+const board = (nodes: BoardRead['nodes'], decisions: BoardRead['decisions'] = []): BoardRead => ({
+	project: null,
+	nodes,
+	decisions,
+	broken: [],
+})
 
 test('a wait is resolved to what a person reads, not to the id they were given', () => {
 	// A panel that renders `auth-model-k7f2` has handed the reader the lookup
