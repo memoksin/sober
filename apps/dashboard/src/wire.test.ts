@@ -53,7 +53,7 @@ test('a read carries the token as a bearer header', async () => {
 
 	await wire('4f3a', spy).read('projection')
 
-	expect((sent?.[1].headers as Record<string, string>).authorization).toBe('Bearer 4f3a')
+	expect(sent?.[1]?.headers).toEqual({ authorization: 'Bearer 4f3a' })
 	// Relative: the page's own origin is the server, and there is no second one.
 	expect(sent?.[0]).toBe('/read/projection')
 })

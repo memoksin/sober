@@ -38,8 +38,12 @@ export const stylesheet = (resolve: Resolve): Rule[] => [
 			color: resolve('var(--ink-dim)'),
 			'text-valign': 'bottom',
 			'text-margin-y': 5,
-			'text-max-width': '110px',
+			'text-max-width': '96px',
 			'text-wrap': 'ellipsis',
+			// Zoomed out far enough, every label is illegible and all of them
+			// together are a grey wash over the shape — which is the thing you
+			// zoomed out to see.
+			'min-zoomed-font-size': 7,
 			// Only the node under the pointer grows, and it grows on its own
 			// clock: transitions live on the states that animate (ADR 0039 §6).
 			'transition-duration': 0,

@@ -1,5 +1,6 @@
 import { serve } from '@besober/server'
 import { openBoard } from './board.js'
+import { built } from './client.js'
 import { bold, cyan, dim, green, say } from './out.js'
 
 /**
@@ -21,9 +22,14 @@ import { bold, cyan, dim, green, say } from './out.js'
  */
 export const dashboard = async (port?: number): Promise<void> => {
 	const paths = await openBoard()
-	const served = await serve({ paths, port })
+	const served = await serve({ paths, port, client: built() })
 
-	say(`${green('✓')} the board is served at ${cyan(bold(served.url))}`)
+	// The token rides in the fragment, which a browser never sends to a server
+	// and never puts in a `Referer`. `/` has to answer without one — a browser
+	// opening a printed address sends no header — so anything served there is
+	// readable by any process on this machine that guessed the port, and that
+	// is the one thing the token exists to stop.
+	say(`${green('✓')} the board is served at ${cyan(bold(`${served.url}#${served.token}`))}`)
 	say()
 	// The token sits alone on its line. It was printed as `token <value>` for
 	// one commit, and the first person to use it copied the label with the

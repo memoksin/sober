@@ -52,15 +52,22 @@ const start = (cwd: string): Promise<{ out: string; url: string; token: string }
 
 		let out = ''
 		const timer = setTimeout(() => reject(new Error(`nothing usable printed:\n${out}`)), 20_000)
+		// Settled means quiet, not "the first line arrived". The token is in the
+		// address now, so a url and a token are both present before the lines
+		// that say what stops this have been written at all.
+		let quiet: NodeJS.Timeout | undefined
 
 		child.stdout.on('data', (chunk: Buffer) => {
 			out += chunk.toString()
 			const url = /http:\/\/127\.0\.0\.1:\d+\//.exec(out)?.[0]
 			const token = /\b[0-9a-f]{64}\b/.exec(out)?.[0]
-			if (url !== undefined && token !== undefined) {
+			if (url === undefined || token === undefined) return
+
+			clearTimeout(quiet)
+			quiet = setTimeout(() => {
 				clearTimeout(timer)
 				resolve({ out, url, token })
-			}
+			}, 250)
 		})
 		child.stderr.on('data', (chunk: Buffer) => {
 			out += chunk.toString()
@@ -82,6 +89,18 @@ test('it prints a loopback address and a token, and stays up', async () => {
 	// ADR 0037: the thing a person has to know is what stops it.
 	expect(out.toLowerCase()).toContain('ctrl-c')
 	expect(running?.exitCode).toBeNull()
+})
+
+test('the address it prints carries the token where a browser keeps it to itself', async () => {
+	repo = board()
+
+	const { out, token } = await start(repo.dir)
+
+	// A fragment is never sent to a server, never lands in `Referer`, and never
+	// reaches a log. It is also the only channel left: `/` has to answer an
+	// unauthenticated GET, so a token served in that response would be readable
+	// by anything on this machine that guessed the port.
+	expect(out).toContain(`/#${token}`)
 })
 
 test('what it printed is what serves the board', async () => {
