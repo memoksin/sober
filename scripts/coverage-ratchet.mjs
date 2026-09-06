@@ -20,7 +20,9 @@ const RISE_TOLERANCE = 1
 const percentages = (summary) => {
 	const totals = new Map()
 	for (const [file, data] of Object.entries(summary)) {
-		const name = file.replaceAll('\\', '/').match(/\/packages\/([^/]+)\//)?.[1]
+		// `apps/` as well as `packages/`: the dashboard is source like any other,
+		// and a group this misses is a group with no floor that still reads green.
+		const name = file.replaceAll('\\', '/').match(/\/(?:packages|apps)\/([^/]+)\//)?.[1]
 		if (!name || EXCLUDED.has(name)) continue
 		const running = totals.get(name) ?? { covered: 0, total: 0 }
 		running.covered += data.lines.covered

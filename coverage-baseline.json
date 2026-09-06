@@ -1,6 +1,7 @@
 {
-	"cli": 0.15,
+	"cli": 0.14,
 	"core": 97.43,
+	"dashboard": 37.42,
 	"mcp": 93.78,
-	"server": 88.79
+	"server": 90.98
 }
