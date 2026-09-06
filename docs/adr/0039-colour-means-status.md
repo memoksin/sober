@@ -137,12 +137,13 @@ carrying a colour that means nothing.
 
 The halo is where the paragraph above needs qualifying. A node's underlay is
 its bounding box, which on a circle is a square; an edge has no bounding box to
-get wrong, so `underlay` follows the line. It still has no blur, so one band is
-a hard-edged outline that reads as a second line — but `underlay` and `overlay`
-together give two nested bands, a wide faint one under and a narrow one over,
-and the falloff between them lands below the threshold where anybody sees a
-seam. So the node bloom is a DOM element and the edge halo is not, and the two
-mechanisms differ because the shapes do.
+get wrong, so an overlay follows the line. It still has no blur, so the band is
+kept narrow enough that its outer edge reads as the thickness of the line
+rather than as an outline around it. A second, wider band under it was tried
+and was worse: an unblurred band has a hard edge, and a long straight one is
+exactly the shape an eye picks out — it read as a border. So the node bloom is
+a DOM element and the edge halo is not, and the two mechanisms differ because
+the shapes do.
 
 **The light reaches 25% of a radius past the node's own edge**, and the number
 is a token rather than a pixel count. It is a rim of light around a disc rather

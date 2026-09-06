@@ -54,7 +54,7 @@ test('a traced edge is ink, never a status colour', () => {
 
 	expect(JSON.stringify(traced)).not.toMatch(/--status-/)
 	expect(traced?.style['line-color']).toBe('resolved(var(--ink))')
-	expect(traced?.style['underlay-opacity']).toBeGreaterThan(0)
+	expect(traced?.style['overlay-opacity']).toBeGreaterThan(0)
 })
 
 test('the click overlay is turned off', () => {

@@ -136,25 +136,21 @@ export const stylesheet = (resolve: Resolve): Rule[] => [
 		// the bounding box, which on a circle is a square; on a line there is no
 		// bounding box to get wrong, it follows the path.
 		//
-		// One band is a hard-edged outline and reads as a second line. Two
-		// nested ones — a wide faint one under, a narrow one over — approximate
-		// the falloff a blur would have given, and the seam between them lands
-		// below the threshold where anybody sees it. Wider and fainter than this
-		// stops being a halo and becomes a smear; the numbers were dialled on a
-		// real board rather than reasoned about.
+		// One band, and it hugs the line. A second wider one under it was tried
+		// and read as a border: an unblurred band has a hard outer edge, and a
+		// long straight one is exactly what an eye picks out. Kept narrow enough
+		// that its edge reads as the thickness of the line rather than as an
+		// outline around it.
 		selector: 'edge.traced',
 		style: {
 			width: 1.6,
 			'line-color': resolve('var(--ink)'),
 			'target-arrow-color': resolve('var(--ink)'),
 			'arrow-scale': 0.85,
-			'underlay-color': resolve('var(--ink)'),
-			'underlay-opacity': 0.06,
-			'underlay-padding': 9,
 			'overlay-color': resolve('var(--ink)'),
 			'overlay-opacity': 0.07,
 			'overlay-padding': 4,
-			'transition-property': 'width line-color target-arrow-color underlay-opacity overlay-opacity',
+			'transition-property': 'width line-color target-arrow-color overlay-opacity',
 			'transition-duration': 130,
 			'transition-timing-function': 'ease-out',
 		},

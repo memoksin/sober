@@ -64,6 +64,36 @@ Three properties follow, and all three are tested rather than observed:
   different picture each time, so the board a person learns the shape of is not
   the board they come back to.
 
+### The board floats
+
+A placed layout is exactly right and reads as pinned. Every node sits where the
+arithmetic put it and never moves again, so the picture looks like a diagram
+and dragging one node feels like pulling something off a nail — which was the
+first thing said about it after a real board was opened.
+
+So what is drawn is the resting place **plus a few pixels of drift**: two sine
+waves per node at rates that do not divide each other, seeded from the node's
+id. Amplitude 3.5px, roughly seven seconds a wander.
+
+- **Bounded**, which is what keeps the no-overlap arithmetic above true. Two
+  placed nodes are 112px apart and 18px wide, so 94px of gap absorbs the ten
+  this can close.
+- **Not a line.** One rate and one phase is a straight line through the resting
+  place, and a line reads as a slide rather than a float.
+- **Not in step.** The phase is a hash of the id, so no two nodes move
+  together — everything moving together is not a board floating, it is a board
+  being dragged.
+- **Not random.** Positions are not board state (ADR 0016) and so cannot be
+  saved; a seeded wander is the only way the same board floats the same way
+  when it is opened again.
+- **Off under `prefers-reduced-motion`**, by setting the amplitude to zero
+  rather than by taking a different code path, so a drag still paints through
+  exactly the same line of code either way.
+
+The drift is presentation and nothing else. `rest` holds one position per node
+and everything that reasons about geometry — the drag constraint, the layout —
+reasons about that, never about the moving target on screen.
+
 The drag constraint of ADR 0039 §7 changes with it. The pull now starts at the
 held node and travels outward one hop per pass, rather than enforcing the
 maximum length across every edge at once. Enforcing it everywhere meant the

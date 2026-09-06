@@ -127,6 +127,55 @@ const order = (projection: Projection): string[] => {
 	return components.sort((a, b) => b.length - a.length).flat()
 }
 
+export interface DriftOptions {
+	/** The furthest a node strays, on either axis, from where it was placed. */
+	readonly amplitude: number
+	/** Roughly one wander. Varied per node, so nothing on the board marches. */
+	readonly period: number
+}
+
+/**
+ * How far a node has floated from its resting place, at a moment.
+ *
+ * `pack` puts every node exactly where it belongs and leaves it there, which
+ * reads as pinned: the board looks like a diagram, and dragging one feels like
+ * pulling something off a nail. A few pixels of slow wander says the same
+ * layout is a surface things are sitting on.
+ *
+ * It is bounded by the amplitude on each axis, which is what keeps ADR 0040's
+ * no-overlap arithmetic true: the gap between two placed nodes is far wider
+ * than twice this.
+ *
+ * Two waves at rates that do not divide each other. One rate and one phase is
+ * a straight line through the resting place, and a line reads as a slide
+ * rather than a float. Both are seeded from the node's id, so nothing is
+ * random, nothing marches in step, and the same board floats the same way
+ * every time it is opened (ADR 0016 — positions are not state, so they have to
+ * be reproducible instead).
+ */
+export const drift = (id: string, at: number, { amplitude, period }: DriftOptions): Point => {
+	if (amplitude <= 0) return { x: 0, y: 0 }
+
+	const seed = hash(id)
+	const own = period * (0.75 + seed * 0.5)
+	const t = (2 * Math.PI * at) / own
+
+	return {
+		x: amplitude * Math.sin(t + seed * 2 * Math.PI),
+		y: amplitude * Math.sin(t * 0.61 + seed * 4 * Math.PI),
+	}
+}
+
+/** FNV-1a, folded to 0..1. A hash and not a counter: order is not identity. */
+const hash = (id: string): number => {
+	let h = 2_166_136_261
+	for (let i = 0; i < id.length; i++) {
+		h ^= id.charCodeAt(i)
+		h = Math.imul(h, 16_777_619)
+	}
+	return (h >>> 0) / 2 ** 32
+}
+
 export interface RelaxOptions {
 	/** The longest an edge may be drawn before the far node comes along. */
 	readonly max: number

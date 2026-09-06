@@ -1,7 +1,7 @@
 import type { Projection } from '@besober/schema'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 import { useEffect, useRef } from 'react'
-import { elementsOf, glow, type Point, pack, relax } from './graph.js'
+import { drift, elementsOf, glow, type Point, pack, relax } from './graph.js'
 import { type Resolve, sameShape, stylesheet } from './paint.js'
 
 /**
@@ -16,6 +16,14 @@ const MAX_EDGE = 170
  * not the circle: an 18px node under a 96px title needs the title's room.
  */
 const SPACING = 112
+
+/**
+ * The float. Small enough that ADR 0040's no-overlap arithmetic still holds —
+ * the gap between two placed nodes is around 94px and this closes at most ten
+ * of them — and slow enough that no frame moves anything a whole pixel.
+ */
+const AMPLITUDE = 3.5
+const PERIOD = 7000
 
 /**
  * The bridge between theme.css and a canvas. Cytoscape brings its own colour
@@ -65,6 +73,10 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 	const bloom = useRef<HTMLDivElement>(null)
 	const cy = useRef<Core | null>(null)
 	const drawn = useRef<Projection | null>(null)
+	// Where each node lives. What is drawn is this plus a few pixels of drift,
+	// so the float is presentation and the drag constraint still reasons about
+	// one position per node rather than about a moving target.
+	const rest = useRef<Map<string, Point>>(new Map())
 
 	useEffect(() => {
 		const container = box.current
@@ -129,20 +141,42 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		// frame budget spent on a halo nobody is looking at.
 		instance.on('viewport', dark)
 
+		// The float, as an offset over the resting places. Reduced motion turns
+		// the amplitude off rather than turning the loop off, so a drag still
+		// paints through exactly the same path.
+		const float = () => ({ amplitude: still.matches ? 0 : AMPLITUDE, period: PERIOD })
+
+		const settle = (now: number): void => {
+			instance.batch(() => {
+				for (const [id, at] of rest.current) {
+					const by = drift(id, now, float())
+					instance.getElementById(id).position({ x: at.x + by.x, y: at.y + by.y })
+				}
+			})
+		}
+
+		let frame = requestAnimationFrame(function tick(now) {
+			frame = requestAnimationFrame(tick)
+			if (!still.matches) settle(now)
+		})
+
 		instance.on('drag', 'node', (event) => {
-			const held = (event.target as NodeSingular).id()
-			const positions = new Map<string, Point>(
-				instance.nodes().map((node) => [node.id(), { ...node.position() }]),
-			)
+			const node = event.target as NodeSingular
+			const held = node.id()
+			const now = performance.now()
+
+			// The pointer owns the held node, so its resting place is read back
+			// out of where the pointer put it — otherwise the next frame would
+			// paint it back to where it was and the drag would fight the float.
+			const by = drift(held, now, float())
+			const at = node.position()
+			rest.current.set(held, { x: at.x - by.x, y: at.y - by.y })
+
 			const edges = instance
 				.edges()
 				.map((edge) => [edge.source().id(), edge.target().id()] as const)
-
-			instance.batch(() => {
-				for (const [id, at] of relax(positions, edges, { max: MAX_EDGE, held })) {
-					if (id !== held) instance.getElementById(id).position(at)
-				}
-			})
+			rest.current = relax(rest.current, edges, { max: MAX_EDGE, held })
+			settle(now)
 		})
 
 		const theme = matchMedia('(prefers-color-scheme: light)')
@@ -152,6 +186,7 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		theme.addEventListener('change', repaint)
 
 		return () => {
+			cancelAnimationFrame(frame)
 			theme.removeEventListener('change', repaint)
 			instance.destroy()
 			cy.current = null
@@ -159,6 +194,7 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 			// finds a record of a picture that no longer exists anywhere, decides
 			// nothing changed, and repaints an empty graph in place.
 			drawn.current = null
+			rest.current = new Map()
 		}
 	}, [])
 
@@ -187,14 +223,21 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		// and computing them is a loop over the nodes, not a settling animation
 		// nobody wanted to watch.
 		const placed = pack(projection, { spacing: SPACING })
+		rest.current = placed
 
 		instance.elements().remove()
 		instance.add(
-			elementsOf(projection).map((element) =>
-				element.group === 'nodes'
-					? { ...element, position: placed.get(element.data.id ?? '') }
-					: element,
-			),
+			elementsOf(projection).map((element) => {
+				if (element.group !== 'nodes') return element
+				const at = placed.get(element.data.id ?? '')
+				// A copy, and the copy is the whole point. Cytoscape keeps the
+				// object it is handed and `position()` gives that same object back
+				// — so sharing one with `rest` would make every frame's drift an
+				// offset from the last frame's drift rather than from the resting
+				// place, and the board would slide off the screen in a smooth
+				// accelerating arc with nothing in the code that says "move".
+				return at === undefined ? element : { ...element, position: { ...at } }
+			}),
 		)
 
 		instance.fit(undefined, 48)
