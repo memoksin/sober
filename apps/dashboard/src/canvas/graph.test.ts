@@ -336,3 +336,43 @@ test('it floats rather than vibrates — no frame moves a node a whole pixel', (
 test('no amplitude is no motion, which is what reduced motion asks for', () => {
 	expect(drift('auth-api-k7f2', 9999, { amplitude: 0, period: 7000 })).toEqual({ x: 0, y: 0 })
 })
+
+test('easing closes part of the gap, not all of it', () => {
+	// A follower that snaps to the limit is on the end of a rod. Closing a
+	// fraction per frame is what makes it read as being towed.
+	const after = relax(
+		at([
+			['a', 0, 0],
+			['b', 300, 0],
+		]),
+		[['a', 'b']],
+		{ max: 100, held: 'a', ease: 0.25 },
+	)
+
+	expect(after.get('b')?.x).toBeCloseTo(250)
+})
+
+test('an eased follower arrives, given enough frames', () => {
+	// It has to converge on the limit and not merely approach it slowly: the
+	// pointer stops long before the eye does.
+	let positions = at([
+		['a', 0, 0],
+		['b', 900, 0],
+	])
+	for (let frame = 0; frame < 60; frame++)
+		positions = relax(positions, [['a', 'b']], { max: 100, held: 'a', ease: 0.25 })
+
+	expect(positions.get('b')?.x).toBeCloseTo(100, 1)
+})
+
+test('easing never pulls a follower past the limit', () => {
+	// Overshoot on a chain is a whip, and a whip is the opposite of floating.
+	let positions = at([
+		['a', 0, 0],
+		['b', 400, 0],
+	])
+	for (let frame = 0; frame < 40; frame++) {
+		positions = relax(positions, [['a', 'b']], { max: 100, held: 'a', ease: 0.25 })
+		expect(positions.get('b')?.x).toBeGreaterThanOrEqual(100)
+	}
+})
