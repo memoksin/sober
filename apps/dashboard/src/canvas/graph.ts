@@ -183,6 +183,12 @@ export interface RelaxOptions {
 	readonly held: string
 	/** How far a pull travels. Three hops is enough; more is motion nobody asked for. */
 	readonly passes?: number
+	/**
+	 * How much of the remaining gap a follower closes in one call. 1 puts it on
+	 * the limit at once, which is a rod; a fraction is a tow. Called every frame
+	 * it converges, and it never overshoots because it only ever moves towards.
+	 */
+	readonly ease?: number
 }
 
 /**
@@ -204,7 +210,7 @@ export interface RelaxOptions {
 export const relax = (
 	positions: ReadonlyMap<string, Point>,
 	edges: readonly (readonly [string, string])[],
-	{ max, held, passes = 3 }: RelaxOptions,
+	{ max, held, passes = 3, ease = 1 }: RelaxOptions,
 ): Map<string, Point> => {
 	const next = new Map([...positions].map(([id, at]) => [id, { ...at }]))
 	// What the wave has reached. Anything in here is an anchor for the next hop
@@ -233,7 +239,10 @@ export const relax = (
 			if (distance === 0) continue
 
 			if (distance > max) {
-				const pull = (distance - max) / distance
+				// Each edge is relaxed once per call — the passes carry the wave
+				// outward, they do not iterate the same edge — so the ease is the
+				// whole of what one frame closes.
+				const pull = ((distance - max) / distance) * ease
 				next.set(follower, { x: loose.x - dx * pull, y: loose.y - dy * pull })
 				moved = true
 			}

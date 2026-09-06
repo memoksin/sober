@@ -90,6 +90,12 @@ id. Amplitude 3.5px, roughly seven seconds a wander.
   rather than by taking a different code path, so a drag still paints through
   exactly the same line of code either way.
 
+**The node under the pointer does not float.** A target that keeps moving is a
+target that slips out from under the hand, and 3.5px is enough to feel on
+something you are trying to click. Its drift eases to zero over 180ms rather
+than stopping dead, because a 3.5px jump the moment the pointer arrives is the
+same problem compressed into one frame.
+
 The drift is presentation and nothing else. `rest` holds one position per node
 and everything that reasons about geometry — the drag constraint, the layout —
 reasons about that, never about the moving target on screen.
@@ -99,6 +105,15 @@ held node and travels outward one hop per pass, rather than enforcing the
 maximum length across every edge at once. Enforcing it everywhere meant the
 first drag of a session tidied the whole board: a person moved one node and the
 far side rearranged itself while they were looking somewhere else.
+
+**A follower is towed rather than welded.** The first version put the far node
+on the limit in the frame the limit was exceeded, which is a rod: the follower
+arrives before the eye can see it leave, and the two move as one rigid piece.
+It now closes a fifth of the remaining slack per frame — the edge stretches
+past its limit while the hand is moving and comes back after it stops. That
+means relaxing on every frame rather than on every drag event, and going on for
+forty frames after the hand lets go, because a follower that stops halfway
+because the pointer stopped is worse than a rod.
 
 ## Consequences
 

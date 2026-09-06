@@ -25,6 +25,17 @@ const SPACING = 112
 const AMPLITUDE = 3.5
 const PERIOD = 7000
 
+/** How long the hovered node takes to come to rest, and to start again. */
+const PIN_MS = 180
+
+/**
+ * How much of the remaining slack a follower takes up per frame, and how long
+ * it goes on catching up after the hand lets go. A fifth a frame is settled
+ * inside half a second, which is where these two meet.
+ */
+const TOW = 0.2
+const COAST_FRAMES = 40
+
 /**
  * The bridge between theme.css and a canvas. Cytoscape brings its own colour
  * parser and knows none of `var()`, `color-mix()` or `oklch()`; a 2D context
@@ -77,6 +88,9 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 	// so the float is presentation and the drag constraint still reasons about
 	// one position per node rather than about a moving target.
 	const rest = useRef<Map<string, Point>>(new Map())
+	// The edge list, kept rather than rebuilt: the drag constraint reads it on
+	// every frame, and it only changes when the graph does.
+	const wires = useRef<readonly (readonly [string, string])[]>([])
 
 	useEffect(() => {
 		const container = box.current
@@ -120,9 +134,19 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		// says which node this is, the 1.2× is the part that moves.
 		const still = matchMedia('(prefers-reduced-motion: reduce)')
 
+		// How much of its own drift a node is currently allowed, 0 to 1. The node
+		// under the pointer goes to 0: a target that keeps moving is a target
+		// that slips out from under the hand, and 3.5px is enough to feel on
+		// something you are trying to hold. It eases rather than snaps, because a
+		// 3.5px jump the moment the pointer arrives is the same problem in one
+		// frame.
+		const calm = new Map<string, number>()
+		let under: string | null = null
+
 		instance.on('mouseover', 'node', (event) => {
 			const node = event.target as NodeSingular
 			if (!still.matches) node.addClass('lit')
+			under = node.id()
 			light(node)
 
 			// What this one touches, and everything else out of the way. On a
@@ -133,6 +157,7 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		})
 		instance.on('mouseout', 'node', (event) => {
 			;(event.target as NodeSingular).removeClass('lit')
+			under = null
 			instance.elements().removeClass('faded traced')
 			dark()
 		})
@@ -146,37 +171,72 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		// paints through exactly the same path.
 		const float = () => ({ amplitude: still.matches ? 0 : AMPLITUDE, period: PERIOD })
 
+		const breathe = (elapsed: number): void => {
+			const step = elapsed / PIN_MS
+			for (const id of new Set([...calm.keys(), ...(under === null ? [] : [under])])) {
+				const want = id === under ? 0 : 1
+				const now = calm.get(id) ?? 1
+				const next = now < want ? Math.min(want, now + step) : Math.max(want, now - step)
+				if (next === 1) calm.delete(id)
+				else calm.set(id, next)
+			}
+		}
+
 		const settle = (now: number): void => {
 			instance.batch(() => {
 				for (const [id, at] of rest.current) {
 					const by = drift(id, now, float())
-					instance.getElementById(id).position({ x: at.x + by.x, y: at.y + by.y })
+					const much = calm.get(id) ?? 1
+					instance.getElementById(id).position({ x: at.x + by.x * much, y: at.y + by.y * much })
 				}
 			})
 		}
 
-		let frame = requestAnimationFrame(function tick(now) {
-			frame = requestAnimationFrame(tick)
-			if (!still.matches) settle(now)
+		// The node the pointer has hold of, and how many frames of catching up
+		// its followers still have coming. A follower that stops halfway because
+		// the hand stopped moving leaves the edge over its limit.
+		let held: string | null = null
+		let coasting = 0
+
+		instance.on('grab', 'node', (event) => {
+			held = (event.target as NodeSingular).id()
+			coasting = Number.POSITIVE_INFINITY
+		})
+		instance.on('free', 'node', () => {
+			coasting = COAST_FRAMES
 		})
 
+		// The pointer owns the held node, so its resting place is read back out
+		// of where the pointer put it — otherwise the next frame would paint it
+		// back and the drag would fight the float.
 		instance.on('drag', 'node', (event) => {
 			const node = event.target as NodeSingular
-			const held = node.id()
-			const now = performance.now()
-
-			// The pointer owns the held node, so its resting place is read back
-			// out of where the pointer put it — otherwise the next frame would
-			// paint it back to where it was and the drag would fight the float.
-			const by = drift(held, now, float())
+			const by = drift(node.id(), performance.now(), float())
 			const at = node.position()
-			rest.current.set(held, { x: at.x - by.x, y: at.y - by.y })
+			rest.current.set(node.id(), { x: at.x - by.x, y: at.y - by.y })
+		})
 
-			const edges = instance
-				.edges()
-				.map((edge) => [edge.source().id(), edge.target().id()] as const)
-			rest.current = relax(rest.current, edges, { max: MAX_EDGE, held })
-			settle(now)
+		let last = performance.now()
+		let frame = requestAnimationFrame(function tick(now) {
+			frame = requestAnimationFrame(tick)
+
+			// Relaxing here rather than on the drag event is what makes a
+			// follower lag: it closes a fraction of the gap per frame, and the
+			// frames keep coming after the hand has stopped.
+			if (held !== null) {
+				rest.current = relax(rest.current, wires.current, {
+					max: MAX_EDGE,
+					held,
+					ease: TOW,
+				})
+				if (--coasting <= 0) held = null
+			}
+
+			breathe(now - last)
+			last = now
+			// Nothing to paint when nothing is moving: with reduced motion and no
+			// hand on the board, a frame has no work in it.
+			if (!still.matches || held !== null || calm.size > 0) settle(now)
 		})
 
 		const theme = matchMedia('(prefers-color-scheme: light)')
@@ -224,6 +284,9 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		// nobody wanted to watch.
 		const placed = pack(projection, { spacing: SPACING })
 		rest.current = placed
+		wires.current = projection.nodes.flatMap((node) =>
+			node.dependsOn.filter((from) => placed.has(from)).map((from) => [from, node.id] as const),
+		)
 
 		instance.elements().remove()
 		instance.add(
