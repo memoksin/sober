@@ -1,4 +1,4 @@
-import type { Decision, Run, Status } from '@besober/schema'
+import type { Decision, Run, Status, Waiting } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import type { Board } from './graph.js'
 
@@ -87,18 +87,6 @@ export const openDecisions = (board: Board): [string, Decision][] =>
 	[...board.decisions].filter(
 		([id, decision]) => decisionState(decision) !== 'answered' && !board.archivedDecisions.has(id),
 	)
-
-/** One thing standing between a node and starting. */
-export interface Waiting {
-	readonly kind: 'decision' | 'node'
-	readonly id: string
-	/**
-	 * An archived decision is not in the open list, so a node held by one is
-	 * waiting on something no surface offers to answer. Said out loud rather
-	 * than rendered as an ordinary wait somebody chases.
-	 */
-	readonly archived: boolean
-}
 
 /**
  * What a node is waiting for — the one thing a reader wants beside a held or

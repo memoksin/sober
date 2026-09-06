@@ -47,3 +47,24 @@ export type Projection = z.infer<typeof Projection>
 export const WireError = z.strictObject({ error: z.string().min(1) })
 
 export type WireError = z.infer<typeof WireError>
+
+/**
+ * One thing standing between a node and starting, as it travels. Derived by
+ * `core` and computed into the board read, because the browser cannot import
+ * `core` and a second derivation is a second answer to the same question.
+ *
+ * It lives here rather than beside the derivation for the same reason
+ * `ProjectedNode` does: a wire shape belongs to both ends of the wire.
+ */
+export const Waiting = z.strictObject({
+	kind: z.enum(['decision', 'node']),
+	id: Id,
+	/**
+	 * An archived decision is not in the open list, so a node held by one is
+	 * waiting on something no surface offers to answer. Carried rather than
+	 * rendered as an ordinary wait somebody chases.
+	 */
+	archived: z.boolean(),
+})
+
+export type Waiting = z.infer<typeof Waiting>

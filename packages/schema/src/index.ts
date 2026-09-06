@@ -20,4 +20,4 @@ export {
 export { Project, SCHEMA_VERSION } from './project.js'
 export { CommandResult, RUN_EXITS, Run, RunExit } from './run.js'
 export { STATUSES, type Status } from './status.js'
-export { ProjectedNode, Projection, WireError } from './wire.js'
+export { ProjectedNode, Projection, Waiting, WireError } from './wire.js'
