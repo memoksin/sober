@@ -1,6 +1,6 @@
 import type { Projection } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { elementsOf, glow, pack, relax } from './graph.js'
+import { drift, elementsOf, glow, pack, relax } from './graph.js'
 
 const board: Projection = {
 	nodes: [
@@ -285,4 +285,54 @@ test('the same board is placed the same way twice', () => {
 
 test('an empty board is placed nowhere, not at the origin', () => {
 	expect(pack({ nodes: [] }, { spacing: SPACING }).size).toBe(0)
+})
+
+const FLOAT = { amplitude: 3.5, period: 7000 }
+
+test('a node never strays further than the amplitude it was given', () => {
+	// `pack` guarantees no two nodes overlap, and it does that with arithmetic
+	// (ADR 0040). A drift with no bound would give the guarantee back.
+	for (const at of Array.from({ length: 400 }, (_, i) => i * 45)) {
+		const { x, y } = drift('auth-api-k7f2', at, FLOAT)
+		expect(Math.abs(x)).toBeLessThanOrEqual(FLOAT.amplitude)
+		expect(Math.abs(y)).toBeLessThanOrEqual(FLOAT.amplitude)
+	}
+})
+
+test('two nodes are never in lockstep', () => {
+	// Everything moving together is not a board floating, it is a board being
+	// dragged. The phase comes from the id, so the difference is per node.
+	const a = drift('auth-api-k7f2', 1234, FLOAT)
+	const b = drift('invoice-total-abcd', 1234, FLOAT)
+
+	expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(0.5)
+})
+
+test('the same node at the same moment is always in the same place', () => {
+	// No randomness anywhere: a board that floats differently on every frame
+	// would jitter, and one that floats differently on every open would be a
+	// different board each time (ADR 0016).
+	expect(drift('auth-api-k7f2', 4321, FLOAT)).toEqual(drift('auth-api-k7f2', 4321, FLOAT))
+})
+
+test('it wanders rather than sliding along a line', () => {
+	// One rate and one phase is a straight line through the resting place, and
+	// a line reads as a slide. Two rates that do not divide each other is a
+	// path with area.
+	const path = Array.from({ length: 240 }, (_, i) => drift('auth-api-k7f2', i * 60, FLOAT))
+	const peak = (of: 'x' | 'y') =>
+		path.reduce((best, at, i) => ((path[best]?.[of] ?? 0) < at[of] ? i : best), 0)
+
+	expect(Math.abs(peak('x') - peak('y'))).toBeGreaterThan(8)
+})
+
+test('it floats rather than vibrates — no frame moves a node a whole pixel', () => {
+	const before = drift('auth-api-k7f2', 10_000, FLOAT)
+	const after = drift('auth-api-k7f2', 10_016, FLOAT)
+
+	expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeLessThan(1)
+})
+
+test('no amplitude is no motion, which is what reduced motion asks for', () => {
+	expect(drift('auth-api-k7f2', 9999, { amplitude: 0, period: 7000 })).toEqual({ x: 0, y: 0 })
 })
