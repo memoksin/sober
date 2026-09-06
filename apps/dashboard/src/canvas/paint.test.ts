@@ -52,6 +52,11 @@ const two = board([
 	['b', 'B', ['a']],
 ])
 
+/** The same board with one node changed, which is what a poll usually finds. */
+const with_ = (id: string, change: Partial<Projection['nodes'][number]>): Projection => ({
+	nodes: two.nodes.map((node) => (node.id === id ? { ...node, ...change } : node)),
+})
+
 test('the same board twice is the same shape — nothing is rebuilt', () => {
 	expect(sameShape(two, two)).toBe(true)
 })
@@ -60,19 +65,11 @@ test('a status that moved is still the same shape', () => {
 	// The reason this exists. A poll every couple of seconds that rebuilt the
 	// graph would re-run the layout, and every node on screen would jump while
 	// somebody was reading it.
-	const after: Projection = {
-		nodes: [two.nodes[0] as never, { ...(two.nodes[1] as never), status: 'running' }],
-	}
-
-	expect(sameShape(two, after)).toBe(true)
+	expect(sameShape(two, with_('b', { status: 'running' }))).toBe(true)
 })
 
 test('a title that changed is still the same shape', () => {
-	const after: Projection = {
-		nodes: [{ ...(two.nodes[0] as never), title: 'A, renamed' }, two.nodes[1] as never],
-	}
-
-	expect(sameShape(two, after)).toBe(true)
+	expect(sameShape(two, with_('a', { title: 'A, renamed' }))).toBe(true)
 })
 
 test('a node that arrived is a different shape', () => {
