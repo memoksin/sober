@@ -26,6 +26,37 @@ test('it asks for no status colour the theme does not define', () => {
 		expect(STATUSES, name[0] ?? '').toContain(name[1])
 })
 
+test('a state rule comes after the rule it overrides', () => {
+	// Cytoscape resolves by order, not specificity: the last matching rule
+	// wins. `edge.traced` written above `edge` sets a colour that `edge` takes
+	// straight back, and nothing anywhere reports it — the halo appeared, the
+	// white line did not, and both were in the same rule.
+	const order = stylesheet(token).map((rule) => rule.selector)
+	const after = (state: string, base: string) =>
+		expect(order.indexOf(state), `${state} must come after ${base}`).toBeGreaterThan(
+			order.indexOf(base),
+		)
+
+	after('node.lit', 'node')
+	after('edge.traced', 'edge')
+	after('.faded', 'edge')
+	after('.faded', 'node')
+	// The traced halo is an overlay, and `:active` sets `overlay-opacity: 0`.
+	// Killing Cytoscape's default overlay must not kill ours.
+	after('edge.traced', ':active')
+})
+
+test('a traced edge is ink, never a status colour', () => {
+	// An edge belongs to two nodes and has no status of its own (ADR 0039 §2).
+	// Painting it in one end's colour would make it the first thing here that
+	// carries a colour meaning nothing.
+	const traced = stylesheet(token).find((rule) => rule.selector === 'edge.traced')
+
+	expect(JSON.stringify(traced)).not.toMatch(/--status-/)
+	expect(traced?.style['line-color']).toBe('resolved(var(--ink))')
+	expect(traced?.style['underlay-opacity']).toBeGreaterThan(0)
+})
+
 test('the click overlay is turned off', () => {
 	// Cytoscape ships a black rounded-rectangle overlay on `:active`. It is
 	// drawn around the bounding box, which on a circle is a square, and it cost

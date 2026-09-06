@@ -85,6 +85,31 @@ export const stylesheet = (resolve: Resolve): Rule[] => [
 		style: { 'border-width': 2.5 },
 	},
 	{
+		selector: 'edge',
+		style: {
+			width: 1,
+			'line-color': resolve('var(--line)'),
+			'curve-style': 'straight',
+			'target-arrow-shape': 'triangle',
+			'target-arrow-color': resolve('var(--line)'),
+			'arrow-scale': 0.6,
+		},
+	},
+	// Everything below is a state, and states come last. Cytoscape resolves by
+	// order and not by specificity — the last matching rule wins — so a rule
+	// for `edge.traced` written above `edge` sets a colour that `edge` takes
+	// straight back, and nothing anywhere reports it.
+	{
+		// Cytoscape ships a black rounded-rectangle overlay on `:active`. It is
+		// drawn around the bounding box, which on a circle is a square, and it
+		// was the third square found while chasing one artefact.
+		//
+		// It sits above the base rules and below `edge.traced`, whose halo is an
+		// overlay of its own: killing the default must not kill that.
+		selector: ':active',
+		style: { 'overlay-opacity': 0 },
+	},
+	{
 		// Everything that is not the hovered node or one of its neighbours. The
 		// question a board answers is "what does this one touch?", and on a
 		// dense canvas that is unreadable until the rest steps back.
@@ -99,34 +124,40 @@ export const stylesheet = (resolve: Resolve): Rule[] => [
 	{
 		// The edges into and out of the hovered node. Dimming alone leaves the
 		// lines the same grey they always were, and the lines are the answer.
+		//
+		// They go to the brightest ink rather than a status colour: an edge
+		// belongs to two nodes and has no status of its own, so colouring it
+		// would be the first thing on this canvas to mean nothing (§2).
+		//
+		// The halo is two bands, not a blur. Cytoscape has no shadow property at
+		// all — nothing in 3.34's style set blurs anything — and `underlay` and
+		// `overlay` are the only things that draw outside an element's own
+		// shape. ADR 0039 §6 ruled `underlay` out for nodes because there it is
+		// the bounding box, which on a circle is a square; on a line there is no
+		// bounding box to get wrong, it follows the path.
+		//
+		// One band is a hard-edged outline and reads as a second line. Two
+		// nested ones — a wide faint one under, a narrow one over — approximate
+		// the falloff a blur would have given, and the seam between them lands
+		// below the threshold where anybody sees it. Wider and fainter than this
+		// stops being a halo and becomes a smear; the numbers were dialled on a
+		// real board rather than reasoned about.
 		selector: 'edge.traced',
 		style: {
-			width: 2,
-			'line-color': resolve('var(--ink-dim)'),
-			'target-arrow-color': resolve('var(--ink-dim)'),
-			'arrow-scale': 0.8,
-			'transition-property': 'width line-color target-arrow-color',
+			width: 1.6,
+			'line-color': resolve('var(--ink)'),
+			'target-arrow-color': resolve('var(--ink)'),
+			'arrow-scale': 0.85,
+			'underlay-color': resolve('var(--ink)'),
+			'underlay-opacity': 0.06,
+			'underlay-padding': 9,
+			'overlay-color': resolve('var(--ink)'),
+			'overlay-opacity': 0.07,
+			'overlay-padding': 4,
+			'transition-property': 'width line-color target-arrow-color underlay-opacity overlay-opacity',
 			'transition-duration': 130,
 			'transition-timing-function': 'ease-out',
 		},
-	},
-	{
-		selector: 'edge',
-		style: {
-			width: 1,
-			'line-color': resolve('var(--line)'),
-			'curve-style': 'straight',
-			'target-arrow-shape': 'triangle',
-			'target-arrow-color': resolve('var(--line)'),
-			'arrow-scale': 0.6,
-		},
-	},
-	{
-		// Cytoscape ships a black rounded-rectangle overlay on `:active`. It is
-		// drawn around the bounding box, which on a circle is a square, and it
-		// was the third square found while chasing one artefact.
-		selector: ':active',
-		style: { 'overlay-opacity': 0 },
 	},
 ]
 

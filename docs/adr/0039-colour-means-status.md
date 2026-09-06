@@ -123,12 +123,26 @@ same signal, louder, so §2 holds — a glow in a colour the node does not alrea
 carry would be decoration.
 
 **Its neighbourhood stays lit and everything else falls to 12%**, over the same
-130ms, and the edges into and out of it are traced brighter and wider. Added
-after driving a real board: the bloom says *which* node the pointer is on, and
-that was never the question. The question a board answers is what this one
-touches, and on a canvas where every edge is the same grey the answer is there
-and unreadable. Dimming is the only part of §2 that touches colour without
-meaning status — and it does not introduce a colour, it removes one.
+130ms. Added after driving a real board: the bloom says *which* node the
+pointer is on, and that was never the question. The question a board answers is
+what this one touches, and on a canvas where every edge is the same grey the
+answer is there and unreadable. Dimming is the only part of §2 that touches
+colour without meaning status — and it does not introduce a colour, it removes
+one.
+
+**The edges into and out of it go to the brightest ink and take a halo of
+their own.** Ink rather than a status colour, because an edge belongs to two
+nodes and has no status: colouring it would be the first thing on this canvas
+carrying a colour that means nothing.
+
+The halo is where the paragraph above needs qualifying. A node's underlay is
+its bounding box, which on a circle is a square; an edge has no bounding box to
+get wrong, so `underlay` follows the line. It still has no blur, so one band is
+a hard-edged outline that reads as a second line — but `underlay` and `overlay`
+together give two nested bands, a wide faint one under and a narrow one over,
+and the falloff between them lands below the threshold where anybody sees a
+seam. So the node bloom is a DOM element and the edge halo is not, and the two
+mechanisms differ because the shapes do.
 
 **The light reaches 25% of a radius past the node's own edge**, and the number
 is a token rather than a pixel count. It is a rim of light around a disc rather
@@ -142,8 +156,9 @@ smaller, and the canvas zooms. Every surface that draws this computes the blur
 from the node's own radius, which is also what keeps a mock and the real
 renderer from disagreeing about a number nobody would notice was two numbers.
 
-**No glow comes from Cytoscape at all**, and the reason took three attempts to
-find. An underlay is a solid shape drawn around the element's bounding box.
+**No node glow comes from Cytoscape at all**, and the reason took three
+attempts to find. An underlay is a solid shape drawn around the element's
+bounding box.
 `underlay-shape` is meant to make it follow the circle, but a build that does
 not know the property ignores it in silence and draws the rectangle anyway —
 so a square kept coming back with no error to explain it. An underlay also has
