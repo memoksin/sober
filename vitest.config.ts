@@ -4,7 +4,10 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
 	test: {
 		projects: [
-			// 'apps/*' returns in phase 5, with the dashboard.
+			// The dashboard's own tests are the canvas's logic, and logic needs no
+			// DOM: the projection becomes elements, the drag constraint moves
+			// positions, the glow is a string. The React around them is glue.
+			'apps/*',
 			'packages/*',
 			{
 				// The integration project imports core's source, not its build:
