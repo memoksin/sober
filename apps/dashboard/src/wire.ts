@@ -29,23 +29,26 @@ export const claimToken = (hash: string, store: TokenStore): string | null => {
 
 export interface Wire {
 	read<T>(name: string, params?: Readonly<Record<string, string>>): Promise<T>
+	op<T>(name: string, body: unknown): Promise<T>
 }
 
 /**
- * One route per read (ADR 0036). Errors come back as `{ error }` and are worth
- * more than the status code: the server writes them for a person to act on.
+ * One route per read and one per operation (ADR 0036). Errors come back as
+ * `{ error }` and are worth more than the status code: the server writes them
+ * for a person to act on.
+ *
+ * Every URL is relative, so the page's own origin is the server by
+ * construction and this module never reads `location`. There is no second
+ * origin to reach: the client is served by the thing it talks to.
  */
-export const wire = (token: string, fetcher: typeof fetch = fetch): Wire => ({
-	read: async <T>(name: string, params: Readonly<Record<string, string>> = {}): Promise<T> => {
-		// Relative, so the page's own origin is the server by construction and
-		// this module never reads `location`. There is no second origin to reach:
-		// the client is served by the thing it talks to.
-		const query = new URLSearchParams(params).toString()
-		const url = `/read/${name}${query === '' ? '' : `?${query}`}`
-
+export const wire = (token: string, fetcher: typeof fetch = fetch): Wire => {
+	const send = async <T>(url: string, init: RequestInit): Promise<T> => {
 		let response: Response
 		try {
-			response = await fetcher(url, { headers: { authorization: `Bearer ${token}` } })
+			response = await fetcher(url, {
+				...init,
+				headers: { ...init.headers, authorization: `Bearer ${token}` },
+			})
 		} catch {
 			// `sober dashboard` runs in the foreground, so Ctrl-C is how it
 			// ordinarily ends and this tab is what finds out. "Failed to fetch" is
@@ -55,8 +58,22 @@ export const wire = (token: string, fetcher: typeof fetch = fetch): Wire => ({
 
 		if (!response.ok) throw new Error(await refusal(response))
 		return (await response.json()) as T
-	},
-})
+	}
+
+	return {
+		read: <T>(name: string, params: Readonly<Record<string, string>> = {}): Promise<T> => {
+			const query = new URLSearchParams(params).toString()
+			return send<T>(`/read/${name}${query === '' ? '' : `?${query}`}`, {})
+		},
+
+		op: <T>(name: string, body: unknown): Promise<T> =>
+			send<T>(`/op/${name}`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body),
+			}),
+	}
+}
 
 /** A proxy or a crash can answer in HTML, and then the status is all there is. */
 const refusal = async (response: Response): Promise<string> => {
