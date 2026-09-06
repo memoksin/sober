@@ -185,6 +185,13 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		const settle = (now: number): void => {
 			instance.batch(() => {
 				for (const [id, at] of rest.current) {
+					// The pointer owns the node it is holding, and owns it outright.
+					// Cytoscape moves a dragged node by a delta from wherever it
+					// currently is, so a position written underneath does not merely
+					// displace it once — the next delta lands on the displaced value
+					// and the node walks out from under the hand.
+					if (grabbing && id === held) continue
+
 					const by = drift(id, now, float())
 					const much = calm.get(id) ?? 1
 					instance.getElementById(id).position({ x: at.x + by.x * much, y: at.y + by.y * much })
@@ -196,24 +203,29 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 		// its followers still have coming. A follower that stops halfway because
 		// the hand stopped moving leaves the edge over its limit.
 		let held: string | null = null
+		let grabbing = false
 		let coasting = 0
 
 		instance.on('grab', 'node', (event) => {
 			held = (event.target as NodeSingular).id()
+			grabbing = true
 			coasting = Number.POSITIVE_INFINITY
 		})
 		instance.on('free', 'node', () => {
+			grabbing = false
 			coasting = COAST_FRAMES
 		})
 
-		// The pointer owns the held node, so its resting place is read back out
-		// of where the pointer put it — otherwise the next frame would paint it
-		// back and the drag would fight the float.
+		// Where the pointer put it, less whatever float it would have had there,
+		// so that letting go leaves the node exactly where the hand did and the
+		// drift resumes from that new resting place rather than snapping.
 		instance.on('drag', 'node', (event) => {
 			const node = event.target as NodeSingular
-			const by = drift(node.id(), performance.now(), float())
+			const id = node.id()
+			const by = drift(id, performance.now(), float())
+			const much = calm.get(id) ?? 1
 			const at = node.position()
-			rest.current.set(node.id(), { x: at.x - by.x, y: at.y - by.y })
+			rest.current.set(id, { x: at.x - by.x * much, y: at.y - by.y * much })
 		})
 
 		let last = performance.now()

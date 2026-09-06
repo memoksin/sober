@@ -96,6 +96,14 @@ something you are trying to click. Its drift eases to zero over 180ms rather
 than stopping dead, because a 3.5px jump the moment the pointer arrives is the
 same problem compressed into one frame.
 
+**A node being dragged is the pointer's outright**, and nothing else writes its
+position. Not because the float would be a distraction — it is already off —
+but because Cytoscape moves a dragged node by a delta from wherever it
+currently is. A position written underneath does not displace it once: the next
+delta lands on the displaced value, and the node walks out from under the hand
+and wanders. It looked exactly like the float had gone wrong, and the float was
+not involved.
+
 The drift is presentation and nothing else. `rest` holds one position per node
 and everything that reasons about geometry — the drag constraint, the layout —
 reasons about that, never about the moving target on screen.
