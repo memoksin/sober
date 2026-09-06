@@ -68,3 +68,39 @@ export const Waiting = z.strictObject({
 })
 
 export type Waiting = z.infer<typeof Waiting>
+
+/**
+ * What the board gained while you were away (DESIGN §7.1). Every entry is an
+ * id the board already holds — the digest is a filter over existing records,
+ * and there is no digest record to write or read.
+ */
+export const Delta = z.strictObject({
+	/** Nodes the remote has that this board branch did not. */
+	nodes: z.array(Id),
+	/** Decisions whose `answer` went from null to a record. */
+	answered: z.array(Id),
+	/** Nodes whose `accepted` went from null to a record. */
+	finished: z.array(Id),
+})
+
+export type Delta = z.infer<typeof Delta>
+
+/**
+ * The two halves, together and separable. `delta` is null exactly when
+ * `unreachable` says why — no remote, no network, or a board that has never
+ * been shared — and the snapshot half is unaffected either way, because it
+ * asks the board on this machine and nothing else (§7.1).
+ *
+ * The message may not be empty for `WireError`'s reason: "the delta could not
+ * be read" with nothing after it is a failure nobody can act on (§8.7).
+ */
+export const Digest = z.strictObject({
+	delta: Delta.nullable(),
+	unreachable: z.string().min(1).nullable(),
+	/** Current state: results waiting for a human. */
+	inReview: z.array(Id),
+	/** Current state: nodes whose bound decision moved after approval (§2.8). */
+	flagged: z.array(Id),
+})
+
+export type Digest = z.infer<typeof Digest>

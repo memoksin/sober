@@ -219,3 +219,79 @@ test('the board a panel reads says what each node is waiting for', async () => {
 	])
 	expect(of('billing-api-m3q8')).toEqual([{ kind: 'node', id: 'auth-api-k7f2', archived: false }])
 })
+
+/**
+ * DESIGN §7.1's read, over the wire. The delta half is proven against real git
+ * in `digest.test.ts`; what this asks is whether the route reaches it — and
+ * whether `fetch` survives being a query string, which is the one part of this
+ * read that only exists on the wire.
+ */
+test('the digest is served, and its two halves arrive separately', async () => {
+	repo = board()
+	const there = paths(repo.dir)
+	const at = '2026-09-06T00:00:00.000Z'
+
+	await writeDecision(there, 'auth-model-k7f2', {
+		category: 'state',
+		question: 'Where does session state live?',
+		options: [
+			{ id: 'cookie', label: 'Cookie', reason: 'No server state', costLater: 'Size limits' },
+			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
+		],
+		suggested: null,
+		// Answered after the brief below was approved, which is what §2.8 calls
+		// a flag: the work was approved against an answer that has since moved.
+		answer: { option: 'cookie', rationale: '', by: 'Ada', at: '2026-09-06T02:00:00.000Z' },
+		createdAt: at,
+	})
+	await writeNode(there, 'auth-api-k7f2', {
+		title: 'Session endpoints',
+		description: '',
+		notes: '',
+		dependsOn: [],
+		decisions: ['auth-model-k7f2'],
+		files: [],
+		brief: {
+			approach: 'Write the endpoints.',
+			acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
+			approval: { by: 'Ada', at: '2026-09-06T01:00:00.000Z', queue: false },
+		},
+		outcome: null,
+		assignee: null,
+		claim: null,
+		accepted: null,
+		createdAt: at,
+	})
+
+	server = await serve({ paths: there })
+	const response = await get('digest')
+	expect(response.status).toBe(200)
+
+	const seen = (await response.json()) as {
+		delta: unknown
+		unreachable: string | null
+		inReview: string[]
+		flagged: string[]
+	}
+
+	// Nothing has been synced, so there is nothing to diff — and the snapshot
+	// half answers anyway, which is the property §7.1 is built on.
+	expect(seen.delta).toBeNull()
+	expect(seen.unreachable).toContain('sober sync')
+	expect(seen.flagged).toEqual(['auth-api-k7f2'])
+	expect(seen.inReview).toEqual([])
+})
+
+test('the digest fetches only when the caller asks it to', async () => {
+	repo = board()
+	server = await serve({ paths: paths(repo.dir) })
+
+	// §1.2 permits an automatic fetch; the flag is what keeps it something the
+	// caller asks for rather than something the route does on every poll.
+	expect((await get('digest', '?fetch=true')).status).toBe(200)
+	expect((await get('digest', '?fetch=false')).status).toBe(200)
+
+	// A query string is text, and text that is neither is not a boolean the
+	// route guesses at.
+	expect((await get('digest', '?fetch=maybe')).status).toBe(400)
+})

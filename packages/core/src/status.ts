@@ -70,11 +70,37 @@ const isAnswered = (board: Board, id: string): boolean => {
 export interface Flags {
 	/** Local, from the run record: a teammate needs to know the node is unfinished. */
 	readonly lastRunFailed: boolean
+	/**
+	 * A bound decision moved after this node's brief was approved (§2.8). Not
+	 * "a finished node whose decision changed": the narrower reading let an
+	 * `in-review` node be accepted against an answer that had just changed, and
+	 * nothing on the board knew.
+	 */
+	readonly flagged: boolean
 }
 
 export const flagsOf = (board: Board, id: string): Flags => ({
 	lastRunFailed: lastRun(board, id)?.run.exit === 'failed',
+	flagged: stale(board, id),
 })
+
+/**
+ * Timestamps compare as strings because they are ISO-8601 and UTC (`Timestamp`),
+ * which is the property that makes them sortable without being parsed.
+ *
+ * An answer written at the same instant as the approval is not a change: a
+ * brief is rendered from the answers it was approved against.
+ */
+const stale = (board: Board, id: string): boolean => {
+	const node = board.nodes.get(id)
+	const approved = node?.brief?.approval
+	if (node === undefined || approved == null) return false
+
+	return node.decisions.some((decision) => {
+		const answered = board.decisions.get(decision)?.answer?.at
+		return answered !== undefined && answered > approved.at
+	})
+}
 
 /** What can start now (§3.2's whole point), in dependency order. */
 /**

@@ -33,6 +33,7 @@ export {
 	NoSuchOptionError,
 	writeBrief,
 } from './decide.js'
+export { digest } from './digest.js'
 export { dispatch, dispatchWave, SetupFailedError, stopRun } from './dispatch.js'
 export { bind, unbound } from './edges.js'
 // `NotOnBoardError` came off this barrel in ADR 0033's deletion pass and comes

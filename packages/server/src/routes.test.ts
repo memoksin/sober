@@ -30,8 +30,10 @@ test('a read is never spelled like an operation', () => {
 	for (const read of Object.keys(READS)) expect(OPERATIONS, read).not.toContain(read)
 })
 
-test('S1 ships the three reads the hand-drive needs, and no speculative fourth', () => {
-	expect(Object.keys(READS).sort()).toEqual(['board', 'projection', 'review'])
+test('every read the hand-drive needs, and no speculative fifth', () => {
+	// The digest is the fourth, and it was written when §7.1's screen asked for
+	// it rather than beside the three — which is the property this guards.
+	expect(Object.keys(READS).sort()).toEqual(['board', 'digest', 'projection', 'review'])
 })
 
 test.each(Object.keys(OPS))('%s refuses a body that is not its shape', async (operation) => {

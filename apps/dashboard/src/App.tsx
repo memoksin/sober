@@ -1,6 +1,8 @@
-import type { Projection, Review } from '@besober/schema'
+import type { Digest as DigestRead, Projection, Review } from '@besober/schema'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
+import { Digest } from './digest/Digest.js'
+import { worthShowing } from './digest/data.js'
 import { DecisionScreen } from './panel/Decision.js'
 import type { Action, BoardRead } from './panel/data.js'
 import { Panel } from './panel/Panel.js'
@@ -22,6 +24,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [picked, setPicked] = useState<string | null>(null)
 	const [deciding, setDeciding] = useState<string | null>(null)
 	const [reviewing, setReviewing] = useState<Review | null>(null)
+	const [digest, setDigest] = useState<DigestRead | null>(null)
 
 	// The full board is only read while something is open. The canvas needs the
 	// slim projection every couple of seconds (ADR 0008); a drawer that is not
@@ -55,6 +58,41 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			clearInterval(timer)
 		}
 	}, [token, open])
+
+	/**
+	 * Coming back (§7.1). Read once, on open, and never on the poll: the delta
+	 * half costs a `git fetch`, which §1.2 permits automatically precisely
+	 * because it moves one ref and touches no file — but permitting it every two
+	 * seconds is a different thing than permitting it.
+	 *
+	 * A digest that cannot be read is not an error on the board. The five things
+	 * it reports are all still visible elsewhere; this is the sentence that saves
+	 * a person hunting for them.
+	 */
+	useEffect(() => {
+		if (token === null) return
+		let stopped = false
+		void wire(token)
+			.read<DigestRead>('digest', { fetch: 'true' })
+			.then((seen) => {
+				if (!stopped && worthShowing(seen)) setDigest(seen)
+			})
+			// A read that failed outright says so in the bar it would have filled,
+			// rather than in the failure line the poll clears two seconds later.
+			// The digest already has a field for "this half could not be read".
+			.catch((error: unknown) => {
+				if (stopped) return
+				setDigest({
+					delta: null,
+					unreachable: error instanceof Error ? error.message : String(error),
+					inReview: [],
+					flagged: [],
+				})
+			})
+		return () => {
+			stopped = true
+		}
+	}, [token])
 
 	// One way out of everything, and the one a person tries first.
 	useEffect(() => {
@@ -171,6 +209,8 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 					{withDone ? 'showing done' : `${hidden} done hidden`}
 				</button>
 			</header>
+
+			{digest !== null && <Digest digest={digest} onClose={() => setDigest(null)} />}
 
 			{failure !== null && (
 				<p className="shrink-0 border-[var(--line)] border-b bg-[var(--surface)] px-4 py-1.5 text-[var(--danger)] text-xs">

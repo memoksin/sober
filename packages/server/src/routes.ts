@@ -8,6 +8,7 @@ import {
 	bind,
 	claimNode,
 	currentBranch,
+	digest,
 	dispatch,
 	initBoard,
 	loadBoard,
@@ -28,6 +29,7 @@ import {
 import {
 	Brief,
 	Contributor,
+	type Digest,
 	Id,
 	OPERATIONS,
 	type Operation,
@@ -207,10 +209,11 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
 
 /**
- * Reads. Deliberately three: what the canvas draws, what `sober status` says,
- * and what a human reads before accepting. The panel, the decision screen and
- * the digest add theirs in the sessions that draw them — a read written before
- * a screen asks for it is a shape guessed from nothing.
+ * Reads. Four now: what the canvas draws, what `sober status` says, what a
+ * human reads before accepting, and what changed since they last looked. The
+ * panel and the decision screen added none — `board` already carried what they
+ * needed — which is what "a read written before a screen asks for it is a shape
+ * guessed from nothing" was protecting.
  *
  * A read is a `GET`, so its input is the query string rather than a body, and
  * the same `Route` carries it: the only difference is where the object comes
@@ -256,6 +259,18 @@ export const READS: Readonly<Record<string, Route>> = {
 	review: route(
 		z.strictObject({ node: Id, base: z.string().optional() }),
 		async (paths, { node: id, base }) => reviewNode(paths, id, await baseOf(paths, base)),
+	),
+
+	/**
+	 * What changed since you last looked (§7.1). `fetch` is the caller saying
+	 * this read may touch the network — §1.2 permits an automatic fetch and
+	 * forbids an automatic pull, and the flag is what keeps the permission
+	 * something a caller asks for rather than something a route does on every
+	 * poll.
+	 */
+	digest: route(
+		z.strictObject({ fetch: z.stringbool().default(false) }),
+		async (paths, { fetch }): Promise<Digest> => digest(paths, { fetch }),
 	),
 }
 

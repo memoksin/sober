@@ -160,7 +160,7 @@ test('an operation nobody routes is not found', async () => {
 })
 
 test('a read nobody routes is not found', async () => {
-	expect((await call('/read/digest')).status).toBe(404)
+	expect((await call('/read/impact')).status).toBe(404)
 })
 
 test('an operation is a POST — reading one does not perform it', async () => {

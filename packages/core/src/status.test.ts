@@ -54,8 +54,14 @@ test('a stopped or failed run does not enter the review queue', () => {
 
 	expect(statusOf(board({ a: node }, { r1: stopped }), 'a')).toBe('ready')
 	expect(statusOf(board({ a: node }, { r1: failed }), 'a')).toBe('ready')
-	expect(flagsOf(board({ a: node }, { r1: failed }), 'a')).toEqual({ lastRunFailed: true })
-	expect(flagsOf(board({ a: node }, { r1: stopped }), 'a')).toEqual({ lastRunFailed: false })
+	expect(flagsOf(board({ a: node }, { r1: failed }), 'a')).toEqual({
+		lastRunFailed: true,
+		flagged: false,
+	})
+	expect(flagsOf(board({ a: node }, { r1: stopped }), 'a')).toEqual({
+		lastRunFailed: false,
+		flagged: false,
+	})
 })
 
 test('the last run started is the one that decides', () => {
@@ -197,4 +203,39 @@ test('decisions outrank dependencies, the way blocked outranks held does not', (
 test('a node waiting on nothing is waiting on nothing, and a missing one too', () => {
 	expect(waitingOn(board({ a: aNode({ brief: approved }) }), 'a')).toEqual([])
 	expect(waitingOn(board({}), 'nobody')).toEqual([])
+})
+
+/**
+ * DESIGN §2.8: the flag is not "a finished node whose decision changed" but
+ * "a node whose bound decision changed after its brief was approved". The
+ * broader definition is what catches the `in-review` node whose brief approval
+ * was withdrawn under it — the case §2.8 records as having gone unnoticed.
+ */
+test('a bound decision answered after the brief was approved flags the node', () => {
+	const after = '2026-09-04T01:00:00.000Z'
+	const flagged = (at: string): Board => ({
+		...board({ a: aNode({ brief: approved, decisions: ['auth-model-k7f2'] }) }),
+		decisions: new Map([['auth-model-k7f2', aDecision({ answer: { ...answer, at } })]]),
+	})
+
+	expect(flagsOf(flagged(after), 'a').flagged).toBe(true)
+	// Answered at the same moment the brief was approved is the ordinary order,
+	// not a change: a brief is approved against the answers it was rendered from.
+	expect(flagsOf(flagged(AT), 'a').flagged).toBe(false)
+})
+
+test('an unapproved brief cannot be stale, and neither can an unbound decision', () => {
+	const after = '2026-09-04T01:00:00.000Z'
+	const moved = new Map([['auth-model-k7f2', aDecision({ answer: { ...answer, at: after } })]])
+
+	// Nothing was approved against this answer, so nothing was invalidated by it.
+	const unapproved = {
+		...board({ a: aNode({ decisions: ['auth-model-k7f2'] }) }),
+		decisions: moved,
+	}
+	expect(flagsOf(unapproved, 'a').flagged).toBe(false)
+
+	// The decision moved, but this node never bound it.
+	const unbound = { ...board({ a: aNode({ brief: approved }) }), decisions: moved }
+	expect(flagsOf(unbound, 'a').flagged).toBe(false)
 })
