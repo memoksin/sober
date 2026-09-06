@@ -78,11 +78,14 @@ test('a package outside core that reaches for the filesystem fails the boundarie
 		let output = ''
 		let failed = false
 		try {
-			execFileSync(
-				join(repoRoot, 'node_modules/.bin/depcruise'),
-				['packages', 'test', '--config', '.dependency-cruiser.cjs'],
-				{ cwd: repoRoot, encoding: 'utf8' },
-			)
+			// The arguments come from the script rather than being written twice.
+			// The two drifted once already — the script grew `apps` and a copy of
+			// it here would have gone on checking the old set.
+			const [, ...args] = (manifest.scripts.boundaries ?? '').split(' ')
+			execFileSync(join(repoRoot, 'node_modules/.bin/depcruise'), args, {
+				cwd: repoRoot,
+				encoding: 'utf8',
+			})
 		} catch (error) {
 			failed = true
 			output = String((error as { stdout?: string }).stdout ?? '')
