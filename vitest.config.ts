@@ -14,6 +14,12 @@ export default defineConfig({
 					alias: {
 						'@besober/core': fileURLToPath(new URL('packages/core/src/index.ts', import.meta.url)),
 						'@besober/mcp': fileURLToPath(new URL('packages/mcp/src/index.ts', import.meta.url)),
+						'@besober/schema': fileURLToPath(
+							new URL('packages/schema/src/index.ts', import.meta.url),
+						),
+						'@besober/server': fileURLToPath(
+							new URL('packages/server/src/index.ts', import.meta.url),
+						),
 					},
 				},
 				test: {
