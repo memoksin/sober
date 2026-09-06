@@ -3,6 +3,10 @@
 - Status: accepted
 - Date: 2026-09-06
 - Refines: ADR 0016, D11
+- Partly superseded by [ADR 0040](0040-the-layout-is-placed-not-simulated.md):
+  the renderer is still Cytoscape; the `cose` layout was replaced once it met a
+  board that was mostly islands. The 1000-node reading below is a reading of
+  `cose` animating, and no longer describes anything the product runs.
 
 ## Context
 

@@ -122,6 +122,14 @@ in its own status colour**. Nothing new is introduced by the bloom: it is the
 same signal, louder, so §2 holds — a glow in a colour the node does not already
 carry would be decoration.
 
+**Its neighbourhood stays lit and everything else falls to 12%**, over the same
+130ms, and the edges into and out of it are traced brighter and wider. Added
+after driving a real board: the bloom says *which* node the pointer is on, and
+that was never the question. The question a board answers is what this one
+touches, and on a canvas where every edge is the same grey the answer is there
+and unreadable. Dimming is the only part of §2 that touches colour without
+meaning status — and it does not introduce a colour, it removes one.
+
 **The light reaches 25% of a radius past the node's own edge**, and the number
 is a token rather than a pixel count. It is a rim of light around a disc rather
 than an aura around a region: the node stays the subject, and on a board where
@@ -202,8 +210,13 @@ So an edge has a **maximum rendered length**, and a drag that would exceed it
 pulls the far node along instead. The constraint is relaxed over three passes
 per drag frame, so a pull travels a few hops out rather than stopping at the
 first neighbour; more passes than that is motion nobody asked for. The node
-under the pointer never moves — the person is holding it — and where neither
-end is held, both give half.
+under the pointer never moves — the person is holding it.
+
+**The pull starts at the hand and travels outward.** The first draft enforced
+the maximum on every edge at once, which meant the first drag of a session
+tidied the whole board: somebody moved one node and the far side rearranged
+itself while they were looking somewhere else. An edge with nothing to do with
+the held node is now left where it is. ADR 0040 carries the rest of this.
 
 This costs nothing to undo, which is what makes it safe: ADR 0016 already
 established that positions live for the session and the layout re-simulates

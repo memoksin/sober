@@ -1,7 +1,7 @@
 import type { Projection } from '@besober/schema'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 import { useEffect, useRef } from 'react'
-import { elementsOf, glow, type Point, relax } from './graph.js'
+import { elementsOf, glow, type Point, pack, relax } from './graph.js'
 import { type Resolve, sameShape, stylesheet } from './paint.js'
 
 /**
@@ -10,6 +10,12 @@ import { type Resolve, sameShape, stylesheet } from './paint.js'
  * has stopped saying anything about adjacency.
  */
 const MAX_EDGE = 170
+
+/**
+ * Centre to centre between two nodes that sit side by side. Set by the label,
+ * not the circle: an 18px node under a 96px title needs the title's room.
+ */
+const SPACING = 112
 
 /**
  * The bridge between theme.css and a canvas. Cytoscape brings its own colour
@@ -106,9 +112,16 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 			const node = event.target as NodeSingular
 			if (!still.matches) node.addClass('lit')
 			light(node)
+
+			// What this one touches, and everything else out of the way. On a
+			// board of 200 the lines are only legible once the rest steps back.
+			const near = node.closedNeighborhood()
+			instance.elements().difference(near).addClass('faded')
+			near.edges().addClass('traced')
 		})
 		instance.on('mouseout', 'node', (event) => {
 			;(event.target as NodeSingular).removeClass('lit')
+			instance.elements().removeClass('faded traced')
 			dark()
 		})
 		instance.on('position', 'node.lit', (event) => light(event.target as NodeSingular))
@@ -169,28 +182,23 @@ export const Canvas = ({ projection }: { readonly projection: Projection }): Rea
 			return
 		}
 
+		// Placed, not simulated (ADR 0040). Positions are not board state
+		// (ADR 0016), so they are computed fresh every time the shape changes —
+		// and computing them is a loop over the nodes, not a settling animation
+		// nobody wanted to watch.
+		const placed = pack(projection, { spacing: SPACING })
+
 		instance.elements().remove()
-		instance.add(elementsOf(projection))
-		instance
-			.layout({
-				name: 'cose',
-				// Positions are not board state (ADR 0016), so the layout runs fresh
-				// every time the shape changes. Watching it settle is the part that
-				// costs frames, and it is not the part anybody wants to see.
-				animate: false,
-				idealEdgeLength: () => MAX_EDGE * 0.65,
-				nodeRepulsion: () => 12_000,
-				// A board is mostly islands early on, and left to itself `cose`
-				// stacks disconnected components into a column taller than any
-				// screen. Given the screen's own shape it fills it instead.
-				boundingBox: { x1: 0, y1: 0, w: instance.width(), h: instance.height() },
-				// Spaced for the label, not for the 18px circle it hangs under.
-				componentSpacing: 80,
-			})
-			.run()
+		instance.add(
+			elementsOf(projection).map((element) =>
+				element.group === 'nodes'
+					? { ...element, position: placed.get(element.data.id ?? '') }
+					: element,
+			),
+		)
 
 		instance.fit(undefined, 48)
-		// `fit` will happily zoom in, and on a sparse board it zooms to 2× and
+		// `fit` will happily zoom in, and on a small board it zooms to 2× and
 		// turns a dense picture into a poster. Out is useful; in is not.
 		if (instance.zoom() > 1) {
 			instance.zoom(1)

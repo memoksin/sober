@@ -85,6 +85,32 @@ export const stylesheet = (resolve: Resolve): Rule[] => [
 		style: { 'border-width': 2.5 },
 	},
 	{
+		// Everything that is not the hovered node or one of its neighbours. The
+		// question a board answers is "what does this one touch?", and on a
+		// dense canvas that is unreadable until the rest steps back.
+		selector: '.faded',
+		style: {
+			opacity: 0.12,
+			'transition-property': 'opacity',
+			'transition-duration': 130,
+			'transition-timing-function': 'ease-out',
+		},
+	},
+	{
+		// The edges into and out of the hovered node. Dimming alone leaves the
+		// lines the same grey they always were, and the lines are the answer.
+		selector: 'edge.traced',
+		style: {
+			width: 2,
+			'line-color': resolve('var(--ink-dim)'),
+			'target-arrow-color': resolve('var(--ink-dim)'),
+			'arrow-scale': 0.8,
+			'transition-property': 'width line-color target-arrow-color',
+			'transition-duration': 130,
+			'transition-timing-function': 'ease-out',
+		},
+	},
+	{
 		selector: 'edge',
 		style: {
 			width: 1,
