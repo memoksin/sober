@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { BoardRead } from './data.js'
-import { held, offer } from './data.js'
+import { actions, held, offer } from './data.js'
 
 const AT = '2026-09-06T00:00:00.000Z'
 
@@ -119,4 +119,33 @@ test('the suggested option is marked, and no other one is', () => {
 	const open = offer(decision('d1', { suggested: 'redis' }))
 
 	expect(open.options.map((option) => option.suggested)).toEqual([false, true])
+})
+
+test('a ready node can be run, and nothing else offers to run one', () => {
+	expect(actions('ready').map((one) => one.does)).toEqual(['run'])
+
+	for (const status of ['blocked', 'held', 'needs-brief'] as const)
+		expect(actions(status), status).toEqual([])
+})
+
+test('an unapproved brief is approved before it is run, never beside it', () => {
+	// The two are one step in the loop and two acts on the board. A panel that
+	// offered both would be offering to start work nobody has read.
+	expect(actions('needs-approval').map((one) => one.does)).toEqual(['approve'])
+})
+
+test('a run in flight can be stopped, and a finished one is reviewed', () => {
+	expect(actions('running').map((one) => one.does)).toEqual(['stop'])
+	expect(actions('in-review').map((one) => one.does)).toEqual(['review'])
+})
+
+test('done offers the review and never a second accept', () => {
+	// M2's gate found this in the terminal: a node accepted from a session still
+	// read as reviewable and offered an accept that had no branch left to merge.
+	// The review of accepted work is a record, so it is still worth opening.
+	expect(actions('done').map((one) => one.does)).toEqual(['review'])
+})
+
+test('a status the board could not derive offers nothing', () => {
+	expect(actions(null)).toEqual([])
 })
