@@ -92,6 +92,8 @@ export {
 	openDecisions,
 	ready,
 	statusOf,
+	type Waiting,
+	waitingOn,
 } from './status.js'
 export {
 	adoptBoard,

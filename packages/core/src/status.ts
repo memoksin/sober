@@ -88,6 +88,47 @@ export const openDecisions = (board: Board): [string, Decision][] =>
 		([id, decision]) => decisionState(decision) !== 'answered' && !board.archivedDecisions.has(id),
 	)
 
+/** One thing standing between a node and starting. */
+export interface Waiting {
+	readonly kind: 'decision' | 'node'
+	readonly id: string
+	/**
+	 * An archived decision is not in the open list, so a node held by one is
+	 * waiting on something no surface offers to answer. Said out loud rather
+	 * than rendered as an ordinary wait somebody chases.
+	 */
+	readonly archived: boolean
+}
+
+/**
+ * What a node is waiting for — the one thing a reader wants beside a held or
+ * blocked node, and the question the panel exists to answer.
+ *
+ * Not the same ordering as `statusOf`. That reports `blocked` before `held`,
+ * because options generated against context that does not exist yet are worse
+ * than no options. This lists both, decisions first, because a decision is the
+ * one a human can act on right now.
+ */
+export const waitingOn = (board: Board, id: string): Waiting[] => {
+	const node = board.nodes.get(id)
+	if (node === undefined) return []
+
+	return [
+		...node.decisions
+			.filter((decision) => !isAnswered(board, decision))
+			.map(
+				(decision): Waiting => ({
+					kind: 'decision',
+					id: decision,
+					archived: board.archivedDecisions.has(decision),
+				}),
+			),
+		...node.dependsOn
+			.filter((dependency) => !isDone(board, dependency))
+			.map((dependency): Waiting => ({ kind: 'node', id: dependency, archived: false })),
+	]
+}
+
 export const ready = (board: Board): string[] =>
 	[...board.nodes.keys()].filter((id) => statusOf(board, id) === 'ready').sort()
 

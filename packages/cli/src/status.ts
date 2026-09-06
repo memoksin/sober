@@ -1,4 +1,4 @@
-import { flagsOf, lastRun, openDecisions, statusOf, unbound } from '@besober/core'
+import { flagsOf, lastRun, openDecisions, statusOf, unbound, waitingOn } from '@besober/core'
 import { decisionState } from '@besober/schema'
 import { openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
@@ -93,25 +93,21 @@ const who = (
 	return dim(`@${node.claim.by}${plan}`)
 }
 
-/** The one thing a reader wants beside a held or blocked node: what it is waiting for. */
+/**
+ * The one thing a reader wants beside a held or blocked node: what it is
+ * waiting for. `core` decides what that is (it is a fact about the board); this
+ * decides how a terminal says it, which is one kind at a time — a column is not
+ * a panel, and "waiting on a decision and two nodes" is not a column's sentence.
+ */
 const waiting = (board: Awaited<ReturnType<typeof readBoard>>, id: string): string => {
-	const node = board.nodes.get(id)
-	if (node === undefined) return ''
+	const held = waitingOn(board, id)
+	const first = held[0]
 
-	const held = node.decisions
-		.filter((decision) => {
-			const record = board.decisions.get(decision)
-			return record === undefined || decisionState(record) !== 'answered'
-		})
-		// An archived decision is not in the open list, so a node held by one
-		// would otherwise be waiting on something nothing offers to answer.
-		.map((decision) =>
-			board.archivedDecisions.has(decision) ? `${decision} (archived)` : decision,
-		)
-	if (held.length > 0) return dim(`waiting on ${held.join(', ')}`)
-
-	const blocked = node.dependsOn.filter((dep) => board.nodes.get(dep)?.accepted == null)
-	if (blocked.length > 0) return dim(`waiting on ${blocked.join(', ')}`)
+	if (first !== undefined) {
+		const same = held.filter((one) => one.kind === first.kind)
+		const names = same.map((one) => (one.archived ? `${one.id} (archived)` : one.id))
+		return dim(`waiting on ${names.join(', ')}`)
+	}
 
 	const run = lastRun(board, id)
 	return run !== null && run.run.exit === null ? dim(`run ${run.id}`) : ''
