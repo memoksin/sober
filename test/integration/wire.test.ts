@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { paths } from '@besober/core'
+import { paths, writeDecision, writeNode } from '@besober/core'
 import { type Served, serve } from '@besober/server'
 import { afterEach, beforeAll, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
@@ -158,4 +158,64 @@ test('a read the board cannot answer says so rather than answering nothing', asy
 	// empty review that reads like a clean one.
 	expect(response.status).toBe(200)
 	expect(await response.json()).toBeNull()
+})
+
+test('the board a panel reads says what each node is waiting for', async () => {
+	repo = board()
+	const at = '2026-09-06T00:00:00.000Z'
+	const there = paths(repo.dir)
+
+	await writeDecision(there, 'auth-model-k7f2', {
+		category: 'state',
+		question: 'Where does session state live?',
+		options: [
+			{ id: 'cookie', label: 'Cookie', reason: 'No server state', costLater: 'Size limits' },
+			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
+		],
+		suggested: null,
+		answer: null,
+		createdAt: at,
+	})
+	await writeNode(there, 'auth-api-k7f2', {
+		title: 'Session endpoints',
+		description: '',
+		notes: '',
+		dependsOn: [],
+		decisions: ['auth-model-k7f2'],
+		files: [],
+		brief: null,
+		outcome: null,
+		assignee: null,
+		claim: null,
+		accepted: null,
+		createdAt: at,
+	})
+	await writeNode(there, 'billing-api-m3q8', {
+		title: 'Billing',
+		description: '',
+		notes: '',
+		dependsOn: ['auth-api-k7f2'],
+		decisions: [],
+		files: [],
+		brief: null,
+		outcome: null,
+		assignee: null,
+		claim: null,
+		accepted: null,
+		createdAt: at,
+	})
+
+	server = await serve({ paths: there })
+	const read = (await (await get('board')).json()) as {
+		nodes: { id: string; waitingOn: unknown }[]
+	}
+	const of = (id: string) => read.nodes.find((node) => node.id === id)?.waitingOn
+
+	// The panel's whole question. Derived on the server by the same `core`
+	// function the command line calls, so the two cannot come to disagree about
+	// what is holding a node up.
+	expect(of('auth-api-k7f2')).toEqual([
+		{ kind: 'decision', id: 'auth-model-k7f2', archived: false },
+	])
+	expect(of('billing-api-m3q8')).toEqual([{ kind: 'node', id: 'auth-api-k7f2', archived: false }])
 })
