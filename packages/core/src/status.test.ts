@@ -3,7 +3,7 @@ import { expect, test } from 'vitest'
 import type { Board } from './graph.js'
 import type { Feedback } from './local.js'
 import { aDecision, aNode, aRun } from './records.fixture.js'
-import { flagsOf, ready, statusOf } from './status.js'
+import { flagsOf, ready, statusOf, waitingOn } from './status.js'
 
 const AT = '2026-09-04T00:00:00.000Z'
 const answer: Answer = { option: 'cookie', rationale: 'Simplest', by: 'memoksin', at: AT }
@@ -151,4 +151,48 @@ test('feedback older than the run answers an earlier attempt, not this one', () 
 		'auth-api-k7f2': stale,
 	})
 	expect(statusOf(reviewing, 'auth-api-k7f2')).toBe('in-review')
+})
+
+test('a held node is waiting on the decisions nobody has answered', () => {
+	const node = aNode({ decisions: ['auth-model-k7f2'], brief: approved })
+
+	expect(waitingOn(board({ a: node }, {}, false), 'a')).toEqual([
+		{ kind: 'decision', id: 'auth-model-k7f2', archived: false },
+	])
+})
+
+test('a decision that was archived is still what the node waits on, and says so', () => {
+	// It is not in the open list, so without the flag the panel says "waiting on
+	// auth-model-k7f2" and nothing on the board ever offers to answer it.
+	const held = board({ a: aNode({ decisions: ['auth-model-k7f2'] }) }, {}, false)
+	held.archivedDecisions.add('auth-model-k7f2')
+
+	expect(waitingOn(held, 'a')).toEqual([
+		{ kind: 'decision', id: 'auth-model-k7f2', archived: true },
+	])
+})
+
+test('a blocked node is waiting on the upstream nodes that are not accepted', () => {
+	const done = aNode({ accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean' } })
+	const node = aNode({ dependsOn: ['b', 'c'] })
+
+	expect(waitingOn(board({ a: node, b: done, c: aNode({}) }), 'a')).toEqual([
+		{ kind: 'node', id: 'c', archived: false },
+	])
+})
+
+test('decisions outrank dependencies, the way blocked outranks held does not', () => {
+	// `statusOf` reports `blocked` first, but a node held by both is waiting on
+	// both — and the decision is the one a human can act on right now.
+	const node = aNode({ decisions: ['auth-model-k7f2'], dependsOn: ['b'] })
+
+	expect(waitingOn(board({ a: node, b: aNode({}) }, {}, false), 'a')).toEqual([
+		{ kind: 'decision', id: 'auth-model-k7f2', archived: false },
+		{ kind: 'node', id: 'b', archived: false },
+	])
+})
+
+test('a node waiting on nothing is waiting on nothing, and a missing one too', () => {
+	expect(waitingOn(board({ a: aNode({ brief: approved }) }), 'a')).toEqual([])
+	expect(waitingOn(board({}), 'nobody')).toEqual([])
 })
