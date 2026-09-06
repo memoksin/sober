@@ -1,10 +1,10 @@
-import { STATUSES } from '@besober/schema'
 import type { Projection } from '@besober/schema'
+import { STATUSES } from '@besober/schema'
 import { expect, test } from 'vitest'
 import { sameShape, stylesheet } from './paint.js'
 
-/** Stands in for the browser resolving a custom property off the document. */
-const token = (name: string) => `resolved(${name})`
+/** Stands in for the browser, which is the only thing that can do this. */
+const token = (css: string) => `resolved(${css})`
 
 test('every status the schema has is a colour on the canvas', () => {
 	// Cytoscape paints to a canvas, so it never sees theme.css — the colours
@@ -12,20 +12,18 @@ test('every status the schema has is a colour on the canvas', () => {
 	// with no colour and be drawn as whatever the default is.
 	const painted = JSON.stringify(stylesheet(token))
 
-	for (const status of STATUSES) expect(painted, status).toContain(`resolved(--status-${status})`)
+	for (const status of STATUSES) expect(painted, status).toContain(`--status-${status})`)
 })
 
-test('it asks for no colour the theme does not define', () => {
-	const asked = new Set<string>()
-	stylesheet((name) => {
-		asked.add(name)
+test('it asks for no status colour the theme does not define', () => {
+	const asked: string[] = []
+	stylesheet((css) => {
+		asked.push(css)
 		return '#000'
 	})
 
-	for (const name of asked) {
-		if (!name.startsWith('--status-')) continue
-		expect(STATUSES, name).toContain(name.replace('--status-', ''))
-	}
+	for (const name of asked.flatMap((css) => [...css.matchAll(/--status-([a-z-]+)/g)]))
+		expect(STATUSES, name[0] ?? '').toContain(name[1])
 })
 
 test('the click overlay is turned off', () => {
