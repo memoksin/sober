@@ -177,8 +177,14 @@ const hash = (id: string): number => {
 }
 
 export interface RelaxOptions {
-	/** The longest an edge may be drawn before the far node comes along. */
-	readonly max: number
+	/**
+	 * Where every node was when this drag began. An edge's limit is the length it
+	 * had here plus the slack, so the constraint is about what the drag stretched
+	 * rather than about a number the layout has to have satisfied.
+	 */
+	readonly since: ReadonlyMap<string, Point>
+	/** How much further apart than the drag found it an edge may be pulled. */
+	readonly slack: number
 	/** The node under the pointer. It never moves. */
 	readonly held: string
 	/** How far a pull travels. Three hops is enough; more is motion nobody asked for. */
@@ -192,9 +198,15 @@ export interface RelaxOptions {
 }
 
 /**
- * An edge has a maximum length (ADR 0039 §7). An edge stretched across the
- * window has stopped saying anything about adjacency, which is the only thing
- * this picture encodes, so past the limit the far node follows.
+ * An edge stretched across the window has stopped saying anything about
+ * adjacency, which is the only thing this picture encodes, so past a point the
+ * far node follows (ADR 0039 §7).
+ *
+ * That point is per edge and relative: the length the drag found it at, plus
+ * the slack. It was an absolute constant, which was wrong for a placed layout
+ * and not merely tuned wrong — rings put connected nodes on chords, and on a
+ * real 39-node board 38 of 45 edges opened longer than the constant. Every
+ * mousedown hauled two thirds of the graph inward before the pointer moved.
  *
  * The pull starts at the hand and travels outward, one hop per pass. It is not
  * the limit enforced everywhere at once: that way the first drag of a session
@@ -210,7 +222,7 @@ export interface RelaxOptions {
 export const relax = (
 	positions: ReadonlyMap<string, Point>,
 	edges: readonly (readonly [string, string])[],
-	{ max, held, passes = 3, ease = 1 }: RelaxOptions,
+	{ since, slack, held, passes = 3, ease = 1 }: RelaxOptions,
 ): Map<string, Point> => {
 	const next = new Map([...positions].map(([id, at]) => [id, { ...at }]))
 	// What the wave has reached. Anything in here is an anchor for the next hop
@@ -237,6 +249,12 @@ export const relax = (
 			const distance = Math.hypot(dx, dy)
 			// Two nodes in the same place have no direction to be pulled along.
 			if (distance === 0) continue
+
+			// What the layout gave this edge, plus what a hand may stretch it by.
+			// An edge whose ends the drag has not separated has no limit to
+			// exceed, however long the layout drew it.
+			const was = span(since, from, to)
+			const max = (was ?? distance) + slack
 
 			if (distance > max) {
 				// Each edge is relaxed once per call — the passes carry the wave
@@ -292,4 +310,11 @@ export const glow = (
 		`0 0 ${(reach * 1.1).toFixed(2)}px ${(reach * 0.3).toFixed(2)}px ${alpha(1)}, ` +
 		`0 0 ${(reach * 2.2).toFixed(2)}px 0 ${alpha(0.55)}`
 	)
+}
+
+/** How far apart two nodes were, or null when the snapshot does not hold both. */
+const span = (at: ReadonlyMap<string, Point>, from: string, to: string): number | null => {
+	const a = at.get(from)
+	const b = at.get(to)
+	return a === undefined || b === undefined ? null : Math.hypot(a.x - b.x, a.y - b.y)
 }

@@ -114,6 +114,28 @@ maximum length across every edge at once. Enforcing it everywhere meant the
 first drag of a session tidied the whole board: a person moved one node and the
 far side rearranged itself while they were looking somewhere else.
 
+**The limit is relative, and it took a second correction to get there.** §7's
+maximum was an absolute length — 170px, measured on ADR 0038's spike, where a
+force layout settles its edges short. Rings do not: they put connected nodes on
+chords, and on the 39-node board this ADR was written against, **38 of 45 edges
+open longer than that constant, the longest at 672px**. The constraint was not
+tuned wrong; it described a property the layout never had.
+
+What it cost was visible and was reported as a different bug. `grab` fires on
+mousedown, so clicking any node started the relaxation, found two thirds of the
+board already over the limit, and hauled it inward — a click that rearranged
+the graph.
+
+So an edge's limit is now the length **the drag found it at**, plus 60px of
+slack, and the relaxation starts on the first `drag` event rather than on
+`grab`. A click grabs and frees without passing through that handler, so it
+moves nothing. A nudge inside the slack stretches the edge and moves nothing.
+Past the slack the far node comes.
+
+Measured in the browser after the change, on the same board: a click moves a
+neighbour 3.4px, a 30px nudge moves it 3.1px — both of which are the float and
+not the pull — and a 580px drag brings it 543px.
+
 **A follower is towed rather than welded.** The first version put the far node
 on the limit in the frame the limit was exceeded, which is a rod: the follower
 arrives before the eye can see it leave, and the two move as one rigid piece.

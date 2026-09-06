@@ -54,26 +54,38 @@ test('an empty board is an empty canvas, not a failure', () => {
 const at = (entries: readonly [string, number, number][]) =>
 	new Map(entries.map(([id, x, y]) => [id, { x, y }]))
 
-test('an edge inside the limit is left alone', () => {
-	const before = at([
+test('an edge inside the slack is left alone', () => {
+	const since = at([
 		['a', 0, 0],
 		['b', 50, 0],
 	])
+	const before = at([
+		['a', -30, 0],
+		['b', 50, 0],
+	])
 
-	expect(relax(before, [['a', 'b']], { max: 100, held: 'a' })).toEqual(before)
+	expect(relax(before, [['a', 'b']], { since, slack: 100, held: 'a' })).toEqual(before)
 })
 
-test('an edge past the limit pulls the far node back to exactly the limit', () => {
+test('an edge past the slack pulls the far node back to exactly the limit', () => {
 	const after = relax(
 		at([
-			['a', 0, 0],
-			['b', 300, 0],
+			['a', -250, 0],
+			['b', 50, 0],
 		]),
 		[['a', 'b']],
-		{ max: 100, held: 'a' },
+		{
+			since: at([
+				['a', 0, 0],
+				['b', 50, 0],
+			]),
+			slack: 100,
+			held: 'a',
+		},
 	)
 
-	expect(after.get('b')?.x).toBeCloseTo(100)
+	// The edge was 50 and may be 150, so `b` lands 150 from where the hand is.
+	expect(after.get('b')?.x).toBeCloseTo(-100)
 	expect(after.get('b')?.y).toBeCloseTo(0)
 })
 
@@ -84,7 +96,14 @@ test('the node under the pointer never moves — the person is holding it', () =
 			['b', 300, 0],
 		]),
 		[['a', 'b']],
-		{ max: 100, held: 'a' },
+		{
+			since: at([
+				['a', 0, 0],
+				['b', 50, 0],
+			]),
+			slack: 100,
+			held: 'a',
+		},
 	)
 
 	expect(after.get('a')).toEqual({ x: 0, y: 0 })
@@ -107,7 +126,7 @@ test('an edge with nothing to do with the held node is left where it is', () => 
 			['a', 'b'],
 			['b', 'far'],
 		],
-		{ max: 100, held: 'nothing-here' },
+		{ since: before, slack: 100, held: 'nothing-here' },
 	)
 
 	expect(after).toEqual(before)
@@ -126,7 +145,15 @@ test('a pull travels past the first neighbour', () => {
 			['a', 'b'],
 			['b', 'c'],
 		],
-		{ max: 100, held: 'a' },
+		{
+			since: at([
+				['a', 400, 0],
+				['b', 400, 0],
+				['c', 800, 0],
+			]),
+			slack: 100,
+			held: 'a',
+		},
 	)
 
 	expect(after.get('c')?.x).toBeLessThan(800)
@@ -139,7 +166,14 @@ test('it returns new positions and leaves the ones it was given alone', () => {
 	])
 	const snapshot = new Map([...before].map(([id, p]) => [id, { ...p }]))
 
-	relax(before, [['a', 'b']], { max: 100, held: 'a' })
+	relax(before, [['a', 'b']], {
+		since: at([
+			['a', 250, 0],
+			['b', 300, 0],
+		]),
+		slack: 100,
+		held: 'a',
+	})
 
 	expect(before).toEqual(snapshot)
 })
@@ -158,7 +192,15 @@ test('the pull reaches a neighbour whose edge is listed before the one that move
 			['b', 'c'],
 			['a', 'b'],
 		],
-		{ max: 100, held: 'a' },
+		{
+			since: at([
+				['a', 400, 0],
+				['b', 400, 0],
+				['c', 800, 0],
+			]),
+			slack: 100,
+			held: 'a',
+		},
 	)
 
 	expect(after.get('c')?.x).toBeLessThan(800)
@@ -171,7 +213,14 @@ test('two nodes on top of each other do not divide by zero', () => {
 			['b', 10, 10],
 		]),
 		[['a', 'b']],
-		{ max: 100, held: 'a' },
+		{
+			since: at([
+				['a', 10, 10],
+				['b', 10, 10],
+			]),
+			slack: 100,
+			held: 'a',
+		},
 	)
 
 	expect(after.get('b')).toEqual({ x: 10, y: 10 })
@@ -346,7 +395,15 @@ test('easing closes part of the gap, not all of it', () => {
 			['b', 300, 0],
 		]),
 		[['a', 'b']],
-		{ max: 100, held: 'a', ease: 0.25 },
+		{
+			since: at([
+				['a', 200, 0],
+				['b', 300, 0],
+			]),
+			slack: 0,
+			held: 'a',
+			ease: 0.25,
+		},
 	)
 
 	expect(after.get('b')?.x).toBeCloseTo(250)
@@ -360,7 +417,15 @@ test('an eased follower arrives, given enough frames', () => {
 		['b', 900, 0],
 	])
 	for (let frame = 0; frame < 60; frame++)
-		positions = relax(positions, [['a', 'b']], { max: 100, held: 'a', ease: 0.25 })
+		positions = relax(positions, [['a', 'b']], {
+			since: at([
+				['a', 200, 0],
+				['b', 300, 0],
+			]),
+			slack: 0,
+			held: 'a',
+			ease: 0.25,
+		})
 
 	expect(positions.get('b')?.x).toBeCloseTo(100, 1)
 })
@@ -372,7 +437,15 @@ test('easing never pulls a follower past the limit', () => {
 		['b', 400, 0],
 	])
 	for (let frame = 0; frame < 40; frame++) {
-		positions = relax(positions, [['a', 'b']], { max: 100, held: 'a', ease: 0.25 })
+		positions = relax(positions, [['a', 'b']], {
+			since: at([
+				['a', 200, 0],
+				['b', 300, 0],
+			]),
+			slack: 0,
+			held: 'a',
+			ease: 0.25,
+		})
 		expect(positions.get('b')?.x).toBeGreaterThanOrEqual(100)
 	}
 })
@@ -388,7 +461,14 @@ test('a node grabbed and not moved pulls nothing, however long its edges are', (
 		['c', 900, 400],
 	])
 
-	const after = relax(still, [['a', 'b'], ['b', 'c']], { since: still, slack: 60, held: 'a' })
+	const after = relax(
+		still,
+		[
+			['a', 'b'],
+			['b', 'c'],
+		],
+		{ since: still, slack: 60, held: 'a' },
+	)
 
 	expect(after).toEqual(still)
 })
@@ -400,19 +480,33 @@ test('a follower comes along only once the drag has stretched the edge past the 
 	])
 
 	// Dragged 40px against 60px of slack: the edge stretches and nothing follows.
-	const inside = relax(at([['a', -40, 0], ['b', 600, 0]]), [['a', 'b']], {
-		since,
-		slack: 60,
-		held: 'a',
-	})
+	const inside = relax(
+		at([
+			['a', -40, 0],
+			['b', 600, 0],
+		]),
+		[['a', 'b']],
+		{
+			since,
+			slack: 60,
+			held: 'a',
+		},
+	)
 	expect(inside.get('b')).toEqual({ x: 600, y: 0 })
 
 	// Dragged 200px: 140px past the slack, so `b` starts to come.
-	const past = relax(at([['a', -200, 0], ['b', 600, 0]]), [['a', 'b']], {
-		since,
-		slack: 60,
-		held: 'a',
-	})
+	const past = relax(
+		at([
+			['a', -200, 0],
+			['b', 600, 0],
+		]),
+		[['a', 'b']],
+		{
+			since,
+			slack: 60,
+			held: 'a',
+		},
+	)
 	expect(past.get('b')?.x).toBeLessThan(600)
 })
 
@@ -431,7 +525,14 @@ test('the slack is measured from where the drag found the edge, not from a const
 		['far', 0, 700],
 	])
 
-	const after = relax(now, [['a', 'near'], ['a', 'far']], { since, slack: 60, held: 'a' })
+	const after = relax(
+		now,
+		[
+			['a', 'near'],
+			['a', 'far'],
+		],
+		{ since, slack: 60, held: 'a' },
+	)
 
 	// Both edges grew by the same drag, and both are past the slack, so both
 	// followers move — the 700px one no further than the 100px one for it.
@@ -447,11 +548,18 @@ test('a node the drag has moved closer to never pushes its follower away', () =>
 		['b', 600, 0],
 	])
 
-	const after = relax(at([['a', 400, 0], ['b', 600, 0]]), [['a', 'b']], {
-		since,
-		slack: 60,
-		held: 'a',
-	})
+	const after = relax(
+		at([
+			['a', 400, 0],
+			['b', 600, 0],
+		]),
+		[['a', 'b']],
+		{
+			since,
+			slack: 60,
+			held: 'a',
+		},
+	)
 
 	expect(after.get('b')).toEqual({ x: 600, y: 0 })
 })

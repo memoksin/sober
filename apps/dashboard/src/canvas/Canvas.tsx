@@ -5,11 +5,18 @@ import { drift, elementsOf, glow, type Point, pack, relax } from './graph.js'
 import { type Resolve, sameShape, stylesheet } from './paint.js'
 
 /**
- * The longest an edge is drawn before the far node follows (ADR 0039 §7).
- * Measured on the spike rather than reasoned about: past roughly this, an edge
- * has stopped saying anything about adjacency.
+ * How much further apart than the drag found it an edge stretches before the
+ * far node follows (ADR 0039 §7).
+ *
+ * Relative, not absolute. The absolute version was a length the placed layout
+ * never satisfied — rings put connected nodes on chords, and on a real 39-node
+ * board 38 of 45 edges opened longer than it — so every mousedown hauled two
+ * thirds of the graph inward before the pointer had moved at all.
+ *
+ * Around half a node's spacing: far enough that a nudge is a nudge, close
+ * enough that a real drag brings its neighbours.
  */
-const MAX_EDGE = 170
+const SLACK = 60
 
 /**
  * Centre to centre between two nodes that sit side by side. Set by the label,
@@ -210,7 +217,7 @@ export const Canvas = ({
 					// currently is, so a position written underneath does not merely
 					// displace it once — the next delta lands on the displaced value
 					// and the node walks out from under the hand.
-					if (grabbing && id === held) continue
+					if (grabbing && id === grabbed) continue
 
 					const by = drift(id, now, float())
 					const much = calm.get(id) ?? 1
@@ -222,17 +229,21 @@ export const Canvas = ({
 		// The node the pointer has hold of, and how many frames of catching up
 		// its followers still have coming. A follower that stops halfway because
 		// the hand stopped moving leaves the edge over its limit.
-		let held: string | null = null
+		let grabbed: string | null = null
 		let grabbing = false
+		// The node whose drag the followers are answering, and where the board was
+		// when that drag began. Both null until the pointer actually moves.
+		let held: string | null = null
+		let since: ReadonlyMap<string, Point> | null = null
 		let coasting = 0
 
 		instance.on('grab', 'node', (event) => {
-			held = (event.target as NodeSingular).id()
+			grabbed = (event.target as NodeSingular).id()
 			grabbing = true
-			coasting = Number.POSITIVE_INFINITY
 		})
 		instance.on('free', 'node', () => {
 			grabbing = false
+			grabbed = null
 			coasting = COAST_FRAMES
 		})
 
@@ -246,6 +257,16 @@ export const Canvas = ({
 			const much = calm.get(id) ?? 1
 			const at = node.position()
 			rest.current.set(id, { x: at.x - by.x * much, y: at.y - by.y * much })
+
+			// The first frame of a real drag, and not a moment sooner. `grab` fires
+			// on mousedown, so starting here is what keeps a plain click from
+			// pulling anything: a click grabs and frees without ever passing
+			// through this handler.
+			if (held !== id) {
+				held = id
+				since = new Map([...rest.current].map(([at_, point]) => [at_, { ...point }]))
+			}
+			coasting = Number.POSITIVE_INFINITY
 		})
 
 		let last = performance.now()
@@ -255,13 +276,17 @@ export const Canvas = ({
 			// Relaxing here rather than on the drag event is what makes a
 			// follower lag: it closes a fraction of the gap per frame, and the
 			// frames keep coming after the hand has stopped.
-			if (held !== null) {
+			if (held !== null && since !== null) {
 				rest.current = relax(rest.current, wires.current, {
-					max: MAX_EDGE,
+					since,
+					slack: SLACK,
 					held,
 					ease: TOW,
 				})
-				if (--coasting <= 0) held = null
+				if (--coasting <= 0) {
+					held = null
+					since = null
+				}
 			}
 
 			breathe(now - last)
