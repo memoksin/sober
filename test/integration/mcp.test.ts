@@ -16,6 +16,7 @@ import {
 	statusOf,
 	sync,
 	writeNode,
+	writeRun,
 } from '@besober/core'
 import { createServer } from '@besober/mcp'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -148,6 +149,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 	expect(names).toEqual(
 		[
 			'accept',
+			'answer',
 			'approve',
 			'archive',
 			'assign',
@@ -486,7 +488,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(25)
+		expect((await client.listTools()).tools.length).toBe(26)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -552,8 +554,13 @@ test('a run goes through the same dispatch the CLI uses, and the log reads back'
 	await call(client, 'approve', { node })
 
 	expect(await call(client, 'stop', { node })).toContain('Nothing is running')
+	// Answering something that has not run yet is refused for the honest reason,
+	// rather than accepting the words and dropping them (ADR 0046).
+	expect(await call(client, 'answer', { node, text: 'anyone there?' })).toMatch(/has not run yet/i)
 	expect(await call(client, 'run', { nodes: [node], base: 'main' })).toContain('finished')
 	expect(await call(client, 'logs', { node })).toContain('result')
+	// And a finished one cannot be answered either: the session is over.
+	expect(await call(client, 'answer', { node, text: 'well done' })).toMatch(/not running/i)
 	expect(statusOf(await loadBoard(paths), node)).toBe('in-review')
 })
 
@@ -1037,4 +1044,35 @@ test('a session opens one node for the fix, and it is not a plan', async () => {
 		'not on this board',
 	)
 	expect((await loadBoard(paths)).nodes.size).toBe(3)
+})
+
+test('a session can answer a run somebody is watching, and finish it', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'The auth API' }] })
+	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
+
+	// A live attended run, written directly: `answerRun` appends to a file the
+	// owning process relays, so reaching it needs a record rather than a host
+	// (ADR 0046). What is under test is the tool, not the dispatch.
+	await writeRun(paths, 'run-attended-k7f2', {
+		node,
+		host: 'claude-code',
+		branch: `sober/${node}`,
+		worktree: '/tmp/worktree',
+		startedAt: new Date().toISOString(),
+		endedAt: null,
+		exit: null,
+		error: null,
+		verify: null,
+		acceptance: [],
+		attended: true,
+	})
+
+	expect(await call(client, 'answer', { node, text: 'use the second option' })).toMatch(
+		/logs.*says back|Told/i,
+	)
+	expect(await call(client, 'answer', { node, text: 'that is everything', done: true })).toMatch(
+		/finish/i,
+	)
 })

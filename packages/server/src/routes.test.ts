@@ -1,6 +1,6 @@
 import { AGENT_OPERATIONS, OPERATIONS } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { COVERS, OPS, READS } from './routes.js'
+import { COVERS, OPS, READS, WATCHES } from './routes.js'
 
 test('every operation PR-09-08 binds has a route', () => {
 	for (const operation of OPERATIONS) expect(Object.keys(OPS), operation).toContain(operation)
@@ -56,4 +56,32 @@ test('a route refuses a body it cannot parse rather than handing it to core', as
 	const archive = OPS.archive
 
 	await expect(archive.run({} as never, { nothing: true })).rejects.toThrow()
+})
+
+test('the log is watched, not read, so no sixth read appears beside the first five', () => {
+	// ADR 0036 named the run log as the one place polling is the wrong shape,
+	// and ADR 0046 built the channel rather than a sixth `READS` entry. This is
+	// the assertion that keeps the two from quietly becoming the same thing.
+	expect(Object.keys(READS)).not.toContain('logs')
+	expect(Object.keys(WATCHES)).toEqual(['logs'])
+})
+
+test('a watch says what it accepts, so a query is parsed before core sees it', () => {
+	for (const [name, route] of Object.entries(WATCHES)) {
+		expect(route.accepts, name).toBeDefined()
+		expect(typeof route.open, name).toBe('function')
+	}
+})
+
+test.each(Object.keys(WATCHES))('the %s watch refuses a query that is not its shape', (name) => {
+	const route = WATCHES[name] as (typeof WATCHES)[string]
+
+	expect(() => route.accepts.parse({ definitely: 'not the shape' })).toThrow()
+})
+
+test('a watch is never spelled like an operation or a read', () => {
+	for (const watched of Object.keys(WATCHES)) {
+		expect(OPERATIONS, watched).not.toContain(watched)
+		expect(Object.keys(READS), watched).not.toContain(watched)
+	}
 })

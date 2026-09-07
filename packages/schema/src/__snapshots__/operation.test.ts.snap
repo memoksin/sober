@@ -3,6 +3,7 @@
 exports[`the catalogue is what PR-09-08 binds, so growing it is visible in review 1`] = `
 [
   "accept",
+  "answer",
   "approve",
   "archive",
   "assign",

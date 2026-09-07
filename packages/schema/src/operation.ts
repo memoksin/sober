@@ -36,6 +36,11 @@ export const OPERATIONS = [
 	'write_brief',
 	'approve',
 	'run',
+	// Talking to a run somebody is watching (ADR 0046). It changes no record on
+	// the board, and `stop` beside it does not either — both act on a live host
+	// process, and `PR-09-08`'s promise is about abilities a surface has rather
+	// than about which file an operation writes.
+	'answer',
 	'stop',
 	'accept',
 	'reject',

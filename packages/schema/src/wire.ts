@@ -146,3 +146,43 @@ export const Impact = z.strictObject({
 })
 
 export type Impact = z.infer<typeof Impact>
+
+/**
+ * One rendered line of a run log, as it travels (§5.5). The raw log is the
+ * host's own JSON — machine-facing, like every internal format (`PR-09-03`) —
+ * and this is what a person reads.
+ *
+ * It is an allowlist, not a denylist. A host adds event types between releases,
+ * and a denylist turns every new one into noise in front of the user the day it
+ * ships, which is exactly how a live tail becomes a thing nobody reads.
+ *
+ * The shape lives here rather than in `core` because both ends of the wire hold
+ * it: `core` renders it off the log and the screen draws it, and a browser
+ * cannot import `core` (ADR 0008).
+ */
+export const LogLine = z.strictObject({
+	kind: z.enum(['started', 'text', 'tool', 'result', 'raw', 'answer']),
+	text: z.string(),
+})
+
+export type LogLine = z.infer<typeof LogLine>
+
+/**
+ * What a screen watching a run is sent, one message at a time (ADR 0046).
+ *
+ * `offset` is a byte position in the log file, not a line count: it is what a
+ * reconnecting screen hands back to resume, and bytes are the only unit that
+ * survives a line the host wrote in two chunks.
+ *
+ * `live` is the reason the connection can close. A run that has ended will not
+ * grow its log again, so a screen that has read to the end of a finished run is
+ * finished too — which is what keeps a tab open on yesterday's node from
+ * holding anything at all.
+ */
+export const LogWindow = z.strictObject({
+	lines: z.array(LogLine),
+	offset: z.number().int().nonnegative(),
+	live: z.boolean(),
+})
+
+export type LogWindow = z.infer<typeof LogWindow>

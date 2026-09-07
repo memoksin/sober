@@ -16,8 +16,17 @@ import { append, appendLine, writeRecord } from './write.js'
 export const readRun = (paths: Paths, id: string): Promise<ReadRecord<Run>> =>
 	readRecord(recordFile(paths.runs, id), Run)
 
-export const writeRun = (paths: Paths, id: string, run: Run): Promise<void> =>
-	writeRecord(recordFile(paths.runs, id), run)
+/**
+ * `z.input`, not `Run`: a field with a default may be omitted by a writer and is
+ * always present to a reader. Without it, adding `attended` would have made
+ * every existing caller name a value for something it does not care about.
+ *
+ * The default is filled rather than parsed. Writing has never validated here —
+ * `readRun` is where a record meets its schema — and turning a write into a
+ * parse would reject records these tests and this product have always written.
+ */
+export const writeRun = (paths: Paths, id: string, run: z.input<typeof Run>): Promise<void> =>
+	writeRecord(recordFile(paths.runs, id), { attended: false, ...run })
 
 export const readRuns = (paths: Paths): Promise<ReadRecords<Run>> => readRecords(paths.runs, Run)
 
@@ -30,6 +39,30 @@ export const appendRunOutput = (paths: Paths, id: string, chunk: string): Promis
 /** The same log, read back. A run with no log yet reads as empty, never as an error. */
 export const readRunOutput = (paths: Paths, id: string): Promise<string> =>
 	readFile(runLog(paths, id), 'utf8').catch(() => '')
+
+/**
+ * The other direction: what a human has said to a run they are watching
+ * (ADR 0046).
+ *
+ * A file rather than a pipe, for the reason `stop` is a file. Answering is
+ * available from every surface (`PR-09-08`), which means it is usually a second
+ * process — the dashboard server, or a second terminal — and the process that
+ * owns the host is the only one holding its stdin. The file is what the two
+ * share, and it is the mechanism `markStopped` already proved across the three
+ * platforms this has to work on.
+ */
+export const runInput = (paths: Paths, id: string): string => join(paths.runs, `${id}.in`)
+
+export const appendRunInput = (paths: Paths, id: string, line: string): Promise<void> =>
+	append(runInput(paths, id), `${line}\n`)
+
+/** A run nobody has said anything to reads as empty, never as an error. */
+export const readRunInput = (paths: Paths, id: string): Promise<string> =>
+	readFile(runInput(paths, id), 'utf8').catch(() => '')
+
+export const clearRunInput = async (paths: Paths, id: string): Promise<void> => {
+	await rm(runInput(paths, id), { force: true })
+}
 
 /**
  * The host's pid, beside the run, for as long as it is running. `sober stop` is

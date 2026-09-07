@@ -28,6 +28,7 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	write_brief: 'write_brief',
 	approve: 'approve',
 	run: 'run',
+	answer: 'answer',
 	stop: 'stop',
 	accept: 'accept',
 	reject: 'reject',

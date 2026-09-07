@@ -1,4 +1,5 @@
 import {
+	answerRun,
 	currentBranch,
 	dispatch,
 	dispatchWave,
@@ -151,6 +152,25 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 				stopped
 					? `${node} was stopped. Its worktree is untouched; run it again when you are ready.`
 					: `${live[0]} had already ended.`,
+			)
+		}),
+	)
+
+	server.registerTool(
+		'answer',
+		{
+			title: 'Answer a run somebody is watching',
+			description:
+				'Reply to a node dispatched with watching on. Set done when there is nothing left to say, which lets the session finish instead of waiting.',
+			inputSchema: { node: z.string(), text: z.string(), done: z.boolean().optional() },
+		},
+		tool(async ({ node, text: said, done }: { node: string; text: string; done?: boolean }) => {
+			const paths = await openBoard(cwd)
+			const { run } = await answerRun(paths, node, said, { done })
+			return text(
+				done === true
+					? `Told ${node}, and let the session finish. Its output is in run ${run}.`
+					: `Told ${node}. The \`logs\` tool is what it says back.`,
 			)
 		}),
 	)

@@ -2,6 +2,7 @@ import {
 	acceptWork,
 	addContributor,
 	answerDecision,
+	answerRun,
 	approveBrief,
 	archiveNode,
 	assignNode,
@@ -14,8 +15,10 @@ import {
 	dispatch,
 	editDecision,
 	flagsOf,
+	followRun,
 	impactOf,
 	initBoard,
+	lastRun,
 	loadBoard,
 	NotOnBoardError,
 	type Paths,
@@ -25,6 +28,7 @@ import {
 	reopenNode,
 	resolveConflict,
 	reviewNode,
+	SoberError,
 	statusOf,
 	stopRun,
 	sync,
@@ -38,6 +42,7 @@ import {
 	type Digest,
 	Id,
 	type Impact,
+	type LogWindow,
 	OPERATIONS,
 	type Operation,
 	Project,
@@ -142,10 +147,33 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 			approveBrief(paths, id, { by: await whoami(paths.root), queue }),
 	),
 
+	/**
+	 * `attended` is opt-in and never the default, including here. An attended run
+	 * stays open for a reply, so a person who starts one and walks away leaves a
+	 * session waiting until `stop` or the dispatch timeout — which is a fine
+	 * trade for somebody who meant to watch it and a bad surprise for anybody
+	 * else (ADR 0046).
+	 */
 	run: route(
-		z.strictObject({ node: Id, base: z.string().optional(), anyway: z.boolean().optional() }),
-		async (paths, { node: id, base, anyway }) =>
-			dispatch(paths, id, { base: await baseOf(paths, base), anyway }),
+		z.strictObject({
+			node: Id,
+			base: z.string().optional(),
+			anyway: z.boolean().optional(),
+			attended: z.boolean().optional(),
+		}),
+		async (paths, { node: id, base, anyway, attended }) =>
+			dispatch(paths, id, { base: await baseOf(paths, base), anyway, attended }),
+	),
+
+	/**
+	 * Talking to a run somebody is watching (ADR 0046). `done` closes the
+	 * session's input, which is how an attended run ends on its own rather than
+	 * being killed — the difference between finishing a conversation and hanging
+	 * up on it.
+	 */
+	answer: route(
+		z.strictObject({ node: Id, text: z.string().min(1), done: z.boolean().optional() }),
+		async (paths, { node: id, text, done }) => answerRun(paths, id, text, { done }),
 	),
 
 	stop: route(node, async (paths, { node: id }) => ({ stopped: await stopRun(paths, id) })),
@@ -349,6 +377,126 @@ export const READS: Readonly<Record<string, Route>> = {
 		z.strictObject({ fetch: z.stringbool().default(false) }),
 		async (paths, { fetch }): Promise<Digest> => digest(paths, { fetch }),
 	),
+}
+
+/**
+ * How often the server looks at a live run's log. This is a `stat` on a local
+ * file the same machine is writing, not a request — ADR 0036's objection to
+ * polling is about the wire, and the wire here carries a line exactly when
+ * there is one.
+ *
+ * A quarter-second is under the threshold where output reads as arriving rather
+ * than appearing, and it is the cadence of one process reading one file, which
+ * is the cost floor `core` already pays for everything else.
+ */
+const WATCH_MS = 250
+
+/**
+ * A held-open channel, as opposed to a read that answers once (ADR 0046).
+ *
+ * `open` resolves the subject before the first byte goes out, so "that node has
+ * never run" is still a status code rather than an empty stream the screen has
+ * to interpret. Everything after that is the iterable, and the caller leaving
+ * is an `abort` rather than an error.
+ */
+export interface Watch {
+	readonly accepts: z.ZodType
+	readonly open: (
+		paths: Paths,
+		query: unknown,
+		signal: AbortSignal,
+	) => Promise<AsyncIterable<LogWindow>>
+}
+
+/** `route`'s twin, for the channels: parse first, so `open` never sees an unchecked query. */
+const watch = <I>(
+	accepts: z.ZodType<I>,
+	open: (paths: Paths, input: I, signal: AbortSignal) => Promise<AsyncIterable<LogWindow>>,
+): Watch => ({
+	accepts,
+	open: async (paths, query, signal) => open(paths, accepts.parse(query), signal),
+})
+
+/**
+ * The run log, and nothing else (ADR 0046). ADR 0036 named it as the one place
+ * polling is the wrong shape, and this is that one place — a sixth entry here
+ * wants the same argument made again for whatever it is.
+ *
+ * A screen names a node, because a run id is local and disposable (§5.5) and
+ * the canvas has never seen one. `run` is accepted too, so a screen already
+ * watching one attempt is not moved to a newer one underneath it.
+ */
+export const WATCHES: Readonly<Record<string, Watch>> = {
+	logs: watch(
+		z
+			.strictObject({
+				node: Id.optional(),
+				run: z.string().min(1).optional(),
+				/** Where a reconnecting screen left off, in bytes. */
+				from: z.coerce.number().int().nonnegative().optional(),
+			})
+			.refine(
+				(query) => query.node !== undefined || query.run !== undefined,
+				'name a node or a run to watch',
+			),
+
+		async (paths, { node, run, from }, signal) => {
+			const id = run ?? (node === undefined ? undefined : lastRun(await loadBoard(paths), node)?.id)
+			// A `SoberError`, not an `Error`: the request was understood and the
+			// state said no, which is a 409 rather than a 500 on the wire — and it
+			// is refused here, before a byte of the channel goes out, because after
+			// that there is no status left to send.
+			if (id === undefined)
+				throw new SoberError(
+					'no-run',
+					`${node} has not run yet — there is no log to read until it is dispatched`,
+				)
+
+			return follow(paths, id, from, signal)
+		},
+	),
+}
+
+/**
+ * The loop behind the channel. It yields a window when there is something to
+ * say and when the run ends, and stays quiet in between — a live run that is
+ * thinking sends no bytes, which is what makes an open tab cheap.
+ *
+ * It ends itself on a run that is over. Nothing will append to that log again,
+ * so holding the connection would be a promise the file cannot keep, and a tab
+ * left open on yesterday's node costs nothing once this returns.
+ */
+async function* follow(
+	paths: Paths,
+	id: string,
+	from: number | undefined,
+	signal: AbortSignal,
+): AsyncIterable<LogWindow> {
+	let offset = from
+	let first = true
+
+	while (!signal.aborted) {
+		const window = await followRun(paths, id, { from: offset })
+		// The first window always goes out, even empty: it carries the offset a
+		// reconnecting screen resumes from, and `live`, which is how the screen
+		// knows whether to expect anything at all.
+		if (first || window.lines.length > 0 || !window.live) yield window
+		offset = window.offset
+		first = false
+
+		if (!window.live) return
+		await new Promise((resolve) => {
+			const timer = setTimeout(resolve, WATCH_MS)
+			signal.addEventListener(
+				'abort',
+				() => {
+					clearTimeout(timer)
+					resolve(null)
+				},
+				{ once: true },
+			)
+		})
+	}
 }
 
 export { OPERATIONS }

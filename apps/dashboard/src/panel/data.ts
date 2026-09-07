@@ -174,10 +174,24 @@ export const flagOp = (
 }
 
 export interface Action {
-	/** An operation on the wire, or `review`, which opens a screen. */
-	readonly does: 'approve' | 'run' | 'stop' | 'review'
+	/**
+	 * An operation on the wire, or `review` and `logs`, which open screens.
+	 * `watch` is both: it dispatches with watching on and opens the log.
+	 */
+	readonly does: 'approve' | 'run' | 'stop' | 'review' | 'logs' | 'watch'
 	readonly label: string
 }
+
+/**
+ * Which statuses have a log to open. A node that has never been dispatched has
+ * nothing to read, and offering a button that can only answer "it has not run
+ * yet" is the surface lying about what it holds.
+ *
+ * `done` is on the list for ADR 0037's reason, one level out: a run survives a
+ * closed tab, so what it said survives one too — and the finished runs are the
+ * ones people come back to.
+ */
+const HAS_RUN: readonly Status[] = ['running', 'in-review', 'done']
 
 /**
  * What a person can do with this node right now, from its status and nothing
@@ -192,20 +206,33 @@ export interface Action {
  * offering to start work nobody has read.
  */
 export const actions = (status: Status | null): readonly Action[] => {
+	// The log comes first on a running node and last everywhere else, and that
+	// is the whole of the ordering rule: while it is running, reading what the
+	// agent is saying is the only thing anyone came for.
+	const log: readonly Action[] =
+		status !== null && HAS_RUN.includes(status) ? [{ does: 'logs', label: 'Watch the run' }] : []
+
 	switch (status) {
 		case 'needs-approval':
 			return [{ does: 'approve', label: 'Approve the brief' }]
+		// Two ways to start, and the plain one is first. A watched run stays open
+		// for a reply, so it ends when somebody ends it — that is the right trade
+		// for a person who meant to sit with it and a bad surprise for anyone who
+		// clicked the nearest button (ADR 0046).
 		case 'ready':
-			return [{ does: 'run', label: 'Run' }]
+			return [
+				{ does: 'run', label: 'Run' },
+				{ does: 'watch', label: 'Run and watch' },
+			]
 		case 'running':
-			return [{ does: 'stop', label: 'Stop' }]
+			return [...log, { does: 'stop', label: 'Stop' }]
 		case 'in-review':
-			return [{ does: 'review', label: 'Review' }]
+			return [{ does: 'review', label: 'Review' }, ...log]
 		// A review of accepted work is a record of what was accepted rather than
 		// a decision waiting to be made — still worth opening, never a second
 		// accept.
 		case 'done':
-			return [{ does: 'review', label: 'What was accepted' }]
+			return [{ does: 'review', label: 'What was accepted' }, ...log]
 		default:
 			return []
 	}
@@ -236,10 +263,11 @@ export const nextMove = (status: Status | null): string | null => {
 			return 'Read the approach and the criteria below. Nothing runs until you approve them.'
 		case 'ready':
 			return 'The brief is approved. Running cuts a worktree and spends real money.'
-		// Finding 4 is out of v1 (ADR 0045): the run cannot be read on this
-		// screen, so the screen says where it can be.
+		// ADR 0045 sent people to a terminal here, because the screen could not
+		// show a run. ADR 0046 built the screen, and a pointer at somewhere else
+		// is what a surface says only while it is missing the thing.
 		case 'running':
-			return 'The agent is working. `sober logs <node>` on the command line is what it has said.'
+			return 'The agent is working. Watch the run to read what it is saying as it says it.'
 		case 'in-review':
 			return 'The scan has run. Open the review to read what it found before accepting.'
 		case 'held':

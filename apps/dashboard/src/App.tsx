@@ -4,6 +4,7 @@ import { Canvas } from './canvas/Canvas.js'
 import { visible } from './canvas/graph.js'
 import { Digest } from './digest/Digest.js'
 import { worthShowing } from './digest/data.js'
+import { LogScreen } from './logs/Logs.js'
 import { DecisionScreen } from './panel/Decision.js'
 import type { Action, BoardRead, FlagAction } from './panel/data.js'
 import { flagOp } from './panel/data.js'
@@ -26,6 +27,9 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [picked, setPicked] = useState<string | null>(null)
 	const [deciding, setDeciding] = useState<string | null>(null)
 	const [reviewing, setReviewing] = useState<Review | null>(null)
+	// Which node's run is open, or null. A node id rather than a run id: a run id
+	// is local and disposable (§5.5), and the server resolves the newest one.
+	const [watching, setWatching] = useState<string | null>(null)
 	const [digest, setDigest] = useState<DigestRead | null>(null)
 	// §7.2's list, as a view over the canvas rather than a sixth screen. The
 	// nodes are already drawn; what was missing is which of them are flagged.
@@ -105,13 +109,14 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			if (event.key !== 'Escape') return
 			// One layer at a time: a screen opened from a node goes back to that
 			// node rather than clearing the board out from under it.
-			if (reviewing !== null) setReviewing(null)
+			if (watching !== null) setWatching(null)
+			else if (reviewing !== null) setReviewing(null)
 			else if (deciding !== null) setDeciding(null)
 			else setPicked(null)
 		}
 		addEventListener('keydown', back)
 		return () => removeEventListener('keydown', back)
-	}, [deciding, reviewing])
+	}, [deciding, reviewing, watching])
 
 	/**
 	 * What the board says now, after something changed it. Read rather than
@@ -184,6 +189,30 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				return
 			}
 
+			// The two that open a screen rather than change the board. Nothing is
+			// read here: the channel is opened by the screen, so closing it is what
+			// closes the connection (ADR 0046).
+			if (does === 'logs') {
+				setWatching(node)
+				return
+			}
+
+			// Start it and sit with it. The screen opens first and the dispatch is
+			// left running: `run` does not answer until the agent is finished, and
+			// an attended run is finished when the human says so — waiting for it
+			// here would open the log after the thing it was meant to watch.
+			if (does === 'watch') {
+				setWatching(node)
+				void surface
+					.op('run', { node, attended: true })
+					.then(refresh)
+					.catch((error: unknown) =>
+						setFailure(error instanceof Error ? error.message : String(error)),
+					)
+				await refresh()
+				return
+			}
+
 			await surface.op(does, { node })
 			await refresh()
 		},
@@ -223,6 +252,14 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	// `done` is off by default: a board keeps its finished work, and after a few
 	// weeks that is most of what is on it (ADR 0039 §1 — done is the one status
 	// whose colour inverts between themes, because it is the one that recedes).
+	/**
+	 * One client for the screens that hold a connection open. `wire` is cheap to
+	 * build, but a new object every render would restart the log's channel on
+	 * every poll — reopening a stream is not the same kind of harmless as
+	 * repeating a read.
+	 */
+	const surface = useMemo(() => (token === null ? null : wire(token)), [token])
+
 	const shown = useMemo<Projection | null>(
 		() => (projection === null ? null : visible(projection, { withDone, onlyFlagged })),
 		[projection, withDone, onlyFlagged],
@@ -309,6 +346,10 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 						onPreview={preview}
 						onEdit={edit}
 					/>
+				)}
+
+				{watching !== null && surface !== null && (
+					<LogScreen node={watching} surface={surface} onClose={() => setWatching(null)} />
 				)}
 
 				{reviewing !== null && (

@@ -30,6 +30,17 @@ export const claimToken = (hash: string, store: TokenStore): string | null => {
 export interface Wire {
 	read<T>(name: string, params?: Readonly<Record<string, string>>): Promise<T>
 	op<T>(name: string, body: unknown): Promise<T>
+	/**
+	 * A channel that stays open, one message at a time (ADR 0046). Resolves when
+	 * the server hangs up — which it does the moment the thing being watched
+	 * cannot change again — or when `signal` is aborted.
+	 */
+	watch<T>(
+		name: string,
+		params: Readonly<Record<string, string>>,
+		onMessage: (message: T) => void,
+		signal?: AbortSignal,
+	): Promise<void>
 }
 
 /**
@@ -72,6 +83,65 @@ export const wire = (token: string, fetcher: typeof fetch = fetch): Wire => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body),
 			}),
+
+		/**
+		 * A streaming `fetch` rather than an `EventSource`, and the difference is
+		 * the header. `EventSource` cannot set one, which is why ADR 0036 priced
+		 * this work at moving the loopback token into the URL; a reader over
+		 * `response.body` keeps `Authorization` and ADR 0008's rule with it.
+		 *
+		 * The refusal path is the one every other route uses, because the server
+		 * refuses before it writes a status: once the channel is open there is no
+		 * status left to send, so a watch that gets past this line is a watch that
+		 * was accepted.
+		 */
+		watch: async <T>(
+			name: string,
+			params: Readonly<Record<string, string>>,
+			onMessage: (message: T) => void,
+			signal?: AbortSignal,
+		): Promise<void> => {
+			const query = new URLSearchParams(params).toString()
+			let response: Response
+			try {
+				response = await fetcher(`/watch/${name}?${query}`, {
+					headers: { authorization: `Bearer ${token}` },
+					signal,
+				})
+			} catch (error) {
+				// An abort is the caller closing the screen, not a failure to report.
+				if (signal?.aborted === true) return
+				throw error instanceof Error && error.name === 'AbortError'
+					? error
+					: new Error('the dashboard server has stopped — `sober dashboard` is no longer running')
+			}
+
+			if (!response.ok || response.body === null) throw new Error(await refusal(response))
+
+			const reader = response.body.getReader()
+			const decoder = new TextDecoder()
+			// Messages are newline-delimited, and a chunk boundary is not a message
+			// boundary: the tail of a partial line is carried to the next chunk
+			// rather than parsed as its own broken one.
+			let rest = ''
+			try {
+				for (;;) {
+					const { done, value } = await reader.read()
+					if (done) break
+					rest += decoder.decode(value, { stream: true })
+					const parts = rest.split('\n')
+					rest = parts.pop() ?? ''
+					for (const part of parts) if (part.trim() !== '') onMessage(JSON.parse(part) as T)
+				}
+			} catch (error) {
+				// The server going away mid-stream is how this ordinarily ends when
+				// someone presses Ctrl-C, and the screen has already shown
+				// everything up to that point.
+				if (signal?.aborted !== true) throw error
+			} finally {
+				await reader.cancel().catch(() => {})
+			}
+		},
 	}
 }
 

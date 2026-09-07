@@ -3,6 +3,7 @@
 // here is importable from inside the package, and re-exporting one is a
 // one-line diff the day something outside asks for it.
 
+export { answerRun } from './answer.js'
 export { archiveDecision, archiveNode } from './archive.js'
 export {
 	createBoardBranch,
@@ -104,7 +105,7 @@ export {
 	type SyncResult,
 	sync,
 } from './sync.js'
-export { tail } from './tail.js'
+export { followRun, tail } from './tail.js'
 export {
 	assignNode,
 	type Claimed,

@@ -285,7 +285,7 @@ Three terms, because two words were carrying three meanings (ADR 0009):
 
 | Term | What it is | Version |
 | --- | --- | --- |
-| **adapter** | SOBER launching a host headless, for a dispatch | v1 |
+| **adapter** | SOBER launching a host for a dispatch — headless by default, or **attended** when a human is watching and can reply (ADR 0046) | v1 |
 | **plugin** | the bundle installed into a host: MCP configuration, commands, skills | v1, Claude Code |
 | **hook enforcement** | a plugin denying an agent spawn while a node is held | v1.x |
 
@@ -500,7 +500,7 @@ The wire types live in `schema`, alongside the record types, and are written at 
 
 The server binds loopback TCP on `127.0.0.1`, port `0`, plus a token — the rule §9 already sets for IPC, applied rather than restated.
 
-**The wire is request/response JSON over HTTP** (ADR 0036). One route per `core` operation, its shapes typed in `schema` beside the record types; no RPC framework, because that would make `schema` a client-server coupling rather than a description of what travels. Freshness is the client asking again: the canvas polls for the slim projection, and a panel fetches the full record when it opens. An event channel is the named next move and its first subject is the run log, where polling is plainly the wrong shape — additive when it arrives, and not free, because `EventSource` cannot set a header and the token moves into the URL.
+**The wire is request/response JSON over HTTP** (ADR 0036). One route per `core` operation, its shapes typed in `schema` beside the record types; no RPC framework, because that would make `schema` a client-server coupling rather than a description of what travels. Freshness is the client asking again: the canvas polls for the slim projection, and a panel fetches the full record when it opens. A channel that stays open is the exception, and its one subject is the run log, where polling is plainly the wrong shape: `GET /watch/logs` holds a connection and sends one window of rendered lines at a time (ADR 0046). It is a streaming `fetch` over newline-delimited JSON rather than SSE — `EventSource` is the one client that cannot send a header, so using it would have moved the loopback token into the URL, and a reader over `response.body` keeps `Authorization` and ADR 0008's rule with it.
 
 **Every state-changing operation has a route, `run` included.** `PR-09-08` requires the parity, and the three operations an agent may not perform alone (ADR 0010) need no elicitation here — the human is at the screen, and the screen is the asking. One consequence is recorded rather than left to be discovered: `accept`, `archive` and editing an answered decision are a single step on the screen and two on the command line, where ADR 0032's confirmation lives.
 
@@ -536,11 +536,13 @@ This is the ordinary pull request flow — review comments, more commits, one pu
 
 SOBER shells out to the user's own host CLI, headless — `claude -p`, `codex exec`, `opencode run` (D28). It never asks for an API key and never chooses the model: the tool the user already installed and logged into does the work.
 
+A dispatch has a second mode, **attended**, chosen per run and never the default (ADR 0046). It opens the session's input, adds `--input-format stream-json`, and tells the agent a human is reading — so a person watching on the dashboard, or holding `sober run --watch` in a terminal, can answer it. Everything else is identical: same worktree, same judging, same records. A headless run is still told that nobody can answer it, which is the M2 gate's finding 1 and the reason the two modes are separate rather than one mode with a flag on the prompt.
+
 Calling a model API directly was the alternative, and it makes SOBER an agent framework — owning the tool loop, file access, and sandboxing. That is a different product.
 
 This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. Claude Code is the first adapter; the rest are v1.x.
 
-Note what an adapter is _not_ used for. Decomposition, option generation and brief writing are not adapter calls — they happen inside the user's session through the MCP server (ADR 0009). SOBER launches a host headless only to make a node's code.
+Note what an adapter is _not_ used for. Decomposition, option generation and brief writing are not adapter calls — they happen inside the user's session through the MCP server (ADR 0009). SOBER launches a host only to make a node's code.
 
 The Claude Code invocation, read off the installed CLI at implementation time rather than from memory:
 

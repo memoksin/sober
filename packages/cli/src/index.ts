@@ -9,7 +9,7 @@ import { accept, acceptGreen, archive, reject, review } from './review.js'
 import { status } from './status.js'
 import { sync } from './sync.js'
 import { assign, claim, contributors, release } from './team.js'
-import { approve, bind, brief, decide, decisions, edit, logs, run, stop } from './work.js'
+import { answer, approve, bind, brief, decide, decisions, edit, logs, run, stop } from './work.js'
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -55,8 +55,11 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['run <node...>', 'start the agent in the node’s own worktree'],
 			['run <node> --anyway', 'start it even though it meets another node’s files'],
+			['run <node> --watch', 'start it so you can read it and answer it as it works'],
 			['stop <node>', 'stop it; the work stays where it is'],
 			['logs <node>', 'what the agent said, from the last run'],
+			['say <node> -m "…"', 'answer a run you are watching'],
+			['say <node> -m "…" --done', 'answer it and let the session finish'],
 		],
 	],
 	[
@@ -122,6 +125,7 @@ const NAMES_A_RECORD = new Set([
 	'run',
 	'stop',
 	'logs',
+	'say',
 	'review',
 	'accept',
 	'reject',
@@ -145,6 +149,8 @@ const options = {
 	'depends-on': { type: 'string' },
 	queue: { type: 'boolean' },
 	anyway: { type: 'boolean' },
+	watch: { type: 'boolean' },
+	done: { type: 'boolean' },
 	'no-push': { type: 'boolean' },
 	name: { type: 'string' },
 	role: { type: 'string' },
@@ -211,7 +217,12 @@ const main = async (): Promise<void> => {
 			return approve(need('node'), values.queue === true)
 		case 'run':
 			if (rest.length === 0) fail('which node? `sober status` shows what is ready')
-			return run(rest, values.base, values.anyway === true)
+			return run(rest, values.base, values.anyway === true, values.watch === true)
+		case 'say': {
+			const node = need('node')
+			const text = values.message ?? fail('say what to tell it: sober say <node> -m "…"')
+			return answer(node, text, values.done === true)
+		}
 		case 'stop':
 			return stop(need('node'))
 		case 'logs':

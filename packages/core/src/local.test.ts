@@ -30,6 +30,7 @@ const run = (node: string): Run => ({
 	error: null,
 	verify: null,
 	acceptance: [],
+	attended: false,
 })
 
 beforeEach(async () => {

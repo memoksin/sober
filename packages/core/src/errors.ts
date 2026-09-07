@@ -32,6 +32,9 @@ export const ERROR_CODES = [
 	'no-reason',
 	'no-title',
 	'not-finished',
+	// A node the screen asked to watch that has never been dispatched. There is
+	// no log to open, and saying so is the whole of the fix (ADR 0046).
+	'no-run',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

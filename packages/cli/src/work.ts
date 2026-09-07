@@ -1,5 +1,6 @@
 import {
 	answerDecision,
+	answerRun,
 	approveBrief,
 	bind as bindEdges,
 	dispatch,
@@ -237,6 +238,7 @@ export const run = async (
 	nodes: readonly string[],
 	base?: string,
 	anyway = false,
+	watch = false,
 ): Promise<void> => {
 	const paths = await openBoard()
 	const ref = await baseOf(paths, base)
@@ -256,7 +258,13 @@ export const run = async (
 	// Several nodes are a wave: they run to `dispatch.concurrency` and the chain
 	// stops at the first that does not finish (§5.3, `PR-05-08`). One node keeps
 	// the live tail, because with two the two outputs interleave into noise.
-	if (nodes.length > 1) return wave(paths, nodes, ref, anyway)
+	if (nodes.length > 1) {
+		// A wave is never attended. Its members run to `dispatch.concurrency` and
+		// there is one terminal between them: an agent asking a question it cannot
+		// be answered is the M2 gate's finding 1 with more processes.
+		if (watch) return fail('`--watch` takes one node — a wave has nobody to answer it')
+		return wave(paths, nodes, ref, anyway)
+	}
 
 	for (const node of nodes) {
 		say(`${cyan(bold(node))} ${dim(`on ${ref}`)}`)
@@ -265,6 +273,7 @@ export const run = async (
 			const result = await dispatch(paths, node, {
 				base: ref,
 				anyway,
+				attended: watch,
 				onLine: (line) => {
 					const [rendered] = tail(line)
 					if (rendered === undefined) return
@@ -385,6 +394,26 @@ export const logs = async (node: string): Promise<void> => {
 			.map((line) => `  ${mark(line.kind)} ${line.text}`)
 			.join('\n'),
 	)
+}
+
+/**
+ * Answering a run somebody is watching (ADR 0046). Usually a second terminal:
+ * `sober run <node> --watch` holds the first one, so this is how the answer
+ * gets in — and it is the same path the dashboard's reply takes, because
+ * `answerRun` writes to a file rather than to a process it does not own.
+ */
+export const answer = async (node: string, text: string, done = false): Promise<void> => {
+	const paths = await openBoard()
+	try {
+		await answerRun(paths, node, text, { done })
+		say(
+			done
+				? `${green('✓')} told ${cyan(node)}, and let the session finish`
+				: `${green('✓')} told ${cyan(node)} — \`sober logs ${node}\` is what it says back`,
+		)
+	} catch (error) {
+		refuse(error)
+	}
 }
 
 /**

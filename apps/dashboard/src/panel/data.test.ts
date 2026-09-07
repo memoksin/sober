@@ -140,7 +140,7 @@ test('the suggested option is marked, and no other one is', () => {
 })
 
 test('a ready node can be run, and nothing else offers to run one', () => {
-	expect(actions('ready').map((one) => one.does)).toEqual(['run'])
+	expect(actions('ready').map((one) => one.does)).toContain('run')
 
 	for (const status of ['blocked', 'held', 'needs-brief'] as const)
 		expect(actions(status), status).toEqual([])
@@ -153,15 +153,23 @@ test('an unapproved brief is approved before it is run, never beside it', () => 
 })
 
 test('a run in flight can be stopped, and a finished one is reviewed', () => {
-	expect(actions('running').map((one) => one.does)).toEqual(['stop'])
-	expect(actions('in-review').map((one) => one.does)).toEqual(['review'])
+	expect(actions('running').map((one) => one.does)).toEqual(['logs', 'stop'])
+	expect(actions('in-review').map((one) => one.does)).toEqual(['review', 'logs'])
 })
 
 test('done offers the review and never a second accept', () => {
 	// M2's gate found this in the terminal: a node accepted from a session still
 	// read as reviewable and offered an accept that had no branch left to merge.
-	// The review of accepted work is a record, so it is still worth opening.
-	expect(actions('done').map((one) => one.does)).toEqual(['review'])
+	// The review of accepted work is a record, so it is still worth opening —
+	// and so is what the run said while it was making it (ADR 0046).
+	expect(actions('done').map((one) => one.does)).toEqual(['review', 'logs'])
+})
+
+test('a ready node offers both ways to start, with the plain one first', () => {
+	// A watched run stays open for a reply and ends when somebody ends it. That
+	// is worth it for a person who meant to sit with it, so it is the second
+	// button rather than the default (ADR 0046).
+	expect(actions('ready').map((one) => one.does)).toEqual(['run', 'watch'])
 })
 
 test('a status the board could not derive offers nothing', () => {
@@ -231,11 +239,36 @@ test('the statuses with no button name what produces the move', () => {
 })
 
 /**
- * Finding 4 is out of v1 (ADR 0045), and the honest thing on a screen that
- * cannot show the run is to say where the run can be read instead.
+ * ADR 0045 left the run unreadable on the screen and had the panel point at a
+ * terminal instead. ADR 0046 built the screen, so the sentence stops sending
+ * people somewhere else — the pointer was the apology for the gap, and the gap
+ * is closed.
  */
-test('a running node points at the one place its output can be read', () => {
-	expect(nextMove('running')).toMatch(/sober logs/)
+test('a running node is watched here rather than pointed at a terminal', () => {
+	expect(nextMove('running')).not.toMatch(/sober logs/)
+	expect(nextMove('running')).toMatch(/watch/i)
+})
+
+test('a running node offers to open its log, beside the stop', () => {
+	expect(actions('running').map((action) => action.does)).toEqual(['logs', 'stop'])
+})
+
+test('a node that has finished still offers its log, because the log outlives the run', () => {
+	// ADR 0037's reason, applied to the log: a run survives a closed tab, so
+	// what it said has to survive one too.
+	for (const status of ['in-review', 'done'] as const)
+		expect(
+			actions(status).map((action) => action.does),
+			status,
+		).toContain('logs')
+})
+
+test('a node that has never run offers no log to open', () => {
+	for (const status of ['needs-brief', 'needs-approval', 'ready', 'held', 'blocked'] as const)
+		expect(
+			actions(status).map((action) => action.does),
+			status,
+		).not.toContain('logs')
 })
 
 test('no two statuses give the same instruction', () => {

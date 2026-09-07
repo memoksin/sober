@@ -29,4 +29,14 @@ export {
 } from './review.js'
 export { CommandResult, RUN_EXITS, Run, RunExit } from './run.js'
 export { STATUSES, type Status } from './status.js'
-export { Delta, Digest, Impact, ProjectedNode, Projection, Waiting, WireError } from './wire.js'
+export {
+	Delta,
+	Digest,
+	Impact,
+	LogLine,
+	LogWindow,
+	ProjectedNode,
+	Projection,
+	Waiting,
+	WireError,
+} from './wire.js'

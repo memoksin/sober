@@ -4,13 +4,15 @@ import { renderBrief } from './brief.js'
 import { type Config, readConfig, readConfigFromBase } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
-import { checkHost, HostError, startAgent } from './host.js'
+import { type AgentInput, checkHost, HostError, startAgent } from './host.js'
 import {
 	appendEvent,
 	appendRunOutput,
+	clearRunInput,
 	clearRunPid,
 	clearStopped,
 	markStopped,
+	readRunInput,
 	readRunPid,
 	wasStopped,
 	writeRunPid,
@@ -57,6 +59,12 @@ export interface DispatchOptions {
 	readonly onLine?: (line: string) => void
 	/** The human saw the same-files warning and said go (§3.4). Never set by the queue. */
 	readonly anyway?: boolean
+	/**
+	 * Somebody is watching this one and can answer it (ADR 0046). Off by
+	 * default, and never set by the queue or a wave: an unwatched run that stops
+	 * to ask is the M2 gate's finding 1, and `NO_HUMAN` is what fixed it.
+	 */
+	readonly attended?: boolean
 	/** Nodes going out in the same command: unclaimed, and active all the same. */
 	readonly alsoStarting?: readonly string[]
 }
@@ -99,7 +107,8 @@ export const dispatch = async (
 	if (worktree.created && config.dispatch.setup !== null)
 		await prepare(node, worktree.path, config.dispatch.setup)
 
-	const { id } = await startRun(paths, node, config.dispatch.host)
+	const attended = options.attended === true
+	const { id } = await startRun(paths, node, config.dispatch.host, { attended })
 	// The pid file holds the **agent's** pid and nothing else, written by
 	// `onStart` below. It used to be seeded with this process's, so a `sober
 	// stop` landing before the child started killed the process that owns the
@@ -117,19 +126,27 @@ export const dispatch = async (
 	// and forgotten, two appends race and the tail reads back shuffled.
 	let written: Promise<void> = Promise.resolve()
 
+	// What the human has said, relayed from the file every surface writes to
+	// into the stdin only this process holds (ADR 0046). Nothing runs unless the
+	// run is attended, so a headless dispatch pays for none of it.
+	const relay = attended ? relayInput(paths, id) : null
+
 	try {
 		const exit = await startAgent({
 			host: config.dispatch.host,
 			cwd: worktree.path,
 			prompt,
+			attended,
 			signal: control.signal,
 			onStart: (pid) => void writeRunPid(paths, id, pid),
+			onInput: (input) => relay?.start(input),
 			onLine: (line) => {
 				options.onLine?.(line)
 				written = written.then(() => appendRunOutput(paths, id, `${line}\n`))
 			},
 		})
 		await written
+		relay?.stop()
 
 		// A run past its limit is killed and recorded as failed with a timeout
 		// error, never as a stop (§5.4). Its worktree is preserved like any
@@ -176,8 +193,60 @@ export const dispatch = async (
 		}
 	} finally {
 		clearTimeout(timer)
+		relay?.stop()
 		await clearRunPid(paths, id)
 		await clearStopped(paths, id)
+		await clearRunInput(paths, id)
+	}
+}
+
+/**
+ * How much of the answer file has already been handed to the host, and how
+ * often this looks for more. The cadence is a `stat` on a local file this
+ * machine wrote — the same shape `stop` uses, and the same reason: answering is
+ * available from every surface (`PR-09-08`), so the writer is usually a second
+ * process and a file is what the two share.
+ */
+const RELAY_MS = 150
+
+/**
+ * The bridge between the file anybody may append to and the stdin only this
+ * process holds. Each line is one thing the human said; `done` ends the
+ * session's input, which is how an attended host exits on its own instead of
+ * waiting for the dispatch timeout.
+ */
+const relayInput = (paths: Paths, id: string) => {
+	let timer: NodeJS.Timeout | null = null
+	let read = 0
+
+	const stop = (): void => {
+		if (timer !== null) clearInterval(timer)
+		timer = null
+	}
+
+	return {
+		stop,
+		start: (input: AgentInput): void => {
+			timer = setInterval(() => {
+				void readRunInput(paths, id).then((text) => {
+					const lines = text.split('\n').filter((line) => line.trim() !== '')
+					// Only what has arrived since the last look. Re-reading the file
+					// each tick is cheap; re-saying what was already said is not.
+					for (const line of lines.slice(read)) {
+						const said = JSON.parse(line) as { text?: string; done?: boolean }
+						if (typeof said.text === 'string' && said.text !== '') input.say(said.text)
+						if (said.done === true) {
+							input.done()
+							stop()
+						}
+					}
+					read = lines.length
+				})
+			}, RELAY_MS)
+			// Nothing else is waiting on this process, so a relay that outlived its
+			// run must not be what keeps node alive.
+			timer.unref?.()
+		},
 	}
 }
 

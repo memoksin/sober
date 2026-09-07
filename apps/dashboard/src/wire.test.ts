@@ -139,3 +139,81 @@ test('an operation against a server that has gone says the command stopped', asy
 		'`sober dashboard` is no longer',
 	)
 })
+
+let sent: RequestInit | undefined
+let url = ''
+
+/** A streaming body, the way the watch route sends one: NDJSON, in chunks. */
+const streams = (chunks: readonly string[], status = 200) =>
+	(async (at: string, init?: RequestInit) => {
+		sent = init
+		url = at
+		return new Response(
+			new ReadableStream({
+				start(controller) {
+					for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk))
+					controller.close()
+				},
+			}),
+			{ status, headers: { 'content-type': 'application/x-ndjson' } },
+		)
+	}) as unknown as typeof fetch
+
+test('a watch carries the token in the header, so ADR 0008 keeps its rule', async () => {
+	await wire('4f3a', streams(['{"lines":[],"offset":0,"live":false}\n'])).watch(
+		'logs',
+		{ node: 'auth-api-k7f2' },
+		() => {},
+	)
+
+	// The whole reason the channel is a streaming `fetch` and not an
+	// `EventSource`: the token stays out of the URL (ADR 0046).
+	expect((sent?.headers as Record<string, string> | undefined)?.authorization).toBe('Bearer 4f3a')
+	expect(url).not.toContain('4f3a')
+})
+
+test('a watch hands over each window as it lands, not all of them at the end', async () => {
+	const seen: number[] = []
+
+	await wire(
+		'4f3a',
+		streams([
+			'{"lines":[{"kind":"text","text":"one"}],"offset":10,"live":true}\n',
+			'{"lines":[{"kind":"text","text":"two"}],"offset":20,"live":false}\n',
+		]),
+	).watch<{ lines: { kind: string; text: string }[]; offset: number; live: boolean }>(
+		'logs',
+		{ node: 'n' },
+		(window) => seen.push(window.offset),
+	)
+
+	expect(seen).toEqual([10, 20])
+})
+
+test('a window split across two chunks is one window, never two broken ones', async () => {
+	const seen: string[] = []
+
+	await wire(
+		'4f3a',
+		streams(['{"lines":[{"kind":"text","text":"hal', 'f"}],"offset":9,"live":false}\n']),
+	).watch<{ lines: { kind: string; text: string }[]; offset: number; live: boolean }>(
+		'logs',
+		{ node: 'n' },
+		(window) => seen.push(...window.lines.map((line) => line.text)),
+	)
+
+	// The server writes one window per line, and TCP does not promise to deliver
+	// one per chunk. A reader that assumes it does drops the first long line
+	// anybody writes.
+	expect(seen).toEqual(['half'])
+})
+
+test('a refused watch fails with what the server said, like every other route', async () => {
+	await expect(
+		wire('4f3a', streams(['{"error":"n has not run yet"}'], 409)).watch(
+			'logs',
+			{ node: 'n' },
+			() => {},
+		),
+	).rejects.toThrow(/has not run yet/)
+})

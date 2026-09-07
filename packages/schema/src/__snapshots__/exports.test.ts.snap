@@ -22,6 +22,8 @@ exports[`schema exports nothing new without a reviewer seeing it 1`] = `
   "ID_PATTERN",
   "Id",
   "Impact",
+  "LogLine",
+  "LogWindow",
   "Node",
   "OPERATIONS",
   "Option",

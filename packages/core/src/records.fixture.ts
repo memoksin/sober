@@ -45,5 +45,6 @@ export const aRun = (node: string, overrides: Partial<Run> = {}): Run => ({
 	error: null,
 	verify: null,
 	acceptance: [],
+	attended: false,
 	...overrides,
 })

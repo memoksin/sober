@@ -42,6 +42,46 @@ export const HOST_ARGS = [
 ] as const
 
 /**
+ * The inverse of `NO_HUMAN`, for a run somebody is watching (ADR 0046).
+ *
+ * It says the opposite about the reader and the same thing about committing,
+ * and the second half is deliberate. `NO_HUMAN` exists because two of five M2
+ * dispatches stopped to ask a permission nobody could give and finished with an
+ * empty branch; a human at the screen fixes the "nobody could give" half and
+ * changes nothing about what SOBER does with the branch afterwards. An attended
+ * run that ends its turn waiting for approval to commit is the same empty
+ * branch with somebody watching it happen.
+ */
+export const A_HUMAN_IS_WATCHING =
+	'You are running inside SOBER, dispatched to build one node, and a human is watching this session on a dashboard and can reply to you. If you genuinely need a decision only they can make, ask for it in a short message and wait — they will answer. Do not ask for permission to act or to commit: that is already granted, and the work is committed on this branch either way. Prefer doing the work and reporting what you did over asking whether to start.'
+
+/**
+ * What attended mode adds. `--input-format stream-json` is what keeps the
+ * session open for a reply — without it the host reads the prompt, answers, and
+ * exits, which is a monologue rather than a conversation. `--replay-user-messages`
+ * echoes what the human sent back onto stdout, so the run log holds both halves
+ * and the transcript can be read later by somebody who was not there.
+ *
+ * `bypassPermissions` stays. Answering a *tool permission* prompt is a
+ * different feature: the host routes those through a control protocol to an SDK
+ * host (`--permission-prompts host`), which is a second protocol to implement
+ * and is not what `SCOPE.md`'s line asks for. This is the conversation, and it
+ * is the half that a person watching a run actually wants.
+ */
+export const ATTENDED_ARGS = [
+	'--output-format',
+	'stream-json',
+	'--input-format',
+	'stream-json',
+	'--replay-user-messages',
+	'--verbose',
+	'--permission-mode',
+	'bypassPermissions',
+	'--append-system-prompt',
+	A_HUMAN_IS_WATCHING,
+] as const
+
+/**
  * `dispatch.host` is a command line, not just a program name, so `npx claude`
  * and `claude --model opus` are both settable without a fourth setting.
  *
@@ -109,6 +149,24 @@ export interface AgentOptions {
 	/** The pid, as soon as there is one, so a second process can stop this run. */
 	readonly onStart?: (pid: number) => void
 	readonly signal?: AbortSignal
+	/**
+	 * A human is watching and may reply (ADR 0046). It opens stdin and swaps the
+	 * system prompt; everything else about the run is the same, which is what
+	 * keeps one dispatch path rather than two.
+	 */
+	readonly attended?: boolean
+	/**
+	 * Handed the writer for the session's input, once, as soon as there is one.
+	 * Only called in attended mode — a headless host has no stdin to write to.
+	 */
+	readonly onInput?: (input: AgentInput) => void
+}
+
+/** Talking to a live session: one message, or the end of the conversation. */
+export interface AgentInput {
+	readonly say: (text: string) => void
+	/** Closes the session's input, which is how an attended host exits on its own. */
+	readonly done: () => void
 }
 
 /**
@@ -120,14 +178,44 @@ export interface AgentOptions {
 export const startAgent = (options: AgentOptions): Promise<AgentExit> =>
 	new Promise((resolve) => {
 		const [command, args] = hostCommand(options.host)
-		const child = spawn(command, [...args, '-p', options.prompt, ...HOST_ARGS], {
-			cwd: options.cwd,
-			// Never a shell: a brief carrying a backtick is text, not a second command.
-			shell: false,
-			stdio: ['ignore', 'pipe', 'pipe'],
-		})
+		const attended = options.attended === true
+		const child = spawn(
+			command,
+			[...args, '-p', options.prompt, ...(attended ? ATTENDED_ARGS : HOST_ARGS)],
+			{
+				cwd: options.cwd,
+				// Never a shell: a brief carrying a backtick is text, not a second command.
+				shell: false,
+				// stdin is closed for a headless run, and the reason is measurable: a
+				// `claude -p` with an open stdin waits three seconds for input that
+				// never comes, on every dispatch. An attended run is the case where
+				// something does come.
+				stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+			},
+		)
 
 		if (child.pid !== undefined) options.onStart?.(child.pid)
+
+		if (attended && child.stdin !== null) {
+			const input = child.stdin
+			options.onInput?.({
+				// The shape the host reads on `--input-format stream-json`, recorded
+				// off a real invocation rather than from memory (BUILD-PLAN §6).
+				say: (text) =>
+					void input.write(
+						`${JSON.stringify({
+							type: 'user',
+							message: { role: 'user', content: [{ type: 'text', text }] },
+						})}\n`,
+					),
+				// An attended host exits when its input ends, so this is what lets a
+				// conversation finish without killing anything.
+				done: () => input.end(),
+			})
+			// A host that exits while a write is in flight is an ordinary end to a
+			// conversation, not a crash in this process.
+			input.on('error', () => {})
+		}
 
 		let stopped = false
 		const abort = () => {
@@ -139,11 +227,15 @@ export const startAgent = (options: AgentOptions): Promise<AgentExit> =>
 		options.signal?.addEventListener('abort', abort, { once: true })
 
 		const stderr: string[] = []
-		lines(child.stdout, options.onLine)
-		lines(child.stderr, (line) => {
-			stderr.push(line)
-			options.onLine(line)
-		})
+		// Both are piped in both modes; the null is what the type says about a
+		// `stdio` array TypeScript cannot read the shape of, not a state that
+		// happens here.
+		if (child.stdout !== null) lines(child.stdout, options.onLine)
+		if (child.stderr !== null)
+			lines(child.stderr, (line) => {
+				stderr.push(line)
+				options.onLine(line)
+			})
 
 		child.on('error', (error) => {
 			options.signal?.removeEventListener('abort', abort)

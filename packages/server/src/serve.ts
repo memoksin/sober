@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { type Paths, SoberError } from '@besober/core'
 import { z } from 'zod'
 import type { Client } from './client.js'
-import { OPS, READS, type Route } from './routes.js'
+import { OPS, READS, type Route, WATCHES, type Watch } from './routes.js'
 
 /**
  * Loopback only, and never a name that resolves anywhere else. ADR 0008 sets
@@ -175,15 +175,52 @@ const page = (response: ServerResponse, pathname: string, client: Client | undef
 	response.end(GREETING)
 }
 
-/** `/op/<name>` or `/read/<name>` — the path is the operation (ADR 0036). */
+/**
+ * `/op/<name>`, `/read/<name>` or `/watch/<name>` — the path is the operation
+ * (ADR 0036), and the prefix is what shape of answer it has: one JSON object,
+ * or a channel that stays open (ADR 0046).
+ */
 const routed = (
 	pathname: string,
-): { readonly kind: 'op' | 'read'; readonly route: Route | undefined } | null => {
+):
+	| { readonly kind: 'op' | 'read'; readonly route: Route | undefined }
+	| { readonly kind: 'watch'; readonly route: Watch | undefined }
+	| null => {
 	const [, kind, name, ...rest] = pathname.split('/')
 	if (rest.length > 0 || name === undefined || name === '') return null
 	if (kind === 'op') return { kind: 'op', route: OPS[name as keyof typeof OPS] }
 	if (kind === 'read') return { kind: 'read', route: READS[name] }
+	if (kind === 'watch') return { kind: 'watch', route: WATCHES[name] }
 	return null
+}
+
+/**
+ * A channel, as newline-delimited JSON (ADR 0046). Not `text/event-stream`:
+ * `EventSource` is the only client that needs SSE's framing, and it is the one
+ * client that cannot send an `Authorization` header — so using it would spend
+ * ADR 0008's token exception to buy a format nothing here reads. A streaming
+ * `fetch` keeps the header and parses a line.
+ *
+ * The headers go out before the first window, so a screen knows it is connected
+ * while the run is still thinking. `no-transform` is the one that matters on a
+ * channel: a proxy that buffers to be helpful turns a live tail into a file
+ * that arrives at the end.
+ */
+const stream = async (response: ServerResponse, windows: AsyncIterable<unknown>): Promise<void> => {
+	response.writeHead(200, {
+		'content-type': 'application/x-ndjson; charset=utf-8',
+		'cache-control': 'no-store, no-transform',
+		connection: 'keep-alive',
+	})
+
+	for await (const window of windows) {
+		// Backpressure, and the reason the loop can be this plain: a screen that
+		// has stopped reading stops the reads behind it rather than queueing
+		// windows in this process's memory.
+		if (!response.write(`${JSON.stringify(window)}\n`))
+			await new Promise((resolve) => response.once('drain', resolve))
+	}
+	response.end()
 }
 
 export const serve = async ({ paths, port = 0, client }: ServeOptions): Promise<Served> => {
@@ -230,6 +267,21 @@ export const serve = async ({ paths, port = 0, client }: ServeOptions): Promise<
 		const wanted = match.kind === 'op' ? 'POST' : 'GET'
 		if (method !== wanted)
 			return fail(response, 405, `${url.pathname} is a ${wanted}, and this was a ${method}`)
+
+		if (match.kind === 'watch') {
+			// The subject is resolved before a byte goes out, so a node that has
+			// never run is still a status code rather than an empty stream. Once
+			// `stream` has written the head there is no status left to send, which
+			// is why `open` does its refusing first.
+			const leaving = new AbortController()
+			// A closed tab is how a watch ordinarily ends (ADR 0037: closing the
+			// browser stops nothing else, and this is the one thing it should stop).
+			request.on('close', () => leaving.abort())
+			return stream(
+				response,
+				await match.route.open(paths, Object.fromEntries(url.searchParams), leaving.signal),
+			)
+		}
 
 		const input = match.kind === 'op' ? await read(request) : Object.fromEntries(url.searchParams)
 		json(response, 200, (await match.route.run(paths, input)) ?? null)

@@ -5,6 +5,7 @@ exports[`server exports nothing new without a reviewer seeing it 1`] = `
   "COVERS",
   "OPS",
   "READS",
+  "WATCHES",
   "serve",
 ]
 `;

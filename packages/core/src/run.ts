@@ -18,7 +18,12 @@ export interface StartedRun {
 	readonly run: Run
 }
 
-export const startRun = (paths: Paths, node: string, host: string): Promise<StartedRun> =>
+export const startRun = (
+	paths: Paths,
+	node: string,
+	host: string,
+	{ attended = false }: { readonly attended?: boolean } = {},
+): Promise<StartedRun> =>
 	withLock(paths, 'run', async () => {
 		const record = await readNode(paths, node)
 		if (record.kind !== 'ok') throw new NotOnBoardError('node', node)
@@ -43,6 +48,10 @@ export const startRun = (paths: Paths, node: string, host: string): Promise<Star
 			error: null,
 			verify: null,
 			acceptance: [],
+			// Written at the start rather than derived later: it decides what the
+			// host was launched with, so a second process reading this record is
+			// reading a fact about the process rather than a guess (ADR 0046).
+			attended,
 		}
 		await writeRun(paths, id, run)
 		await appendEvent(paths, { action: 'run.started', node, run: id, host })

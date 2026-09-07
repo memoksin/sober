@@ -23,6 +23,9 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	write_brief: 'brief',
 	approve: 'approve',
 	run: 'run',
+	// Talking to a run you are watching. Usually a second terminal, because
+	// `sober run --watch` is holding the first one.
+	answer: 'say',
 	stop: 'stop',
 	accept: 'accept',
 	reject: 'reject',

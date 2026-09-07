@@ -15,7 +15,13 @@ const run = {
 }
 
 test('parses a run still in flight', () => {
-	expect(Run.parse(run)).toEqual(run)
+	// `attended` defaults rather than being required, so a run record written
+	// before it existed still parses (ADR 0046).
+	expect(Run.parse(run)).toEqual({ ...run, attended: false })
+})
+
+test('a run record from before watching existed reads as unattended', () => {
+	expect(Run.parse(run).attended).toBe(false)
 })
 
 test('a criterion that did not run is null, never a passing exit code', () => {
