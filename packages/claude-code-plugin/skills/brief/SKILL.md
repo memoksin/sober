@@ -3,9 +3,11 @@ description: Write the brief for one SOBER node — the approach and the accepta
 argument-hint: "[node id] — or nothing, for the first node that needs one"
 ---
 
+<!-- Generated from plugins/skills/brief/SKILL.md by scripts/build-plugins.mjs. Edit the source, then run `pnpm plugins`. -->
+
 > **These are tools, not commands.** Everything named in backticks below —
 > `board`, `write_brief`, `approve` and the rest — is a tool of the `sober`
-> MCP server that arrived with this plugin. Call it as a tool. Never reproduce
+> MCP server SOBER installs into this host. Call it as a tool. Never reproduce
 > one with `bash`, never read `.sober/` by hand, and never write a script that
 > stands in for one: the board you would reconstruct is a guess, and a guess
 > with real ids in it is worse than no answer. If a tool is not available, say

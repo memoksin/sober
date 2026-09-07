@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))
 const SOBER = join(repoRoot, 'packages/cli/dist/sober.js')
 const FAKE_GH = join(repoRoot, 'test/integration/fake-gh.mjs')
-const FAKE_HOST = join(repoRoot, 'test/integration/fake-host.mjs')
+const FAKE_HOST = join(repoRoot, 'test/integration/hosts/claude.mjs')
 const AT = new Date().toISOString()
 
 const bold = (text) => `[1m${text}[0m`

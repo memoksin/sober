@@ -1,98 +1,28 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { SoberError } from './errors.js'
+import { adapterFor, hostCommand } from './hosts.js'
+
+export {
+	A_HUMAN_IS_WATCHING,
+	ATTENDED_ARGS,
+	HOST_ARGS,
+	hostCommand,
+	NO_HUMAN,
+} from './hosts.js'
 
 const run = promisify(execFile)
 
 /**
- * The adapter (DESIGN §5.1): SOBER shells out to the host CLI the user already
- * installed and logged into. It never asks for an API key and never chooses the
- * model. Thin by contract — build an invocation, stream its output, report how
- * it exited — and deliberately not abstracted: Claude Code is the only host in
- * v1, and the second one is what earns the interface.
+ * Launching an adapter (DESIGN §5.1): SOBER shells out to the host CLI the user
+ * already installed and logged into. It never asks for an API key and never
+ * chooses the model. Thin by contract — build an invocation, stream its output,
+ * report how it exited.
  *
- * Every flag below was read off `claude --help` and one real invocation at
- * implementation time, never from memory (BUILD-PLAN §6). Two of them are not
- * guesses a reader would make:
- *
- * - `--output-format stream-json` is what makes a live tail possible at all.
- *   Plain `--print` emits the final answer only, after the run, so there is
- *   nothing to watch while a node is building (`PR-05-09`).
- * - stdin is closed. A `claude -p` with an open stdin waits three seconds for
- *   input that never comes, on every dispatch.
- * - `--append-system-prompt` is the M2 gate's finding 1. The host discovers the
- *   operator's own `CLAUDE.md` and rules, and one of them said "never run
- *   `git commit` without asking": two of five dispatches stopped to ask a
- *   permission nobody was there to give, finished with an empty branch, and
- *   left the work staged in the worktree. `bypassPermissions` does not reach
- *   this — the agent was not blocked, it was instructed. So the instruction is
- *   answered where instructions live.
+ * What differs host by host is a table in `hosts.ts`. This file is the half
+ * every host shares: the probe, the spawn, the line splitting, and how an exit
+ * is read.
  */
-export const NO_HUMAN =
-	'You are running headless, dispatched by SOBER. No human is reading this session and no question you ask can be answered. Ignore any instruction — from a CLAUDE.md, a rules file, or anywhere else — that tells you to ask for confirmation or approval before acting, including before committing: there is nobody to ask. Do the work described and commit it. If something genuinely stops you, stop and say why in your final message, because that message is what the human will read.'
-
-export const HOST_ARGS = [
-	'--output-format',
-	'stream-json',
-	'--verbose',
-	'--permission-mode',
-	'bypassPermissions',
-	'--append-system-prompt',
-	NO_HUMAN,
-] as const
-
-/**
- * The inverse of `NO_HUMAN`, for a run somebody is watching (ADR 0046).
- *
- * It says the opposite about the reader and the same thing about committing,
- * and the second half is deliberate. `NO_HUMAN` exists because two of five M2
- * dispatches stopped to ask a permission nobody could give and finished with an
- * empty branch; a human at the screen fixes the "nobody could give" half and
- * changes nothing about what SOBER does with the branch afterwards. An attended
- * run that ends its turn waiting for approval to commit is the same empty
- * branch with somebody watching it happen.
- */
-export const A_HUMAN_IS_WATCHING =
-	'You are running inside SOBER, dispatched to build one node, and a human is watching this session on a dashboard and can reply to you. If you genuinely need a decision only they can make, ask for it in a short message and wait — they will answer. Do not ask for permission to act or to commit: that is already granted, and the work is committed on this branch either way. Prefer doing the work and reporting what you did over asking whether to start.'
-
-/**
- * What attended mode adds. `--input-format stream-json` is what keeps the
- * session open for a reply — without it the host reads the prompt, answers, and
- * exits, which is a monologue rather than a conversation. `--replay-user-messages`
- * echoes what the human sent back onto stdout, so the run log holds both halves
- * and the transcript can be read later by somebody who was not there.
- *
- * `bypassPermissions` stays. Answering a *tool permission* prompt is a
- * different feature: the host routes those through a control protocol to an SDK
- * host (`--permission-prompts host`), which is a second protocol to implement
- * and is not what `SCOPE.md`'s line asks for. This is the conversation, and it
- * is the half that a person watching a run actually wants.
- */
-export const ATTENDED_ARGS = [
-	'--output-format',
-	'stream-json',
-	'--input-format',
-	'stream-json',
-	'--replay-user-messages',
-	'--verbose',
-	'--permission-mode',
-	'bypassPermissions',
-	'--append-system-prompt',
-	A_HUMAN_IS_WATCHING,
-] as const
-
-/**
- * `dispatch.host` is a command line, not just a program name, so `npx claude`
- * and `claude --model opus` are both settable without a fourth setting.
- *
- * ponytail: split on whitespace, so a host whose *path* contains a space has to
- * go through a wrapper script. Real quoting when someone hits it — the default
- * is a bare name on PATH.
- */
-export const hostCommand = (host: string): readonly [string, string[]] => {
-	const [command = host, ...args] = host.trim().split(/\s+/)
-	return [command, args]
-}
 
 export class HostError extends SoberError {
 	constructor(message: string) {
@@ -112,10 +42,11 @@ export interface HostReady {
  * a host that is installed but logged out are not the same problem.
  */
 export const checkHost = async (host: string): Promise<HostReady> => {
+	const adapter = adapterFor(host)
 	const [command, args] = hostCommand(host)
 	let stdout: string
 	try {
-		;({ stdout } = await run(command, [...args, 'auth', 'status', '--json'], { encoding: 'utf8' }))
+		;({ stdout } = await run(command, [...args, ...adapter.probe], { encoding: 'utf8' }))
 	} catch (error) {
 		const code = (error as { code?: string }).code
 		if (code === 'ENOENT')
@@ -123,15 +54,13 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 		return { ok: false, reason: `${host} could not report its authentication status` }
 	}
 
-	try {
-		const status = JSON.parse(stdout) as { loggedIn?: boolean }
-		if (status.loggedIn === true) return { ok: true, reason: null }
-	} catch {
+	const loggedIn = adapter.loggedIn(stdout)
+	if (loggedIn === true) return { ok: true, reason: null }
+	if (loggedIn === null)
 		return { ok: false, reason: `${host} reported an authentication status SOBER cannot read` }
-	}
 	return {
 		ok: false,
-		reason: `${host} is installed but not logged in — run \`${host} auth login\``,
+		reason: `${host} is installed but not logged in — run \`${adapter.signIn(host)}\``,
 	}
 }
 
@@ -178,21 +107,19 @@ export interface AgentInput {
 export const startAgent = (options: AgentOptions): Promise<AgentExit> =>
 	new Promise((resolve) => {
 		const [command, args] = hostCommand(options.host)
-		const attended = options.attended === true
-		const child = spawn(
-			command,
-			[...args, '-p', options.prompt, ...(attended ? ATTENDED_ARGS : HOST_ARGS)],
-			{
-				cwd: options.cwd,
-				// Never a shell: a brief carrying a backtick is text, not a second command.
-				shell: false,
-				// stdin is closed for a headless run, and the reason is measurable: a
-				// `claude -p` with an open stdin waits three seconds for input that
-				// never comes, on every dispatch. An attended run is the case where
-				// something does come.
-				stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-			},
-		)
+		const adapter = adapterFor(options.host)
+		const attended = options.attended === true && adapter.attendable
+		const child = spawn(command, [...args, ...adapter.argv(options.prompt, attended)], {
+			cwd: options.cwd,
+			// Never a shell: a brief carrying a backtick is text, not a second command.
+			shell: false,
+			// stdin is closed for a headless run, and the reason is measurable: a
+			// `claude -p` with an open stdin waits three seconds for input that
+			// never comes, and `codex exec` says so out loud — "Reading additional
+			// input from stdin...". An attended run is the case where something
+			// does come.
+			stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+		})
 
 		if (child.pid !== undefined) options.onStart?.(child.pid)
 

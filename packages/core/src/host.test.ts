@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, test } from 'vitest'
@@ -11,10 +11,16 @@ afterAll(() => rmSync(scripts, { recursive: true, force: true }))
  * A host built out of node itself, so these run anywhere the suite does. It has
  * to be a file rather than `node -e "..."`: `dispatch.host` is split on
  * whitespace, which is the documented ceiling in host.ts.
+ *
+ * It is called `claude.mjs`, one per directory, because that is how SOBER knows
+ * which host it is talking to (`hosts.ts`). A fake that impersonates a host now
+ * has to say which one, which is the same rule a real wrapper script follows.
  */
 let written = 0
-const node = (script: string): string => {
-	const file = join(scripts, `host-${written++}.mjs`)
+const node = (script: string, host = 'claude'): string => {
+	const dir = join(scripts, `host-${written++}`)
+	mkdirSync(dir)
+	const file = join(dir, `${host}.mjs`)
 	writeFileSync(file, script)
 	return `${process.execPath} ${file}`
 }
@@ -36,9 +42,9 @@ test('a host command may carry arguments, so `npx claude` needs no second settin
 })
 
 test('a host that is not installed is named, and not confused with a logged-out one', async () => {
-	expect(await checkHost('sober-no-such-host')).toEqual({
+	expect(await checkHost('/nonexistent/bin/claude')).toEqual({
 		ok: false,
-		reason: 'sober-no-such-host is not installed, or is not on this PATH',
+		reason: '/nonexistent/bin/claude is not installed, or is not on this PATH',
 	})
 })
 
@@ -69,7 +75,7 @@ test('a logged-in host is ready, and says nothing else', async () => {
 
 test('a host that cannot be started fails the run instead of hanging it', async () => {
 	const exit = await startAgent({
-		host: 'sober-no-such-host',
+		host: '/nonexistent/bin/claude',
 		cwd: process.cwd(),
 		prompt: 'do the thing',
 		onLine: () => {},

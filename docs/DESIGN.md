@@ -308,9 +308,9 @@ Three things about the shape:
 
 A guard that is not installed is silent, and silence reads as permission. So the installed one announces itself, and a guard that could not read the board says so rather than reading as clean — the scan's rule (§2.8), applied to the hook.
 
-Hooks in other hosts stay v1.x with the plugins that would carry them, and v0 learned two things there worth carrying: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins. A host without working hook support is a host where SOBER advises rather than enforces, and its plugin must say so rather than claim enforcement everywhere.
+Hooks in the other two plugins stay v1.x, and v0's two observations are why: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins. A host without working hook support is a host where SOBER advises rather than enforces, and ADR 0048 is where that stopped being a rule with nowhere to apply it — neither the Codex nor the OpenCode plugin ships a hook, so neither claims one. Their loop skill says the block is stated here and enforced everywhere SOBER owns the code path, which makes keeping it the reader's.
 
-The same honesty applies to elicitation (§2.4): a host that cannot ask the human directly cannot accept a decision, and the tool says which surface can.
+The same honesty applies to elicitation (§2.4): a host that cannot put a question on screen cannot accept a decision, and the tool says so rather than guessing. What follows from it is the agent's job, not a workaround: stop, put the one question to the user in the conversation, wait, and let `sober decide <id> <option>` record what they say. The pick comes from the human either way — that is ADR 0010's rule, and ADR 0048 keeps the rule while dropping the assumption that elicitation is the only shape it has.
 
 ---
 
@@ -557,7 +557,21 @@ A dispatch has a second mode, **attended**, chosen per run and never the default
 
 Calling a model API directly was the alternative, and it makes SOBER an agent framework — owning the tool loop, file access, and sandboxing. That is a different product.
 
-This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. Claude Code is the first adapter; the rest are v1.x.
+This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. There are three of them (ADR 0048), and what differs between them is a table in `hosts.ts` rather than a shape in the code:
+
+| | Claude Code | Codex | OpenCode |
+| --- | --- | --- | --- |
+| ready | `auth status --json` | `login status` | `providers list` |
+| run | `-p <brief> …` | `exec --json …` | `run --format json …` |
+| permissions | `--permission-mode bypassPermissions` | `--dangerously-bypass-approvals-and-sandbox` | `--auto` |
+| system prompt | `--append-system-prompt` | none — in front of the brief | none — in front of the brief |
+| attendable | yes | no | no |
+
+Two consequences of that table are worth stating on their own. A host SOBER has no adapter for is **refused before the worktree**, naming the three it has: defaulting to the invocation above would send `--permission-mode` to a CLI with no such flag, and the failure would arrive three minutes later as an exit code nobody can read. And an **attended** run is refused on the two hosts that take one message and exit, rather than quietly downgraded to a headless run with somebody watching it.
+
+A run log carries no host of its own. Each adapter recognises its own event shapes and returns nothing for the others, so a run started under one host still reads after `dispatch.host` changes.
+
+Cursor is the one still v1.x, and for the reason every flag in this section has a recording behind it: its headless invocation has no released shape to read one off.
 
 Note what an adapter is _not_ used for. Decomposition, option generation and brief writing are not adapter calls — they happen inside the user's session through the MCP server (ADR 0009). SOBER launches a host only to make a node's code.
 
@@ -573,9 +587,9 @@ Three things in it are not obvious, and each was a surprise worth recording:
 - **stdin is closed.** A `claude -p` with an inherited stdin waits three seconds for input that never arrives, on every dispatch.
 - `--permission-mode bypassPermissions` is what an unattended run needs: an agent that must build and test its own work cannot answer a permission prompt nobody is watching. The containment is the worktree and the review, not the prompt — which is the trade `PR-09-05` already makes explicit by never letting an agent land its own work.
 
-`dispatch.host` is a command line, not just a program name, so `npx claude` and `claude --model opus` are both settable. It is split on whitespace: a host whose path contains a space needs a wrapper script.
+`dispatch.host` is a command line, not just a program name, so `npx claude` and `claude --model opus` are both settable. It is split on whitespace: a host whose path contains a space needs a wrapper script. Which adapter it selects is read off the program name, so a wrapper has to be named after what it wraps.
 
-The other hosts are v1.x, and each one's invocation is read from its own current documentation when its adapter is written — never ported from this one.
+Each host's invocation was read off its own installed CLI when its adapter was written — never ported from this one. The recordings are in `docs/testing/v1x-4-other-hosts.tdd.md`.
 
 ### 5.2 Before a run starts
 

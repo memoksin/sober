@@ -3,9 +3,11 @@ description: Plan work as a SOBER graph — nodes, the edges between them, and t
 argument-hint: what you want built, in your own words
 ---
 
+<!-- Generated from plugins/skills/plan/SKILL.md by scripts/build-plugins.mjs. Edit the source, then run `pnpm plugins`. -->
+
 > **These are tools, not commands.** Everything named in backticks below —
 > `board`, `propose`, `decide`, `run` and the rest — is a tool of the `sober`
-> MCP server that arrived with this plugin. Call it as a tool. Never reproduce
+> MCP server SOBER installs into this host. Call it as a tool. Never reproduce
 > one with `bash`, never read `.sober/` by hand, and never write a script that
 > stands in for one: the board you would reconstruct is a guess, and a guess
 > with real ids in it is worse than no answer. If a tool is not available, say

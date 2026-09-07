@@ -1,0 +1,10 @@
+{
+	"name": "sober",
+	"interface": { "displayName": "SOBER" },
+	"plugins": [
+		{
+			"name": "sober",
+			"source": { "source": "local", "path": "./packages/codex-plugin" }
+		}
+	]
+}

@@ -9,6 +9,7 @@
 		"integration": "turbo run build && vitest run --project integration",
 		"lint": "biome check . && secretlint --secretlintignore .gitignore \"**/*\"",
 		"format": "biome check --write .",
+		"plugins": "node scripts/build-plugins.mjs",
 		"boundaries": "depcruise apps packages test --config .dependency-cruiser.cjs",
 		"scan": "secretlint --secretlintignore .gitignore \"**/*\"",
 		"demo:dispatch": "pnpm --filter @besober/core build && node scripts/demo-dispatch.mjs",

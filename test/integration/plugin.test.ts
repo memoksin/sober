@@ -4,78 +4,143 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
 
 /**
- * The plugin is data, not code: nothing typechecks it and nothing imports it,
- * so a renamed directory or a dropped field is only found by a human starting
- * a session. These are the checks that would have caught each one.
+ * The plugins are data, not code: nothing typechecks them and nothing imports
+ * them, so a renamed directory or a dropped field is only found by a human
+ * starting a session. These are the checks that would have caught each one.
+ *
+ * There are three of them now, and the prose in them is one source
+ * (`plugins/skills/`) rendered per host by `scripts/build-plugins.mjs`. That is
+ * what the drift check below is for: a generated file edited in place looks
+ * right until the next build silently reverts it.
  */
 const root = fileURLToPath(new URL('../../', import.meta.url))
-const plugin = join(root, 'packages/claude-code-plugin')
-const read = (file: string) => JSON.parse(readFileSync(join(plugin, file), 'utf8'))
+const read = (file: string) => JSON.parse(readFileSync(join(root, file), 'utf8'))
 
-test('the manifest names the plugin, and the marketplace points at it', () => {
-	expect(read('.claude-plugin/plugin.json')).toMatchObject({ name: 'sober' })
+const { SKILL_DIRS, buildSkills } = (await import(join(root, 'scripts/build-plugins.mjs'))) as {
+	SKILL_DIRS: Record<string, string>
+	buildSkills: (host: string) => Map<string, string>
+}
 
-	const marketplace = JSON.parse(
-		readFileSync(join(root, '.claude-plugin/marketplace.json'), 'utf8'),
-	) as { plugins: { name: string; source: string }[] }
+const SKILLS = ['brief', 'decide', 'loop', 'next', 'plan']
+
+test('the Claude Code manifest names the plugin, and the marketplace points at it', () => {
+	expect(read('packages/claude-code-plugin/.claude-plugin/plugin.json')).toMatchObject({
+		name: 'sober',
+	})
+
+	const marketplace = read('.claude-plugin/marketplace.json') as {
+		plugins: { name: string; source: string }[]
+	}
 	const entry = marketplace.plugins.find((one) => one.name === 'sober')
 	expect(entry?.source).toBe('./packages/claude-code-plugin')
 	// A source path that does not resolve installs an empty plugin, silently.
 	expect(readdirSync(join(root, entry?.source ?? ''))).toContain('.claude-plugin')
 })
 
-test('the server it declares is the one the CLI publishes', () => {
+test('the Codex manifest names the plugin and says where its skills are', () => {
+	// Codex reads `.codex-plugin/plugin.json` and the `skills` path in it. A
+	// plugin with no `skills` entry installs and teaches nothing.
+	expect(read('packages/codex-plugin/.codex-plugin/plugin.json')).toMatchObject({
+		name: 'sober',
+		skills: './skills/',
+	})
+	expect(readdirSync(join(root, 'packages/codex-plugin/skills')).sort()).toEqual(SKILLS)
+})
+
+test('every host declares the server the CLI publishes, in that host’s own format', () => {
 	// `sober` off the PATH, which is what `npm i -g @besober/cli` puts there
 	// (`PR-00-01`) — not a path into anyone's checkout.
-	expect(read('.mcp.json')).toEqual({ mcpServers: { sober: { command: 'sober', args: ['mcp'] } } })
+	const server = { command: 'sober', args: ['mcp'] }
+	expect(read('packages/claude-code-plugin/.mcp.json')).toEqual({ mcpServers: { sober: server } })
+	expect(read('packages/codex-plugin/.mcp.json')).toEqual({ mcpServers: { sober: server } })
+
+	// OpenCode spells the same thing differently: one array, and a `type` that
+	// says the server is a process rather than a URL.
+	expect(read('packages/opencode-plugin/opencode.json')).toMatchObject({
+		mcp: { sober: { type: 'local', command: ['sober', 'mcp'], enabled: true } },
+	})
 })
 
-test('the guard is declared on the spawn, and announces itself at the start', () => {
-	const hooks = read('hooks/hooks.json') as {
-		hooks: Record<string, { matcher?: string; hooks: { type: string; command: string }[] }[]>
-	}
-
-	// `Task` is the agent spawn. Anything else here would be a guard on the
-	// wrong event, which is a guard that is never reached.
-	const spawn = hooks.hooks.PreToolUse?.[0]
-	expect(spawn?.matcher).toBe('Task')
-	expect(spawn?.hooks).toEqual([{ type: 'command', command: 'sober hook spawn' }])
-
-	// A guard that is not installed is silent, and silence reads as permission
-	// — so the installed one says so at the start of every session (ADR 0047).
-	expect(hooks.hooks.SessionStart?.[0]?.hooks).toEqual([
-		{ type: 'command', command: 'sober hook session' },
-	])
-
-	// `sober` off the PATH, the same binary `.mcp.json` names: one install.
-	for (const event of Object.values(hooks.hooks))
-		for (const entry of event)
-			for (const one of entry.hooks) expect(one.command.startsWith('sober ')).toBe(true)
-})
-
-test('every skill carries the description the model decides on', () => {
-	const skills = readdirSync(join(plugin, 'skills'))
-	// `brief` is M3's gate finding 5: step 5 of the loop is the third thing a
-	// human asks a session for, and it had no command of its own.
-	expect(skills.sort()).toEqual(['brief', 'decide', 'loop', 'next', 'plan'])
-
-	for (const skill of skills) {
-		const text = readFileSync(join(plugin, 'skills', skill, 'SKILL.md'), 'utf8')
-		expect(text.startsWith('---\n'), `${skill} has no frontmatter`).toBe(true)
-		const frontmatter = text.slice(4).split('\n---')[0] ?? ''
-		// Without it the skill is never chosen, and never says so.
-		expect(frontmatter, `${skill} has no description`).toContain('description:')
+test('what is on disk is what the source builds, for every host', () => {
+	// The generated files are committed, because a plugin is installed by
+	// copying a directory and nobody runs a build to do that. This is the check
+	// that they are current — the alternative is a plugin that ships last
+	// month's refusals.
+	for (const [host, dir] of Object.entries(SKILL_DIRS)) {
+		for (const [skill, text] of buildSkills(host)) {
+			const file = join(dir, skill, 'SKILL.md')
+			expect(
+				readFileSync(join(root, file), 'utf8'),
+				`${file} is stale — run \`pnpm plugins\``,
+			).toBe(text)
+		}
 	}
 })
 
-test('every invocable skill says the tools are tools', () => {
+test('every skill in every host carries the description the model decides on', () => {
+	for (const [host, dir] of Object.entries(SKILL_DIRS)) {
+		expect(readdirSync(join(root, dir)).sort(), host).toEqual(SKILLS)
+		for (const skill of SKILLS) {
+			const text = readFileSync(join(root, dir, skill, 'SKILL.md'), 'utf8')
+			expect(text.startsWith('---\n'), `${host}/${skill} has no frontmatter`).toBe(true)
+			const frontmatter = text.slice(4).split('\n---')[0] ?? ''
+			// Without it the skill is never chosen, and never says so.
+			expect(frontmatter, `${host}/${skill} has no description`).toContain('description:')
+		}
+	}
+})
+
+test('every invocable skill in every host says the tools are tools', () => {
 	// The M1 gate caught a host reconstructing the board in bash — "Mock the
 	// board output since we can't call MCP from bash" — and handing the user
 	// invented ids. The instruction against it has to be in every entry point,
 	// because a weaker model reads one skill and not the others.
-	for (const skill of ['plan', 'decide', 'brief', 'next', 'loop']) {
-		const text = readFileSync(join(plugin, 'skills', skill, 'SKILL.md'), 'utf8')
-		expect(text, skill).toContain('MCP server')
-		expect(text, skill).toMatch(/never reproduce|do not shell out/i)
+	for (const [host, dir] of Object.entries(SKILL_DIRS)) {
+		for (const skill of SKILLS) {
+			const text = readFileSync(join(root, dir, skill, 'SKILL.md'), 'utf8')
+			expect(text, `${host}/${skill}`).toContain('MCP server')
+			expect(text, `${host}/${skill}`).toMatch(/never reproduce|do not shell out/i)
+		}
+	}
+})
+
+test('the refusals are the same sentence in every host', () => {
+	// This is the list the whole product rests on, and it is also the first
+	// thing hand-copied prose loses. One source is what makes it one list; this
+	// is what proves the render did not drop it.
+	const never = (host: string): string => {
+		const text = buildSkills(host).get('loop') ?? ''
+		const found = /## What never happens\n([\s\S]*?)\n## /.exec(text)
+		expect(found, `${host} has no "What never happens" list`).not.toBeNull()
+		return found?.[1] ?? ''
+	}
+	const claude = never('claude')
+	expect(claude).toContain('An agent answering a decision')
+	expect(never('codex')).toBe(claude)
+	expect(never('opencode')).toBe(claude)
+})
+
+test('a host that cannot enforce the block says so, rather than claiming it can', () => {
+	// DESIGN §2.9: hook enforcement is Claude Code's, and a plugin that claims
+	// it everywhere is worse than one that admits where it only advises — a
+	// guard that is not installed is silent, and silence reads as permission.
+	const loop = (host: string) => buildSkills(host).get('loop') ?? ''
+	expect(loop('claude')).toContain('This plugin installs a hook')
+
+	for (const host of ['codex', 'opencode']) {
+		expect(loop(host), host).not.toContain('This plugin installs a hook')
+		expect(loop(host), host).toContain('cannot enforce it')
+	}
+})
+
+test('where a host cannot put a question on screen, the decision skill says what to do', () => {
+	// A decision that cannot be asked cannot be answered, and the honest
+	// behaviour is to stop and say so (§2.9, ADR 0010). Every host's skill has
+	// to carry the fallback, because the one that needs it most is the one
+	// where the tool refuses.
+	for (const host of Object.keys(SKILL_DIRS)) {
+		const decide = buildSkills(host).get('decide') ?? ''
+		expect(decide, host).toContain('sober decide <id> <option>')
+		expect(decide, host).toMatch(/cannot ask|no way for a tool to put a question/)
 	}
 })

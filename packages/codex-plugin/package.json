@@ -1,0 +1,10 @@
+{
+	"name": "@besober/codex-plugin",
+	"version": "0.0.0",
+	"private": true,
+	"description": "SOBER as a Codex plugin: the MCP server and the five skills that teach the loop. The skills are generated — edit plugins/skills and run `pnpm plugins`.",
+	"type": "module",
+	"engines": {
+		"node": ">=22"
+	}
+}

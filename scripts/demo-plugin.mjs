@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))
 const SOBER = join(repoRoot, 'packages/cli/dist/sober.js')
-const FAKE_HOST = `${process.execPath} ${join(repoRoot, 'test/integration/fake-host.mjs')}`
+const FAKE_HOST = `${process.execPath} ${join(repoRoot, 'test/integration/hosts/claude.mjs')}`
 
 const root = mkdtempSync(join(tmpdir(), 'sober-plugin-'))
 const plugin = join(root, 'sober')

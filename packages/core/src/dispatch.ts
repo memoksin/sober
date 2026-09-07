@@ -5,6 +5,7 @@ import { type Config, readConfig, readConfigFromBase } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { type AgentInput, checkHost, HostError, startAgent } from './host.js'
+import { adapterFor } from './hosts.js'
 import {
 	appendEvent,
 	appendRunOutput,
@@ -100,6 +101,15 @@ export const dispatch = async (
 	// one sentence, not a failure three minutes into a worktree (`PR-05-04`).
 	const host = await checkHost(config.dispatch.host)
 	if (!host.ok) throw new HostError(`${node} was not started: ${host.reason}`)
+
+	// Attended mode needs a host that reads stdin while it runs (ADR 0046), and
+	// two of the three do not. Refusing is the honest answer: running it
+	// headless anyway would put somebody in front of a session that cannot hear
+	// them, which is worse than not offering it (§2.9).
+	if (options.attended === true && !adapterFor(config.dispatch.host).attendable)
+		throw new HostError(
+			`${node} was not started: ${config.dispatch.host} takes one message and exits, so nobody can answer it while it runs. Start it without watching, or set \`dispatch.host\` to a host that can be attended.`,
+		)
 
 	const prompt = options.prompt ?? (await promptFor(paths, node))
 
