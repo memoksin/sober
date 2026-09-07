@@ -151,9 +151,12 @@ test('an empty log renders nothing rather than a blank line', () => {
 	expect(tail('\n\n')).toEqual([])
 })
 
-// --- The other two hosts. Every event below was recorded off a real
-// invocation at implementation time (BUILD-PLAN §6), never written from
-// memory: `codex exec --json` and `opencode run --format json`. ---
+// --- The other three hosts. Every Codex and OpenCode event below was recorded
+// off a real invocation at implementation time (BUILD-PLAN §6), never written
+// from memory: `codex exec --json` and `opencode run --format json`. Cursor's
+// CLI is not installed here, so its events are the sequence its own reference
+// publishes — `docs/testing/v1x-5-cursor.tdd.md` says what that does and does
+// not prove. ---
 
 test('a Codex run renders its start, its message, its command and its end', () => {
 	const rendered = tail(
@@ -201,6 +204,48 @@ test('an OpenCode run renders what it said and which tool it used', () => {
 	expect(rendered).toEqual([
 		{ kind: 'text', text: "I'll run ls to list the files." },
 		{ kind: 'tool', text: 'bash' },
+	])
+})
+
+test('a Cursor run renders its start, its tools, what it said and its end', () => {
+	const session = 'c6b62c6f-7ead-4fd6-9922-e952131177ff'
+	const rendered = tail(
+		log(
+			{ type: 'system', subtype: 'init', session_id: session, model: 'Claude 4 Sonnet' },
+			// The prompt, echoed back. It is SOBER's own brief, so it is not a
+			// line in the transcript — see hosts.test.ts.
+			{
+				type: 'user',
+				session_id: session,
+				message: { role: 'user', content: [{ type: 'text', text: 'build the node' }] },
+			},
+			{
+				type: 'tool_call',
+				subtype: 'started',
+				call_id: 'toolu_0',
+				tool_call: { readToolCall: { args: { path: 'README.md' } } },
+				session_id: session,
+			},
+			{
+				type: 'tool_call',
+				subtype: 'completed',
+				call_id: 'toolu_0',
+				tool_call: { readToolCall: { args: { path: 'README.md' } } },
+				session_id: session,
+			},
+			{
+				type: 'assistant',
+				session_id: session,
+				message: { role: 'assistant', content: [{ type: 'text', text: 'Done!' }] },
+			},
+			{ type: 'result', subtype: 'success', is_error: false, session_id: session },
+		),
+	)
+	expect(rendered).toEqual([
+		{ kind: 'started', text: 'session started' },
+		{ kind: 'tool', text: 'read README.md' },
+		{ kind: 'text', text: 'Done!' },
+		{ kind: 'result', text: 'finished' },
 	])
 })
 

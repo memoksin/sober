@@ -1,7 +1,7 @@
 # SOBER for Codex
 
 The same board, the same tools and the same loop as the Claude Code plugin —
-`.codex-plugin/plugin.json`, the MCP server in `.mcp.json`, and five skills.
+`.codex-plugin/plugin.json`, the MCP server in `.mcp.json`, and six skills.
 
 ## Install
 

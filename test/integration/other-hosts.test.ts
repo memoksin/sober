@@ -17,11 +17,12 @@ import { afterEach, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
 
 /**
- * The second and third hosts, end to end: a real git repository, a real child
+ * The second, third and fourth hosts, end to end: a real git repository, a real child
  * process, a real worktree and a real run record, with only the host itself
  * faked (ADR 0014). The fakes answer the shapes recorded off `codex exec
- * --json` and `opencode run --format json` — see `hosts/codex.mjs` and
- * `hosts/opencode.mjs`.
+ * --json` and `opencode run --format json`, and the shape Cursor's CLI
+ * reference publishes for `agent -p --output-format stream-json` — see
+ * `hosts/codex.mjs`, `hosts/opencode.mjs` and `hosts/cursor.mjs`.
  *
  * What this proves is the half of `SCOPE.md`'s SHOULD that is code: a node
  * dispatched to one of these hosts actually runs, commits, and reads back.
@@ -29,7 +30,7 @@ import { createTempRepo, type TempRepo } from './fixture.js'
 const fake = (host: string): string =>
 	`${process.execPath} ${fileURLToPath(new URL(`./hosts/${host}.mjs`, import.meta.url))}`
 
-const OTHER_HOSTS = ['codex', 'opencode'] as const
+const OTHER_HOSTS = ['codex', 'opencode', 'cursor'] as const
 
 const aNode = (title: string) => ({
 	title,
@@ -111,6 +112,11 @@ for (const host of OTHER_HOSTS) {
 		// prose, which is the shape of an unparsed event leaking to the reader.
 		for (const line of rendered)
 			if (line.kind === 'raw') expect(line.text.startsWith('{')).toBe(false)
+		// And nothing renders as `answer`: nobody was watching this run, so a
+		// line in the half of the transcript ADR 0046 keeps for the human is a
+		// sentence nobody said. Cursor echoes the brief back and is the reason
+		// this assertion exists.
+		expect(rendered.some((line) => line.kind === 'answer')).toBe(false)
 	})
 
 	test(`a logged-out ${host} is caught before a worktree exists`, async () => {

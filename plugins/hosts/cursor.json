@@ -1,0 +1,13 @@
+{
+	"host": "Cursor",
+	"slots": {
+		"args": "the id the user gave",
+		"intent": "Read what the user asked for, in their own words, from this conversation. That is what they want built.",
+		"plan": "the **plan** skill",
+		"decide": "the **decide** skill",
+		"brief": "the **brief** skill",
+		"next": "the **next** skill",
+		"ask": "The question reaches them through this host's own way of putting one on screen — this host's MCP client supports elicitation, so `decide` opens the question there, and the same control asks the user anything else. If it cannot ask, `decide` says so rather than guessing, and then you stop: the decisions are on the board and `sober decide <id> <option>` answers them on the command line. Never answer on their behalf, and never treat a reply you did not get as one.",
+		"spawn-guard": "**The block does not reach into this session here.** SOBER's Claude Code plugin installs a hook that denies an agent spawn onto a held node. This host gets no such hook, so SOBER can tell you the rule and cannot enforce it — which makes keeping it yours. Never spawn an agent onto a node the board holds, and never route around a decision because nothing stopped you. Say what is held and answer it instead."
+	}
+}

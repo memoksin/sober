@@ -104,6 +104,11 @@ export const ATTENDED_ARGS = [
  */
 export interface Adapter {
 	readonly id: string
+	/**
+	 * A second name the host answers to, where the id is not what the installer
+	 * puts on the PATH. Only Cursor needs one, and the reason is in its adapter.
+	 */
+	readonly alias?: string
 	/** Args that ask the host whether it can run at all, before a worktree exists. */
 	readonly probe: readonly string[]
 	/** How the user signs in, in the words they have to type (§8.7). */
@@ -156,7 +161,14 @@ const claude: Adapter = {
 		// holds both halves: a conversation where only one side was recorded is
 		// not one anybody can audit afterwards, and the answers are the part
 		// nobody else can reconstruct.
-		if (event.type === 'user') {
+		//
+		// The session check is what keeps a machine out of that half. Cursor
+		// emits this exact shape on every run, carrying the brief SOBER just
+		// sent, and an answer line holding `NO_HUMAN` is a sentence nobody said.
+		// What separates them is what SOBER writes: an answer goes to stdin as
+		// `{type, message}` and comes back echoed, with no session on it, while a
+		// host echoing its own prompt stamps the session it belongs to.
+		if (event.type === 'user' && event.session_id === undefined) {
 			const said = (event.message?.content ?? [])
 				.map((part) => (part.type === 'text' ? part.text?.trim() : null))
 				.filter((text): text is string => typeof text === 'string' && text.length > 0)
@@ -271,20 +283,81 @@ const opencode: Adapter = {
 }
 
 /**
+ * Cursor. `agent -p` takes the prompt positionally and has no flag for the
+ * system prompt, so `NO_HUMAN` goes in front of the brief — the third host in a
+ * row for which that is true, and the second half of the M2 gate's finding 1
+ * being a fact about hosts rather than about Claude Code.
+ *
+ * Three things about the invocation are not guesses a reader would make:
+ *
+ * - `--force` is the analogue of `bypassPermissions`, and the CLI reference is
+ *   blunt about what its absence costs: "without `--force`, changes are only
+ *   proposed, not applied". The run would finish, describe the work, and leave
+ *   an empty branch.
+ * - `--trust` is Cursor's alone. A dispatch cuts a worktree the host has never
+ *   seen, and an untrusted workspace stops for a prompt nobody is there to
+ *   answer. It is documented as headless-only, which is exactly this case.
+ * - `status` is asked in text, not `--format json`. The flag exists; the keys
+ *   of the object it prints are not in the reference, and the sentence is.
+ *
+ * Unlike Codex and OpenCode, this host can put a question on screen: its MCP client
+ * supports elicitation, so `decide` asks through `ask.ts` here rather than
+ * refusing (ADR 0010, ADR 0048).
+ */
+const cursor: Adapter = {
+	id: 'cursor',
+	/**
+	 * The installed binary is `agent` — the most generic word on anybody's
+	 * PATH. Answering to it would make every wrapper script called `agent` a
+	 * Cursor invocation by accident, which is the small version of the
+	 * unknown-host default this file refuses. So the host answers to its own
+	 * name and to the one the installer writes, and `agent` is refused by name.
+	 */
+	alias: 'cursor-agent',
+	probe: ['status'],
+	signIn: (host) => `${host} login`,
+	loggedIn: (stdout) => {
+		if (/authenticated/i.test(stdout)) return !/not authenticated/i.test(stdout)
+		return null
+	},
+	argv: (prompt) => ['-p', '--output-format', 'stream-json', '--force', '--trust', brief(prompt)],
+	attendable: false,
+	line: (event) => {
+		// `tool_call` is the only shape that is Cursor's own. `system`, `user`,
+		// `assistant` and `result` are Claude Code's, key for key, so the
+		// adapter above already renders them and a second copy here would be
+		// two renderers for one shape, waiting to disagree.
+		//
+		// A call is reported twice, `started` then `completed`. One line, at the
+		// start: somebody watching a run wants what is happening, and the pair
+		// would double every tool in the log.
+		if (event.type !== 'tool_call' || event.subtype !== 'started') return null
+		const [name, call] = Object.entries(event.tool_call ?? {})[0] ?? []
+		if (name === undefined) return null
+		// `readToolCall` and `writeToolCall` name themselves and carry the path
+		// they touch; anything else arrives under `function`, with its own name.
+		const tool = name === 'function' ? (call?.name ?? 'tool') : name.replace(/ToolCall$/, '')
+		const path = call?.args?.path
+		return { kind: 'tool', text: path === undefined ? tool : `${tool} ${path}` }
+	},
+}
+
+/**
  * The brief, for a host with nowhere else to put the system prompt. The
  * sentence goes first and is separated by a rule, so a model reading the two as
  * one document still reads them as two things.
  */
 const brief = (prompt: string): string => `${NO_HUMAN}\n\n---\n\n${prompt}`
 
-export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode]
+export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode, cursor]
 
 /**
  * `dispatch.host` is a command line rather than a program name, so the adapter
  * is found by looking for a known host anywhere in it: `npx codex`,
  * `/opt/homebrew/bin/codex --model x` and a wrapper script called `codex.sh`
  * are all Codex. Directories and one extension are stripped, and nothing else —
- * a name has to *be* the host's, not merely mention it.
+ * a name has to *be* the host's, or the second one its adapter answers to, which
+ * only Cursor has because its installed binary is not called `cursor`.
  *
  * An unknown host is refused rather than defaulted. Falling back to the Claude
  * Code invocation would send `--permission-mode` to a CLI with no such flag,
@@ -295,7 +368,7 @@ export const adapterFor = (host: string): Adapter => {
 	const [command, args] = hostCommand(host)
 	for (const word of [command, ...args]) {
 		const name = (word.split(/[\\/]/).at(-1) ?? '').replace(/\.[^.]+$/, '')
-		const found = ADAPTERS.find((adapter) => adapter.id === name)
+		const found = ADAPTERS.find((adapter) => adapter.id === name || adapter.alias === name)
 		if (found !== undefined) return found
 	}
 	throw new UnknownHostError(host)
@@ -314,11 +387,13 @@ export const renderLine = (event: Event): LogLine | null => {
 	return null
 }
 
-/** The union of what the three hosts write, read defensively at every level. */
+/** The union of what the four hosts write, read defensively at every level. */
 export interface Event {
 	readonly type?: string
 	readonly subtype?: string
 	readonly is_error?: boolean
+	/** Stamped by a host on its own events, never on an answer SOBER wrote. */
+	readonly session_id?: string
 	readonly message?: {
 		readonly content?: readonly {
 			readonly type?: string
@@ -333,6 +408,13 @@ export interface Event {
 		readonly command?: string
 		readonly message?: string
 	}
+	/** Cursor: one tool call, under a key that names the tool that made it. */
+	readonly tool_call?: Readonly<
+		Record<
+			string,
+			{ readonly name?: string; readonly args?: { readonly path?: string } } | undefined
+		>
+	>
 	/** OpenCode: one part of a step. */
 	readonly part?: {
 		readonly type?: string

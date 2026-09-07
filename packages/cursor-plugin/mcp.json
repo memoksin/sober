@@ -1,0 +1,8 @@
+{
+	"mcpServers": {
+		"sober": {
+			"command": "sober",
+			"args": ["mcp"]
+		}
+	}
+}

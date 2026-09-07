@@ -1,0 +1,6 @@
+{
+	"name": "sober",
+	"description": "Plan work as a graph, then dispatch agents into it — the board, the decisions, and the review, inside your session.",
+	"version": "0.0.0",
+	"author": { "name": "Mehmet Yiğit Keskin" }
+}

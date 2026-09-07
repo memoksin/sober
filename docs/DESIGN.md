@@ -311,9 +311,11 @@ Three things about the shape:
 
 A guard that is not installed is silent, and silence reads as permission. So the installed one announces itself, and a guard that could not read the board says so rather than reading as clean — the scan's rule (§2.8), applied to the hook.
 
-Hooks in the other two plugins stay v1.x, and v0's two observations are why: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins. A host without working hook support is a host where SOBER advises rather than enforces, and ADR 0048 is where that stopped being a rule with nowhere to apply it — neither the Codex nor the OpenCode plugin ships a hook, so neither claims one. Their loop skill says the block is stated here and enforced everywhere SOBER owns the code path, which makes keeping it the reader's.
+Hooks in the other three plugins stay v1.x, and v0's two observations are why: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins. A host without working hook support is a host where SOBER advises rather than enforces, and ADR 0048 is where that stopped being a rule with nowhere to apply it — none of the three ships a hook, so none of them claims one. Their loop skill says the block is stated here and enforced everywhere SOBER owns the code path, which makes keeping it the reader's.
 
-The same honesty applies to elicitation (§2.4): a host that cannot put a question on screen cannot accept a decision, and the tool says so rather than guessing. What follows from it is the agent's job, not a workaround: stop, put the one question to the user in the conversation, wait, and let `sober decide <id> <option>` record what they say. The pick comes from the human either way — that is ADR 0010's rule, and ADR 0048 keeps the rule while dropping the assumption that elicitation is the only shape it has.
+Cursor is the one of the three that has hooks SOBER could use, and shipping none of them is a scope decision rather than a host limitation. `SCOPE.md` keeps hook enforcement beyond Claude Code in SHOULD, and the plugin says what is true today: this host gets no such hook.
+
+The same honesty applies to elicitation (§2.4): a host that cannot put a question on screen cannot accept a decision, and the tool says so rather than guessing. What follows from it is the agent's job, not a workaround: stop, put the one question to the user in the conversation, wait, and let `sober decide <id> <option>` record what they say. The pick comes from the human either way — that is ADR 0010's rule, and ADR 0048 keeps the rule while dropping the assumption that elicitation is the only shape it has. Cursor is the second host where the mechanism is available rather than merely described: its MCP client supports elicitation, so `decide` asks there instead of refusing.
 
 ---
 
@@ -566,27 +568,25 @@ This is the ordinary pull request flow — review comments, more commits, one pu
 
 ### 5.1 The host runs the agent, not SOBER
 
-SOBER shells out to the user's own host CLI, headless — `claude -p`, `codex exec`, `opencode run` (D28). It never asks for an API key and never chooses the model: the tool the user already installed and logged into does the work.
+SOBER shells out to the user's own host CLI, headless — `claude -p`, `codex exec`, `opencode run`, `agent -p` (D28). It never asks for an API key and never chooses the model: the tool the user already installed and logged into does the work.
 
 A dispatch has a second mode, **attended**, chosen per run and never the default (ADR 0046). It opens the session's input, adds `--input-format stream-json`, and tells the agent a human is reading — so a person watching on the dashboard, or holding `sober run --watch` in a terminal, can answer it. Everything else is identical: same worktree, same judging, same records. A headless run is still told that nobody can answer it, which is the M2 gate's finding 1 and the reason the two modes are separate rather than one mode with a flag on the prompt.
 
 Calling a model API directly was the alternative, and it makes SOBER an agent framework — owning the tool loop, file access, and sandboxing. That is a different product.
 
-This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. There are three of them (ADR 0048), and what differs between them is a table in `hosts.ts` rather than a shape in the code:
+This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. There are four of them (ADR 0048, ADR 0052), and what differs between them is a table in `hosts.ts` rather than a shape in the code:
 
-| | Claude Code | Codex | OpenCode |
-| --- | --- | --- | --- |
-| ready | `auth status --json` | `login status` | `providers list` |
-| run | `-p <brief> …` | `exec --json …` | `run --format json …` |
-| permissions | `--permission-mode bypassPermissions` | `--dangerously-bypass-approvals-and-sandbox` | `--auto` |
-| system prompt | `--append-system-prompt` | none — in front of the brief | none — in front of the brief |
-| attendable | yes | no | no |
+| | Claude Code | Codex | OpenCode | Cursor |
+| --- | --- | --- | --- | --- |
+| ready | `auth status --json` | `login status` | `providers list` | `status` |
+| run | `-p <brief> …` | `exec --json …` | `run --format json …` | `-p --output-format stream-json …` |
+| permissions | `--permission-mode bypassPermissions` | `--dangerously-bypass-approvals-and-sandbox` | `--auto` | `--force --trust` |
+| system prompt | `--append-system-prompt` | none — in front of the brief | none — in front of the brief | none — in front of the brief |
+| attendable | yes | no | no | no |
 
-Two consequences of that table are worth stating on their own. A host SOBER has no adapter for is **refused before the worktree**, naming the three it has: defaulting to the invocation above would send `--permission-mode` to a CLI with no such flag, and the failure would arrive three minutes later as an exit code nobody can read. And an **attended** run is refused on the two hosts that take one message and exit, rather than quietly downgraded to a headless run with somebody watching it.
+Three consequences of that table are worth stating on their own. A host SOBER has no adapter for is **refused before the worktree**, naming the four it has: defaulting to the invocation above would send `--permission-mode` to a CLI with no such flag, and the failure would arrive three minutes later as an exit code nobody can read. An **attended** run is refused on the three hosts that take one message and exit, rather than quietly downgraded to a headless run with somebody watching it. And a host is found by a name that is **its own**: Cursor installs its CLI as `agent`, which is refused, because accepting the most generic word on a PATH would make any wrapper script called `agent` a Cursor invocation by accident. `cursor` and `cursor-agent` both reach it.
 
-A run log carries no host of its own. Each adapter recognises its own event shapes and returns nothing for the others, so a run started under one host still reads after `dispatch.host` changes.
-
-Cursor is the one still v1.x, and for the reason every flag in this section has a recording behind it: its headless invocation has no released shape to read one off.
+A run log carries no host of its own. Each adapter recognises its own event shapes and returns nothing for the others, so a run started under one host still reads after `dispatch.host` changes. Cursor is where that rule met its first collision and held: its stream is Claude Code's, event for event, except for tool calls — so four of its five shapes are rendered by an adapter with another host's name on it, and only the fifth is its own. The one place the collision is not benign is `type: "user"`: Claude Code emits it only when replaying what a human said (ADR 0046), and Cursor emits it on every run carrying the brief SOBER itself sent. An answer line holding `NO_HUMAN` is a sentence nobody said, so the transcript's human half is keyed on what SOBER wrote rather than on the event's name.
 
 Note what an adapter is _not_ used for. Decomposition, option generation and brief writing are not adapter calls — they happen inside the user's session through the MCP server (ADR 0009). SOBER launches a host only to make a node's code.
 

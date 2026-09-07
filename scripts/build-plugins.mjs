@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The skills are prose, and the same prose has to reach three hosts. Copied by
+ * The skills are prose, and the same prose has to reach four hosts. Copied by
  * hand it drifts — and the part that drifts first is the "What never happens"
  * list, which is the one part that is load-bearing.
  *
@@ -67,6 +67,7 @@ export const SKILL_DIRS = {
 	claude: 'packages/claude-code-plugin/skills',
 	codex: 'packages/codex-plugin/skills',
 	opencode: 'packages/opencode-plugin/.opencode/skills',
+	cursor: 'packages/cursor-plugin/skills',
 }
 
 const main = () => {

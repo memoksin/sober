@@ -22,11 +22,18 @@ sober/
 │   ├── server/                 # HTTP over core. Serves the dashboard.
 │   ├── mcp/                    # MCP server over core. Ships as `sober mcp`.
 │   ├── cli/                    # bin: sober. Thin.
-│   ├── claude-code-plugin/     # MCP config and four skills
+│   ├── claude-code-plugin/     # MCP config, a hook, and six skills
+│   ├── codex-plugin/           # the same six skills, generated (ADR 0048)
+│   ├── opencode-plugin/        # the same six skills, generated (ADR 0048)
+│   ├── cursor-plugin/          # the same six skills, generated (ADR 0052)
 │   └── tsconfig/               # shared tsconfig presets
 ├── test/
-│   └── integration/            # temp-repo fixture, fake host, fake gh
+│   └── integration/            # temp-repo fixture, one fake host per adapter, fake gh
+├── plugins/
+│   ├── skills/                 # the prose, once, with named slots
+│   └── hosts/                  # what each host calls things
 ├── scripts/
+│   ├── build-plugins.mjs       # plugins/ → each plugin package. `pnpm plugins`
 │   └── coverage-ratchet.mjs    # coverage may not drop, per package
 ├── docs/
 │   ├── CHARTER.md              # what SOBER is and is not
@@ -103,9 +110,9 @@ Node is pinned at `>=22` in `engines`, `packageManager` is pinned in the reposit
 | `core` | never | Publishing it turns the internal API into a public API, and phases 2–4 are exactly when `core` most needs to be reshaped. |
 | `server`, `mcp` | no | Bundled into `cli`. `mcp` ships as the `sober mcp` subcommand: one install, one version, one changelog. |
 | `dashboard` | no | An app. Its built assets are written into the CLI's `dist` by a `prepack` script and shipped inside it. |
-| `claude-code-plugin` | no | Distributed as a plugin, not on npm. |
+| `claude-code-plugin`, `codex-plugin`, `opencode-plugin`, `cursor-plugin` | no | Distributed as plugins, not on npm. Their `skills/` are generated from `plugins/skills/` and committed, because a plugin is installed by copying a directory and nobody runs a build to do that (ADR 0048). |
 
-**One deviation from ADR 0009, forced by the host and recorded here rather than by amending an accepted ADR.** That ADR named "three commands (`/sober-plan`, `/sober-next`, `/sober-decide`), and one skill". Claude Code's plugin format now derives an invocable name from a skill's *directory*, and `commands/` is the legacy path — so the plugin ships four skills under `skills/`, three of them invocable as `/sober:plan`, `/sober:decide` and `/sober:next`, and one not invocable at all: the loop itself, which the model reads on its own. The count and the split are what ADR 0009 decided; the file layout is the host's, read off the installed CLI at implementation time (`BUILD-PLAN.md` §6) rather than from the ADR.
+**One deviation from ADR 0009, forced by the host and recorded here rather than by amending an accepted ADR.** That ADR named "three commands (`/sober-plan`, `/sober-next`, `/sober-decide`), and one skill". Claude Code's plugin format now derives an invocable name from a skill's *directory*, and `commands/` is the legacy path — so the plugin ships its skills under `skills/`, invocable as `/sober:plan`, `/sober:decide` and the rest, with one not invocable at all: the loop itself, which the model reads on its own and which says so with `user-invocable: false`. There are six now — `brief`, `decide`, `distribute`, `loop`, `next` and `plan` — because ADR 0004's brief, ADR 0049's review and ADR 0051's distribution each earned an entry point after ADR 0009 was accepted. The count and the split are what ADR 0009 decided; the file layout is the host's, read off the installed CLI at implementation time (`BUILD-PLAN.md` §6) rather than from the ADR.
 
 Owning the `@besober` org means the whole namespace is already reserved. So publishing is never about claiming a name — it is only ever about taking on a semver contract, and exactly one package takes one.
 
