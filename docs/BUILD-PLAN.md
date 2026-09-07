@@ -68,6 +68,8 @@ M2's is `pnpm gate:m2`: the same nine steps with a teammate, on a **real private
 
 M3's is the same nine steps with **no terminal**, and it is driven by a human rather than by a browser automation. A script that replays clicks answers "do the selectors still match"; the question this gate exists to ask is whether the loop closes for someone who never opens a shell, and only a person can answer that. The script prepares the repository and the board; the drive is by hand, and `M3-GATE.md` records what it finds. ADR 0037 adds one step the earlier gates had no reason to carry: start a run from the screen, close the tab, reopen it, and find the run still there.
 
+**Run on 2026-09-07, green.** `pnpm gate:m3` prepares it; `M3-GATE.md` records it: twelve steps driven by hand with no `sober` command typed after step 1, and five findings, all of them about what the screen says rather than what it does.
+
 ---
 
 ## 4. Pace
