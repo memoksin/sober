@@ -7,6 +7,7 @@ import {
 	archiveNode,
 	assignNode,
 	bind,
+	claimChain,
 	claimNode,
 	createNode,
 	currentBranch,
@@ -23,6 +24,7 @@ import {
 	NotOnBoardError,
 	type Paths,
 	rejectWork,
+	releaseChain,
 	releaseNode,
 	removeContributor,
 	reopenNode,
@@ -39,7 +41,9 @@ import {
 import {
 	Brief,
 	Contributor,
+	chainEnds,
 	type Digest,
+	ID_PATTERN,
 	Id,
 	type Impact,
 	type LogWindow,
@@ -81,6 +85,19 @@ const baseOf = async (paths: Paths, given: string | undefined): Promise<string> 
 
 const node = z.strictObject({ node: Id })
 const nothing = z.strictObject({})
+
+/**
+ * A node, or the run of linked nodes between two of them (ADR 0050). One field
+ * rather than a second one beside it, because a run is not a different thing to
+ * claim — it is the same operation over a set, which is why `OPERATIONS` does
+ * not grow for it.
+ */
+const target = z
+	.string()
+	.refine(
+		(one) => ID_PATTERN.test(one) || chainEnds(one) !== null,
+		'expected a node id, or from..to',
+	)
 
 /**
  * The seventeen. Keyed by the catalogue's own names (ADR 0036), so
@@ -253,11 +270,23 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 		},
 	),
 
-	claim: route(node, async (paths, { node: id }) => claimNode(paths, id, await whoami(paths.root))),
+	claim: route(
+		z.strictObject({ node: target, anyway: z.boolean().optional() }),
+		async (paths, { node: id, anyway }) => {
+			const by = await whoami(paths.root)
+			const ends = chainEnds(id)
+			return ends === null
+				? claimNode(paths, id, by)
+				: claimChain(paths, ends[0], ends[1], by, { anyway })
+		},
+	),
 
-	release: route(node, async (paths, { node: id }) => ({
-		released: await releaseNode(paths, id),
-	})),
+	release: route(z.strictObject({ node: target }), async (paths, { node: id }) => {
+		const ends = chainEnds(id)
+		return ends === null
+			? { released: await releaseNode(paths, id) }
+			: releaseChain(paths, ends[0], ends[1], await whoami(paths.root))
+	}),
 
 	// DESIGN §7.2's three. None of them runs anything: a decision change can
 	// reach thirty nodes, and re-running them unasked is what the impact preview

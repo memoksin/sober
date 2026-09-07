@@ -198,7 +198,7 @@ Growing the surface now means updating a snapshot in the same PR, where it is vi
 
 Three **alarms** beside the ratchets (ADR 0023). An alarm warns and asks for an ADR; it does not fail the build:
 
-- `core` exports > 100 (ADR 0028, raised for M2 by ADR 0029 — the number moves with the number of consumers, by ADR; the surface snapshot above is the guard that actually catches growth).
+- `core` exports > 103 (ADR 0028, raised for M2 by ADR 0029 and for the run of linked nodes by ADR 0050 — the number moves with the number of consumers, by ADR; the surface snapshot above is the guard that actually catches growth. It read 100 here while the test read 101, which ADR 0050 found and corrected).
 - `apps/dashboard` lines > 1.5 × `packages/core` lines. v0's ratio was 0.67; the problem was that the screens came before the loop closed, and this is the only number that would have shown the phase running away.
 - A phase past 1.5 × its estimate: rewrite the phase gate before continuing.
 

@@ -6,7 +6,7 @@ import { addContributor, readContributors, removeContributor } from './contribut
 import type { Paths } from './paths.js'
 import { aNode } from './records.fixture.js'
 import { readNode, writeNode } from './records.js'
-import { assignNode, claimNode, overlaps, releaseNode } from './team.js'
+import { assignNode, claimChain, claimNode, overlaps, releaseChain, releaseNode } from './team.js'
 import { tmpRoot } from './tmp.fixture.js'
 
 const claimed = (by: string, files: string[], rest: Partial<Node> = {}): Node =>
@@ -166,5 +166,149 @@ describe('on a board', () => {
 		await writeFile(paths.contributors, '{ not json')
 
 		await expect(readContributors(paths)).rejects.toThrow('cannot be read')
+	})
+})
+
+/**
+ * A run of linked nodes, taken and given back in one act (ADR 0050). The board
+ * is the one the decision was taken against: a run hanging off a shared
+ * foundation, with a second feature beside it that must never be swept in.
+ */
+describe('a run of linked nodes', () => {
+	let paths: Paths
+
+	beforeEach(async () => {
+		const root = await tmpRoot('sober-chain-')
+		paths = (await initBoard(root, { title: 'Acme', intent: '', constraints: [] })).paths
+		await writeNode(paths, 'db-setup-4t7w', aNode({ title: 'The database' }))
+		await writeNode(paths, 'auth-schema-m3q8', aNode({ dependsOn: ['db-setup-4t7w'] }))
+		await writeNode(paths, 'auth-api-k7f2', aNode({ dependsOn: ['auth-schema-m3q8'] }))
+		await writeNode(paths, 'auth-ui-9x1p', aNode({ dependsOn: ['auth-api-k7f2'] }))
+		await writeNode(paths, 'billing-api-7h4d', aNode({ dependsOn: ['db-setup-4t7w'] }))
+	})
+
+	const claimOf = async (id: string) => {
+		const record = await readNode(paths, id)
+		return record.kind === 'ok' ? record.value.claim : null
+	}
+
+	test('taking the whole run is one act, and it stops at the ends it was given', async () => {
+		const run = await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+
+		expect(run.changed).toEqual(['auth-schema-m3q8', 'auth-api-k7f2', 'auth-ui-9x1p'])
+		expect((await claimOf('auth-ui-9x1p'))?.by).toBe('alice')
+		expect(await claimOf('db-setup-4t7w')).toBeNull()
+		expect(await claimOf('billing-api-7h4d')).toBeNull()
+	})
+
+	test('one act means one moment: every node in the run carries the same timestamp', async () => {
+		await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+
+		const at = await Promise.all(
+			['auth-schema-m3q8', 'auth-api-k7f2', 'auth-ui-9x1p'].map(
+				async (id) => (await claimOf(id))?.at,
+			),
+		)
+		expect(new Set(at).size).toBe(1)
+	})
+
+	test('a run whose middle is someone else’s is refused whole, and takes nothing', async () => {
+		await claimNode(paths, 'auth-api-k7f2', 'bob')
+
+		const run = await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+
+		expect(run.changed).toEqual([])
+		expect(run.taken).toEqual([{ id: 'auth-api-k7f2', by: 'bob' }])
+		expect(run.nodes).toEqual(['auth-schema-m3q8', 'auth-api-k7f2', 'auth-ui-9x1p'])
+		expect(await claimOf('auth-schema-m3q8')).toBeNull()
+	})
+
+	test('the second command is the confirmation, and it says whose it was', async () => {
+		await claimNode(paths, 'auth-api-k7f2', 'bob')
+
+		const run = await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice', {
+			anyway: true,
+		})
+
+		expect(run.changed).toEqual(['auth-schema-m3q8', 'auth-api-k7f2', 'auth-ui-9x1p'])
+		expect(run.taken).toEqual([{ id: 'auth-api-k7f2', by: 'bob' }])
+		expect((await claimOf('auth-api-k7f2'))?.by).toBe('alice')
+	})
+
+	test('my own node in the run is not somebody else’s, whatever case it was written in', async () => {
+		await claimNode(paths, 'auth-api-k7f2', 'Alice')
+
+		const run = await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+
+		expect(run.taken).toEqual([])
+		expect(run.changed).toHaveLength(3)
+	})
+
+	test('a finished node in the middle is left alone — a claim on it says nothing', async () => {
+		await writeNode(
+			paths,
+			'auth-api-k7f2',
+			aNode({
+				dependsOn: ['auth-schema-m3q8'],
+				accepted: {
+					by: 'bob',
+					at: '2026-09-05T10:00:00.000Z',
+					flagged: false,
+					scan: 'clean',
+					audit: 'passed',
+				},
+			}),
+		)
+
+		const run = await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+
+		expect(run.changed).toEqual(['auth-schema-m3q8', 'auth-ui-9x1p'])
+		expect(run.done).toEqual(['auth-api-k7f2'])
+		expect(await claimOf('auth-api-k7f2')).toBeNull()
+	})
+
+	test('giving the run back is one act too, and it leaves a teammate’s node alone', async () => {
+		await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+		await claimNode(paths, 'auth-api-k7f2', 'bob')
+
+		const run = await releaseChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+
+		expect(run.changed).toEqual(['auth-schema-m3q8', 'auth-ui-9x1p'])
+		expect(run.taken).toEqual([{ id: 'auth-api-k7f2', by: 'bob' }])
+		expect((await claimOf('auth-api-k7f2'))?.by).toBe('bob')
+		expect(await claimOf('auth-ui-9x1p')).toBeNull()
+	})
+
+	test('a claim is a snapshot: a node that lands in the run later is nobody’s', async () => {
+		await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')
+
+		// What a teammate’s sync does — a new node inside the run they took.
+		await writeNode(paths, 'auth-token-5r2v', aNode({ dependsOn: ['auth-schema-m3q8'] }))
+		await writeNode(paths, 'auth-api-k7f2', aNode({ dependsOn: ['auth-token-5r2v'] }))
+
+		expect(await claimOf('auth-token-5r2v')).toBeNull()
+		expect((await claimChain(paths, 'auth-schema-m3q8', 'auth-ui-9x1p', 'alice')).changed).toEqual([
+			'auth-schema-m3q8',
+			'auth-token-5r2v',
+			'auth-api-k7f2',
+			'auth-ui-9x1p',
+		])
+	})
+
+	test('two ends with nothing between them take nothing, and say so as an empty run', async () => {
+		const run = await claimChain(paths, 'auth-api-k7f2', 'billing-api-7h4d', 'alice')
+
+		expect(run.nodes).toEqual([])
+		expect(run.changed).toEqual([])
+		expect(await claimOf('auth-api-k7f2')).toBeNull()
+	})
+
+	test('an end the board does not hold is refused, the way one node is', async () => {
+		await expect(claimChain(paths, 'auth-api-k7f2', 'gone-k7f2', 'alice')).rejects.toThrow(
+			'not on this board',
+		)
+		await expect(releaseChain(paths, 'gone-k7f2', 'auth-ui-9x1p', 'alice')).rejects.toThrow(
+			'not on this board',
+		)
 	})
 })

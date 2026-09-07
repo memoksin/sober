@@ -1080,3 +1080,97 @@ test('a session can answer a run somebody is watching, and finish it', async () 
 		/finish/i,
 	)
 })
+
+/**
+ * A run of linked nodes (ADR 0050), on the surface where the confirmation is a
+ * dialog rather than a second command. `PROPOSAL`'s two nodes are already an
+ * edge, so the run is the pair.
+ */
+const run = async (human?: Human) => {
+	const { repo: created } = await board()
+	const client = await connect(created.dir, human)
+	await call(client, 'propose', PROPOSAL)
+
+	const paths = resolve(created.dir)
+	const ids = [...(await loadBoard(paths)).nodes.keys()].sort()
+	return {
+		client,
+		paths,
+		auth: ids.find((id) => id.startsWith('the-auth-api')) as string,
+		billing: ids.find((id) => id.startsWith('the-billing-screen')) as string,
+		claims: async () => {
+			const nodes = (await loadBoard(paths)).nodes
+			return [...nodes].map(([id, node]) => [id, node.claim?.by ?? null] as const).sort()
+		},
+	}
+}
+
+const bobHas = async (paths: Paths, id: string) => {
+	const record = (await loadBoard(paths)).nodes.get(id)
+	if (record === undefined) throw new Error(`${id} is not on the board`)
+	await writeNode(paths, id, { ...record, claim: { by: 'bob', at: '2026-09-08T00:00:00.000Z' } })
+}
+
+test('a run of linked nodes is taken and given back in one act, in a session', async () => {
+	const { client, auth, billing, claims } = await run()
+
+	const taken = await call(client, 'claim', { node: `${auth}..${billing}` })
+	expect(taken).toContain(auth)
+	expect(taken).toContain(billing)
+	expect((await claims()).every(([, by]) => by !== null)).toBe(true)
+
+	expect(await call(client, 'claim', { node: `${auth}..${billing}`, release: true })).toContain(
+		"nobody's again",
+	)
+	expect((await claims()).every(([, by]) => by === null)).toBe(true)
+})
+
+test('two ends with nothing between them are said so, not answered with silence', async () => {
+	const { client, auth, billing, claims } = await run()
+
+	expect(await call(client, 'claim', { node: `${billing}..${auth}` })).toContain('Nothing links')
+	expect((await claims()).every(([, by]) => by === null)).toBe(true)
+})
+
+test('a run crossing somebody else’s node asks once, and yes takes the whole run', async () => {
+	const asked: string[] = []
+	const { client, paths, auth, billing } = await run((message) => {
+		asked.push(message)
+		return 'yes'
+	})
+	await bobHas(paths, billing)
+
+	const taken = await call(client, 'claim', { node: `${auth}..${billing}` })
+
+	// One question for the run, not one per node (M1's gate, defect 11).
+	expect(asked.filter((one) => one.includes("already someone else's"))).toHaveLength(1)
+	expect(taken).toContain('they were not asked, and not stopped')
+	expect((await loadBoard(paths)).nodes.get(billing)?.claim?.by).not.toBe('bob')
+})
+
+test('a human who says no leaves every node in the run exactly where it was', async () => {
+	const { client, paths, auth, billing, claims } = await run(() => 'no')
+	await bobHas(paths, billing)
+
+	expect(await call(client, 'claim', { node: `${auth}..${billing}` })).toContain(
+		'Nothing was taken',
+	)
+	expect(await claims()).toEqual([
+		[auth, null],
+		[billing, 'bob'],
+	])
+})
+
+test('giving a run back never takes a teammate’s node off them', async () => {
+	const { client, paths, auth, billing, claims } = await run()
+	await call(client, 'claim', { node: `${auth}..${billing}` })
+	await bobHas(paths, billing)
+
+	const given = await call(client, 'claim', { node: `${auth}..${billing}`, release: true })
+
+	expect(given).toContain('Left alone, because they are not yours')
+	expect(await claims()).toEqual([
+		[auth, null],
+		[billing, 'bob'],
+	])
+})

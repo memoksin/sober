@@ -1,14 +1,18 @@
 import {
 	addContributor,
 	assignNode,
+	type Chained,
+	claimChain,
 	claimNode,
 	type Overlap,
 	readContributors,
+	releaseChain,
 	releaseNode,
 	removeContributor,
 	sameHandle,
 	whoami,
 } from '@besober/core'
+import { chainEnds } from '@besober/schema'
 import { openBoard } from './board.js'
 import { bold, columns, cyan, dim, fail, green, refuse, say, yellow } from './out.js'
 
@@ -89,34 +93,114 @@ export const assign = async (node: string, handle: string | null): Promise<void>
  * Claim is a fact — whoever actually starts it. It is a signal, not a lock
  * (D23): taking a node someone else is heading for is reported, never refused.
  */
-export const claim = async (node: string): Promise<void> => {
+export const claim = async (node: string, anyway = false): Promise<void> => {
 	const paths = await openBoard()
 	const by = await whoami(paths.root)
-	const taken = await claimNode(paths, node, by).catch(refuse)
+	const ends = chainEnds(node)
 
-	say(`${green('✓')} ${node} is yours, as ${bold(by)}`)
-	if (taken.previous !== null && taken.previous.by !== by) {
-		say()
-		say(`${yellow('·')} it was ${bold(taken.previous.by)}'s — they were not asked, and not stopped`)
+	if (ends === null) {
+		const taken = await claimNode(paths, node, by).catch(refuse)
+
+		say(`${green('✓')} ${node} is yours, as ${bold(by)}`)
+		if (taken.previous !== null && !sameHandle(taken.previous.by, by)) {
+			say()
+			say(
+				`${yellow('·')} it was ${bold(taken.previous.by)}'s — they were not asked, and not stopped`,
+			)
+		}
+		await onTheProject(paths, by)
+		return warn(taken.overlaps)
 	}
 
-	const team = await readContributors(paths).catch(refuse)
-	if (!team.some((person) => sameHandle(person.handle, by))) {
+	const run = await claimChain(paths, ends[0], ends[1], by, { anyway }).catch(refuse)
+	if (run.nodes.length === 0) return nothingLinks(ends)
+
+	if (run.changed.length === 0) {
+		say(`${yellow('·')} ${some(run.taken.length, run.nodes.length)} already someone else's`)
+		say(columns(run.taken.map((one) => [`  ${cyan(one.id)}`, dim(one.by)])).join('\n'))
 		say()
-		say(`${yellow('·')} you are not on this project yet`)
-		say(dim(`  sober contributors add "${by}"`))
+		say(dim('  Nothing was taken. `--anyway` takes the whole run.'))
+		return
 	}
-	warn(taken.overlaps)
+
+	say(`${green('✓')} ${nodesAre(run.changed.length)} yours, as ${bold(by)}`)
+	say(columns(run.changed.map((id) => [`  ${cyan(id)}`])).join('\n'))
+	passedOver(run)
+	if (run.taken.length > 0) {
+		say()
+		say(
+			`${yellow('·')} ${run.taken.length} of them ${run.taken.length === 1 ? 'was' : 'were'} someone else's — they were not asked`,
+		)
+		say(columns(run.taken.map((one) => [`  ${cyan(one.id)}`, dim(one.by)])).join('\n'))
+	}
+	await onTheProject(paths, by)
 }
 
 export const release = async (node: string): Promise<void> => {
 	const paths = await openBoard()
-	const had = await releaseNode(paths, node).catch(refuse)
+	const ends = chainEnds(node)
+
+	if (ends === null) {
+		const had = await releaseNode(paths, node).catch(refuse)
+		return say(
+			had === null
+				? `${yellow('·')} nobody had claimed ${node}`
+				: `${green('✓')} ${node} is nobody's again`,
+		)
+	}
+
+	const by = await whoami(paths.root)
+	const run = await releaseChain(paths, ends[0], ends[1], by).catch(refuse)
+	if (run.nodes.length === 0) return nothingLinks(ends)
+
 	say(
-		had === null
-			? `${yellow('·')} nobody had claimed ${node}`
-			: `${green('✓')} ${node} is nobody's again`,
+		run.changed.length === 0
+			? `${yellow('·')} you had claimed none of these ${run.nodes.length} nodes`
+			: `${green('✓')} ${nodesAre(run.changed.length)} nobody's again`,
 	)
+	if (run.changed.length > 0) say(columns(run.changed.map((id) => [`  ${cyan(id)}`])).join('\n'))
+	if (run.taken.length > 0) {
+		say()
+		say(`${yellow('·')} left alone, because they are not yours`)
+		say(columns(run.taken.map((one) => [`  ${cyan(one.id)}`, dim(one.by)])).join('\n'))
+	}
+}
+
+const nodesAre = (many: number): string => `${many} node${many === 1 ? ' is' : 's are'}`
+
+// The noun agrees with the run, the verb with the part of it being talked about.
+const some = (many: number, of: number): string =>
+	`${many} of ${of} node${of === 1 ? '' : 's'} ${many === 1 ? 'is' : 'are'}`
+
+/**
+ * Two ends with nothing between them. Said as its own line rather than as an
+ * empty success, because "I took nothing" and "there was nothing to take" are
+ * the two answers a person needs told apart — usually the ends were given the
+ * wrong way round, and the run reads from dependency to dependent.
+ */
+const nothingLinks = (ends: readonly [string, string]): void => {
+	say(`${yellow('·')} nothing links ${cyan(ends[0])} to ${cyan(ends[1])} — no run to take`)
+	say()
+	say(dim('  A run reads from the node the work starts at to the one it ends at.'))
+}
+
+const passedOver = (run: Chained): void => {
+	if (run.done.length === 0) return
+	say()
+	say(
+		`${dim('·')} ${dim(`passed over ${run.done.length === 1 ? 'a node that is' : `${run.done.length} nodes that are`} already done: ${run.done.join(', ')}`)}`,
+	)
+}
+
+const onTheProject = async (
+	paths: Awaited<ReturnType<typeof openBoard>>,
+	by: string,
+): Promise<void> => {
+	const team = await readContributors(paths).catch(refuse)
+	if (team.some((person) => sameHandle(person.handle, by))) return
+	say()
+	say(`${yellow('·')} you are not on this project yet`)
+	say(dim(`  sober contributors add "${by}"`))
 }
 
 /**

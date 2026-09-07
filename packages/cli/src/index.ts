@@ -85,8 +85,9 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['contributors [add|remove] <handle>', 'who is on this project'],
 			['assign <node> [handle]', 'hand a node to someone, or to nobody'],
-			['claim <node>', 'say you are on it — a signal, never a lock'],
-			['release <node>', 'give it back'],
+			['claim <node|from..to>', 'say you are on it — a signal, never a lock'],
+			['claim <from..to> --anyway', 'take the run even where somebody else is on it'],
+			['release <node|from..to>', 'give it back'],
 		],
 	],
 	[
@@ -260,7 +261,7 @@ const main = async (): Promise<void> => {
 		case 'assign':
 			return assign(need('node'), rest[1] ?? null)
 		case 'claim':
-			return claim(need('node'))
+			return claim(need('node'), values.anyway === true)
 		case 'release':
 			return release(need('node'))
 		case 'dismiss': {

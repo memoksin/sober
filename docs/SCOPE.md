@@ -39,6 +39,7 @@ If a proposed feature does not make one of these seven steps possible or correct
 | 15 | Hook enforcement in the Claude Code plugin: an agent spawn that names a held node is denied | 3 | MUST #2 is the one hard block, and MUST #12 opened the hole in it — inside a session the decision was only advice. Moved from SHOULD by ADR 0047, on the fact that the host it ships for does honour hook definitions. |
 | 16 | Two more hosts, plugin and adapter each: Codex and OpenCode | 1–6 | One host is not an abstraction, it is a hard-coded invocation, and every host-shaped line in the product was written against Claude Code's. Moved from SHOULD by ADR 0048 — the new fact is that both now ship a skills directory and an MCP client, so the distance between them turned out to be four flags and three event shapes rather than a design. |
 | 17 | The auditor: the acceptance list runs, and the review says what each command did | 6 | ADR 0022 made review "check results against approved criteria" and ADR 0027 made a criterion a command. Nothing ran them, so the review showed the list as text and asked a human to believe it — which is the diff-reading cost those two ADRs exist to remove. Moved from SHOULD by ADR 0049. |
+| 18 | Chain claim: a run of linked nodes, named by its two ends, claimed and released in one act | 8 | Claiming one node at a time charged the most to whoever planned furthest ahead: a run of five linked nodes meant coming back four times, and between any two of them a teammate could take the next. Moved from SHOULD by ADR 0050 — the new fact is that the three readings of "a chain" return sets that do not overlap on a real graph, so it could not be built without first deciding which one it was. |
 
 Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision**, never a "gate" — and by ADR 0009 for the three host-facing terms: an **adapter** launches a host headless, a **plugin** is installed into a host, and **hook enforcement** is what a plugin does about a held node.
 
@@ -47,7 +48,6 @@ Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision*
 ## SHOULD — v1.x, designed for but not built
 
 - AI distribution: allocating nodes by matching each contributor's role and focus
-- Chain claim: taking a whole dependency chain as one unit
 - Cursor: its plugin, and the dispatch adapter that goes with it. Codex and OpenCode moved into MUST #16; Cursor did not, because its headless surface is the one of the three that has no released shape to read flags off (ADR 0048)
 - **Hook enforcement in the plugins beyond Claude Code**, which is where "host-dependent" is still true: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins (`DESIGN.md` §2.9). Both plugins ship saying so rather than implying a guard they do not have
 - **Attended dispatch beyond Claude Code.** `codex exec` and `opencode run` take one message and exit, so a run dispatched to either cannot be answered while it runs, and SOBER refuses an attended run there rather than seating somebody in front of a session that cannot hear them (ADR 0048)

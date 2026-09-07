@@ -1,7 +1,8 @@
 import type { Claim, Node } from '@besober/schema'
 import picomatch from 'picomatch'
-import { readContributors } from './contributors.js'
+import { readContributors, sameHandle } from './contributors.js'
 import { NotOnBoardError, SoberError } from './errors.js'
+import { between } from './graph.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
 import { readNode, readNodes, writeNode } from './records.js'
@@ -130,4 +131,97 @@ export const assignNode = (paths: Paths, id: string, handle: string | null): Pro
 				)
 		}
 		await writeNode(paths, id, { ...record.value, assignee: handle })
+	})
+
+/**
+ * A run of linked nodes, taken or given back in one act (ADR 0050). It is a
+ * claim on each node rather than a record of its own: nothing on the board says
+ * "these five were a run", which is what makes the run a snapshot of the nodes
+ * that were there when it was named.
+ */
+export interface Chained {
+	/** The run itself, in dependency order. Empty when no path joins the ends. */
+	readonly nodes: readonly string[]
+	/** What this call took, or gave back. Empty when it refused. */
+	readonly changed: readonly string[]
+	/** Somebody else's, and who. What a refusal is about, and what a release leaves alone. */
+	readonly taken: readonly { readonly id: string; readonly by: string }[]
+	/** Finished, so passed over: a claim on work that already landed says nothing. */
+	readonly done: readonly string[]
+}
+
+/** The two ends checked, and the run they name with its records already in hand. */
+const ends = async (paths: Paths, from: string, to: string) => {
+	const { records } = await readNodes(paths)
+	for (const id of [from, to]) if (!records.has(id)) throw new NotOnBoardError('node', id)
+
+	const run = between(records, from, to)
+	// `between` only ever returns keys of `records`, so nothing is dropped here.
+	// Carrying the record beside the id is what keeps the writes below off a
+	// second lookup that the types would have to be told cannot fail.
+	const nodes = run.flatMap((id) => {
+		const record = records.get(id)
+		return record === undefined ? [] : [[id, record] as const]
+	})
+	return { run, nodes }
+}
+
+type Held = readonly (readonly [string, Node])[]
+
+const held = (nodes: Held, by: string): { id: string; by: string }[] =>
+	nodes.flatMap(([id, node]) =>
+		node.claim !== null && !sameHandle(node.claim.by, by) ? [{ id, by: node.claim.by }] : [],
+	)
+
+const ids = (nodes: Held): string[] => nodes.map(([id]) => id)
+
+/**
+ * Taking the whole run. A single claim never refuses (D23, ADR 0005) because
+ * there is one node and one person to report; a run can cross several people at
+ * once, so it borrows ADR 0032's shape instead — refused once with the names,
+ * and the second call carrying `anyway` is the confirmation. The claim itself
+ * is still a signal and still not a lock: the second call always goes through.
+ *
+ * All of it under one lock, because ADR 0025's lock covers an action rather
+ * than a file — half a run visible to the other writer is exactly what it is
+ * for.
+ */
+export const claimChain = (
+	paths: Paths,
+	from: string,
+	to: string,
+	by: string,
+	options: { readonly anyway?: boolean } = {},
+): Promise<Chained> =>
+	withLock(paths, 'claim', async () => {
+		const { run, nodes } = await ends(paths, from, to)
+		const done = nodes.filter(([, node]) => node.accepted !== null)
+		const mine = nodes.filter(([, node]) => node.accepted === null)
+		const taken = held(mine, by)
+		if (taken.length > 0 && options.anyway !== true)
+			return { nodes: run, changed: [], taken, done: ids(done) }
+
+		// One timestamp for the whole run: they were taken in one act, and a
+		// spread of them would read as somebody working down the list.
+		const claim: Claim = { by, at: new Date().toISOString() }
+		for (const [id, node] of mine) await writeNode(paths, id, { ...node, claim })
+		return { nodes: run, changed: ids(mine), taken, done: ids(done) }
+	})
+
+/**
+ * Giving the whole run back. It never touches a node somebody else holds and
+ * never asks to: taking a teammate's claim off as a side effect of tidying up
+ * my own is the silent stomp the same-files warning exists to prevent.
+ */
+export const releaseChain = (
+	paths: Paths,
+	from: string,
+	to: string,
+	by: string,
+): Promise<Chained> =>
+	withLock(paths, 'claim', async () => {
+		const { run, nodes } = await ends(paths, from, to)
+		const mine = nodes.filter(([, node]) => node.claim !== null && sameHandle(node.claim.by, by))
+		for (const [id, node] of mine) await writeNode(paths, id, { ...node, claim: null })
+		return { nodes: run, changed: ids(mine), taken: held(nodes, by), done: [] }
 	})

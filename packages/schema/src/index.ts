@@ -9,7 +9,7 @@ export {
 	decisionState,
 	Option,
 } from './decision.js'
-export { Handle, ID_PATTERN, Id, Timestamp } from './id.js'
+export { chainEnds, Handle, ID_PATTERN, Id, Timestamp } from './id.js'
 export {
 	Accepted,
 	type AuditResult,
