@@ -326,6 +326,9 @@ test('init writes the attributes that keep markers out of records', () => {
 	const attributes = readFileSync(join(a.dir, '.gitattributes'), 'utf8')
 	expect(attributes).toContain('.sober/nodes/*.json merge=binary -text')
 	expect(attributes).toContain('.sober/decisions/*.json merge=binary -text')
+	// Added after `init` existed (ADR 0051), so it is also the one that proves
+	// the block is kept in step line by line rather than written once.
+	expect(attributes).toContain('.sober/distribution.json merge=binary -text')
 })
 
 test('the board branch carries no config and no local state', () => {

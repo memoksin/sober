@@ -10,6 +10,7 @@ export interface Paths {
 	readonly config: string
 	readonly project: string
 	readonly contributors: string
+	readonly distribution: string
 	readonly nodes: string
 	readonly decisions: string
 	readonly archive: string
@@ -34,6 +35,10 @@ export const paths = (root: string): Paths => {
 		config: join(sober, 'config.jsonc'),
 		project: join(sober, 'project.json'),
 		contributors: join(sober, 'contributors.json'),
+		// The plan waiting on the board, when there is one (ADR 0051). Beside
+		// the team rather than under `local/`: it is about who does what, which
+		// is a property of the project rather than of this machine.
+		distribution: join(sober, 'distribution.json'),
 		nodes: join(sober, 'nodes'),
 		decisions: join(sober, 'decisions'),
 		archive: join(sober, 'archive'),

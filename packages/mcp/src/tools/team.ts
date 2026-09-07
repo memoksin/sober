@@ -44,7 +44,10 @@ export const registerTeam = (server: McpServer, cwd: string): void => {
 				handle: z.string().nullish(),
 				name: z.string().nullish(),
 				role: z.string().nullish(),
-				focus: z.string().nullish(),
+				focus: z
+					.array(z.string())
+					.nullish()
+					.describe('what they work on — a glob per entry where there is one'),
 			},
 		},
 		tool(
@@ -53,7 +56,7 @@ export const registerTeam = (server: McpServer, cwd: string): void => {
 				handle?: string | null
 				name?: string | null
 				role?: string | null
-				focus?: string | null
+				focus?: string[] | null
 			}) => {
 				const paths = await openBoard(cwd)
 				if (input.action === 'list') {
@@ -61,7 +64,10 @@ export const registerTeam = (server: McpServer, cwd: string): void => {
 					if (team.length === 0) return text('Nobody is on this project yet.')
 					return text(
 						team
-							.map((person) => `- ${person.handle} ${person.name} ${person.role} ${person.focus}`)
+							.map(
+								(person) =>
+									`- ${person.handle} ${person.name} ${person.role} ${person.focus.join(' ')}`,
+							)
 							.join('\n'),
 					)
 				}
@@ -77,7 +83,7 @@ export const registerTeam = (server: McpServer, cwd: string): void => {
 					handle,
 					name: input.name ?? '',
 					role: input.role ?? '',
-					focus: input.focus ?? '',
+					focus: input.focus ?? [],
 				})
 				return text(`${handle} is on the project.`)
 			},

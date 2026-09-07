@@ -1,4 +1,5 @@
 import {
+	acceptDistribution,
 	acceptWork,
 	addContributor,
 	answerDecision,
@@ -14,6 +15,7 @@ import {
 	digest,
 	dismissFlag,
 	dispatch,
+	dropDistribution,
 	editDecision,
 	flagsOf,
 	followRun,
@@ -23,6 +25,7 @@ import {
 	loadBoard,
 	NotOnBoardError,
 	type Paths,
+	readDistribution,
 	rejectWork,
 	releaseChain,
 	releaseNode,
@@ -311,6 +314,21 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 		}),
 		async (paths, opening) => createNode(paths, { ...opening, by: await whoami(paths.root) }),
 	),
+
+	/**
+	 * The plan a session proposed, taken or taken off the board (ADR 0051).
+	 * Neither takes a body: the plan is the record, and passing it back would let
+	 * a screen accept something other than what it showed.
+	 *
+	 * Proposing is not here and is not an operation. It needs a model, and this
+	 * surface has no more of one than the command line does — ADR 0009's line,
+	 * which `propose` and `open_decision` already sit behind.
+	 */
+	accept_distribution: route(z.strictObject({}), (paths) => acceptDistribution(paths)),
+
+	drop_distribution: route(z.strictObject({}), async (paths) => ({
+		dropped: await dropDistribution(paths),
+	})),
 }
 
 /**
@@ -334,6 +352,11 @@ export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
  * from.
  */
 export const READS: Readonly<Record<string, Route>> = {
+	// The plan waiting on the board, or null. A read rather than part of the
+	// projection: the canvas asks every two seconds and a plan changes once a
+	// week (ADR 0051).
+	distribution: route(z.strictObject({}), (paths) => readDistribution(paths)),
+
 	// The `done` filter is a view filter (ADR 0016), so it is not applied here.
 	// Filtering on the server would make "show me everything" a second request.
 	projection: route(nothing, async (paths): Promise<Projection> => {

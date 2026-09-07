@@ -1,9 +1,17 @@
-import type { Digest as DigestRead, Impact, Projection, Review } from '@besober/schema'
+import type {
+	Digest as DigestRead,
+	Distribution,
+	Impact,
+	Projection,
+	Review,
+} from '@besober/schema'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
 import { visible } from './canvas/graph.js'
 import { Digest } from './digest/Digest.js'
 import { worthShowing } from './digest/data.js'
+import { DistributionScreen } from './distribute/Distribution.js'
+import { readPlan, waiting } from './distribute/data.js'
 import { LogScreen } from './logs/Logs.js'
 import { DecisionScreen } from './panel/Decision.js'
 import type { Action, BoardRead, FlagAction } from './panel/data.js'
@@ -31,6 +39,15 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	// is local and disposable (§5.5), and the server resolves the newest one.
 	const [watching, setWatching] = useState<string | null>(null)
 	const [digest, setDigest] = useState<DigestRead | null>(null)
+	// The plan a session proposed, when there is one (ADR 0051), and whether it
+	// is open. Two pieces of state rather than one: the bar has to keep saying
+	// a plan is waiting after the screen behind it is closed.
+	const [plan, setPlan] = useState<Distribution | null>(null)
+	const [planOpen, setPlanOpen] = useState(false)
+	// A plan that will not parse is the bar's problem and never the canvas's
+	// (§8.4): one bad record has never taken the board down, and a read added to
+	// the poll is exactly how that stops being true.
+	const [planFailure, setPlanFailure] = useState<string | null>(null)
 	// §7.2's list, as a view over the canvas rather than a sixth screen. The
 	// nodes are already drawn; what was missing is which of them are flagged.
 	const [onlyFlagged, setOnlyFlagged] = useState(false)
@@ -47,13 +64,20 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 
 		const poll = async (): Promise<void> => {
 			try {
-				const [next, full] = await Promise.all([
+				// The plan is on the poll rather than read once on open: it is
+				// proposed in a session the user is sitting in, and the dashboard is
+				// the next window they look at. One small file, read beside the
+				// projection that is already being asked for.
+				const [next, full, proposed] = await Promise.all([
 					surface.read<Projection>('projection'),
 					open ? surface.read<BoardRead>('board') : Promise.resolve(null),
+					readPlan(surface),
 				])
 				if (stopped) return
 				setProjection(next)
 				if (full !== null) setBoard(full)
+				setPlan(proposed.plan)
+				setPlanFailure(proposed.failure)
 				setFailure(null)
 			} catch (error) {
 				if (!stopped) setFailure(error instanceof Error ? error.message : String(error))
@@ -109,14 +133,15 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			if (event.key !== 'Escape') return
 			// One layer at a time: a screen opened from a node goes back to that
 			// node rather than clearing the board out from under it.
-			if (watching !== null) setWatching(null)
+			if (planOpen) setPlanOpen(false)
+			else if (watching !== null) setWatching(null)
 			else if (reviewing !== null) setReviewing(null)
 			else if (deciding !== null) setDeciding(null)
 			else setPicked(null)
 		}
 		addEventListener('keydown', back)
 		return () => removeEventListener('keydown', back)
-	}, [deciding, reviewing, watching])
+	}, [deciding, planOpen, reviewing, watching])
 
 	/**
 	 * What the board says now, after something changed it. Read rather than
@@ -235,6 +260,21 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		[token, refresh],
 	)
 
+	/**
+	 * §3.3's plan, taken whole or taken off the board. Both close the screen: the
+	 * record they were about is gone either way, and the poll is what says so.
+	 */
+	const onPlan = useCallback(
+		async (does: 'accept_distribution' | 'drop_distribution'): Promise<void> => {
+			if (token === null) return
+			await wire(token).op(does, {})
+			setPlan(null)
+			setPlanOpen(false)
+			await refresh()
+		},
+		[token, refresh],
+	)
+
 	const settle = useCallback(
 		async (how: 'accept' | 'reject', text?: string): Promise<void> => {
 			if (token === null || reviewing === null) return
@@ -303,6 +343,23 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				/>
 			)}
 
+			{planFailure !== null && (
+				<p className="shrink-0 border-[var(--line)] border-b bg-[var(--raised)] px-4 py-1.5 text-[var(--ink-dim)] text-xs">
+					The proposed distribution cannot be read: {planFailure} · `sober distribute --drop` takes
+					it off the board.
+				</p>
+			)}
+
+			{plan !== null && !planOpen && (
+				<button
+					type="button"
+					onClick={() => setPlanOpen(true)}
+					className="shrink-0 border-[var(--line)] border-b bg-[var(--raised)] px-4 py-1.5 text-left text-[var(--ink-dim)] text-xs hover:text-[var(--ink)]"
+				>
+					A distribution is waiting · {waiting(plan)} · read it
+				</button>
+			)}
+
 			{onlyFlagged && (
 				<button
 					type="button"
@@ -350,6 +407,16 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 
 				{watching !== null && surface !== null && (
 					<LogScreen node={watching} surface={surface} onClose={() => setWatching(null)} />
+				)}
+
+				{planOpen && plan !== null && (
+					<DistributionScreen
+						plan={plan}
+						nodes={projection?.nodes ?? []}
+						onAccept={() => void onPlan('accept_distribution')}
+						onDrop={() => void onPlan('drop_distribution')}
+						onClose={() => setPlanOpen(false)}
+					/>
 				)}
 
 				{reviewing !== null && (

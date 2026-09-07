@@ -19,7 +19,7 @@ import { bold, columns, cyan, dim, fail, green, refuse, say, yellow } from './ou
 export interface Person {
 	name?: string
 	role?: string
-	focus?: string
+	focus?: readonly string[]
 }
 
 /**
@@ -52,14 +52,16 @@ export const contributors = async (
 		handle,
 		name: person.name ?? '',
 		role: person.role ?? '',
-		focus: person.focus ?? '',
+		focus: [...(person.focus ?? [])],
 	}).catch(refuse)
 	say(`${green('✓')} ${handle} is on the project`)
 	say()
 	say(dim(`Next: ${bold(`sober assign <node> ${handle}`)}, or edit .sober/contributors.json.`))
 }
 
-const list = (team: readonly { handle: string; name: string; role: string; focus: string }[]) => {
+const list = (
+	team: readonly { handle: string; name: string; role: string; focus: readonly string[] }[],
+) => {
 	if (team.length === 0) {
 		say(dim('Nobody is on this project yet.'))
 		say()
@@ -72,7 +74,7 @@ const list = (team: readonly { handle: string; name: string; role: string; focus
 				`  ${cyan(person.handle)}`,
 				person.name,
 				dim(person.role),
-				dim(person.focus),
+				dim(person.focus.join(' ')),
 			]),
 		).join('\n'),
 	)

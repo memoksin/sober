@@ -62,6 +62,7 @@ Default git behaviour is the opposite of that promise: a conflicted text file ge
 ```
 .sober/project.json            merge=binary -text
 .sober/contributors.json       merge=binary -text
+.sober/distribution.json       merge=binary -text
 .sober/nodes/*.json            merge=binary -text
 .sober/decisions/*.json        merge=binary -text
 .sober/archive/nodes/*.json    merge=binary -text
@@ -69,7 +70,9 @@ Default git behaviour is the opposite of that promise: a conflicted text file ge
 ```
 
 `sober init` writes that block, and adds it to a `.gitattributes` a project
-already has rather than replacing one. The archive is two directories, not one
+already has rather than replacing one — line by line, so a board file added
+after `init` ran gets its rule on a repository that already had the block. `sync`
+does the same on the way in, which is what carries it to a board somebody cloned. The archive is two directories, not one
 flat `archive/`, for the reason §8.4 gives.
 
 `merge=binary` stops git attempting a textual merge. The working-tree file stays as ours, no markers are written, and the path is recorded unmerged with all three versions available in the index. `-text` stops line-ending conversion, which on Windows would otherwise produce phantom diffs and turn a merged file into a conflict on every line.
@@ -396,7 +399,7 @@ Two things are deliberately not statuses:
       "handle": "memoksin",
       "name": "…",
       "role": "maintainer",
-      "focus": "core, cli",
+      "focus": ["packages/core/**", "packages/cli/**"],
     },
   ],
 }
@@ -414,7 +417,15 @@ A claim is a **signal, not a lock** (D23, ADR 0005). SOBER warns; it never block
 
 It is a claim on each node and nothing more: no record says "these were a run", so a node that lands inside one later, on a teammate's sync, is nobody's until the command is run again. A run crossing somebody else's node is refused once with the names, and the second call is the confirmation (§3.4's shape, ADR 0032). Giving it back never touches a node somebody else holds.
 
-Allocating nodes by matching a contributor's role and focus is v1.x (`SCOPE.md` SHOULD).
+**A distribution** is a session proposing who takes which node (ADR 0051). It reads the board against each contributor's `role` and `focus` and writes a plan to `.sober/distribution.json` — board state beside `contributors.json`, for the same reason: who does what is a property of the project.
+
+`focus` is a list rather than a sentence. Entries that are globs are matched against a node's `files`, which is the one part of the match that is not a judgement; entries that are words are read as words. A glob holds commas, so `--focus` is given once per entry.
+
+**The plan assigns nobody.** Every match carries the sentence that put that node with that person, and a human takes the whole plan or drops it — `sober distribute --accept`, the same on the other two surfaces. This is MUST #10's rule one record over: an agent proposes, a human accepts, nothing lands unreviewed.
+
+The matching itself is not in `core` and never will be. It needs a model, so it happens where every other model-authored operation happens (ADR 0009): in the host session, as `distribute`, beside `propose` and `open_decision`. No surface routes it.
+
+**A node somebody has claimed is passed over**, and named. A claim is a fact and an assignment is a plan; writing the plan over the fact is the one thing a distribution must not do. So is a finished node — a plan for work that already landed says nothing. The skip is checked again at acceptance, because a teammate can claim any of it between the proposal and the day somebody reads it.
 
 ### 3.4 The same-files warning
 

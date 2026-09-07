@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import { init, openBoard } from './board.js'
+import { distribute } from './distribute.js'
 import { dismiss, open, reopen } from './flag.js'
 import { hook } from './hook.js'
 import { widen } from './name.js'
@@ -88,6 +89,9 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['claim <node|from..to>', 'say you are on it — a signal, never a lock'],
 			['claim <from..to> --anyway', 'take the run even where somebody else is on it'],
 			['release <node|from..to>', 'give it back'],
+			['distribute', 'the plan a session proposed: who takes what'],
+			['distribute --accept', 'take the plan — it assigns, nothing else'],
+			['distribute --drop', 'take the plan off the board'],
 		],
 	],
 	[
@@ -164,7 +168,11 @@ const options = {
 	'no-push': { type: 'boolean' },
 	name: { type: 'string' },
 	role: { type: 'string' },
-	focus: { type: 'string' },
+	// More than once, rather than one comma-separated string: a focus entry is
+	// a glob, and a glob holds commas — `packages/{core,cli}/**` is one pattern.
+	focus: { type: 'string', multiple: true },
+	accept: { type: 'boolean' },
+	drop: { type: 'boolean' },
 	clean: { type: 'boolean' },
 	green: { type: 'boolean' },
 	diff: { type: 'boolean' },
@@ -264,6 +272,8 @@ const main = async (): Promise<void> => {
 			return claim(need('node'), values.anyway === true)
 		case 'release':
 			return release(need('node'))
+		case 'distribute':
+			return distribute(values.accept === true ? 'accept' : values.drop === true ? 'drop' : 'show')
 		case 'dismiss': {
 			const node = need('node')
 			const reason = values.message ?? fail('say why it is fine: sober dismiss <node> -m "…"')

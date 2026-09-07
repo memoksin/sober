@@ -21,7 +21,7 @@ const { SKILL_DIRS, buildSkills } = (await import(join(root, 'scripts/build-plug
 	buildSkills: (host: string) => Map<string, string>
 }
 
-const SKILLS = ['brief', 'decide', 'loop', 'next', 'plan']
+const SKILLS = ['brief', 'decide', 'distribute', 'loop', 'next', 'plan']
 
 test('the Claude Code manifest names the plugin, and the marketplace points at it', () => {
 	expect(read('packages/claude-code-plugin/.claude-plugin/plugin.json')).toMatchObject({

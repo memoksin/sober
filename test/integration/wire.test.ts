@@ -66,7 +66,7 @@ test('an operation performed on the wire is one the command line sees', async ()
 	server = await serve({ paths: paths(repo.dir) })
 
 	const added = await post('contributors_add', {
-		contributor: { handle: 'Ada', name: 'Ada Lovelace', role: '', focus: '' },
+		contributor: { handle: 'Ada', name: 'Ada Lovelace', role: '', focus: [] },
 	})
 
 	expect(added.status).toBe(200)

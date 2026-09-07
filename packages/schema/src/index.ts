@@ -9,6 +9,7 @@ export {
 	decisionState,
 	Option,
 } from './decision.js'
+export { Distribution, Match } from './distribution.js'
 export { chainEnds, Handle, ID_PATTERN, Id, Timestamp } from './id.js'
 export {
 	Accepted,

@@ -87,6 +87,27 @@ test('no surface routes what an agent authors — planning stays in the session'
 	for (const covers of [CLI_COVERS, MCP_COVERS]) {
 		expect(Object.keys(covers)).not.toContain('propose')
 		expect(Object.keys(covers)).not.toContain('open_decision')
+		// The matching is a model's, the same way decomposition is (ADR 0051).
+		// The two operations it produces are not — they are on every surface, and
+		// the checks above already hold them there.
+		expect(Object.keys(covers)).not.toContain('distribute')
+	}
+})
+
+/**
+ * ADR 0051's split, which no check above can see: `accept_distribution` and
+ * `drop_distribution` are in `OPERATIONS`, so parity already covers them — but
+ * nothing says that only a session can *propose* one. That is the half a
+ * terminal grows by accident the day somebody adds a heuristic to `core`.
+ */
+test('only a session proposes a distribution, and every surface settles one', async () => {
+	expect(tools).toContain('distribute')
+	expect(described.distribute).toMatch(/propose/i)
+	expect(help).not.toMatch(/distribute .*--propose/)
+
+	const { OPS } = await import('@besober/server')
+	for (const operation of ['accept_distribution', 'drop_distribution'] as const) {
+		expect(OPS[operation].accepts.safeParse({}).success, operation).toBe(true)
 	}
 })
 

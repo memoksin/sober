@@ -3,6 +3,7 @@
 exports[`the catalogue is what PR-09-08 binds, so growing it is visible in review 1`] = `
 [
   "accept",
+  "accept_distribution",
   "answer",
   "approve",
   "archive",
@@ -14,6 +15,7 @@ exports[`the catalogue is what PR-09-08 binds, so growing it is visible in revie
   "create_node",
   "decide",
   "dismiss",
+  "drop_distribution",
   "edit_decision",
   "init",
   "reject",

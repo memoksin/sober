@@ -114,7 +114,7 @@ describe('on a board', () => {
 	test('assignment refuses a handle the project does not hold', async () => {
 		await expect(assignNode(paths, 'auth-api-k7f2', 'alcie')).rejects.toThrow('contributors add')
 
-		await addContributor(paths, { handle: 'alice', name: '', role: '', focus: '' })
+		await addContributor(paths, { handle: 'alice', name: '', role: '', focus: [] })
 		await assignNode(paths, 'auth-api-k7f2', 'alice')
 		expect((await readNode(paths, 'auth-api-k7f2')).kind).toBe('ok')
 	})
@@ -135,20 +135,20 @@ describe('on a board', () => {
 	test('a project starts with nobody on it, and adding someone twice corrects them', async () => {
 		expect(await readContributors(paths)).toEqual([])
 
-		await addContributor(paths, { handle: 'alice', name: 'Alice', role: 'maintainer', focus: '' })
-		await addContributor(paths, { handle: 'alice', name: 'Alice', role: 'reviewer', focus: '' })
+		await addContributor(paths, { handle: 'alice', name: 'Alice', role: 'maintainer', focus: [] })
+		await addContributor(paths, { handle: 'alice', name: 'Alice', role: 'reviewer', focus: [] })
 
 		expect(await readContributors(paths)).toEqual([
-			{ handle: 'alice', name: 'Alice', role: 'reviewer', focus: '' },
+			{ handle: 'alice', name: 'Alice', role: 'reviewer', focus: [] },
 		])
 	})
 
 	test('Bob is not a second person from bob', async () => {
-		await addContributor(paths, { handle: 'bob', name: '', role: 'author', focus: '' })
-		await addContributor(paths, { handle: 'Bob', name: 'Bob', role: 'author', focus: '' })
+		await addContributor(paths, { handle: 'bob', name: '', role: 'author', focus: [] })
+		await addContributor(paths, { handle: 'Bob', name: 'Bob', role: 'author', focus: [] })
 
 		expect(await readContributors(paths)).toEqual([
-			{ handle: 'Bob', name: 'Bob', role: 'author', focus: '' },
+			{ handle: 'Bob', name: 'Bob', role: 'author', focus: [] },
 		])
 		expect(await removeContributor(paths, 'BOB')).toBe(true)
 		expect(await readContributors(paths)).toEqual([])
@@ -157,7 +157,7 @@ describe('on a board', () => {
 	test('taking off somebody who was never on says so rather than pretending', async () => {
 		expect(await removeContributor(paths, 'alice')).toBe(false)
 
-		await addContributor(paths, { handle: 'alice', name: '', role: '', focus: '' })
+		await addContributor(paths, { handle: 'alice', name: '', role: '', focus: [] })
 		expect(await removeContributor(paths, 'alice')).toBe(true)
 		expect(await readContributors(paths)).toEqual([])
 	})

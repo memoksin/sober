@@ -9,10 +9,12 @@ import { Handle } from './id.js'
 export const Contributor = z.strictObject({
 	handle: Handle,
 	name: z.string(),
-	// Free text on purpose. Allocating work by matching a role and a focus is
-	// v1.x; until something reads them, a fixed vocabulary is a guess.
 	role: z.string(),
-	focus: z.string(),
+	// A list rather than a sentence: globs where somebody wrote one, words
+	// where they did not. The matching happens in a host session (ADR 0051) and
+	// a session reads both, but only entry-by-entry can a glob be run against a
+	// node's files — which is the half a comma-separated string cannot give.
+	focus: z.array(z.string()),
 })
 
 export type Contributor = z.infer<typeof Contributor>

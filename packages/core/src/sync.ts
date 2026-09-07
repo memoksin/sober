@@ -33,7 +33,13 @@ const BOARD_DIRS = [
 	`${SOBER_DIR}/archive/decisions`,
 ] as const
 
-const BOARD_FILES = [`${SOBER_DIR}/project.json`, `${SOBER_DIR}/contributors.json`] as const
+const BOARD_FILES = [
+	`${SOBER_DIR}/project.json`,
+	`${SOBER_DIR}/contributors.json`,
+	// A plan waiting on a human travels with the board it is about (ADR 0051),
+	// so a teammate can argue with it before it lands.
+	`${SOBER_DIR}/distribution.json`,
+] as const
 
 /** Files the working tree gained, changed or lost because of what came in. */
 export interface SyncChange {

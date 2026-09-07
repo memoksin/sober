@@ -43,4 +43,9 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	dismiss: 'dismiss',
 	reopen: 'reopen',
 	create_node: 'open',
+	// One command, both ways out of a plan: `--accept` assigns it, `--drop`
+	// takes it off the board. Proposing is not here — a terminal has no agent
+	// (ADR 0051, and ADR 0009's line before it).
+	accept_distribution: 'distribute',
+	drop_distribution: 'distribute',
 }

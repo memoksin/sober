@@ -3,6 +3,7 @@
 # Board records are merged field by field by SOBER, never by git (DESIGN.md 1.2.1).
 .sober/project.json merge=binary -text
 .sober/contributors.json merge=binary -text
+.sober/distribution.json merge=binary -text
 .sober/nodes/*.json merge=binary -text
 .sober/decisions/*.json merge=binary -text
 .sober/archive/nodes/*.json merge=binary -text

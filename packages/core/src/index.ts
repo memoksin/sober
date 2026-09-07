@@ -37,6 +37,12 @@ export {
 } from './decide.js'
 export { digest } from './digest.js'
 export { dispatch, dispatchWave, SetupFailedError, stopRun } from './dispatch.js'
+export {
+	acceptDistribution,
+	dropDistribution,
+	proposeDistribution,
+	readDistribution,
+} from './distribute.js'
 export { bind, unbound } from './edges.js'
 // `NotOnBoardError` came off this barrel in ADR 0033's deletion pass and comes
 // back here, which is the shape that ADR predicted: a name returns in the pull

@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SCHEMA_VERSION } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
+import { readContributors } from './contributors.js'
 import { migrateBoard } from './migrate.js'
 import { type Paths, paths } from './paths.js'
 import { readNodes } from './records.js'
@@ -136,4 +137,69 @@ test('a project record that will not parse is not a board to migrate', async () 
 	await writeFile(board.project, '{ not json')
 
 	expect(await migrateBoard(board)).toEqual({ kind: 'no-board' })
+})
+
+/**
+ * v5 made a contributor's focus a list (ADR 0051). The words a person wrote are
+ * kept — a migration that invented globs would be guessing at what somebody
+ * meant, and a migration that emptied the field would lose it.
+ */
+test('a team written before focus was a list keeps the words, one entry each', async () => {
+	await writeV1(4)
+	await writeFile(
+		board.contributors,
+		`${JSON.stringify({
+			contributors: [{ handle: 'alice', name: 'Alice', role: 'maintainer', focus: 'core, cli' }],
+		})}\n`,
+	)
+
+	await migrateBoard(board)
+
+	expect(await readContributors(board)).toEqual([
+		{ handle: 'alice', name: 'Alice', role: 'maintainer', focus: ['core', 'cli'] },
+	])
+})
+
+test('a contributor who was given no focus arrives with an empty list, not with one empty word', async () => {
+	await writeV1(4)
+	await writeFile(
+		board.contributors,
+		`${JSON.stringify({
+			contributors: [{ handle: 'bob', name: '', role: '', focus: '' }],
+		})}\n`,
+	)
+
+	await migrateBoard(board)
+
+	expect((await readContributors(board))[0]?.focus).toEqual([])
+})
+
+test('a board with nobody on it migrates without a team file to migrate', async () => {
+	await writeV1(4)
+
+	expect(await migrateBoard(board)).toMatchObject({ kind: 'migrated', records: 2 })
+})
+
+test('a focus somebody already wrote as a list is left exactly as it is', async () => {
+	await writeV1(4)
+	await writeFile(
+		board.contributors,
+		`${JSON.stringify({
+			contributors: [{ handle: 'ada', name: '', role: '', focus: ['packages/core/**'] }],
+		})}\n`,
+	)
+
+	await migrateBoard(board)
+
+	expect((await readContributors(board))[0]?.focus).toEqual(['packages/core/**'])
+})
+
+test('a team file that is not a team file is left alone rather than replaced', async () => {
+	await writeV1(4)
+	await writeFile(board.contributors, JSON.stringify({ people: [] }))
+
+	expect(await migrateBoard(board)).toMatchObject({ kind: 'migrated', records: 2 })
+	// Untouched: rewriting it is how a board with one bad line loses the team,
+	// and the reader is what reports it (§8.4).
+	expect(JSON.parse(await readFile(board.contributors, 'utf8'))).toEqual({ people: [] })
 })

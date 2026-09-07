@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { Node, Project, SCHEMA_VERSION } from '@besober/schema'
+import { Contributors, Node, Project, SCHEMA_VERSION } from '@besober/schema'
 import { SoberError } from './errors.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
@@ -13,7 +13,9 @@ type Record_ = { [field: string]: unknown }
 interface Migration {
 	readonly to: number
 	/** Applied to every node on the board and in the archive, as raw JSON. */
-	readonly node: (record: Record_) => Record_
+	readonly node?: (record: Record_) => Record_
+	/** Applied to every entry in the team file, when there is one. */
+	readonly contributor?: (record: Record_) => Record_
 }
 
 /**
@@ -46,6 +48,21 @@ const MIGRATIONS: readonly Migration[] = [
 			const accepted = record.accepted as Record_ | null | undefined
 			if (accepted === null || accepted === undefined) return record
 			return { ...record, accepted: { audit: 'did-not-run', ...accepted } }
+		},
+	},
+	{
+		to: 5,
+		// A contributor's focus became a list, so a distribution can be matched
+		// against it entry by entry (ADR 0051). The words are split and kept as
+		// they were written: inventing globs out of "core, cli" would be guessing
+		// at what somebody meant, and emptying the field would lose it.
+		contributor: (record) => {
+			if (typeof record.focus !== 'string') return record
+			const written = record.focus
+				.split(',')
+				.map((part) => part.trim())
+				.filter((part) => part !== '')
+			return { ...record, focus: written }
 		},
 	},
 ]
@@ -87,7 +104,7 @@ export const migrateBoard = async (paths: Paths): Promise<Migrated> => {
 		for (const dir of [paths.nodes, paths.archivedNodes]) {
 			for (const file of await jsonFiles(dir)) {
 				let record = JSON.parse(await readFile(file, 'utf8')) as Record_
-				for (const step of steps) record = step.node(record)
+				for (const step of steps) record = step.node?.(record) ?? record
 				// Through the schema, so a migrated record is written in the same
 				// field order as every other one. Bytes that differ by key order
 				// are a whole-file diff to git and a phantom change to the merge
@@ -97,6 +114,8 @@ export const migrateBoard = async (paths: Paths): Promise<Migrated> => {
 				records += 1
 			}
 		}
+		records += await migrateTeam(paths, steps)
+
 		const current = JSON.parse(await readFile(paths.project, 'utf8')) as Record_
 		await writeRecord(
 			paths.project,
@@ -104,6 +123,31 @@ export const migrateBoard = async (paths: Paths): Promise<Migrated> => {
 		)
 		return { kind: 'migrated', from: version, to: SCHEMA_VERSION, records }
 	})
+}
+
+/**
+ * The team file, when the board has one. One record holding a list rather than
+ * a directory of them, so it is counted as the single record it is.
+ *
+ * A file nobody can parse is left alone: rewriting it is how a board with one
+ * bad line loses the whole team, and the reader already reports it (§8.4).
+ */
+const migrateTeam = async (paths: Paths, steps: readonly Migration[]): Promise<number> => {
+	if (!steps.some((step) => step.contributor !== undefined)) return 0
+
+	let current: { contributors?: unknown }
+	try {
+		current = JSON.parse(await readFile(paths.contributors, 'utf8')) as { contributors?: unknown }
+	} catch {
+		return 0
+	}
+	if (!Array.isArray(current.contributors)) return 0
+
+	const contributors = (current.contributors as Record_[]).map((person) =>
+		steps.reduce((record, step) => step.contributor?.(record) ?? record, person),
+	)
+	await writeRecord(paths.contributors, canonical(Contributors, { ...current, contributors }))
+	return 1
 }
 
 const canonical = <T>(

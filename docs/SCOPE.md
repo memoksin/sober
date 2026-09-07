@@ -40,6 +40,7 @@ If a proposed feature does not make one of these seven steps possible or correct
 | 16 | Two more hosts, plugin and adapter each: Codex and OpenCode | 1–6 | One host is not an abstraction, it is a hard-coded invocation, and every host-shaped line in the product was written against Claude Code's. Moved from SHOULD by ADR 0048 — the new fact is that both now ship a skills directory and an MCP client, so the distance between them turned out to be four flags and three event shapes rather than a design. |
 | 17 | The auditor: the acceptance list runs, and the review says what each command did | 6 | ADR 0022 made review "check results against approved criteria" and ADR 0027 made a criterion a command. Nothing ran them, so the review showed the list as text and asked a human to believe it — which is the diff-reading cost those two ADRs exist to remove. Moved from SHOULD by ADR 0049. |
 | 18 | Chain claim: a run of linked nodes, named by its two ends, claimed and released in one act | 8 | Claiming one node at a time charged the most to whoever planned furthest ahead: a run of five linked nodes meant coming back four times, and between any two of them a teammate could take the next. Moved from SHOULD by ADR 0050 — the new fact is that the three readings of "a chain" return sets that do not overlap on a real graph, so it could not be built without first deciding which one it was. |
+| 19 | AI distribution: a session proposes who takes which node, and a human accepts it or drops it | 2, 8 | A person looking at thirty nodes and four contributors had no help at all, and assignment was one node at a time by hand. Moved from SHOULD by ADR 0051 — two new facts: `focus` was free text nothing could match against, so the feature ADR 0005 described could not be built against the record it shipped; and ADR 0009's host session is now where a model runs, which is where the matching belongs rather than as a heuristic in `core`. It obeys the WON'T list's rule the same way MUST #10 does: it is proposed, never applied. |
 
 Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision**, never a "gate" — and by ADR 0009 for the three host-facing terms: an **adapter** launches a host headless, a **plugin** is installed into a host, and **hook enforcement** is what a plugin does about a held node.
 
@@ -47,7 +48,6 @@ Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision*
 
 ## SHOULD — v1.x, designed for but not built
 
-- AI distribution: allocating nodes by matching each contributor's role and focus
 - Cursor: its plugin, and the dispatch adapter that goes with it. Codex and OpenCode moved into MUST #16; Cursor did not, because its headless surface is the one of the three that has no released shape to read flags off (ADR 0048)
 - **Hook enforcement in the plugins beyond Claude Code**, which is where "host-dependent" is still true: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins (`DESIGN.md` §2.9). Both plugins ship saying so rather than implying a guard they do not have
 - **Attended dispatch beyond Claude Code.** `codex exec` and `opencode run` take one message and exit, so a run dispatched to either cannot be answered while it runs, and SOBER refuses an attended run there rather than seating somebody in front of a session that cannot hear them (ADR 0048)
@@ -64,6 +64,7 @@ Each of these is a real feature. None of them is required for the loop to close 
 | Multi-project workspace | One project, one graph. Multi-project is a UI problem you cannot see until one project works. |
 | Knowledge map, learner-level assessment, education analytics | Modelling what a human knows is unbounded research. The charter's education pillar is served by option reasons and costs. |
 | Decomposition that lands without human acceptance | The human owns intent. A machine graph nobody evaluated is plausible and unevaluable at once. Proposing is MUST #10; landing unreviewed stays out (ADR 0004). |
+| A distribution that lands without human acceptance | The same rule, one record over. Thirty nodes quietly acquiring an owner is a change nobody reviewed, and "an assignment is only a plan, so it is reversible" is not the test — "nobody evaluated it" is (ADR 0051). |
 | Per-language static analysis of dispatch results | The scan ships a short, named signal list (ADR 0011). A real injection analyser needs one rule set per language a user might write in. |
 | Anything that serves none of the three pillars | The charter's own rule. |
 
@@ -115,5 +116,12 @@ Ported from v0, where each was considered and rejected for a stated reason, and 
 - **Drag-to-connect on the canvas.** Edges come from decomposition; manual editing is correction, which suits a list. It was also the only criterion separating the candidate graph libraries, and the one that required a five-year-old extension. ADR 0016.
 - **Storing node positions on the board.** A conflict on every node move, over coordinates that mean nothing on a teammate's screen. ADR 0016.
 - **Automatic dispatch of every ready node.** Removes the approval that is the last thing a human sees before an agent starts working. "Approve and queue" is per-node and opt-in instead. ADR 0017.
+
+### From the v1.x work
+
+- **Allocating work by a rule in `core` over `role` and `focus`.** Testable and reproducible, and what it buys is a score nobody can explain a week later. It also forces `focus` into whatever shape the rule can read, which is the controlled vocabulary the schema refused two milestones earlier. ADR 0051.
+- **A distribution proposed in the conversation and never written down.** The smallest diff by a distance — `assign` is already on all three surfaces — and the plan then lives in a window that closes. A plan about four people that only one of them can see is not a plan the team can argue with. ADR 0051.
+- **Writing `assignee` directly, on the grounds that §3.3 already calls it a plan.** The most defensible reading of the existing vocabulary, and it fails on volume: thirty silent owners is the unreviewed landing the WON'T list rules out. ADR 0051.
+- **Reassigning a claimed node behind a confirmation.** ADR 0032's shape, which does not transfer: there the second call overwrites a claim with a claim, fact with fact. Here it would overwrite a fact with a plan, and the person holding the node finds out from a diff. ADR 0051.
 
 v0 rejections tied to its Bun stack (`bun build --compile` single binaries, `bundleDependencies`) are not carried: v1's stack differs, so they have to be re-decided rather than inherited.

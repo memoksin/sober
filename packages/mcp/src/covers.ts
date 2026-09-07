@@ -45,4 +45,9 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	dismiss: 'dismiss',
 	reopen: 'reopen',
 	create_node: 'open_node',
+	// One tool, four acts, told apart by what it is given — the shape
+	// `contributors` already has. Proposing is the session's alone (ADR 0051);
+	// the two operations here are the human's and are on every surface.
+	accept_distribution: 'distribute',
+	drop_distribution: 'distribute',
 }

@@ -32,6 +32,7 @@ export const GITIGNORE_BLOCK = `# SOBER: the board travels on its own branch, an
 export const ATTRIBUTES_BLOCK = `# SOBER: board records are merged field by field by SOBER, never by git (DESIGN §1.2.1).
 .sober/project.json merge=binary -text
 .sober/contributors.json merge=binary -text
+.sober/distribution.json merge=binary -text
 .sober/nodes/*.json merge=binary -text
 .sober/decisions/*.json merge=binary -text
 .sober/archive/nodes/*.json merge=binary -text
@@ -70,9 +71,25 @@ export const initBoard = async (
 export const ensureGitignore = (root: string): Promise<void> =>
 	appendBlock(join(root, '.gitignore'), '.sober/*', GITIGNORE_BLOCK)
 
-/** The other half of the same promise: no conflict marker ever lands in a record. */
-export const ensureAttributes = (root: string): Promise<void> =>
-	appendBlock(join(root, '.gitattributes'), '.sober/nodes/*.json', ATTRIBUTES_BLOCK)
+/**
+ * The other half of the same promise: no conflict marker ever lands in a record.
+ *
+ * Line by line rather than block-once, because the list grows.
+ * `.sober/distribution.json` was the first board file added after `init`
+ * existed (ADR 0051), and a block matched by one marker line would have left
+ * every board created before it with git line-merging the one file nobody
+ * thought to look at. A person's own rules in the file are untouched: only the
+ * lines this block names are ever written, and only the missing ones.
+ */
+export const ensureAttributes = async (root: string): Promise<void> => {
+	const file = join(root, '.gitattributes')
+	const current = await readOrEmpty(file)
+	const missing = ATTRIBUTES_BLOCK.split('\n').filter(
+		(line) => line !== '' && !current.includes(line),
+	)
+	if (missing.length === 0) return
+	await write(file, current, `${missing.join('\n')}\n`)
+}
 
 /**
  * Appends a block to a file the project also owns, once. Both files may already
@@ -80,15 +97,24 @@ export const ensureAttributes = (root: string): Promise<void> =>
  * block cannot be without and adds nothing if it is there.
  */
 const appendBlock = async (file: string, marker: string, block: string): Promise<void> => {
-	let current = ''
+	const current = await readOrEmpty(file)
+	if (current.includes(marker)) return
+	await write(file, current, block)
+}
+
+const readOrEmpty = async (file: string): Promise<string> => {
 	try {
-		current = await readFile(file, 'utf8')
+		return await readFile(file, 'utf8')
 	} catch (error) {
 		if ((error as { code?: string }).code !== 'ENOENT') throw error
+		return ''
 	}
-	if (current.includes(marker)) return
+}
+
+/** A blank line between what was there and what is added, and never a leading one. */
+const write = (file: string, current: string, block: string): Promise<void> => {
 	const separator = current.length === 0 || current.endsWith('\n') ? '' : '\n'
-	await writeAtomic(file, `${current}${separator}${current.length === 0 ? '' : '\n'}${block}`)
+	return writeAtomic(file, `${current}${separator}${current.length === 0 ? '' : '\n'}${block}`)
 }
 
 /**

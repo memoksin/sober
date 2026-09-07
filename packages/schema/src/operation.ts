@@ -58,16 +58,28 @@ export const OPERATIONS = [
 	'dismiss',
 	'reopen',
 	'create_node',
+	// The plan a session proposed, taken whole or taken off the board whole
+	// (ADR 0051). Two entries rather than one with a flag: putting a plan on
+	// the board and taking it off are different acts, and the second is the
+	// only way out of a proposal somebody disagrees with — without it the one
+	// exit from a bad plan is applying it.
+	'accept_distribution',
+	'drop_distribution',
 ] as const
 
 export type Operation = (typeof OPERATIONS)[number]
 
 /**
  * Operations a model authors: `propose` returns nodes with the edges between
- * them and the decisions each introduces (DESIGN §3.5), and `open_decision`
- * generates options on demand (§2.6). Both need an agent, and a terminal does
- * not have one — ADR 0009 put planning in a host session for exactly this
- * reason.
+ * them and the decisions each introduces (DESIGN §3.5), `open_decision`
+ * generates options on demand (§2.6), and `distribute` reads a board of thirty
+ * nodes against four people's role and focus and says who should do what
+ * (§3.3, ADR 0051). All three need an agent, and a terminal does not have one —
+ * ADR 0009 put planning in a host session for exactly this reason.
+ *
+ * `accept_distribution` above is the other half of the third, and it is an
+ * ordinary operation on every surface: reading a plan and taking it is a
+ * human's work, and a human is on all three.
  *
  * So `PR-09-08` does not reach them. Its promise is that choosing a surface
  * never costs a human an ability; it is not a promise that every surface grows
@@ -80,6 +92,6 @@ export type Operation = (typeof OPERATIONS)[number]
  * it is now. The first needs a person who knows what they want, the second
  * needs a model — which is the line ADR 0009 drew.
  */
-export const AGENT_OPERATIONS = ['propose', 'open_decision'] as const
+export const AGENT_OPERATIONS = ['propose', 'open_decision', 'distribute'] as const
 
 export type AgentOperation = (typeof AGENT_OPERATIONS)[number]
