@@ -4,6 +4,9 @@ import {
 	bind as bindEdges,
 	dispatch,
 	dispatchWave,
+	editDecision,
+	flagsOf,
+	ImpactError,
 	OverlapError,
 	openDecisions,
 	type Published,
@@ -75,6 +78,77 @@ export const decisions = async (): Promise<void> => {
 		}
 		say()
 	}
+}
+
+/**
+ * §2.8's edit, in ADR 0032's shape rather than a second one: the first command
+ * prints what the change reaches and writes nothing, and `--anyway` on the
+ * second is the confirmation. One confirmation vocabulary — `run` already asks
+ * this way, and a second spelling is how one surface becomes two.
+ *
+ * There is no `drain` after it. Answering a decision makes nodes ready, so
+ * `decide` reads the queue; changing an answer takes briefs away, and a run
+ * started by the command that just invalidated its brief is the automatic
+ * consequence §7.2 refuses.
+ */
+export const edit = async (
+	id: string,
+	option: string,
+	why: string | undefined,
+	anyway: boolean,
+): Promise<void> => {
+	const paths = await openBoard()
+	try {
+		const decision = await editDecision(paths, id, {
+			option,
+			rationale: why ?? '',
+			by: await whoami(paths.root),
+			anyway,
+		})
+		say(`${green('✓')} ${magenta(id)}: ${bold(decision.answer?.option ?? '')}`)
+
+		// What it did, read back off the board rather than reported from memory —
+		// the same shape `decide` uses to say which nodes moved.
+		const board = await readBoard(paths)
+		const bound = [...board.nodes.keys()].filter((node) =>
+			board.nodes.get(node)?.decisions.includes(id),
+		)
+		const briefs = bound.filter((node) => statusOf(board, node) === 'needs-brief')
+		const flagged = bound.filter((node) => flagsOf(board, node).flagged)
+		if (briefs.length > 0)
+			say(`  ${briefs.map((node) => cyan(node)).join(', ')} ${dim('need briefs again')}`)
+		if (flagged.length > 0)
+			say(
+				`  ${flagged.map((node) => cyan(node)).join(', ')} ${dim('flagged — nothing was stopped')}`,
+			)
+	} catch (error) {
+		if (error instanceof ImpactError) return reaches(error, option)
+		refuse(error)
+	}
+}
+
+/**
+ * The fan-out, before it happens. Every node is named with the status it is in,
+ * because §2.8 counts running nodes precisely so a person can stop one that is
+ * building against the answer they are about to change.
+ */
+const reaches = (error: ImpactError, option: string): void => {
+	const { impact } = error
+	say(`${yellow('·')} ${magenta(impact.decision)} was not changed — nothing was written`)
+	say()
+	if (impact.nodes.length === 0) {
+		say(dim('  No node was built against it yet, so the change costs nothing.'))
+	} else {
+		for (const one of impact.nodes)
+			say(
+				`  ${cyan(one.id)} ${dim(one.status)}  ${
+					one.effect === 'rebrief' ? dim('loses its brief') : yellow('flagged, and left alone')
+				}`,
+			)
+	}
+	say()
+	say(dim(`  Change it anyway if you meant to:  sober edit ${impact.decision} ${option} --anyway`))
+	process.exitCode = 1
 }
 
 export const decide = async (id: string, option: string, why?: string): Promise<void> => {

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { ProjectedNode, Projection, WireError } from './wire.js'
+import { Impact, ProjectedNode, Projection, WireError } from './wire.js'
 
 const projected = {
 	id: 'auth-api-k7f2',
@@ -61,4 +61,26 @@ test('a failure carries a message, because a blank one reads as no failure', () 
 
 test('the failure body carries nothing else — the status code says the rest', () => {
 	expect(WireError.safeParse({ error: 'no', code: 404 }).success).toBe(false)
+})
+
+test('an impact entry says what the save does to that node, and which node it is', () => {
+	const impact = {
+		decision: 'auth-model-k7f2',
+		nodes: [
+			{ id: 'auth-api-k7f2', title: 'The auth API', status: 'in-review', effect: 'flag' },
+			{ id: 'auth-ui-m3q8', title: 'The sign-in screen', status: 'ready', effect: 'rebrief' },
+		],
+	}
+
+	expect(Impact.parse(impact)).toEqual(impact)
+})
+
+test('an impact that reaches nothing is an empty list, not an absent one', () => {
+	expect(Impact.parse({ decision: 'auth-model-k7f2', nodes: [] }).nodes).toEqual([])
+	expect(Impact.safeParse({ decision: 'auth-model-k7f2' }).success).toBe(false)
+})
+
+test('the effect is one of the two the save has — a third would be a case nobody wrote', () => {
+	const entry = { id: 'auth-api-k7f2', title: 'The auth API', status: 'done', effect: 'reopen' }
+	expect(Impact.safeParse({ decision: 'auth-model-k7f2', nodes: [entry] }).success).toBe(false)
 })

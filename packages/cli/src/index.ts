@@ -9,7 +9,7 @@ import { accept, acceptGreen, archive, reject, review } from './review.js'
 import { status } from './status.js'
 import { sync } from './sync.js'
 import { assign, claim, contributors, release } from './team.js'
-import { approve, bind, brief, decide, decisions, logs, run, stop } from './work.js'
+import { approve, bind, brief, decide, decisions, edit, logs, run, stop } from './work.js'
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -38,6 +38,8 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['decisions', 'every decision still waiting on you'],
 			['decide <id> <option>', 'answer one, and unblock what it holds'],
+			['edit <id> <option>', 'change an answer — it shows what that reaches first'],
+			['edit <id> <option> --anyway', 'apply it'],
 			['bind <node> --decisions <ids>', 'say which decisions hold a node'],
 		],
 	],
@@ -113,6 +115,7 @@ const help = (): void => {
 const NAMES_A_RECORD = new Set([
 	'status',
 	'decide',
+	'edit',
 	'bind',
 	'brief',
 	'approve',
@@ -190,6 +193,11 @@ const main = async (): Promise<void> => {
 			const id = need('decision')
 			const option = rest[1] ?? fail(`which option? \`sober decisions\` lists them`)
 			return decide(id, option, values.why)
+		}
+		case 'edit': {
+			const id = need('decision')
+			const option = rest[1] ?? fail(`which option? \`sober decisions\` lists them`)
+			return edit(id, option, values.why, values.anyway === true)
 		}
 		case 'bind': {
 			const node = need('node')

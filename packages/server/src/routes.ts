@@ -12,7 +12,9 @@ import {
 	digest,
 	dismissFlag,
 	dispatch,
+	editDecision,
 	flagsOf,
+	impactOf,
 	initBoard,
 	loadBoard,
 	NotOnBoardError,
@@ -35,6 +37,7 @@ import {
 	Contributor,
 	type Digest,
 	Id,
+	type Impact,
 	OPERATIONS,
 	type Operation,
 	Project,
@@ -104,6 +107,28 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 		z.strictObject({ decision: Id, option: z.string().min(1), rationale: z.string().optional() }),
 		async (paths, { decision, option, rationale }) =>
 			answerDecision(paths, decision, { option, rationale, by: await whoami(paths.root) }),
+	),
+
+	/**
+	 * §2.8's edit. `anyway` is the confirmation, exactly as it is on `run`
+	 * (ADR 0032): without it `core` refuses with the fan-out and writes nothing,
+	 * so the screen that renders the preview and the terminal that prints it are
+	 * answered by one operation.
+	 */
+	edit_decision: route(
+		z.strictObject({
+			decision: Id,
+			option: z.string().min(1),
+			rationale: z.string().optional(),
+			anyway: z.boolean().optional(),
+		}),
+		async (paths, { decision, option, rationale, anyway }) =>
+			editDecision(paths, decision, {
+				option,
+				rationale,
+				anyway,
+				by: await whoami(paths.root),
+			}),
 	),
 
 	write_brief: route(
@@ -300,6 +325,18 @@ export const READS: Readonly<Record<string, Route>> = {
 		z.strictObject({ node: Id, base: z.string().optional() }),
 		async (paths, { node: id, base }) => reviewNode(paths, id, await baseOf(paths, base)),
 	),
+
+	/**
+	 * What changing an answer would reach (§2.8). A read rather than a stored dry
+	 * run: `review` and `digest` are shaped this way for the reason §7.1 gives,
+	 * and a preview with a lifetime is a record to write, migrate and expire in
+	 * exchange for pinning a list the save recomputes anyway (ADR 0044).
+	 */
+	impact: route(z.strictObject({ decision: Id }), async (paths, { decision }): Promise<Impact> => {
+		const found = impactOf(await loadBoard(paths), decision)
+		if (found === null) throw new NotOnBoardError('decision', decision)
+		return found
+	}),
 
 	/**
 	 * What changed since you last looked (§7.1). `fetch` is the caller saying

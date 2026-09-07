@@ -1,3 +1,4 @@
+import type { Impact } from '@besober/schema'
 import { useState } from 'react'
 import { Overlay } from '../Overlay.js'
 import type { BoardRead } from './data.js'
@@ -20,11 +21,16 @@ export const DecisionScreen = ({
 	id,
 	onClose,
 	onAnswer,
+	onPreview,
+	onEdit,
 }: {
 	readonly board: BoardRead
 	readonly id: string
 	readonly onClose: () => void
 	readonly onAnswer: (option: string, rationale: string) => Promise<void>
+	/** §2.8's fan-out, read before it is applied. Never on open: asking for it is the act. */
+	readonly onPreview: (decision: string) => Promise<Impact>
+	readonly onEdit: (option: string, rationale: string) => Promise<void>
 }): React.JSX.Element => {
 	const decision = board.decisions.find((one) => one.id === id)
 	const open = decision === undefined ? null : offer(decision)
@@ -33,20 +39,40 @@ export const DecisionScreen = ({
 	const [rationale, setRationale] = useState('')
 	const [sending, setSending] = useState(false)
 	const [refused, setRefused] = useState<string | null>(null)
+	const [reaches, setReaches] = useState<Impact | null>(null)
 
-	const answer = async (): Promise<void> => {
-		if (chosen === null) return
+	/**
+	 * One `try` for all three, because a failure reads the same to the person
+	 * whichever of them produced it: `core` refuses with a paragraph they can act
+	 * on, and that paragraph is the whole value of the round trip.
+	 */
+	const send = async (work: () => Promise<unknown>): Promise<void> => {
 		setSending(true)
 		setRefused(null)
 		try {
-			await onAnswer(chosen, rationale)
+			await work()
 		} catch (error) {
-			// `core` refuses with a paragraph a person can act on. It is the whole
-			// value of the round trip, so it lands here rather than in a console.
 			setRefused(error instanceof Error ? error.message : String(error))
 		} finally {
 			setSending(false)
 		}
+	}
+
+	const answer = async (): Promise<void> => {
+		if (chosen === null) return
+		await send(() => onAnswer(chosen, rationale))
+	}
+
+	// The fan-out does not depend on which option is picked — it is every node
+	// built against the answer that stands — so switching options after reading
+	// it does not make the preview stale.
+	const preview = async (): Promise<void> => {
+		await send(async () => setReaches(await onPreview(id)))
+	}
+
+	const edit = async (): Promise<void> => {
+		if (chosen === null) return
+		await send(() => onEdit(chosen, rationale))
 	}
 
 	return (
@@ -72,7 +98,7 @@ export const DecisionScreen = ({
 					</header>
 
 					<div className="flex flex-col gap-4 px-6 py-5">
-						{open.kind === 'open' && (
+						{open.kind !== 'unopened' && (
 							<>
 								<div className="flex flex-col gap-2">
 									{open.options.map((option) => (
@@ -89,6 +115,10 @@ export const DecisionScreen = ({
 												name="option"
 												value={option.id}
 												checked={chosen === option.id}
+												// The answer that stands. Picking it again would move the
+												// answer's timestamp and flag every node built on it, for
+												// a change that is not one (§2.8).
+												disabled={option.chosen}
 												onChange={() => setChosen(option.id)}
 												className="mt-1 accent-[var(--status-ready)]"
 											/>
@@ -100,6 +130,11 @@ export const DecisionScreen = ({
 													{option.suggested && (
 														<span className="text-[length:var(--text-xs)] text-[var(--ink-faint)]">
 															suggested
+														</span>
+													)}
+													{option.chosen && (
+														<span className="text-[length:var(--text-xs)] text-[var(--ink-faint)]">
+															the answer that stands
 														</span>
 													)}
 												</span>
@@ -156,6 +191,37 @@ export const DecisionScreen = ({
 							</div>
 						)}
 
+						{/*
+							  §2.8's fan-out, on the surface where the preview is the screen.
+							  It is rendered above the confirmation and never beside it: a
+							  person reads what the change reaches, then confirms, in that
+							  order — which is the whole of D19.
+							*/}
+						{reaches !== null && (
+							<div className="rounded-[var(--radius-md)] border border-[var(--line)] p-3">
+								<p className="text-[length:var(--text-sm)] text-[var(--ink)] leading-[var(--leading-prose)]">
+									{reaches.nodes.length === 0
+										? 'Nothing was built against this answer yet, so the change costs nothing.'
+										: `This reaches ${reaches.nodes.length === 1 ? '1 node' : `${reaches.nodes.length} nodes`}. Nothing is stopped and nothing is re-run.`}
+								</p>
+								<ul className="mt-2 flex flex-col gap-1">
+									{reaches.nodes.map((one) => (
+										<li key={one.id} className="flex items-baseline gap-2">
+											<code className="font-[family-name:var(--font-mono)] text-[length:var(--text-xs)] text-[var(--ink-dim)]">
+												{one.id}
+											</code>
+											<span className="text-[length:var(--text-xs)] text-[var(--ink-faint)]">
+												{one.status}
+											</span>
+											<span className="text-[length:var(--text-sm)] text-[var(--ink-dim)]">
+												{one.effect === 'rebrief' ? 'loses its brief' : 'flagged, and left alone'}
+											</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+
 						{refused !== null && (
 							<p className="text-[length:var(--text-sm)] text-[var(--danger)] leading-[var(--leading-prose)]">
 								{refused}
@@ -181,6 +247,31 @@ export const DecisionScreen = ({
 								{sending ? 'Answering…' : 'Answer'}
 							</button>
 						)}
+						{/*
+							  Two buttons, never at once: the confirmation does not exist until
+							  the fan-out has been asked for, which is what makes "never
+							  triggered unseen" a property of the screen rather than a habit.
+							*/}
+						{open.kind === 'answered' &&
+							(reaches === null ? (
+								<button
+									type="button"
+									onClick={() => void preview()}
+									disabled={chosen === null || sending}
+									className="rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40"
+								>
+									{sending ? 'Reading…' : 'See what this changes'}
+								</button>
+							) : (
+								<button
+									type="button"
+									onClick={() => void edit()}
+									disabled={chosen === null || sending}
+									className="rounded-[var(--radius-sm)] bg-[var(--danger)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-40"
+								>
+									{sending ? 'Changing…' : 'Change it anyway'}
+								</button>
+							))}
 					</footer>
 				</>
 			)}

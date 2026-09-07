@@ -114,3 +114,35 @@ export const Digest = z.strictObject({
 })
 
 export type Digest = z.infer<typeof Digest>
+
+/**
+ * What editing an answered decision reaches (§2.8, D19). It is a read
+ * (`/read/impact`) rather than a stored dry run: a preview with a lifetime is a
+ * record to write, migrate, merge and expire, and §7.1 already refused that
+ * trade for the digest (ADR 0044).
+ *
+ * One entry per node the save touches, and nothing for a node it leaves alone.
+ * A node bound to the decision whose brief was never approved is absent, not
+ * listed as unchanged — the preview is what will happen, and a list padded with
+ * nodes nothing happens to is the fan-out made harder to read.
+ *
+ * `status` is here because §2.8's reason for counting running nodes is that a
+ * person can stop a run that is building against the answer they are about to
+ * change. `effect` is here because the three rows have two outcomes, and three
+ * surfaces deriving which is which from `status` is three answers to one
+ * question (ADR 0035's rule, one level out).
+ */
+export const Impact = z.strictObject({
+	decision: Id,
+	nodes: z.array(
+		z.strictObject({
+			id: Id,
+			title: z.string().min(1),
+			status: z.enum(STATUSES),
+			/** `rebrief` withdraws the brief; `flag` writes nothing at all. */
+			effect: z.enum(['rebrief', 'flag']),
+		}),
+	),
+})
+
+export type Impact = z.infer<typeof Impact>

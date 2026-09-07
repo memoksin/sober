@@ -1,4 +1,4 @@
-import type { Digest as DigestRead, Projection, Review } from '@besober/schema'
+import type { Digest as DigestRead, Impact, Projection, Review } from '@besober/schema'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
 import { visible } from './canvas/graph.js'
@@ -133,6 +133,36 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		async (option: string, rationale: string): Promise<void> => {
 			if (token === null || deciding === null) return
 			await wire(token).op('decide', { decision: deciding, option, rationale })
+			await refresh()
+			setDeciding(null)
+		},
+		[token, deciding, refresh],
+	)
+
+	/**
+	 * §2.8's two halves, and they are one operation with a flag plus one read
+	 * (ADR 0044). The preview is asked for by the screen and never on open: a
+	 * read that runs because a drawer opened is a fan-out nobody asked to see.
+	 */
+	const preview = useCallback(
+		async (decision: string): Promise<Impact> => {
+			if (token === null) throw new Error('the dashboard has no token for this board')
+			return wire(token).read<Impact>('impact', { decision })
+		},
+		[token],
+	)
+
+	const edit = useCallback(
+		async (option: string, rationale: string): Promise<void> => {
+			if (token === null || deciding === null) return
+			await wire(token).op('edit_decision', {
+				decision: deciding,
+				option,
+				rationale,
+				// The confirmation. The screen showed the fan-out before this ran,
+				// which is what the flag asserts on every surface (ADR 0032).
+				anyway: true,
+			})
 			await refresh()
 			setDeciding(null)
 		},
@@ -276,6 +306,8 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 						id={deciding}
 						onClose={() => setDeciding(null)}
 						onAnswer={answer}
+						onPreview={preview}
+						onEdit={edit}
 					/>
 				)}
 

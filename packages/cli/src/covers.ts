@@ -15,6 +15,9 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	init: 'init',
 	bind: 'bind',
 	decide: 'decide',
+	// §2.8's edit. The fan-out is printed and the command refuses; `--anyway` on
+	// the second command is the confirmation, the way `run` already asks for one.
+	edit_decision: 'edit',
 	// The written half of a brief arrives through `--write`, including `-` for
 	// the pipe an agent uses.
 	write_brief: 'brief',

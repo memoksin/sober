@@ -24,6 +24,9 @@ export const ERROR_CODES = [
 	'cycle',
 	'schema',
 	'overlap',
+	// The impact preview's refusal (§2.8): the fan-out was printed and nothing
+	// was written, which is a state the surfaces branch on rather than a crash.
+	'impact',
 	// DESIGN §7.2's three actions, each with the one state it refuses. Named
 	// for what is missing, like `no-brief` and `no-board` above.
 	'no-reason',

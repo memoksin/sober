@@ -223,6 +223,79 @@ test('the board a panel reads says what each node is waiting for', async () => {
 })
 
 /**
+ * DESIGN §2.8 over the wire: the preview is a read and the confirmation is a
+ * flag on the operation (ADR 0044). What this asks is whether the screen's two
+ * halves reach `core`, and whether the flag is what separates seeing from
+ * saving — on the surface where the preview *is* the screen.
+ */
+test('the impact preview is read, and the save is the same call with the flag', async () => {
+	repo = board()
+	const at = '2026-09-06T00:00:00.000Z'
+	const there = paths(repo.dir)
+
+	await writeDecision(there, 'auth-model-k7f2', {
+		category: 'state',
+		question: 'Where does session state live?',
+		options: [
+			{ id: 'cookie', label: 'Cookie', reason: 'No server state', costLater: 'Size limits' },
+			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
+		],
+		suggested: null,
+		answer: { option: 'cookie', rationale: '', by: 'memoksin', at },
+		createdAt: at,
+	})
+	await writeNode(there, 'auth-api-k7f2', {
+		title: 'Session endpoints',
+		description: '',
+		notes: '',
+		dependsOn: [],
+		decisions: ['auth-model-k7f2'],
+		files: [],
+		brief: {
+			approach: 'Write the endpoints.',
+			acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
+			approval: { by: 'memoksin', at, queue: false },
+		},
+		outcome: null,
+		assignee: null,
+		claim: null,
+		accepted: null,
+		dismissal: null,
+		createdAt: at,
+	})
+
+	server = await serve({ paths: there })
+
+	const preview = (await (await get('impact', '?decision=auth-model-k7f2')).json()) as {
+		nodes: { id: string; effect: string; status: string }[]
+	}
+	expect(preview.nodes).toEqual([
+		{ id: 'auth-api-k7f2', title: 'Session endpoints', status: 'ready', effect: 'rebrief' },
+	])
+
+	// A decision that is not there is a 409 rather than an empty fan-out: an
+	// empty preview and a decision nobody has are opposite facts (§8.7).
+	expect((await get('impact', '?decision=gone-x9y8')).status).toBe(409)
+
+	// The read wrote nothing, and the edit without the flag writes nothing
+	// either — it comes back with the fan-out the screen already rendered.
+	const refused = await post('edit_decision', { decision: 'auth-model-k7f2', option: 'redis' })
+	expect(refused.status).toBe(409)
+	expect(((await refused.json()) as { error: string }).error).toContain('auth-api-k7f2')
+	expect(sober(repo.dir, 'decisions')).not.toContain('Redis')
+
+	const saved = await post('edit_decision', {
+		decision: 'auth-model-k7f2',
+		option: 'redis',
+		anyway: true,
+	})
+	expect(saved.status).toBe(200)
+	// §2.8's first row, seen from the other surface: the brief is gone and the
+	// node is back to being briefed against the answer that now stands.
+	expect(sober(repo.dir, 'status')).toContain('needs-brief')
+})
+
+/**
  * DESIGN §7.1's read, over the wire. The delta half is proven against real git
  * in `digest.test.ts`; what this asks is whether the route reaches it — and
  * whether `fetch` survives being a query string, which is the one part of this

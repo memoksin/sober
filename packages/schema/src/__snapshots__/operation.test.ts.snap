@@ -13,6 +13,7 @@ exports[`the catalogue is what PR-09-08 binds, so growing it is visible in revie
   "create_node",
   "decide",
   "dismiss",
+  "edit_decision",
   "init",
   "reject",
   "release",

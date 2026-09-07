@@ -19,15 +19,20 @@
  *   accepts, and requiring it everywhere would invent a host-session tool
  *   nobody asked for. `DESIGN.md` §6.0 already gives each surface its own
  *   shape for the same idea.
- * - **Editing an answered decision.** It arrives with the impact preview
- *   (DESIGN §2.8) in the session that wires all three surfaces at once. Listing
- *   it early would hold the contract test red for a reason no earlier session
- *   can answer.
+ * - **The impact preview.** `edit_decision` below is one entry rather than two
+ *   because the preview is a read (`/read/impact`), and the fan-out it shows is
+ *   carried by the refusal the edit answers with when it arrives unconfirmed.
+ *   The confirmation is a second call with a flag, which is the shape ADR 0032
+ *   already gave `run --anyway` (ADR 0044).
  */
 export const OPERATIONS = [
 	'init',
 	'bind',
 	'decide',
+	// Changing an answer already given, previewed and then confirmed (§2.8).
+	// Not `decide` a second time: the first answer holds nothing back, and this
+	// one withdraws every brief written against the answer it replaces.
+	'edit_decision',
 	'write_brief',
 	'approve',
 	'run',

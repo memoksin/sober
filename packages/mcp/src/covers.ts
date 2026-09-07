@@ -22,6 +22,9 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	init: 'init',
 	bind: 'bind',
 	decide: 'decide',
+	// The fan-out is one elicitation for the whole change rather than one per
+	// node: a window per node is how nobody reads any of them (M1 gate, defect 11).
+	edit_decision: 'edit_decision',
 	write_brief: 'write_brief',
 	approve: 'approve',
 	run: 'run',

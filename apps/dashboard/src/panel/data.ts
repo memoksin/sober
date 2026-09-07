@@ -59,6 +59,8 @@ export const held = (board: BoardRead, id: string): Held[] => {
 
 export interface Choice extends Option {
 	readonly suggested: boolean
+	/** The answer that stands. Re-picking it would move the answer's `at` for nothing. */
+	readonly chosen: boolean
 }
 
 export interface Offer {
@@ -71,11 +73,16 @@ export interface Offer {
 /**
  * What the decision screen puts in front of a person.
  *
- * The two refusals carry a reason rather than a greyed-out button. Answering
- * again is refused in this version because every brief built on the answer
- * would have to be withdrawn and the preview that shows which ones is M3's
- * later work — the same sentence `core` refuses with, so the two surfaces do
- * not explain the same rule two ways.
+ * An answered decision offers its options again (§2.8): on the screen the
+ * preview *is* the screen, so what stops an accidental change is the fan-out
+ * rendered in front of the save, not a screen that refuses to open. The answer
+ * that stands is marked rather than removed — a reader wants to see what was
+ * picked, and re-picking it would move the answer's timestamp and flag every
+ * node built on it for no change at all.
+ *
+ * The one refusal left carries a reason rather than a greyed-out button. A
+ * decision nobody has opened has nothing to choose between, and saying which
+ * surface produces options is the difference between a dead end and a next step.
  */
 export const offer = (decision: Decision): Offer => {
 	const state = decisionState(decision)
@@ -88,19 +95,12 @@ export const offer = (decision: Decision): Offer => {
 				'Nothing has proposed options for this yet. Options are generated in a session, against the code as it is now.',
 		}
 
-	if (state === 'answered')
-		return {
-			kind: 'answered',
-			options: [],
-			refusal:
-				'Changing an answer is not in this version — every brief built on it would have to be withdrawn, and the preview that shows you which ones is not built yet.',
-		}
-
 	return {
-		kind: 'open',
+		kind: state === 'answered' ? 'answered' : 'open',
 		options: (decision.options ?? []).map((option) => ({
 			...option,
 			suggested: option.id === decision.suggested,
+			chosen: option.id === decision.answer?.option,
 		})),
 		refusal: null,
 	}

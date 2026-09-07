@@ -6,8 +6,10 @@ import {
 	createBoardBranch,
 	currentBranch,
 	detectSetup,
+	editDecision,
 	findCycle,
 	findRoot,
+	impactOf,
 	initBoard,
 	isRepo,
 	loadBoard,
@@ -19,7 +21,7 @@ import {
 	writeDecision,
 	writeNode,
 } from '@besober/core'
-import { CATEGORIES, type Decision, type Node, type Option } from '@besober/schema'
+import { CATEGORIES, type Decision, type Impact, type Node, type Option } from '@besober/schema'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { askChoice, askYes } from '../ask.js'
@@ -349,6 +351,66 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 	)
 
 	server.registerTool(
+		'edit_decision',
+		{
+			title: 'Change an answer already given',
+			description:
+				'Change an answered decision. It shows the human what the change reaches — which briefs are withdrawn and which nodes are flagged — and asks once for the whole fan-out. Nothing is written unless they confirm, and nothing is stopped or re-run.',
+			inputSchema: {
+				decision: z.string(),
+				option: z.string(),
+				rationale: z.string().nullish(),
+			},
+		},
+		tool(
+			async ({
+				decision,
+				option,
+				rationale,
+			}: {
+				decision: string
+				option: string
+				rationale?: string | null
+			}) => {
+				const paths = await openBoard(cwd)
+				const board = await loadBoard(paths)
+				const record = board.decisions.get(decision)
+				if (record === undefined) return text(`${decision} is not on this board.`)
+				if (record.answer === null)
+					return text(`${decision} has no answer yet — \`decide\` gives it its first one.`)
+				const offered = record.options ?? []
+				if (!offered.some((one) => one.id === option))
+					return text(
+						`${decision} has no option called ${option} — it offers ${offered.map((one) => one.id).join(', ')}.`,
+					)
+
+				// One question for the whole fan-out, never one per node: a window per
+				// node is how nobody reads any of them (M1 gate, defect 11). The
+				// command line spells the same confirmation as a second command
+				// (ADR 0032); this host can ask, so it asks.
+				const impact = impactOf(board, decision) ?? { decision, nodes: [] }
+				const confirmed = await askYes(
+					server.server,
+					'change an answer',
+					`${record.question}\n\nChanging this to ${option} ${reaches(impact)}`,
+					'Change it anyway',
+				)
+				if (!confirmed) return text('The human did not confirm. Nothing was changed.')
+
+				const answered = await editDecision(paths, decision, {
+					option,
+					rationale: rationale ?? '',
+					by: await whoami(paths.root),
+					anyway: true,
+				})
+				return text(
+					`${decision} is now ${answered.answer?.option}. ${reaches(impact)} Nothing was stopped and nothing was re-run — say so, and show them what is flagged.`,
+				)
+			},
+		),
+	)
+
+	server.registerTool(
 		'brief',
 		{
 			title: 'Read a node’s brief',
@@ -446,4 +508,27 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			)
 		}),
 	)
+}
+
+/**
+ * The fan-out as one sentence, because it is asked as one question. The status
+ * is named for every node: §2.8 counts running nodes so a person can stop a run
+ * that is building against the answer they are about to change, and a list that
+ * hides which ones are running takes that away.
+ */
+const reaches = (impact: Impact): string => {
+	if (impact.nodes.length === 0) return 'reaches no node — nothing was built against it yet.'
+	const rebrief = impact.nodes.filter((one) => one.effect === 'rebrief')
+	const flag = impact.nodes.filter((one) => one.effect === 'flag')
+	return [
+		`reaches ${impact.nodes.length === 1 ? '1 node' : `${impact.nodes.length} nodes`}:`,
+		rebrief.length === 0
+			? ''
+			: `${rebrief.map((one) => one.id).join(', ')} lose their briefs and are briefed again.`,
+		flag.length === 0
+			? ''
+			: `${flag.map((one) => `${one.id} (${one.status})`).join(', ')} are flagged and left alone.`,
+	]
+		.filter((part) => part !== '')
+		.join(' ')
 }

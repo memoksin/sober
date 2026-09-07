@@ -46,6 +46,7 @@ export { currentBranch, isRepo, showFromRef, whoami } from './git.js'
 export { type Board, findCycle, loadBoard } from './graph.js'
 export { checkHost, HostError } from './host.js'
 export { newId } from './id.js'
+export { type Editing, editDecision, ImpactError, impactOf } from './impact.js'
 export {
 	type Feedback,
 	readFeedback,

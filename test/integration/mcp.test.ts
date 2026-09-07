@@ -159,6 +159,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'decide',
 			'decisions',
 			'dismiss',
+			'edit_decision',
 			'init',
 			'logs',
 			'open_decision',
@@ -244,6 +245,89 @@ test('a human who walks away answers nothing', async () => {
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
 	expect(await call(client, 'decide', { decision })).toContain('did not answer')
 	expect((await loadBoard(paths)).decisions.get(decision ?? '')?.answer).toBeNull()
+})
+
+/**
+ * DESIGN §2.8 in a host session. The command line spells the confirmation as a
+ * second command; a host that can ask, asks — **once for the whole fan-out**,
+ * never once per node (M1 gate, defect 11). One vocabulary, two registers
+ * (ADR 0032, ADR 0044).
+ */
+test('changing an answer asks once, and names every node the change reaches', async () => {
+	const { repo: created, paths } = await board()
+	let asked: string[] = []
+	// A confirmation is offered `yes`/`no`; a choice is offered the option ids.
+	const client = await connect(created.dir, (message, choices) => {
+		asked = [...asked, message]
+		return choices.includes('yes') ? 'yes' : (choices[0] ?? null)
+	})
+	await call(client, 'propose', PROPOSAL)
+
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
+	await call(client, 'decide', { decision })
+	const [node] = [...(await loadBoard(paths)).nodes.keys()].filter((id) =>
+		id.startsWith('the-auth'),
+	)
+	await call(client, 'write_brief', {
+		node,
+		approach: 'Write the endpoints.',
+		acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
+	})
+	await call(client, 'approve', { node })
+
+	asked = []
+	const changed = await call(client, 'edit_decision', { decision: decision ?? '', option: 'redis' })
+
+	// One question, and the node it reaches is named in it — a person cannot
+	// confirm a fan-out they were not shown.
+	expect(asked).toHaveLength(1)
+	expect(asked[0]).toContain(node ?? '')
+	expect(changed).toContain('redis')
+	// §2.8's first row: the brief is withdrawn and nothing was started or stopped.
+	expect((await loadBoard(paths)).nodes.get(node ?? '')?.brief).toBeNull()
+})
+
+test('the edit refuses before it asks, so a typo never costs a person a question', async () => {
+	const { repo: created, paths } = await board()
+	let asked = 0
+	const client = await connect(created.dir, (_, choices) => {
+		asked += 1
+		return choices.includes('yes') ? 'yes' : (choices[0] ?? null)
+	})
+	await call(client, 'propose', PROPOSAL)
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
+
+	expect(await call(client, 'edit_decision', { decision: 'gone-x9y8', option: 'redis' })).toContain(
+		'not on this board',
+	)
+	// An unanswered decision is `decide`'s, not this one's: the first answer
+	// withdraws nothing, so it has no fan-out to show.
+	expect(
+		await call(client, 'edit_decision', { decision: decision ?? '', option: 'redis' }),
+	).toContain('no answer yet')
+
+	await call(client, 'decide', { decision })
+	asked = 0
+	expect(
+		await call(client, 'edit_decision', { decision: decision ?? '', option: 'postgres' }),
+	).toContain('no option called')
+	expect(asked).toBe(0)
+})
+
+test('a human who does not confirm the fan-out changes nothing', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir, (_, choices) =>
+		choices.includes('no') ? 'no' : (choices[0] ?? null),
+	)
+	await call(client, 'propose', PROPOSAL)
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
+	await call(client, 'decide', { decision })
+	const answered = (await loadBoard(paths)).decisions.get(decision ?? '')?.answer?.option
+
+	expect(
+		await call(client, 'edit_decision', { decision: decision ?? '', option: 'redis' }),
+	).toContain('did not confirm')
+	expect((await loadBoard(paths)).decisions.get(decision ?? '')?.answer?.option).toBe(answered)
 })
 
 test('a host that cannot ask cannot accept, and says which surface can', async () => {
@@ -402,7 +486,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(24)
+		expect((await client.listTools()).tools.length).toBe(25)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()

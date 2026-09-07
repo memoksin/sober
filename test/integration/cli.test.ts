@@ -161,9 +161,10 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	expect(sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')).toContain(
 		'no longer waiting on it',
 	)
-	// Answering is once: changing an answer is refused in M1, with a reason.
+	// Answering is once. Changing an answer is a different command, because it
+	// withdraws every brief built on the answer it replaces (§2.8).
 	expect(failed(created.dir, 'decide', 'session-store-k7f2', 'redis')).toContain(
-		'not in this version',
+		'goes through the impact preview',
 	)
 
 	// Nothing runs without an approved brief (PR-05-01, D26).
@@ -202,6 +203,39 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	// Accepted work is on the base branch, and the node's branch is gone.
 	expect(created.git('log', '--oneline', '-1')).toContain('sober: auth-api-k7f2')
 	expect(created.git('branch', '--list', 'sober/auth-api-k7f2')).toBe('')
+})
+
+/**
+ * DESIGN §2.8 on the surface with no dialog: the edit is one command that
+ * refuses with the fan-out, and a second carrying `--anyway` applies it — the
+ * vocabulary ADR 0032 gave `run`, against a different fan-out.
+ */
+test('changing an answer prints what it reaches, and the second command applies it', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	expect(sober(created.dir, 'status')).toContain('ready')
+
+	// Nothing was cut and nothing was written: the first command is the preview.
+	const refused = failed(created.dir, 'edit', 'session-store-k7f2', 'redis')
+	expect(refused).toContain('auth-api-k7f2')
+	expect(refused).toContain('loses its brief')
+	expect(refused).toContain('--anyway')
+	expect(sober(created.dir, 'status')).toContain('ready')
+
+	// The confirmation. §2.8's first row: the brief goes, and the node is briefed
+	// again against the answer that now stands.
+	expect(sober(created.dir, 'edit', 'session-store-k7f2', 'redis', '--anyway')).toContain(
+		'need briefs again',
+	)
+	expect(sober(created.dir, 'status')).toContain('needs-brief')
+	expect(sober(created.dir, 'brief', 'auth-api-k7f2')).toContain('Redis')
 })
 
 test('rejecting returns the node to the queue and carries the note into the next run', () => {

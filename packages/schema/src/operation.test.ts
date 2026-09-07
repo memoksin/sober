@@ -13,8 +13,11 @@ test('the catalogue is what PR-09-08 binds, so growing it is visible in review',
 	expect([...OPERATIONS].sort()).toMatchSnapshot()
 })
 
-test('editing an answered decision waits for the session that wires all three surfaces', () => {
-	expect(OPERATIONS).not.toContain('edit_decision')
+test('editing an answered decision is here, and it is one operation rather than two', () => {
+	// The preview is a read (`/read/impact`), and reads are not in the catalogue.
+	// So the fan-out costs the contract one entry, not two (ADR 0044).
+	expect(OPERATIONS).toContain('edit_decision')
+	expect(OPERATIONS).not.toContain('preview_impact')
 })
 
 test('accepting every green node is batching, not a state change of its own', () => {

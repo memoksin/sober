@@ -95,17 +95,33 @@ test('an open decision offers its options', () => {
 	expect(open.refusal).toBeNull()
 })
 
-test('an answered decision offers no options, and says why in the words the CLI uses', () => {
-	// The CLI refuses this with a reason (`every brief built on it would have to
-	// be withdrawn`). A screen that just greys the button out has replaced a
-	// reason with a shrug.
+/**
+ * §2.8 lifted this refusal: on the screen the preview *is* the screen, so an
+ * answered decision offers its options again rather than explaining why it
+ * cannot. What stops an accidental change is the preview in front of the save,
+ * not a screen that will not open.
+ */
+test('an answered decision offers its options again — the edit is this same screen', () => {
 	const answered = offer(
 		decision('d1', { answer: { option: 'redis', rationale: 'We run one.', by: 'me', at: AT } }),
 	)
 
 	expect(answered.kind).toBe('answered')
-	expect(answered.options).toEqual([])
-	expect(answered.refusal).toContain('withdrawn')
+	expect(answered.options).toHaveLength(2)
+	expect(answered.refusal).toBeNull()
+})
+
+test('the answer already given is marked, so re-picking it is not offered as a change', () => {
+	const answered = offer(
+		decision('d1', { answer: { option: 'redis', rationale: 'We run one.', by: 'me', at: AT } }),
+	)
+
+	expect(answered.options.find((one) => one.id === 'redis')?.chosen).toBe(true)
+	expect(answered.options.find((one) => one.id === 'cookie')?.chosen).toBe(false)
+})
+
+test('nothing is marked chosen on a decision nobody has answered', () => {
+	expect(offer(decision('d1')).options.every((one) => !one.chosen)).toBe(true)
 })
 
 test('a decision nobody has opened has nothing to choose between, and says so', () => {

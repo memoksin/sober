@@ -7,16 +7,16 @@ import type { Paths } from './paths.js'
 import { readDecision, readNode, writeDecision, writeNode } from './records.js'
 
 /**
- * Editing an answered decision is a fan-out, so it is previewed before it is
- * saved (D19) — and the preview is M3. In M1 the edit is **refused, with a
- * reason**: being unable to change an answer beats changing it without the
- * preview that exists to make the fan-out visible (ADR 0015).
+ * Answering is for a decision with no answer. Changing one that has an answer is
+ * a fan-out, so it is a different operation with a preview in front of it
+ * (`editDecision`, §2.8) — this refusal is what sends a caller there rather
+ * than letting `decide` quietly become an edit.
  */
 export class AnswerLockedError extends SoberError {
 	constructor(readonly id: string) {
 		super(
 			'answer-locked',
-			`${id} is already answered, and changing an answer is not in this version — every brief built on it would have to be withdrawn, and the preview that shows you which ones is not built yet`,
+			`${id} is already answered — changing it withdraws every brief built on it, so it goes through the impact preview: \`sober edit ${id} <option>\` shows you what it reaches before anything is written`,
 		)
 	}
 }
