@@ -31,7 +31,7 @@ import { createTempRepo, type TempRepo } from './fixture.js'
  * answers differently every time. Everything between SOBER and it — the
  * worktree, the setup command, the run record, the log, the kill — is real.
  */
-const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./fake-host.mjs', import.meta.url))}`
+const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
 
 const aNode = (title: string) => ({
 	title,
@@ -284,9 +284,11 @@ test('with no prompt given, the brief is built here — with any rejection above
 })
 
 test('a host that is not installed says so, and names the command it looked for', async () => {
-	expect(await checkHost('sober-no-such-host')).toMatchObject({
+	// A path, because SOBER reads which host it is talking to off the program
+	// name (`hosts.ts`) — a name it has no adapter for is a different refusal.
+	expect(await checkHost('/nonexistent/bin/claude')).toMatchObject({
 		ok: false,
-		reason: expect.stringContaining('sober-no-such-host'),
+		reason: expect.stringContaining('/nonexistent/bin/claude'),
 	})
 })
 

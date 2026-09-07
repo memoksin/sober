@@ -27,7 +27,7 @@ import { createTempRepo, type TempRepo } from './fixture.js'
  * warning at dispatch, and the queue that "approve and queue" was always
  * feeding. Real git, real child processes, the host faked (ADR 0014).
  */
-const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./fake-host.mjs', import.meta.url))}`
+const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
 
 let repo: TempRepo | undefined
 

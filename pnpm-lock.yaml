@@ -136,6 +136,8 @@ importers:
         specifier: ^0.3.16
         version: 0.3.24
 
+  packages/codex-plugin: {}
+
   packages/core:
     dependencies:
       '@besober/schema':
@@ -175,6 +177,8 @@ importers:
       zod:
         specifier: ^4.5.4
         version: 4.5.4
+
+  packages/opencode-plugin: {}
 
   packages/schema:
     dependencies:

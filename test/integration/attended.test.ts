@@ -30,7 +30,7 @@ import { createTempRepo, type TempRepo } from './fixture.js'
  * give, and `NO_HUMAN` is the sentence that fixed it. It has to keep being true
  * for every run nobody is watching, which is nearly all of them.
  */
-const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./fake-host.mjs', import.meta.url))}`
+const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
 
 const aNode = (title: string) => ({
 	title,

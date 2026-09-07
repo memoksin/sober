@@ -25,7 +25,7 @@ import {
 	writeNode,
 } from '@besober/core'
 
-const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('../test/integration/fake-host.mjs', import.meta.url))}`
+const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('../test/integration/hosts/claude.mjs', import.meta.url))}`
 const BRIEF = `# The auth API
 
 ## How to approach this

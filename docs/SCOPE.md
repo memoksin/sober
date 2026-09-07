@@ -37,6 +37,7 @@ If a proposed feature does not make one of these seven steps possible or correct
 | 13 | The first host plugin: MCP configuration, commands, one skill | 1–4 | How MUST #12 reaches a host, and how a session learns the loop without being told again every time. Added by ADR 0009. |
 | 14 | Live session view: watching a dispatched agent on the dashboard, and answering it | 5 | A dispatch is the longest and most expensive operation in the product, and it was the one thing the screen could not show. Moved from SHOULD by ADR 0046 — the new fact is the M3 gate's finding 4, which found the gap from inside the loop at the moment it costs most. |
 | 15 | Hook enforcement in the Claude Code plugin: an agent spawn that names a held node is denied | 3 | MUST #2 is the one hard block, and MUST #12 opened the hole in it — inside a session the decision was only advice. Moved from SHOULD by ADR 0047, on the fact that the host it ships for does honour hook definitions. |
+| 16 | Two more hosts, plugin and adapter each: Codex and OpenCode | 1–6 | One host is not an abstraction, it is a hard-coded invocation, and every host-shaped line in the product was written against Claude Code's. Moved from SHOULD by ADR 0048 — the new fact is that both now ship a skills directory and an MCP client, so the distance between them turned out to be four flags and three event shapes rather than a design. |
 
 Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision**, never a "gate" — and by ADR 0009 for the three host-facing terms: an **adapter** launches a host headless, a **plugin** is installed into a host, and **hook enforcement** is what a plugin does about a held node.
 
@@ -46,7 +47,9 @@ Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision*
 
 - AI distribution: allocating nodes by matching each contributor's role and focus
 - Chain claim: taking a whole dependency chain as one unit
-- Plugins for hosts beyond Claude Code (Codex, OpenCode, Cursor), and the dispatch adapters that go with them — **and the hook enforcement each one can carry**, which is where "host-dependent" is still true: Codex silently ignores hook definitions until a human runs `/hooks`, and OpenCode has no elicitation for plugins (`DESIGN.md` §2.9). A plugin that cannot deny says so on install rather than implying a guard it does not have
+- Cursor: its plugin, and the dispatch adapter that goes with it. Codex and OpenCode moved into MUST #16; Cursor did not, because its headless surface is the one of the three that has no released shape to read flags off (ADR 0048)
+- **Hook enforcement in the plugins beyond Claude Code**, which is where "host-dependent" is still true: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins (`DESIGN.md` §2.9). Both plugins ship saying so rather than implying a guard they do not have
+- **Attended dispatch beyond Claude Code.** `codex exec` and `opencode run` take one message and exit, so a run dispatched to either cannot be answered while it runs, and SOBER refuses an attended run there rather than seating somebody in front of a session that cannot hear them (ADR 0048)
 - Auditor — automated checks on a finished node, beyond the security scan that ADR 0002 moved into MUST #9
 - Answering a host's **tool-permission** prompts. MUST #14 is the conversation — the agent asks in a message and a human replies. A permission prompt travels a different way (`claude --permission-prompts host`, a control protocol to an SDK host), and it is a second protocol rather than a second button (ADR 0046)
 - An agent definition shipped in the plugin, beyond the skill

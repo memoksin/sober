@@ -1,5 +1,6 @@
 import { open } from 'node:fs/promises'
 import type { LogLine, LogWindow } from '@besober/schema'
+import { type Event, renderLine } from './hosts.js'
 import { readRun, runLog } from './local.js'
 import type { Paths } from './paths.js'
 
@@ -107,64 +108,19 @@ export const followRun = async (
 	}
 }
 
+/**
+ * Which host wrote the line is not asked, it is read: every adapter recognises
+ * its own event shape and returns null for the others (`hosts.ts`). A run
+ * started under one host therefore still renders after `dispatch.host` changes,
+ * and the log needs to carry no host of its own.
+ */
 const tailLine = (line: string): LogLine | null => {
-	let event: Event
 	try {
-		event = JSON.parse(line) as Event
+		return renderLine(JSON.parse(line) as Event)
 	} catch {
 		// Not JSON at all: the host's own stderr, which is the one thing a
 		// failing run always has and the last thing to hide from the person
 		// reading it.
 		return { kind: 'raw', text: line.trim() }
-	}
-
-	if (event.type === 'system' && event.subtype === 'init')
-		return { kind: 'started', text: 'session started' }
-
-	// What the human said, echoed back by the host under `--replay-user-messages`
-	// (ADR 0046). It is in the log so the transcript holds both halves: a
-	// conversation where only one side was recorded is not one anybody can audit
-	// afterwards, and the answers are the part nobody else can reconstruct.
-	if (event.type === 'user') {
-		const said = (event.message?.content ?? [])
-			.map((part) => (part.type === 'text' ? part.text?.trim() : null))
-			.filter((text): text is string => typeof text === 'string' && text.length > 0)
-		return said.length > 0 ? { kind: 'answer', text: said.join(' · ') } : null
-	}
-
-	if (event.type === 'assistant') {
-		const parts = event.message?.content ?? []
-		const rendered = parts
-			.map((part) =>
-				part.type === 'text'
-					? part.text?.trim()
-					: part.type === 'tool_use'
-						? `${part.name ?? 'tool'}`
-						: null,
-			)
-			.filter((text): text is string => typeof text === 'string' && text.length > 0)
-		const kind = parts.some((part) => part.type === 'tool_use') ? 'tool' : 'text'
-		return rendered.length > 0 ? { kind, text: rendered.join(' · ') } : null
-	}
-
-	if (event.type === 'result')
-		return {
-			kind: 'result',
-			text: event.is_error === true ? `failed: ${event.subtype ?? 'error'}` : 'finished',
-		}
-
-	return null
-}
-
-interface Event {
-	readonly type?: string
-	readonly subtype?: string
-	readonly is_error?: boolean
-	readonly message?: {
-		readonly content?: readonly {
-			readonly type?: string
-			readonly text?: string
-			readonly name?: string
-		}[]
 	}
 }

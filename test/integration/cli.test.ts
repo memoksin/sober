@@ -14,7 +14,7 @@ import { createTempRepo, type TempRepo } from './fixture.js'
  */
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 const SOBER = join(repoRoot, 'packages/cli/dist/sober.js')
-const FAKE_HOST = `${process.execPath} ${join(repoRoot, 'test/integration/fake-host.mjs')}`
+const FAKE_HOST = `${process.execPath} ${join(repoRoot, 'test/integration/hosts/claude.mjs')}`
 
 beforeAll(() => {
 	execFileSync(process.execPath, ['build.mjs'], { cwd: join(repoRoot, 'packages/cli') })

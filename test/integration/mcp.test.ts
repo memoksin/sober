@@ -103,7 +103,7 @@ const said = (result: unknown): string =>
 const call = async (client: Client, name: string, args: Record<string, unknown> = {}) =>
 	said(await client.callTool({ name, arguments: args }))
 
-const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./fake-host.mjs', import.meta.url))}`
+const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
 
 const board = async () => {
 	const created = createTempRepo()

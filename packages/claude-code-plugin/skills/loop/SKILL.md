@@ -3,6 +3,8 @@ description: How SOBER's loop works — the graph, the one hard block, briefs an
 user-invocable: false
 ---
 
+<!-- Generated from plugins/skills/loop/SKILL.md by scripts/build-plugins.mjs. Edit the source, then run `pnpm plugins`. -->
+
 # The loop
 
 SOBER plans work as a graph, then dispatches agents into it. One loop, always in this order:
@@ -31,11 +33,11 @@ A decision is a question whose answer changes the shape of more than one node. F
 
 Every node bound by an unanswered decision is held, and no amount of work routes around it. That is deliberate: the alternative is an agent guessing at an architectural choice and twenty files inheriting the guess.
 
-**The answer is the user's.** There is no tool that takes one. `decide` asks them and returns what they picked, one decision per call — never a list, never a summary followed by a single confirmation. If the host cannot ask, say so and point at `sober decide <id> <option>` on the command line. Do not pick for them, and do not treat their earlier remarks as an answer.
+**The answer is the user's.** There is no tool that takes one. `decide` asks them and returns what they picked, one decision per call — never a list, never a summary followed by a single confirmation. The question reaches them through this host's own way of putting one on screen — the same control that asks the user anything else — and `decide` is what opens it. If this host cannot ask, `decide` says so rather than guessing, and then you stop: the decisions are on the board and `sober decide <id> <option>` answers them on the command line. Do not pick for them, and do not treat their earlier remarks as an answer.
 
 Every option carries two things: why someone picks it, and **what it costs later**. Write both for this repository, not in general. That pair is the whole of what makes the choice theirs rather than yours.
 
-**The block reaches into this session.** This plugin installs a hook: an agent spawn whose description or prompt names a held node is denied, and the denial says which decision is unanswered. There is no way around it and no setting that turns it off — answer the decision. If you are told a spawn was denied, do not rephrase it to get past the guard; say what is held and offer `/sober-decide`.
+**The block reaches into this session.** This plugin installs a hook: an agent spawn whose description or prompt names a held node is denied, and the denial says which decision is unanswered. There is no way around it and no setting that turns it off — answer the decision. If you are told a spawn was denied, do not rephrase it to get past the guard; say what is held and offer `/sober:decide`.
 
 An answered decision cannot be changed in this version, and the tool says why: every brief built on it would have to be withdrawn, and the preview that shows which ones is not built yet.
 

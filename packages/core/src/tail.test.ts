@@ -150,3 +150,68 @@ test('an empty log renders nothing rather than a blank line', () => {
 	expect(tail('')).toEqual([])
 	expect(tail('\n\n')).toEqual([])
 })
+
+// --- The other two hosts. Every event below was recorded off a real
+// invocation at implementation time (BUILD-PLAN §6), never written from
+// memory: `codex exec --json` and `opencode run --format json`. ---
+
+test('a Codex run renders its start, its message, its command and its end', () => {
+	const rendered = tail(
+		log(
+			{ type: 'thread.started', thread_id: '01a07d3d-0fee-7e70-ac4f-ea76f7f0bf68' },
+			{ type: 'turn.started' },
+			{ type: 'item.completed', item: { id: 'item_2', type: 'agent_message', text: '  ok  ' } },
+			{
+				type: 'item.completed',
+				item: { id: 'item_3', type: 'command_execution', command: '/bin/zsh -lc ls', exit_code: 0 },
+			},
+			{ type: 'turn.completed', usage: { input_tokens: 22995, output_tokens: 5 } },
+		),
+	)
+	expect(rendered).toEqual([
+		{ kind: 'started', text: 'session started' },
+		{ kind: 'text', text: 'ok' },
+		{ kind: 'tool', text: '/bin/zsh -lc ls' },
+		{ kind: 'result', text: 'finished' },
+	])
+})
+
+test('a warning Codex prints about itself is shown, not swallowed', () => {
+	// It arrives as an item rather than on stderr, and it is the sentence that
+	// explains why a run behaved oddly — "Exceeded skills context budget" was
+	// the first one this adapter ever saw.
+	const rendered = tail(
+		log({
+			type: 'item.completed',
+			item: { id: 'item_1', type: 'error', message: 'Exceeded skills context budget.' },
+		}),
+	)
+	expect(rendered).toEqual([{ kind: 'raw', text: 'Exceeded skills context budget.' }])
+})
+
+test('an OpenCode run renders what it said and which tool it used', () => {
+	const rendered = tail(
+		log(
+			{ type: 'step_start', part: { type: 'step-start' } },
+			{ type: 'text', part: { type: 'text', text: "I'll run ls to list the files.\n" } },
+			{ type: 'tool_use', part: { type: 'tool', tool: 'bash', state: { status: 'completed' } } },
+			{ type: 'step_finish', part: { type: 'step-finish', reason: 'stop' } },
+		),
+	)
+	expect(rendered).toEqual([
+		{ kind: 'text', text: "I'll run ls to list the files." },
+		{ kind: 'tool', text: 'bash' },
+	])
+})
+
+test('one host’s events are never read as another’s', () => {
+	// Every log carries its own shape, so a run started under one host still
+	// reads after `dispatch.host` changes — and Claude Code's `type: "user"` is
+	// not OpenCode's `type: "text"`.
+	expect(tail(log({ type: 'text', part: { type: 'text', text: 'from opencode' } }))).toEqual([
+		{ kind: 'text', text: 'from opencode' },
+	])
+	expect(
+		tail(log({ type: 'assistant', message: { content: [{ type: 'text', text: 'from claude' }] } })),
+	).toEqual([{ kind: 'text', text: 'from claude' }])
+})

@@ -1,0 +1,10 @@
+{
+	"name": "@besober/opencode-plugin",
+	"version": "0.0.0",
+	"private": true,
+	"description": "SOBER for OpenCode: the MCP server and the five skills that teach the loop. The skills are generated — edit plugins/skills and run `pnpm plugins`.",
+	"type": "module",
+	"engines": {
+		"node": ">=22"
+	}
+}
