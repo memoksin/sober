@@ -410,7 +410,11 @@ Someone is put on the project by hand — `sober contributors add <handle>`, or 
 
 A claim is a **signal, not a lock** (D23, ADR 0005). SOBER warns; it never blocks. Enforcing exclusivity would need an authority SOBER does not have and does not want: the git host already decides who can push to the board branch, and an outside contributor forks and opens a pull request like anywhere else.
 
-Allocating nodes by matching a contributor's role and focus, and claiming a whole dependency chain as one unit, are v1.x (`SCOPE.md` SHOULD).
+**A run of linked nodes** is claimed and released in one act, named by its two ends — `sober claim auth-schema-m3q8..auth-ui-9x1p`, and the same string on the other two surfaces (ADR 0050). The run is every node lying on a path from the first to the second, which is what keeps a shared foundation everybody else is waiting on out of one person's claim.
+
+It is a claim on each node and nothing more: no record says "these were a run", so a node that lands inside one later, on a teammate's sync, is nobody's until the command is run again. A run crossing somebody else's node is refused once with the names, and the second call is the confirmation (§3.4's shape, ADR 0032). Giving it back never touches a node somebody else holds.
+
+Allocating nodes by matching a contributor's role and focus is v1.x (`SCOPE.md` SHOULD).
 
 ### 3.4 The same-files warning
 

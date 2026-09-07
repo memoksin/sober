@@ -28,6 +28,7 @@ const SOBER = join(repoRoot, 'packages/cli/dist/sober.js')
 
 let help = ''
 let tools: string[] = []
+let described: Record<string, string> = {}
 
 beforeAll(async () => {
 	execFileSync(process.execPath, ['build.mjs'], { cwd: join(repoRoot, 'packages/cli') })
@@ -41,7 +42,9 @@ beforeAll(async () => {
 		const client = new Client({ name: 'contract', version: '0.0.0' }, { capabilities: {} })
 		const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
 		await Promise.all([createServer(repo.dir).connect(serverSide), client.connect(clientSide)])
-		tools = (await client.listTools()).tools.map((one) => one.name)
+		const listed = (await client.listTools()).tools
+		tools = listed.map((one) => one.name)
+		described = Object.fromEntries(listed.map((one) => [one.name, one.description ?? '']))
 		await client.close()
 	} finally {
 		repo.cleanup()
@@ -85,4 +88,27 @@ test('no surface routes what an agent authors — planning stays in the session'
 		expect(Object.keys(covers)).not.toContain('propose')
 		expect(Object.keys(covers)).not.toContain('open_decision')
 	}
+})
+
+/**
+ * A run of linked nodes is not a new operation (ADR 0050) — it is `claim` and
+ * `release` over a set — so `OPERATIONS` does not grow and the checks above
+ * stay green whether or not any surface has it. That is exactly how parity
+ * would break silently here, so the run is named on each surface by hand.
+ */
+test('a run of linked nodes is claimed and released on every surface', async () => {
+	expect(help).toContain('from..to')
+	expect(described.claim).toContain('from..to')
+
+	const { OPS } = await import('@besober/server')
+	for (const operation of ['claim', 'release'] as const) {
+		const accepts = OPS[operation].accepts
+		expect(accepts.safeParse({ node: 'auth-api-k7f2..auth-ui-9x1p' }).success, operation).toBe(true)
+	}
+})
+
+test('every surface reads a run with the same parser, so the three cannot drift', async () => {
+	const { chainEnds } = await import('@besober/schema')
+
+	expect(chainEnds('auth-api-k7f2..auth-ui-9x1p')).toEqual(['auth-api-k7f2', 'auth-ui-9x1p'])
 })

@@ -147,3 +147,45 @@ export const dangling = (board: Board): DanglingEdge[] => {
 	}
 	return edges
 }
+
+/** Everything one node reaches, itself included, by following one direction. */
+const reaches = (next: (id: string) => readonly string[], start: string): Set<string> => {
+	const seen = new Set([start])
+	const walking = [start]
+	for (let id = walking.pop(); id !== undefined; id = walking.pop()) {
+		for (const found of next(id)) {
+			if (seen.has(found)) continue
+			seen.add(found)
+			walking.push(found)
+		}
+	}
+	return seen
+}
+
+/**
+ * The run between two nodes — every node lying on a path from `from` to `to`
+ * (ADR 0050). Not one path: a graph can hold several between the same pair,
+ * and all of them are the work between those two ends.
+ *
+ * Read as an intersection rather than by enumerating paths, which is what
+ * keeps it linear in the edges instead of exponential in them: a node is on
+ * some path exactly when `from` reaches it going forward and `to` reaches it
+ * going back.
+ *
+ * Empty when no path joins the two, which is a different fact from an end the
+ * board does not hold — the caller is what tells those apart, the way
+ * `claimChain` does.
+ *
+ * The order is `topological`'s, so the run reads in the order the work happens
+ * in, and a node caught in a cycle drops out of it — `findCycle` is what
+ * reports those.
+ */
+export const between = (nodes: ReadonlyMap<string, Node>, from: string, to: string): string[] => {
+	if (!nodes.has(from) || !nodes.has(to)) return []
+
+	const upstream = reaches((id) => nodes.get(id)?.dependsOn ?? [], to)
+	if (!upstream.has(from)) return []
+
+	const downstream = reaches((id) => dependents(nodes, id), from)
+	return topological(nodes).filter((id) => upstream.has(id) && downstream.has(id))
+}

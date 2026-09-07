@@ -546,3 +546,55 @@ test('a node that is done cannot be approved a second time', () => {
 	expect(said).toContain('is done')
 	expect(said).not.toContain('Start it with')
 })
+
+test('a run of linked nodes is taken, refused and given back from the terminal', async () => {
+	const repo = createTempRepo()
+	try {
+		const cli = (...args: string[]) => sober(repo.dir, ...args)
+		const as = (who: string) => execFileSync('git', ['config', 'user.name', who], { cwd: repo.dir })
+		const me = execFileSync('git', ['config', 'user.name'], {
+			cwd: repo.dir,
+			encoding: 'utf8',
+		}).trim()
+		cli('init', '--title', 'Acme', '--intent', 'Ship sign-in')
+		const open = (title: string) =>
+			/[a-z0-9-]+-[a-z0-9]{4}/.exec(cli('open', '--title', title))?.[0] as string
+
+		const foundation = open('db setup')
+		const schema = open('auth schema')
+		const api = open('auth api')
+		const ui = open('auth ui')
+		cli('bind', schema, '--depends-on', foundation)
+		cli('bind', api, '--depends-on', schema)
+		cli('bind', ui, '--depends-on', api)
+
+		const taken = cli('claim', `${schema}..${ui}`)
+		expect(taken).toContain('3 nodes are yours')
+		// The shared foundation is everybody's, so naming the ends is what keeps
+		// it out of one person's claim (ADR 0050).
+		expect(taken).not.toContain(foundation)
+		expect(cli('status')).not.toMatch(new RegExp(`${foundation}.*@`))
+
+		// A node in the middle that is somebody else's refuses the whole run.
+		as('Bob')
+		cli('claim', api)
+		as(me)
+		const refused = cli('claim', `${schema}..${ui}`)
+		expect(refused).toContain('1 of 3 nodes is already someone else')
+		expect(refused).toContain('--anyway')
+		expect(cli('status')).toContain('@Bob')
+
+		expect(cli('claim', `${schema}..${ui}`, '--anyway')).toContain('3 nodes are yours')
+
+		as('Bob')
+		cli('claim', api)
+		as(me)
+		const given = cli('release', `${schema}..${ui}`)
+		expect(given).toContain('2 nodes are nobody')
+		expect(given).toContain('left alone, because they are not yours')
+
+		expect(cli('claim', `${ui}..${schema}`)).toContain('nothing links')
+	} finally {
+		repo.cleanup()
+	}
+})

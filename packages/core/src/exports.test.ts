@@ -4,7 +4,7 @@ import { expect, test } from 'vitest'
 // updated without being read, so a count over the ceiling says so out loud.
 // The number moves with the number of consumers, by ADR (ADR 0028, 0029). What
 // shaves it is the weekly deletion pass, not the ceiling.
-const CEILING = 101
+const CEILING = 103
 
 test('core exports nothing new without a reviewer seeing it', async () => {
 	const names = Object.keys(await import('./index.js')).sort()

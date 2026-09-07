@@ -109,10 +109,13 @@ export {
 export { followRun, tail } from './tail.js'
 export {
 	assignNode,
+	type Chained,
 	type Claimed,
+	claimChain,
 	claimNode,
 	type Overlap,
 	OverlapError,
+	releaseChain,
 	releaseNode,
 } from './team.js'
 export {
