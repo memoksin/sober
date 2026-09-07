@@ -1,4 +1,13 @@
-import type { Handle, PullRequest, Review, ScanResult } from '@besober/schema'
+import type {
+	AuditResult,
+	CommandResult,
+	Criterion,
+	CriterionResult,
+	Handle,
+	PullRequest,
+	Review,
+	ScanResult,
+} from '@besober/schema'
 import { DEFAULT_CONFIG, readConfig } from './config.js'
 import { NotOnBoardError } from './errors.js'
 import { git, refExists } from './git.js'
@@ -40,7 +49,12 @@ export const reviewNode = async (
 		files: scan.files,
 		run: run?.id ?? null,
 		exit: run?.run.exit ?? null,
-		acceptance: record.brief?.acceptance ?? [],
+		// The criterion and what running it did, side by side (ADR 0049). Joined
+		// here rather than by each surface: the browser cannot import `core`, and
+		// three copies of an index join are three chances to read a `null` result
+		// as a pass.
+		acceptance: criterionResults(record.brief?.acceptance ?? [], run?.run.acceptance ?? []),
+		verify: run?.run.verify ?? null,
 		ci: await checksOf(paths, node),
 		pr: await pullRequestOf(paths, node),
 		uncommitted: await uncommittedIn(paths, node),
@@ -50,6 +64,35 @@ export const reviewNode = async (
 		// `core` — is looking at the same derivation as the terminal.
 		flagged: flagsOf(board, node).flagged,
 	}
+}
+
+const criterionResults = (
+	criteria: readonly Criterion[],
+	results: readonly (CommandResult | null)[],
+): readonly CriterionResult[] =>
+	// `?? null` and never `?? { exit: 0 }`: a list longer than its results is a
+	// run that ended before it got there, and the two are told apart nowhere
+	// else.
+	criteria.map((criterion, at) => ({ ...criterion, result: results[at] ?? null }))
+
+/**
+ * How the acceptance list reads right now, in the one word the `accepted` record
+ * keeps (ADR 0049). A node with no criteria is `none`; one criterion nobody
+ * could run makes the whole audit `did-not-run`, because a list is only as read
+ * as its least-read entry.
+ */
+const auditOf = async (paths: Paths, node: string): Promise<AuditResult> => {
+	const board = await loadBoard(paths)
+	const run = lastRun(board, node)
+	return auditResultOf(
+		criterionResults(board.nodes.get(node)?.brief?.acceptance ?? [], run?.run.acceptance ?? []),
+	)
+}
+
+export const auditResultOf = (criteria: readonly CriterionResult[]): AuditResult => {
+	if (criteria.length === 0) return 'none'
+	if (criteria.some((criterion) => criterion.result === null)) return 'did-not-run'
+	return criteria.every((criterion) => criterion.result?.exit === 0) ? 'passed' : 'failed'
 }
 
 const uncommittedIn = async (paths: Paths, node: string): Promise<string[]> => {
@@ -147,6 +190,10 @@ export const acceptWork = async (
 		// Recorded as it was at the moment a human accepted, including "the scan
 		// did not run" — `PR-09-06` exists so that case cannot be dropped.
 		scan: options.scan,
+		// Derived here rather than passed in like `scan`: three surfaces accept,
+		// and a field each of them has to remember to fill is a field that ends
+		// up saying "passed" on the one that forgot.
+		audit: await auditOf(paths, node),
 	})
 
 	if (through === 'pull-request') {

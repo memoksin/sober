@@ -10,7 +10,15 @@ export {
 	Option,
 } from './decision.js'
 export { Handle, ID_PATTERN, Id, Timestamp } from './id.js'
-export { Accepted, Claim, Dismissal, Node, SCAN_RESULTS, ScanResult } from './node.js'
+export {
+	Accepted,
+	type AuditResult,
+	Claim,
+	Dismissal,
+	Node,
+	SCAN_RESULTS,
+	ScanResult,
+} from './node.js'
 export {
 	AGENT_OPERATIONS,
 	type AgentOperation,
@@ -20,6 +28,7 @@ export {
 export { Project, SCHEMA_VERSION } from './project.js'
 export {
 	type Checks,
+	type CriterionResult,
 	type Finding,
 	type PullRequest,
 	type Review,

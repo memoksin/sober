@@ -26,7 +26,7 @@ describe('on a board', () => {
 			'auth-api-k7f2',
 			aNode({
 				title: 'The auth API',
-				accepted: { by: 'memoksin', at: AT, flagged: true, scan: 'clean' },
+				accepted: { by: 'memoksin', at: AT, flagged: true, scan: 'clean', audit: 'passed' },
 			}),
 		)
 		await writeDecision(paths, 'auth-model-k7f2', aDecision({}))

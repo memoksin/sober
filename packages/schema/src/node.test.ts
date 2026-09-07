@@ -61,6 +61,7 @@ test('accepted records the scan result, so a scan that did not run is never drop
 		at: '2026-08-27T12:00:00Z',
 		flagged: false,
 		scan: 'did-not-run',
+		audit: 'passed',
 	}
 
 	expect(Node.parse({ ...node, accepted }).accepted?.scan).toBe('did-not-run')

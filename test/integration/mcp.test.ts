@@ -413,6 +413,9 @@ test('review reads the scan, the criteria and the files; accept merges what the 
 	const review = await call(client, 'review', { node, base: 'main' })
 	expect(review).toContain('Scan: clean')
 	expect(review).toContain('The endpoints answer.')
+	// Nothing dispatched this work, so nothing ran the list — and the session is
+	// told that, rather than being handed a sentence to believe (ADR 0049).
+	expect(review).toContain('DID NOT RUN — The endpoints answer.')
 	expect(review).toContain('src/auth/token.ts')
 	expect(review).not.toContain('+export const sign')
 	expect(await call(client, 'review', { node, base: 'main', diff: true })).toContain(
@@ -1013,6 +1016,7 @@ test('a session reopens a finished node, and reopening does not run it', async (
 		at: '2026-09-06T03:00:00.000Z',
 		flagged: true,
 		scan: 'clean',
+		audit: 'passed',
 	})
 	expect(statusOf(await loadBoard(paths), node)).toBe('done')
 

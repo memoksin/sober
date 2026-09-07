@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { paths, writeDecision, writeNode } from '@besober/core'
+import type { Accepted } from '@besober/schema'
 import { type Served, serve } from '@besober/server'
 import { afterEach, beforeAll, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
@@ -378,7 +379,7 @@ test('the digest fetches only when the caller asks it to', async () => {
  * projection the canvas polls says which nodes to draw them on.
  */
 const flaggedBoard = async (
-	accepted: { by: string; at: string; flagged: boolean; scan: 'clean' } | null = null,
+	accepted: Accepted | null = null,
 ): Promise<ReturnType<typeof paths>> => {
 	const there = paths((repo as TempRepo).dir)
 	const at = '2026-09-06T00:00:00.000Z'
@@ -470,6 +471,7 @@ test('reopening un-finishes a node and refuses one that was never finished', asy
 			// what puts the node in §7.2's list rather than ending the flag.
 			flagged: true,
 			scan: 'clean',
+			audit: 'passed',
 		}),
 	})
 
@@ -491,6 +493,7 @@ test('a node opened for the fix arrives with no brief, bound to what it corrects
 			at: '2026-09-06T03:00:00.000Z',
 			flagged: true,
 			scan: 'clean',
+			audit: 'passed',
 		}),
 	})
 

@@ -111,7 +111,12 @@ const useFakeHost = (dir: string) => {
 
 const BRIEF = JSON.stringify({
 	approach: 'Add the endpoints, then the middleware.',
-	acceptance: [{ run: 'npm test', proves: 'The endpoints answer.' }],
+	// A command that exits 0 and one that is not installed: the review has to
+	// tell those apart, and telling them apart is the whole of ADR 0049.
+	acceptance: [
+		{ run: 'node -e "process.exit(0)"', proves: 'The endpoints answer.' },
+		{ run: 'sober-no-such-checker', proves: 'The middleware rejects an expired token.' },
+	],
 })
 
 test('init writes the board, the branch, and a setup command it detected', () => {
@@ -197,6 +202,15 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	const review = sober(created.dir, 'review', 'auth-api-k7f2')
 	expect(review).toContain('The endpoints answer.')
 	expect(review).toContain('rules: the bundled preset')
+	// The criteria ran and the review says so, one mark each. A checker nobody
+	// installed is `?` and never `✓` — the sentence beside it is the one thing
+	// the human approved as the definition of done (ADR 0049).
+	expect(review).toMatch(/✓ The endpoints answer\./)
+	expect(review).toMatch(/\? The middleware rejects an expired token\./)
+
+	// The list runs again against the work that is already there, without a
+	// second dispatch.
+	expect(sober(created.dir, 'audit', 'auth-api-k7f2')).toMatch(/✓ The endpoints answer\./)
 
 	sober(created.dir, 'accept', 'auth-api-k7f2')
 	expect(sober(created.dir, 'status')).toContain('done')

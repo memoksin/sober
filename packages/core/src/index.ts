@@ -5,6 +5,7 @@
 
 export { answerRun } from './answer.js'
 export { archiveDecision, archiveNode } from './archive.js'
+export { type Audited, auditNode } from './audit.js'
 export {
 	createBoardBranch,
 	detectSetup,

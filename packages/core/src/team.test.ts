@@ -49,7 +49,13 @@ test('a finished node is not in anyone’s way — its merge already happened', 
 	const nodes = board({
 		'auth-api-k7f2': claimed('alice', ['src/auth/**']),
 		'session-ui-m3q8': claimed('bob', ['src/auth/session.ts'], {
-			accepted: { by: 'alice', at: '2026-09-05T10:00:00.000Z', flagged: false, scan: 'clean' },
+			accepted: {
+				by: 'alice',
+				at: '2026-09-05T10:00:00.000Z',
+				flagged: false,
+				scan: 'clean',
+				audit: 'passed',
+			},
 		}),
 	})
 

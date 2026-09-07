@@ -158,10 +158,22 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 		if (review.pr !== null) lines.push(`draft #${review.pr.number}  ${review.pr.url}`)
 	}
 
+	if (review.verify !== null) lines.push('', `Verification exited ${review.verify.exit}.`)
+
 	if (review.acceptance.length > 0) {
-		lines.push('', '## What must be true when this is done')
+		lines.push('', '## What you asked it to prove')
+		// Three words, not two: a criterion nobody could run has not passed and
+		// has not failed, and only saying so keeps the list honest (ADR 0049).
 		for (const criterion of review.acceptance)
-			lines.push(`- ${criterion.proves}  —  \`${criterion.run}\``)
+			lines.push(
+				`- ${
+					criterion.result === null
+						? 'DID NOT RUN'
+						: criterion.result.exit === 0
+							? 'PASSED'
+							: `FAILED (exit ${criterion.result.exit})`
+				} — ${criterion.proves}  —  \`${criterion.run}\``,
+			)
 	}
 
 	lines.push('', '## Files', ...review.files.map((file) => `- ${file}`))

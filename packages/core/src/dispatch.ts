@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import type { CommandResult, RunExit } from '@besober/schema'
+import type { RunExit } from '@besober/schema'
+import { runAudit, unjudged } from './audit.js'
 import { renderBrief } from './brief.js'
 import { type Config, readConfig, readConfigFromBase } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
@@ -20,7 +21,7 @@ import {
 } from './local.js'
 import type { Paths } from './paths.js'
 import { type Published, publish } from './pr.js'
-import { readNode, readNodes } from './records.js'
+import { readNodes } from './records.js'
 import { finishRun, startRun } from './run.js'
 import { OverlapError, overlaps } from './team.js'
 import { addWorktree } from './worktree.js'
@@ -180,17 +181,16 @@ export const dispatch = async (
 		// every acceptance criterion the human approved, each in the node's own
 		// worktree. Both are read from the base (ADR 0019) — work under review
 		// does not get to write the test it is judged by.
+		//
+		// A run that did not finish is not judged, and says so criterion by
+		// criterion: nothing ran, and nothing ran is not nothing to run.
 		const judged =
 			result.exit === 'finished'
-				? {
-						verify: await judge(worktree.path, config.dispatch.verify),
-						acceptance: await Promise.all(
-							(await criteriaOf(paths, node)).map((criterion) =>
-								judge(worktree.path, criterion.run),
-							),
-						),
-					}
-				: {}
+				? await runAudit(paths, node, id, {
+						base: options.base,
+						verify: config.dispatch.verify,
+					})
+				: await unjudged(paths, node)
 
 		const run = await finishRun(paths, id, { ...result, ...judged })
 		return {
@@ -446,27 +446,4 @@ const published = async (paths: Paths, node: string, base: string): Promise<Publ
 		kind: 'skipped' as const,
 		reason: error.message,
 	}))
-}
-
-/**
- * One command, in the worktree, reduced to the one thing anyone reads later: the
- * exit code. `null` means it did not run, and never that it passed (ADR 0021) —
- * which is why a command that was never configured returns null rather than 0.
- *
- * A shell, like the setup command and for the same reason: the value is a shell
- * line a human wrote into their own config on the base ref.
- */
-const judge = (cwd: string, command: string | null): Promise<CommandResult | null> =>
-	command === null
-		? Promise.resolve(null)
-		: new Promise((resolve) => {
-				execFile(command, { cwd, shell: true, encoding: 'utf8' }, (error) => {
-					const code = (error as { code?: number } | null)?.code
-					resolve({ exit: error === null ? 0 : typeof code === 'number' ? code : 1 })
-				})
-			})
-
-const criteriaOf = async (paths: Paths, node: string) => {
-	const record = await readNode(paths, node)
-	return record.kind === 'ok' ? (record.value.brief?.acceptance ?? []) : []
 }

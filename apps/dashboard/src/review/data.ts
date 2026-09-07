@@ -1,4 +1,4 @@
-import type { Checks, Review } from '@besober/schema'
+import type { Checks, CriterionResult, Review } from '@besober/schema'
 
 /**
  * How loudly a line reads. Four, because "could not be read" needs a weight of
@@ -67,6 +67,18 @@ export const verdict = (review: Review): Verdict => {
 
 	return { tone: 'clean', headline: 'the scan is clean', warnings, decidable: true }
 }
+
+/**
+ * One acceptance criterion, in the three words it can honestly be in (ADR
+ * 0049). A criterion that could not run is not a failure and not a pass: it is
+ * the state the whole feature exists to stop rendering as either.
+ */
+export const criterionLine = (criterion: CriterionResult): Line =>
+	criterion.result === null
+		? { tone: 'alarm', text: 'did not run' }
+		: criterion.result.exit === 0
+			? { tone: 'clean', text: 'passed' }
+			: { tone: 'warn', text: `failed · exit ${criterion.result.exit}` }
 
 export interface Line {
 	readonly tone: Tone

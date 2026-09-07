@@ -2,7 +2,7 @@ import type { Review } from '@besober/schema'
 import { useState } from 'react'
 import { Overlay } from '../Overlay.js'
 import { pending } from '../pending.js'
-import { ciLine, type Tone, verdict } from './data.js'
+import { ciLine, criterionLine, type Tone, verdict } from './data.js'
 
 const COLOUR: Record<Tone, string> = {
 	clean: 'var(--status-ready)',
@@ -155,14 +155,18 @@ export const ReviewScreen = ({
 							What you asked it to prove
 						</h3>
 						<ul className="flex flex-col gap-1.5">
-							{review.acceptance.map((criterion) => (
-								<li key={criterion.run} className="text-[length:var(--text-sm)]">
-									<span className="text-[var(--ink-dim)]">{criterion.proves}</span>
-									<code className="ml-2 font-[family-name:var(--font-mono)] text-[var(--ink)]">
-										{criterion.run}
-									</code>
-								</li>
-							))}
+							{review.acceptance.map((criterion) => {
+								const said = criterionLine(criterion)
+								return (
+									<li key={criterion.run} className="text-[length:var(--text-sm)]">
+										<span style={{ color: COLOUR[said.tone] }}>{said.text}</span>
+										<span className="ml-2 text-[var(--ink-dim)]">{criterion.proves}</span>
+										<code className="ml-2 font-[family-name:var(--font-mono)] text-[var(--ink-faint)]">
+											{criterion.run}
+										</code>
+									</li>
+								)
+							})}
 						</ul>
 					</section>
 				)}

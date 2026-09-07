@@ -6,7 +6,7 @@ import { hook } from './hook.js'
 import { widen } from './name.js'
 import { bold, columns, dim, fail, say } from './out.js'
 import { listConflicts, resolve } from './resolve.js'
-import { accept, acceptGreen, archive, reject, review } from './review.js'
+import { accept, acceptGreen, archive, audit, reject, review } from './review.js'
 import { status } from './status.js'
 import { sync } from './sync.js'
 import { assign, claim, contributors, release } from './team.js'
@@ -67,6 +67,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		'Review',
 		[
 			['review <node>', 'the scan, the criteria, and the diff'],
+			['audit <node>', 'run the acceptance list again against the work that is there'],
 			['accept <node>', 'land it — merge, and the node is done'],
 			['accept --green', 'land every node whose checks are all clean'],
 			['reject <node> -m "…"', 'send it back with what was wrong'],
@@ -134,6 +135,7 @@ const NAMES_A_RECORD = new Set([
 	'logs',
 	'say',
 	'review',
+	'audit',
 	'accept',
 	'reject',
 	'resolve',
@@ -236,6 +238,8 @@ const main = async (): Promise<void> => {
 			return logs(need('node'))
 		case 'review':
 			return review(need('node'), values.base, values.diff === true)
+		case 'audit':
+			return audit(need('node'), values.base)
 		case 'accept':
 			return values.green === true ? acceptGreen(values.base) : accept(need('node'), values.base)
 		case 'reject': {

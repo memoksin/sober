@@ -31,7 +31,7 @@ const board = (
 
 test('accepted is done, and nothing outranks it', () => {
 	const node = aNode({
-		accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean' },
+		accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
 		dependsOn: ['missing-node-x9y8'],
 	})
 
@@ -85,7 +85,9 @@ test('an unfinished dependency blocks, and blocked outranks held', () => {
 })
 
 test('held is exactly when the upstream is finished and an answer is missing', () => {
-	const done = aNode({ accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean' } })
+	const done = aNode({
+		accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
+	})
 	const nodes = { up: done, down: aNode({ dependsOn: ['up'], decisions: ['auth-model-k7f2'] }) }
 
 	expect(statusOf(board(nodes, {}, false), 'down')).toBe('held')
@@ -181,7 +183,9 @@ test('a decision that was archived is still what the node waits on, and says so'
 })
 
 test('a blocked node is waiting on the upstream nodes that are not accepted', () => {
-	const done = aNode({ accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean' } })
+	const done = aNode({
+		accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
+	})
 	const node = aNode({ dependsOn: ['b', 'c'] })
 
 	expect(waitingOn(board({ a: node, b: done, c: aNode({}) }), 'a')).toEqual([

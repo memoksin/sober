@@ -1,4 +1,5 @@
 import type { Accepted, ScanResult } from './node.js'
+import type { CommandResult } from './run.js'
 
 /**
  * The six named signals of ADR 0011, as a vocabulary. The rules that look for
@@ -65,6 +66,21 @@ export type Checks =
  * interface in the dashboard would let the promise that no surface can render a
  * review the others cannot come quietly untrue.
  */
+/**
+ * One acceptance criterion and what running it did (ADR 0049). The criterion
+ * without its result is the review this feature replaced: a list of sentences a
+ * human was asked to believe.
+ *
+ * `result` is `null` when the command did not run — never that it passed. That
+ * is the scan's rule (`PR-09-06`, ADR 0021) and it matters more here, because a
+ * criterion is the thing the human approved as the definition of done.
+ */
+export interface CriterionResult {
+	readonly run: string
+	readonly proves: string
+	readonly result: CommandResult | null
+}
+
 export interface Review {
 	readonly node: string
 	readonly scan: ScanReport
@@ -73,7 +89,13 @@ export interface Review {
 	/** The run being reviewed, or null when nothing has run yet. */
 	readonly run: string | null
 	readonly exit: string | null
-	readonly acceptance: readonly { readonly run: string; readonly proves: string }[]
+	readonly acceptance: readonly CriterionResult[]
+	/**
+	 * `dispatch.verify`, when the project configures one. `null` is "it did not
+	 * run", which on this field is the ordinary case: most projects configure
+	 * nothing, and a check nobody asked for is not a check that failed.
+	 */
+	readonly verify: CommandResult | null
 	/** CI, when there is a pull request to read it from (§6.1). */
 	readonly ci: Checks
 	/** The node's draft pull request, when one was opened. */
