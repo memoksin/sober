@@ -13,11 +13,11 @@ argument-hint: "[node id] — or nothing, to take the first that is ready"
 
 Read the board (`board`). Pick the node: $ARGUMENTS if it names one, otherwise the first that is **ready**, or the first that is **needs-brief** if none is ready yet.
 
-If nothing can move, say what everything is waiting on and stop. A node held by a decision needs `/sober-decide`, not a workaround.
+If nothing can move, say what everything is waiting on and stop. A node held by a decision needs `/sober:decide`, not a workaround.
 
 Then, for that one node:
 
-1. **Brief.** Read the node and the repository, and write the approach with `write_brief`: how you would do it, in this codebase, naming real files. With it, the acceptance list — each entry a command that can actually be run here and what passing it proves. A criterion nobody can run is not a criterion.
+1. **Brief.** `/sober:brief` is this step on its own, for when the brief is all that is wanted. Here: read the node and the repository, and write the approach with `write_brief`: how you would do it, in this codebase, naming real files. With it, the acceptance list — each entry a command that can actually be run here and what passing it proves. A criterion nobody can run is not a criterion.
 
 2. **Approve.** Show the user the approach and the criteria, then call `approve`. That tool asks them; you cannot approve on their behalf, and nothing runs without it.
 

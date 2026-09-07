@@ -19,8 +19,22 @@ export const ERROR_CODES = [
 	'answer-locked',
 	'no-such-option',
 	'no-brief',
+	'accepted-already',
 	'no-board',
 	'cycle',
+	'schema',
+	'overlap',
+	// The impact preview's refusal (§2.8): the fan-out was printed and nothing
+	// was written, which is a state the surfaces branch on rather than a crash.
+	'impact',
+	// DESIGN §7.2's three actions, each with the one state it refuses. Named
+	// for what is missing, like `no-brief` and `no-board` above.
+	'no-reason',
+	'no-title',
+	'not-finished',
+	// A node the screen asked to watch that has never been dispatched. There is
+	// no log to open, and saying so is the whole of the fix (ADR 0046).
+	'no-run',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

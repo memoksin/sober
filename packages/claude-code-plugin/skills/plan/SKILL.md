@@ -33,4 +33,4 @@ Plan it as a graph on the SOBER board. Work in this order and do not skip ahead.
 
 7. Show the user what landed: the nodes in dependency order, and each open decision with its options. Then stop.
 
-Do not answer a decision, do not write a brief, and do not run anything. The next step is the user's: `/sober-decide`.
+Do not answer a decision, do not write a brief, and do not run anything. The next step is the user's: `/sober:decide`.

@@ -2,7 +2,7 @@ import { findRoot, loadBoard, paths as resolve, statusOf } from '@besober/core'
 import { decisionState } from '@besober/schema'
 
 /**
- * Hook enforcement (ADR 0009, ADR 0029): the plugin's guard against the one
+ * Hook enforcement (ADR 0009, ADR 0047): the plugin's guard against the one
  * thing SOBER cannot refuse from the outside. `core` will not dispatch a held
  * node and every surface honours that — but a human in a host session can tell
  * the agent to build it anyway, and there the decision is only advice.

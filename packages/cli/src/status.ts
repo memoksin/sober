@@ -1,5 +1,4 @@
-import { flagsOf, lastRun, openDecisions, statusOf, unbound } from '@besober/core'
-import { decisionState } from '@besober/schema'
+import { flagsOf, lastRun, openDecisions, statusOf, unbound, waitingOn } from '@besober/core'
 import { openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
 
@@ -17,6 +16,7 @@ const COLOUR: Record<string, ((text: string) => string) | undefined> = {
 	blocked: dim,
 	held: magenta,
 	'needs-brief': blue,
+	'needs-approval': blue,
 }
 
 /**
@@ -53,6 +53,7 @@ export const status = async (only?: string): Promise<void> => {
 			`  ${(COLOUR[state] ?? dim)(state)}`,
 			cyan(id),
 			node?.title ?? '',
+			who(node),
 			flags.lastRunFailed ? red('last run failed') : waiting(board, id),
 		]
 	})
@@ -76,25 +77,36 @@ export const status = async (only?: string): Promise<void> => {
 	}
 }
 
-/** The one thing a reader wants beside a held or blocked node: what it is waiting for. */
+/**
+ * Who is on it. A claim is a fact and an assignment is a plan (§3.3), so the
+ * two never read the same: one is a name, the other is a name it is heading to.
+ */
+const who = (
+	node: { claim: { by: string } | null; assignee: string | null } | undefined,
+): string => {
+	if (node?.claim == null) return node?.assignee == null ? '' : dim(`→ ${node.assignee}`)
+	// Someone else doing what was planned for another person is the one thing
+	// here a reader has to see; hiding the plan behind the fact loses it.
+	const plan =
+		node.assignee != null && node.assignee !== node.claim.by ? ` (for ${node.assignee})` : ''
+	return dim(`@${node.claim.by}${plan}`)
+}
+
+/**
+ * The one thing a reader wants beside a held or blocked node: what it is
+ * waiting for. `core` decides what that is (it is a fact about the board); this
+ * decides how a terminal says it, which is one kind at a time — a column is not
+ * a panel, and "waiting on a decision and two nodes" is not a column's sentence.
+ */
 const waiting = (board: Awaited<ReturnType<typeof readBoard>>, id: string): string => {
-	const node = board.nodes.get(id)
-	if (node === undefined) return ''
+	const held = waitingOn(board, id)
+	const first = held[0]
 
-	const held = node.decisions
-		.filter((decision) => {
-			const record = board.decisions.get(decision)
-			return record === undefined || decisionState(record) !== 'answered'
-		})
-		// An archived decision is not in the open list, so a node held by one
-		// would otherwise be waiting on something nothing offers to answer.
-		.map((decision) =>
-			board.archivedDecisions.has(decision) ? `${decision} (archived)` : decision,
-		)
-	if (held.length > 0) return dim(`waiting on ${held.join(', ')}`)
-
-	const blocked = node.dependsOn.filter((dep) => board.nodes.get(dep)?.accepted == null)
-	if (blocked.length > 0) return dim(`waiting on ${blocked.join(', ')}`)
+	if (first !== undefined) {
+		const same = held.filter((one) => one.kind === first.kind)
+		const names = same.map((one) => (one.archived ? `${one.id} (archived)` : one.id))
+		return dim(`waiting on ${names.join(', ')}`)
+	}
 
 	const run = lastRun(board, id)
 	return run !== null && run.run.exit === null ? dim(`run ${run.id}`) : ''

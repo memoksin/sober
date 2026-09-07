@@ -8,6 +8,7 @@ import {
 	HostError,
 	initBoard,
 	type Paths,
+	readNodes,
 	readRuns,
 	rejectWork,
 	runLog,
@@ -41,7 +42,10 @@ const aNode = (title: string) => ({
 	files: ['src/auth.ts'],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: '2026-09-04T00:00:00.000Z',
 })
 
@@ -54,7 +58,23 @@ afterEach(() => {
 	delete process.env.FAKE_HOST_HANG
 	delete process.env.FAKE_HOST_LOGGED_OUT
 	delete process.env.FAKE_HOST_WRITE
+	delete process.env.FAKE_HOST_COMMIT
+	delete process.env.SOBER_GH
+	delete process.env.FAKE_GH_STATE
 })
+
+const FAKE_GH = fileURLToPath(new URL('./fake-gh.mjs', import.meta.url))
+
+/** Points SOBER at a `gh` that touches no network, and says where it wrote. */
+const fakeGh = (paths: Paths): string => {
+	const state = join(paths.local, 'fake-gh.json')
+	process.env.SOBER_GH = `${process.execPath} ${FAKE_GH}`
+	process.env.FAKE_GH_STATE = state
+	return state
+}
+
+const ghCalls = (state: string): string[][] =>
+	existsSync(state) ? JSON.parse(readFileSync(state, 'utf8')).calls : []
 
 const board = async (settings: Record<string, unknown> = {}): Promise<Paths> => {
 	const created = createTempRepo()
@@ -107,6 +127,18 @@ test('a dispatch runs the host in the node’s worktree and records how it exite
 	// the worktree for the scan to report as an undeclared file.
 	expect(readFileSync(written, 'utf8')).toContain('Sign in and sign out.')
 	expect(existsSync(join(result.worktree, 'brief.md'))).toBe(false)
+})
+
+test('starting work claims the node, so a teammate sees who is on it', async () => {
+	const paths = await board()
+	expect((await readNodes(paths)).records.get('auth-api-k7f2')?.claim).toBeNull()
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	// git's `user.name` in the fixture repository — the same name every other
+	// surface attributes with (DESIGN §3.3, ADR 0030).
+	const after = (await readNodes(paths)).records.get('auth-api-k7f2')
+	expect(after?.claim?.by).toBe('SOBER Test')
 })
 
 test('the raw log is kept, and the tail renders it without the host’s own noise', async () => {
@@ -213,7 +245,9 @@ test('stopping a run that has already ended is not an error, and marks nothing',
 test('a wave stops queueing after the first run that does not finish', async () => {
 	const paths = await board({ concurrency: 1 })
 	process.env.FAKE_HOST_FAIL = '1'
-	await writeNode(paths, 'billing-ui-p3x9', aNode('Billing'))
+	// Its own files: two nodes heading for one file is §3.4's warning, and this
+	// test is about the halt, not about that.
+	await writeNode(paths, 'billing-ui-p3x9', { ...aNode('Billing'), files: ['src/billing.ts'] })
 
 	const results = await dispatchWave(
 		paths,
@@ -276,3 +310,76 @@ const until = async (check: () => Promise<boolean> | boolean): Promise<void> => 
 	}
 	throw new Error('condition never became true')
 }
+
+test('a finished run pushes its branch and opens the node’s draft pull request', async () => {
+	const paths = await board()
+	const state = fakeGh(paths)
+	// A branch with no commit on it has no diff, so there is nothing to open a
+	// pull request over — the agent has to have committed something.
+	process.env.FAKE_HOST_COMMIT = 'src/auth.ts'
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	expect(result.pr).toMatchObject({ kind: 'opened' })
+	expect(ghCalls(state).some((call) => call[1] === 'create')).toBe(true)
+})
+
+test('with draftPr off, a run finishes and the git host is never called', async () => {
+	const paths = await board({ draftPr: false })
+	const state = fakeGh(paths)
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	expect(result.exit).toBe('finished')
+	expect(result.pr).toBeNull()
+	expect(ghCalls(state)).toEqual([])
+})
+
+test('a pull request that cannot be opened does not fail the run', async () => {
+	const paths = await board()
+	fakeGh(paths)
+	process.env.FAKE_GH_FAIL = '1'
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	expect(result.exit).toBe('finished')
+	expect(result.pr).toMatchObject({ kind: 'skipped' })
+	delete process.env.FAKE_GH_FAIL
+})
+
+test('a finished run is verified and its acceptance commands are run, in the worktree', async () => {
+	const paths = await board({ verify: 'exit 0' })
+	await writeBrief(paths, 'auth-api-k7f2', {
+		approach: 'Write it.',
+		acceptance: [
+			{ run: 'exit 0', proves: 'it signs in' },
+			{ run: 'exit 3', proves: 'it signs out' },
+		],
+	})
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	const run = (await readRuns(paths)).records.get(result.run)
+	expect(run?.verify).toEqual({ exit: 0 })
+	// Parallel to the brief's criteria, by index (ADR 0027).
+	expect(run?.acceptance).toEqual([{ exit: 0 }, { exit: 3 }])
+})
+
+test('a failed verification is recorded, and does not turn the run into a failure', async () => {
+	const paths = await board({ verify: 'exit 1' })
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	expect(result.exit).toBe('finished')
+	expect((await readRuns(paths)).records.get(result.run)?.verify).toEqual({ exit: 1 })
+})
+
+test('a run that did not finish verifies nothing — there is nothing to verify', async () => {
+	const paths = await board({ verify: 'exit 0' })
+	process.env.FAKE_HOST_FAIL = '1'
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	expect(result.exit).toBe('failed')
+	expect((await readRuns(paths)).records.get(result.run)?.verify).toBeNull()
+})

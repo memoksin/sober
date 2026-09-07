@@ -33,6 +33,17 @@ export const Run = z.strictObject({
 	error: z.string().nullable(),
 	verify: CommandResult.nullable(),
 	acceptance: z.array(CommandResult.nullable()),
+	/**
+	 * Whether a human was watching this one, and could therefore be asked
+	 * (ADR 0046). It decides what the host was launched with, so it is a fact
+	 * about the run rather than a preference: an attended run has an open stdin
+	 * and a system prompt saying somebody is there, and a headless one is told
+	 * the opposite.
+	 *
+	 * Defaulted rather than required, because a run record written before this
+	 * existed is still a run record and this file is read, not migrated (§5.5).
+	 */
+	attended: z.boolean().default(false),
 })
 
 export type Run = z.infer<typeof Run>

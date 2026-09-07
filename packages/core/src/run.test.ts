@@ -1,6 +1,3 @@
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { beforeEach, expect, test } from 'vitest'
 import { initBoard } from './board.js'
 import { NotOnBoardError } from './errors.js'
@@ -11,11 +8,12 @@ import { aNode } from './records.fixture.js'
 import { writeNode } from './records.js'
 import { acceptNode, finishRun, recordOutcome, startRun } from './run.js'
 import { statusOf } from './status.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 let paths: Paths
 
 beforeEach(async () => {
-	const root = await mkdtemp(join(tmpdir(), 'sober-run-'))
+	const root = await tmpRoot('sober-run-')
 	paths = (await initBoard(root, { title: 'Acme', intent: 'ship', constraints: [] })).paths
 	await writeNode(paths, 'auth-api-k7f2', aNode())
 })

@@ -1,6 +1,3 @@
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { Answer } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
 import { archiveDecision, archiveNode, deleteDecision, deleteNode, restoreNode } from './archive.js'
@@ -11,6 +8,7 @@ import type { Paths } from './paths.js'
 import { aDecision, aNode } from './records.fixture.js'
 import { readArchivedNodes, writeDecision, writeNode } from './records.js'
 import { statusOf } from './status.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 const AT = '2026-09-04T00:00:00.000Z'
 const answer: Answer = { option: 'redis', rationale: 'We run one.', by: 'memoksin', at: AT }
@@ -18,7 +16,7 @@ const answer: Answer = { option: 'redis', rationale: 'We run one.', by: 'memoksi
 let paths: Paths
 
 beforeEach(async () => {
-	const root = await mkdtemp(join(tmpdir(), 'sober-archive-'))
+	const root = await tmpRoot('sober-archive-')
 	paths = (await initBoard(root, { title: 'Acme', intent: 'ship', constraints: [] })).paths
 })
 

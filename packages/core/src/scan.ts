@@ -4,13 +4,13 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import type { ScanResult } from '@besober/schema'
+import type { Finding, ScanReport } from '@besober/schema'
 import { readConfigFromBase } from './config.js'
 import { type AddedFile, addedLines } from './diff.js'
 import { git, showFromRef } from './git.js'
 import type { Paths } from './paths.js'
 import { readNode } from './records.js'
-import { type Signal, type SignalFinding, signalsIn } from './signals.js'
+import { type SignalFinding, signalsIn } from './signals.js'
 import { branchOf, worktreeOf } from './worktree.js'
 
 const run = promisify(execFile)
@@ -21,27 +21,6 @@ const run = promisify(execFile)
  * it (§6.2). Nothing here auto-rejects and nothing hides a result — the human
  * still decides.
  */
-export interface Finding {
-	readonly signal: Signal | 'secret' | 'extra'
-	readonly file: string
-	readonly line: number | null
-	readonly message: string
-}
-
-export interface ScanReport {
-	/** What goes into the `accepted` record, so a scan that did not run is on it. */
-	readonly result: ScanResult
-	/** Which rule set ran, named — the review says so, because it can differ per project (ADR 0011). */
-	readonly ruleSet: string
-	readonly findings: readonly Finding[]
-	/**
-	 * A scanner that could not run does not disappear (`PR-09-06`). It renders
-	 * with the weight of a finding, which is why it is a field of its own rather
-	 * than a log line nobody reads.
-	 */
-	readonly didNotRun: readonly string[]
-	readonly files: readonly string[]
-}
 
 const RC_FILES = ['.secretlintrc.json', '.secretlintrc']
 

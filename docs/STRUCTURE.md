@@ -15,7 +15,7 @@ sober/
 │   ├── CODEOWNERS              # * @memoksin; the ruleset requires a code-owner review
 │   └── workflows/ci.yml
 ├── apps/
-│   └── dashboard/              # React + Vite. Browser only. Imports schema.
+│   └── dashboard/              # React + Vite + Tailwind, Cytoscape. Imports schema.
 ├── packages/
 │   ├── schema/                 # types + Zod, records and wire. THE CONTRACT.
 │   ├── core/                   # graph model, storage, status derivation, git

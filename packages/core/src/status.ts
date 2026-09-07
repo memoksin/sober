@@ -1,4 +1,4 @@
-import type { Decision, Run, Status } from '@besober/schema'
+import type { Decision, Run, Status, Waiting } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import type { Board } from './graph.js'
 
@@ -43,7 +43,8 @@ export const statusOf = (board: Board, id: string): Status | null => {
 	if (isRunning(run)) return 'running'
 	if (node.dependsOn.some((dependency) => !isDone(board, dependency))) return 'blocked'
 	if (node.decisions.some((decision) => !isAnswered(board, decision))) return 'held'
-	if (node.brief === null || node.brief.approval === null) return 'needs-brief'
+	if (node.brief === null) return 'needs-brief'
+	if (node.brief.approval === null) return 'needs-approval'
 	return 'ready'
 }
 
@@ -69,11 +70,46 @@ const isAnswered = (board: Board, id: string): boolean => {
 export interface Flags {
 	/** Local, from the run record: a teammate needs to know the node is unfinished. */
 	readonly lastRunFailed: boolean
+	/**
+	 * A bound decision moved after this node's brief was approved (§2.8). Not
+	 * "a finished node whose decision changed": the narrower reading let an
+	 * `in-review` node be accepted against an answer that had just changed, and
+	 * nothing on the board knew.
+	 */
+	readonly flagged: boolean
 }
 
 export const flagsOf = (board: Board, id: string): Flags => ({
 	lastRunFailed: lastRun(board, id)?.run.exit === 'failed',
+	flagged: stale(board, id),
 })
+
+/**
+ * Timestamps compare as strings because they are ISO-8601 and UTC (`Timestamp`),
+ * which is the property that makes them sortable without being parsed.
+ *
+ * An answer written at the same instant as the approval is not a change: a
+ * brief is rendered from the answers it was approved against.
+ *
+ * A dismissal moves the mark forward rather than clearing the flag (§7.2): the
+ * change it judged is settled, and the next one is a change nobody has judged.
+ * The later of the two is the mark, because §2.8's first row withdraws brief
+ * approval and it is approved again — an approval after a dismissal is the
+ * newer statement about what this node was built against.
+ */
+const stale = (board: Board, id: string): boolean => {
+	const node = board.nodes.get(id)
+	const approved = node?.brief?.approval
+	if (node === undefined || approved == null) return false
+
+	const judged =
+		node.dismissal !== null && node.dismissal.at > approved.at ? node.dismissal.at : approved.at
+
+	return node.decisions.some((decision) => {
+		const answered = board.decisions.get(decision)?.answer?.at
+		return answered !== undefined && answered > judged
+	})
+}
 
 /** What can start now (§3.2's whole point), in dependency order. */
 /**
@@ -86,6 +122,35 @@ export const openDecisions = (board: Board): [string, Decision][] =>
 	[...board.decisions].filter(
 		([id, decision]) => decisionState(decision) !== 'answered' && !board.archivedDecisions.has(id),
 	)
+
+/**
+ * What a node is waiting for — the one thing a reader wants beside a held or
+ * blocked node, and the question the panel exists to answer.
+ *
+ * Not the same ordering as `statusOf`. That reports `blocked` before `held`,
+ * because options generated against context that does not exist yet are worse
+ * than no options. This lists both, decisions first, because a decision is the
+ * one a human can act on right now.
+ */
+export const waitingOn = (board: Board, id: string): Waiting[] => {
+	const node = board.nodes.get(id)
+	if (node === undefined) return []
+
+	return [
+		...node.decisions
+			.filter((decision) => !isAnswered(board, decision))
+			.map(
+				(decision): Waiting => ({
+					kind: 'decision',
+					id: decision,
+					archived: board.archivedDecisions.has(decision),
+				}),
+			),
+		...node.dependsOn
+			.filter((dependency) => !isDone(board, dependency))
+			.map((dependency): Waiting => ({ kind: 'node', id: dependency, archived: false })),
+	]
+}
 
 export const ready = (board: Board): string[] =>
 	[...board.nodes.keys()].filter((id) => statusOf(board, id) === 'ready').sort()

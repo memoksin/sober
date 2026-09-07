@@ -1,16 +1,15 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { beforeEach, expect, test } from 'vitest'
 import { acquire, LockBusyError, withLock } from './lock.js'
 import { paths } from './paths.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 const WINDOWS = { staleSeconds: 60, waitSeconds: 1 }
 
 let board: ReturnType<typeof paths>
 
 beforeEach(async () => {
-	board = paths(await mkdtemp(join(tmpdir(), 'sober-lock-')))
+	board = paths(await tmpRoot('sober-lock-'))
 	await mkdir(board.local, { recursive: true })
 })
 

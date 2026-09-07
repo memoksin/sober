@@ -4,7 +4,12 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
 	test: {
 		projects: [
-			// 'apps/*' returns in phase 5, with the dashboard.
+			// Most of the dashboard's tests are logic and need no DOM: the
+			// projection becomes elements, the drag constraint moves positions,
+			// the glow is a string. The components that hold a rule do need one —
+			// a dismissal that refuses to send without a reason is a rule (ADR
+			// 0043) — so the project sets `happy-dom` in its own vite config.
+			'apps/*',
 			'packages/*',
 			{
 				// The integration project imports core's source, not its build:
@@ -14,6 +19,12 @@ export default defineConfig({
 					alias: {
 						'@besober/core': fileURLToPath(new URL('packages/core/src/index.ts', import.meta.url)),
 						'@besober/mcp': fileURLToPath(new URL('packages/mcp/src/index.ts', import.meta.url)),
+						'@besober/schema': fileURLToPath(
+							new URL('packages/schema/src/index.ts', import.meta.url),
+						),
+						'@besober/server': fileURLToPath(
+							new URL('packages/server/src/index.ts', import.meta.url),
+						),
 					},
 				},
 				test: {

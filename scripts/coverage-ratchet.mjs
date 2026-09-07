@@ -12,6 +12,9 @@ const SUMMARY = 'coverage/coverage-summary.json'
 const BASELINE = 'coverage-baseline.json'
 // A types-and-Zod package produces tests written to reach a number (STRUCTURE.md).
 const EXCLUDED = new Set(['schema', 'tsconfig'])
+// Read as a subtraction rather than as `pct < was - DROP_TOLERANCE`: a drop of
+// exactly the tolerance is allowed on paper and refused in binary floating
+// point, so the gate fired on the one drop it was written to let through.
 const DROP_TOLERANCE = 0.01
 // Below this the baseline is stale and has to be refreshed in the same commit,
 // or a rise today silently pays for a fall tomorrow.
@@ -20,7 +23,9 @@ const RISE_TOLERANCE = 1
 const percentages = (summary) => {
 	const totals = new Map()
 	for (const [file, data] of Object.entries(summary)) {
-		const name = file.replaceAll('\\', '/').match(/\/packages\/([^/]+)\//)?.[1]
+		// `apps/` as well as `packages/`: the dashboard is source like any other,
+		// and a group this misses is a group with no floor that still reads green.
+		const name = file.replaceAll('\\', '/').match(/\/(?:packages|apps)\/([^/]+)\//)?.[1]
 		if (!name || EXCLUDED.has(name)) continue
 		const running = totals.get(name) ?? { covered: 0, total: 0 }
 		running.covered += data.lines.covered
@@ -66,7 +71,7 @@ for (const [name, pct] of Object.entries(current)) {
 	const was = baseline[name]
 	if (was === undefined) {
 		failures.push(`${name}: new package at ${pct}% — run pnpm coverage:update`)
-	} else if (pct < was - DROP_TOLERANCE) {
+	} else if (was - pct > DROP_TOLERANCE + Number.EPSILON) {
 		failures.push(`${name}: ${was}% -> ${pct}% — coverage dropped`)
 	} else if (pct > was + RISE_TOLERANCE) {
 		failures.push(`${name}: ${was}% -> ${pct}% — run pnpm coverage:update and commit it`)

@@ -48,6 +48,8 @@ const node = (title, description, files, decisions = [], dependsOn = []) =>
 			files,
 			brief: null,
 			outcome: null,
+			assignee: null,
+			claim: null,
 			accepted: null,
 			createdAt: AT,
 		},

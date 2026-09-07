@@ -1,6 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { Run } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
 import { newId } from './id.js'
@@ -17,6 +15,7 @@ import {
 	writeRunPid,
 } from './local.js'
 import { paths } from './paths.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 let board: ReturnType<typeof paths>
 
@@ -31,10 +30,11 @@ const run = (node: string): Run => ({
 	error: null,
 	verify: null,
 	acceptance: [],
+	attended: false,
 })
 
 beforeEach(async () => {
-	board = paths(await mkdtemp(join(tmpdir(), 'sober-local-')))
+	board = paths(await tmpRoot('sober-local-'))
 })
 
 test('a run is one file, and its output is a second one beside it', async () => {

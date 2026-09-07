@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+/*
+ * The design system of ADR 0039, as tokens. Three layers: the primitives are
+ * the raw OKLCH values below, the semantic names are what a component reaches
+ * for, and a component that needs its own token defines it beside itself.
+ *
+ * OKLCH throughout, and not for fashion. Lightness there is perceptual, so a
+ * hue moves between themes by lightness alone and the greyscale gap between
+ * `ready` and `held` — the green-orange pair colour-blindness collapses — is a
+ * number rather than a hope. A hex here would end that argument quietly, which
+ * is why a test refuses one.
+ */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+	--font-ui: ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+	/* A tool, not a document. The scale stops at 24 because nothing here is
+	   marketing (ADR 0039 §3). */
+	--text-xs: 11px;
+	--text-sm: 12px;
+	--text-base: 13px;
+	--text-md: 15px;
+	--text-lg: 18px;
+	--text-xl: 24px;
+
+	--leading-tight: 1.35;
+	--leading-prose: 1.55;
+
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 10px;
+}
+
+/*
+ * Dark is the default and light is real (ADR 0039 §5). The page follows the
+ * operating system; `data-theme` on the root overrides it. There is no toggle
+ * in v1 and adding one is a line, because both themes are already here.
+ */
+:root {
+	--bg: oklch(0.16 0.008 260);
+	--surface: oklch(0.2 0.01 260);
+	--raised: oklch(0.245 0.012 260);
+	--line: oklch(0.3 0.012 260);
+	--line-soft: oklch(0.25 0.01 260);
+	--ink: oklch(0.93 0.005 260);
+	--ink-dim: oklch(0.68 0.008 260);
+	--ink-faint: oklch(0.5 0.008 260);
+	--edge: oklch(0.34 0.01 260);
+
+	/* Warm is yours. Blue and green are motion. Grey and violet are nothing to
+	   do. The families are the decision; the hues only carry them. */
+	--status-in-review: oklch(0.78 0.15 75);
+	--status-needs-approval: oklch(0.85 0.14 95);
+	--status-held: oklch(0.66 0.17 45);
+	--status-ready: oklch(0.74 0.16 150);
+	--status-running: oklch(0.7 0.14 235);
+	--status-blocked: oklch(0.52 0.07 300);
+	--status-needs-brief: oklch(0.58 0.02 250);
+	--status-done: oklch(0.42 0.01 260);
+
+	/* Never on the canvas: the one place colour is allowed to mean something
+	   other than status is confirming an action that cannot be undone. */
+	--danger: oklch(0.62 0.2 25);
+
+	/* How far past a node's own edge the light reaches, as a fraction of its
+	   radius. A fraction because nodes are not one size — `done` renders
+	   smaller and the canvas zooms — so a pixel value is a glow that is right
+	   once. */
+	--glow-extent: 0.45;
+	--glow-power: 1;
+	/* The rim every node carries: its own colour, one step towards the
+	   ground's opposite. An edge, not a new colour. */
+	--rim-mix: 30%;
+	--rim-to: white;
+}
+
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme="dark"]) {
+		--bg: oklch(0.985 0.002 260);
+		--surface: oklch(1 0 0);
+		--raised: oklch(0.965 0.003 260);
+		--line: oklch(0.9 0.004 260);
+		--line-soft: oklch(0.945 0.003 260);
+		--ink: oklch(0.22 0.008 260);
+		--ink-dim: oklch(0.5 0.008 260);
+		--ink-faint: oklch(0.66 0.008 260);
+		--edge: oklch(0.82 0.006 260);
+
+		--status-in-review: oklch(0.6 0.14 75);
+		--status-needs-approval: oklch(0.66 0.14 95);
+		--status-held: oklch(0.52 0.17 45);
+		--status-ready: oklch(0.55 0.15 150);
+		--status-running: oklch(0.52 0.14 235);
+		--status-blocked: oklch(0.48 0.09 300);
+		--status-needs-brief: oklch(0.6 0.02 250);
+		/* `done` inverts direction: recede is relative to the ground, not to a
+		   number. */
+		--status-done: oklch(0.78 0.01 260);
+
+		--danger: oklch(0.52 0.2 25);
+
+		/* A bloom is a dark-ground idiom; on light it smudges, so the same
+		   emphasis arrives denser rather than wider. */
+		--glow-power: 0.65;
+		--rim-mix: 22%;
+		--rim-to: black;
+	}
+}
+
+/* The explicit choice wins in both directions, so a toggle added later needs
+   nothing else. */
+[data-theme="light"] {
+	--bg: oklch(0.985 0.002 260);
+	--surface: oklch(1 0 0);
+	--raised: oklch(0.965 0.003 260);
+	--line: oklch(0.9 0.004 260);
+	--line-soft: oklch(0.945 0.003 260);
+	--ink: oklch(0.22 0.008 260);
+	--ink-dim: oklch(0.5 0.008 260);
+	--ink-faint: oklch(0.66 0.008 260);
+	--edge: oklch(0.82 0.006 260);
+
+	--status-in-review: oklch(0.6 0.14 75);
+	--status-needs-approval: oklch(0.66 0.14 95);
+	--status-held: oklch(0.52 0.17 45);
+	--status-ready: oklch(0.55 0.15 150);
+	--status-running: oklch(0.52 0.14 235);
+	--status-blocked: oklch(0.48 0.09 300);
+	--status-needs-brief: oklch(0.6 0.02 250);
+	--status-done: oklch(0.78 0.01 260);
+
+	--danger: oklch(0.52 0.2 25);
+
+	--glow-power: 0.65;
+	--rim-mix: 22%;
+	--rim-to: black;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	font: var(--text-base) / var(--leading-tight) var(--font-ui);
+	-webkit-font-smoothing: antialiased;
+}

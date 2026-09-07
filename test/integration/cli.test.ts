@@ -86,7 +86,10 @@ const seed = (dir: string) => {
 			files: ['src/auth/**'],
 			brief: null,
 			outcome: null,
+			assignee: null,
+			claim: null,
 			accepted: null,
+			dismissal: null,
 			createdAt: at,
 		}),
 	)
@@ -158,9 +161,10 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	expect(sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')).toContain(
 		'no longer waiting on it',
 	)
-	// Answering is once: changing an answer is refused in M1, with a reason.
+	// Answering is once. Changing an answer is a different command, because it
+	// withdraws every brief built on the answer it replaces (§2.8).
 	expect(failed(created.dir, 'decide', 'session-store-k7f2', 'redis')).toContain(
-		'not in this version',
+		'goes through the impact preview',
 	)
 
 	// Nothing runs without an approved brief (PR-05-01, D26).
@@ -199,6 +203,39 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	// Accepted work is on the base branch, and the node's branch is gone.
 	expect(created.git('log', '--oneline', '-1')).toContain('sober: auth-api-k7f2')
 	expect(created.git('branch', '--list', 'sober/auth-api-k7f2')).toBe('')
+})
+
+/**
+ * DESIGN §2.8 on the surface with no dialog: the edit is one command that
+ * refuses with the fan-out, and a second carrying `--anyway` applies it — the
+ * vocabulary ADR 0032 gave `run`, against a different fan-out.
+ */
+test('changing an answer prints what it reaches, and the second command applies it', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	expect(sober(created.dir, 'status')).toContain('ready')
+
+	// Nothing was cut and nothing was written: the first command is the preview.
+	const refused = failed(created.dir, 'edit', 'session-store-k7f2', 'redis')
+	expect(refused).toContain('auth-api-k7f2')
+	expect(refused).toContain('loses its brief')
+	expect(refused).toContain('--anyway')
+	expect(sober(created.dir, 'status')).toContain('ready')
+
+	// The confirmation. §2.8's first row: the brief goes, and the node is briefed
+	// again against the answer that now stands.
+	expect(sober(created.dir, 'edit', 'session-store-k7f2', 'redis', '--anyway')).toContain(
+		'need briefs again',
+	)
+	expect(sober(created.dir, 'status')).toContain('needs-brief')
+	expect(sober(created.dir, 'brief', 'auth-api-k7f2')).toContain('Redis')
 })
 
 test('rejecting returns the node to the queue and carries the note into the next run', () => {
@@ -240,7 +277,7 @@ test('rejecting returns the node to the queue and carries the note into the next
  * The hook's whole contract with a host is one JSON object in and one out, so
  * that is what these assert — on a real board, through the built binary. What
  * they do not assert is that the host obeys the object: that is the host's own
- * code, and nothing in this repository can reach it (ADR 0029).
+ * code, and nothing in this repository can reach it (ADR 0047).
  */
 const hook = (cwd: string, event: string, payload: unknown): Record<string, unknown> =>
 	JSON.parse(
@@ -327,4 +364,171 @@ test('a session is told at the start whether the guard is live', () => {
 	// A guard that is not there is silent, so the one that is there says so.
 	expect(context).toContain('hook enforcement is live')
 	expect(context).toContain('auth-api-k7f2')
+})
+
+test('a node heading for a claimed node’s files is refused, and the second command is the confirmation', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+
+	// A second node someone is already on, heading for one of the same files.
+	writeFileSync(
+		join(created.dir, '.sober/nodes/session-ui-m3q8.json'),
+		JSON.stringify({
+			title: 'The session panel',
+			description: '',
+			notes: '',
+			dependsOn: [],
+			decisions: [],
+			files: ['src/auth/session.ts'],
+			brief: null,
+			outcome: null,
+			assignee: null,
+			claim: { by: 'Bob', at: '2026-09-05T00:00:00.000Z' },
+			accepted: null,
+			dismissal: null,
+			createdAt: '2026-09-05T00:00:00.000Z',
+		}),
+	)
+
+	const refused = failed(created.dir, 'run', 'auth-api-k7f2')
+	expect(refused).toContain('session-ui-m3q8')
+	expect(refused).toContain('Bob')
+	expect(refused).toContain('--anyway')
+	// Nothing was cut: the refusal happens before the worktree.
+	expect(created.git('branch', '--list', 'sober/auth-api-k7f2')).toBe('')
+
+	expect(sober(created.dir, 'run', 'auth-api-k7f2', '--anyway')).toContain('finished')
+})
+
+test('accepting starts what was approved and queued behind it', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+
+	// A downstream node, approved ahead of time, with its own files.
+	writeFileSync(
+		join(created.dir, '.sober/nodes/session-ui-m3q8.json'),
+		JSON.stringify({
+			title: 'The session panel',
+			description: '',
+			notes: '',
+			dependsOn: ['auth-api-k7f2'],
+			decisions: [],
+			files: ['src/ui/**'],
+			brief: null,
+			outcome: null,
+			assignee: null,
+			claim: null,
+			accepted: null,
+			dismissal: null,
+			createdAt: '2026-09-05T00:00:00.000Z',
+		}),
+	)
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	for (const node of ['auth-api-k7f2', 'session-ui-m3q8'])
+		sober(created.dir, 'brief', node, '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	sober(created.dir, 'approve', 'session-ui-m3q8', '--queue')
+
+	process.env.FAKE_HOST_COMMIT = 'src/auth/token.ts'
+	sober(created.dir, 'run', 'auth-api-k7f2')
+
+	const accepted = sober(created.dir, 'accept', 'auth-api-k7f2')
+	expect(accepted).toContain('auth-api-k7f2 is done')
+	expect(accepted).toContain('1 queued node starting')
+	expect(accepted).toContain('session-ui-m3q8 finished')
+})
+
+test('a review of a node already accepted says so, and offers no second accept', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	process.env.FAKE_HOST_COMMIT = 'src/auth/token.ts'
+	sober(created.dir, 'run', 'auth-api-k7f2')
+	sober(created.dir, 'accept', 'auth-api-k7f2')
+
+	const read = sober(created.dir, 'review', 'auth-api-k7f2')
+	expect(read).toContain('done')
+	expect(read).not.toContain('sober accept auth-api-k7f2   ·')
+	// The branch went with the accept: no diff, and never "the diff is 1 lines".
+	expect(read).not.toContain('the diff is')
+})
+
+test('a clone that has no board yet is told which command takes the team’s', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	created.git('add', '-A')
+	created.git('commit', '-m', 'chore: sober')
+	created.git('push', '-q', '-u', 'origin', 'main')
+	sober(created.dir, 'sync')
+
+	const bob = join(dirname(created.dir), 'bob')
+	execFileSync('git', ['clone', '-q', created.remote, bob])
+
+	const said = failed(bob, 'status')
+	expect(said).toContain('sober init')
+	expect(said).toContain('sober-graph')
+	expect(said).not.toContain('run `sober init` at the root of your repository')
+})
+
+test('a prefix names a node, and an ambiguous one lists what it could have meant', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+
+	// M2 gate finding 7: nobody types `auth-api-k7f2` from memory.
+	expect(sober(created.dir, 'status', 'auth-api')).toContain('auth-api-k7f2')
+	expect(failed(created.dir, 'run', 'auth-api')).toContain('needs-brief')
+
+	// A second node sharing the prefix turns the guess back into a question.
+	writeFileSync(
+		join(created.dir, '.sober/nodes/auth-api-m3q8.json'),
+		readFileSync(join(created.dir, '.sober/nodes/auth-api-k7f2.json'), 'utf8'),
+	)
+	const said = failed(created.dir, 'run', 'auth-api')
+	expect(said).toContain('auth-api-k7f2')
+	expect(said).toContain('auth-api-m3q8')
+	expect(said).toContain('names only one')
+})
+
+test('a node that is done cannot be approved a second time', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+
+	// Written but not approved is its own wait now, not "needs-brief" again.
+	expect(sober(created.dir, 'status')).toContain('needs-approval')
+
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	process.env.FAKE_HOST_COMMIT = 'src/auth/token.ts'
+	sober(created.dir, 'run', 'auth-api-k7f2')
+	sober(created.dir, 'accept', 'auth-api-k7f2')
+
+	// M2 gate finding 3 and 4: this used to succeed and then tell you to run it.
+	const said = failed(created.dir, 'approve', 'auth-api-k7f2')
+	expect(said).toContain('is done')
+	expect(said).not.toContain('Start it with')
 })

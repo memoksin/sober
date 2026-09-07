@@ -1,5 +1,6 @@
-import type { Board, Review } from '@besober/core'
+import type { Board } from '@besober/core'
 import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
+import type { Node, Review } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 
 /**
@@ -25,7 +26,7 @@ export const renderBoard = (board: Board): string => {
 			const state = statusOf(board, id) ?? 'needs-brief'
 			const flags = flagsOf(board, id)
 			lines.push(
-				`- ${id} [${state}] ${node?.title ?? ''}${flags.lastRunFailed ? ' — the last run failed' : ''}${waiting(board, id)}`,
+				`- ${id} [${state}] ${node?.title ?? ''}${who(node)}${flags.lastRunFailed ? ' — the last run failed' : ''}${waiting(board, id)}`,
 			)
 		}
 	}
@@ -53,6 +54,13 @@ export const renderBoard = (board: Board): string => {
 		for (const broken of board.broken) lines.push(`- ${broken.file}: ${broken.reason}`)
 	}
 	return lines.join('\n')
+}
+
+/** A claim is a fact and an assignment is a plan (§3.3), so they never read the same. */
+const who = (node: Node | undefined): string => {
+	if (node?.claim != null) return ` — ${node.claim.by} is on it`
+	if (node?.assignee != null) return ` — for ${node.assignee}`
+	return ''
 }
 
 const waiting = (board: Board, id: string): string => {
@@ -102,10 +110,28 @@ export const renderDecisions = (board: Board): string => {
  * Review is checks, not reading (ADR 0022): the scan first, the criteria next,
  * the diff last and never beside the findings (§6.2).
  */
+/** A check that could not answer is never reported as one that passed (§6.2). */
+const ci = (checks: Review['ci']): string => {
+	switch (checks.kind) {
+		case 'passing':
+			return 'green'
+		case 'failing':
+			return `FAILED — ${checks.failed.join(', ')}`
+		case 'pending':
+			return 'still running'
+		case 'unavailable':
+			return `COULD NOT BE READ — ${checks.reason}`
+		default:
+			return 'no checks on this pull request'
+	}
+}
+
 export const renderReview = (review: Review, showDiff: boolean): string => {
 	const scan = review.scan
 	const lines = [
-		`# ${review.node}  (last run: ${review.exit ?? 'not run'})`,
+		review.accepted === null
+			? `# ${review.node}  (last run: ${review.exit ?? 'not run'})`
+			: `# ${review.node}  (done — accepted by ${review.accepted.by} on ${review.accepted.at.slice(0, 10)}, scan: ${review.accepted.scan})`,
 		'',
 		`## Scan: ${scan.result === 'clean' ? 'clean' : scan.result === 'findings' ? `${scan.findings.length} finding(s)` : 'DID NOT RUN'}`,
 		`rules: ${scan.ruleSet}   files: ${review.files.length}`,
@@ -125,6 +151,13 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 		)
 	if (scan.findings.length === 0 && scan.didNotRun.length === 0) lines.push('nothing to look at')
 
+	// Not gated on having a pull request: a host that cannot be reached hides
+	// both, and a CI line that disappears reads as a clean one (§6.2).
+	if (review.pr !== null || review.ci.kind !== 'none') {
+		lines.push('', `## CI: ${ci(review.ci)}`)
+		if (review.pr !== null) lines.push(`draft #${review.pr.number}  ${review.pr.url}`)
+	}
+
 	if (review.acceptance.length > 0) {
 		lines.push('', '## What must be true when this is done')
 		for (const criterion of review.acceptance)
@@ -132,11 +165,16 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 	}
 
 	lines.push('', '## Files', ...review.files.map((file) => `- ${file}`))
-	lines.push(
-		'',
-		showDiff
-			? `## Diff\n\n${review.diff}`
-			: `The diff is ${review.diff.split('\n').length} lines. Ask for it with diff: true.`,
-	)
+	// An empty diff is zero lines, never one: accept deletes the branch, so every
+	// review after one has nothing left to read.
+	if (review.diff !== '')
+		lines.push(
+			'',
+			showDiff
+				? `## Diff\n\n${review.diff}`
+				: `The diff is ${review.diff.split('\n').length} lines. Ask for it with diff: true.`,
+		)
+	if (review.accepted !== null)
+		lines.push('', 'This node is already done. There is nothing here to accept or reject.')
 	return lines.join('\n')
 }

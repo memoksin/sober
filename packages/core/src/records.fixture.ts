@@ -13,7 +13,10 @@ export const aNode = (overrides: Partial<Node> = {}): Node => ({
 	files: [],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: AT,
 	...overrides,
 })
@@ -42,5 +45,6 @@ export const aRun = (node: string, overrides: Partial<Run> = {}): Run => ({
 	error: null,
 	verify: null,
 	acceptance: [],
+	attended: false,
 	...overrides,
 })

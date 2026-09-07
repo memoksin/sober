@@ -1,8 +1,10 @@
 import {
+	answerRun,
 	currentBranch,
 	dispatch,
 	dispatchWave,
 	loadBoard,
+	OverlapError,
 	readRunOutput,
 	SoberError,
 	statusOf,
@@ -11,7 +13,22 @@ import {
 } from '@besober/core'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
+
+/**
+ * The confirmation §3.4 asks for, in the shape this surface has for one: the
+ * overlap is shown and the human answers. Short on purpose — a host truncates
+ * rather than wraps, so the list of ids goes in and the reasoning stays in the
+ * conversation (M1's gate, defects 8 and 9).
+ */
+const anyway = (server: McpServer, nodes: readonly string[]): Promise<boolean> =>
+	askYes(
+		server.server,
+		nodes.length === 1 ? `Start ${nodes[0]} anyway?` : `Start ${nodes.length} nodes anyway?`,
+		`${nodes.join(', ')} ${nodes.length === 1 ? 'is' : 'are'} heading for files another active node is heading for. Two nodes on one file is one merge, done twice.`,
+		'Yes, start them anyway',
+	)
 
 /**
  * Dispatch from the session that planned the work (§4). It is the same
@@ -52,11 +69,27 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 				}
 
 				if (nodes.length > 1) {
-					const results = await dispatchWave(
-						paths,
-						nodes.map((node) => ({ node, options: { base: ref } })),
-						ref,
-					)
+					const results = [
+						...(await dispatchWave(
+							paths,
+							nodes.map((node) => ({ node, options: { base: ref } })),
+							ref,
+						)),
+					]
+					// The same-files warning is a question for the human, and this
+					// surface can actually ask one (§3.4). One question for the whole
+					// wave: one window per node is how nobody reads any of them.
+					const met = results
+						.map((result, index) => (result instanceof OverlapError ? nodes[index] : null))
+						.filter((node): node is string => node !== null)
+					if (met.length > 0 && (await anyway(server, met)))
+						for (const node of met) {
+							const at = nodes.indexOf(node)
+							results[at] = await dispatch(paths, node, { base: ref, anyway: true }).catch(
+								(error: SoberError) => error,
+							)
+						}
+
 					const lines = results.map((result, index) =>
 						result instanceof SoberError
 							? `${nodes[index]}: ${result.message}`
@@ -70,17 +103,27 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 				}
 
 				const node = nodes[0] as string
-				const result = await dispatch(paths, node, {
-					base: ref,
-					// The progress notification is what keeps a run of several minutes
-					// from timing out in the host, and it is also the only thing the
-					// human sees while it works.
-					onLine: (line) => {
-						const [rendered] = tail(line)
-						if (rendered === undefined) return
-						void notify(extra, `${rendered.kind}: ${rendered.text}`)
-					},
+				const go = (confirmed: boolean) =>
+					dispatch(paths, node, {
+						base: ref,
+						anyway: confirmed,
+						// The progress notification is what keeps a run of several
+						// minutes from timing out in the host, and it is also the only
+						// thing the human sees while it works.
+						onLine: (line) => {
+							const [rendered] = tail(line)
+							if (rendered === undefined) return
+							void notify(extra, `${rendered.kind}: ${rendered.text}`)
+						},
+					})
+
+				const result = await go(false).catch(async (error: unknown) => {
+					if (!(error instanceof OverlapError)) throw error
+					if (!(await anyway(server, [node]))) return null
+					return go(true)
 				})
+				if (result === null)
+					return text(`${node} was not started. Nothing was cut and nothing was spent.`)
 				return text(
 					result.exit === 'finished'
 						? `${node} finished. Review it with the \`review\` tool before anything else.`
@@ -109,6 +152,25 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 				stopped
 					? `${node} was stopped. Its worktree is untouched; run it again when you are ready.`
 					: `${live[0]} had already ended.`,
+			)
+		}),
+	)
+
+	server.registerTool(
+		'answer',
+		{
+			title: 'Answer a run somebody is watching',
+			description:
+				'Reply to a node dispatched with watching on. Set done when there is nothing left to say, which lets the session finish instead of waiting.',
+			inputSchema: { node: z.string(), text: z.string(), done: z.boolean().optional() },
+		},
+		tool(async ({ node, text: said, done }: { node: string; text: string; done?: boolean }) => {
+			const paths = await openBoard(cwd)
+			const { run } = await answerRun(paths, node, said, { done })
+			return text(
+				done === true
+					? `Told ${node}, and let the session finish. Its output is in run ${run}.`
+					: `Told ${node}. The \`logs\` tool is what it says back.`,
 			)
 		}),
 	)

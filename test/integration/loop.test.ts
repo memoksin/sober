@@ -38,7 +38,10 @@ const node = (over: Record<string, unknown>) => ({
 	files: [],
 	brief: null,
 	outcome: null,
+	assignee: null,
+	claim: null,
 	accepted: null,
+	dismissal: null,
 	createdAt: AT,
 	...over,
 })

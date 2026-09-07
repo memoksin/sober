@@ -2,7 +2,9 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
+	AcceptedAlreadyError,
 	AnswerLockedError,
+	acceptNode,
 	acceptWork,
 	addWorktree,
 	answerDecision,
@@ -10,6 +12,7 @@ import {
 	archiveDecision,
 	createBoardBranch,
 	detectSetup,
+	dismissFlag,
 	initBoard,
 	loadBoard,
 	NoBriefError,
@@ -17,6 +20,7 @@ import {
 	openDecisions,
 	type Paths,
 	readFeedback,
+	readNodes,
 	rejectWork,
 	reviewNode,
 	statusOf,
@@ -71,7 +75,10 @@ const board = async (): Promise<Paths> => {
 		files: ['src/auth/**'],
 		brief: null,
 		outcome: null,
+		assignee: null,
+		claim: null,
 		accepted: null,
+		dismissal: null,
 		createdAt: AT,
 	})
 	created.git('add', '-A')
@@ -113,6 +120,30 @@ test('changing an answer is refused in M1, with the reason it is refused', async
 	await expect(
 		answerDecision(paths, DECISION, { option: 'redis', by: 'memoksin' }),
 	).rejects.toBeInstanceOf(AnswerLockedError)
+})
+
+test('a node that is already done cannot be approved again', async () => {
+	const paths = await board()
+	await writeBrief(paths, NODE, {
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await approveBrief(paths, NODE, { by: 'memoksin' })
+	await acceptNode(paths, NODE, {
+		by: 'memoksin',
+		at: '2026-09-05T21:06:47.698Z',
+		flagged: false,
+		scan: 'clean',
+	})
+
+	// M2 gate finding 3: this wrote a fresh approval onto an accepted node, so
+	// the record said the approval came after the acceptance.
+	await expect(approveBrief(paths, NODE, { by: 'memoksin' })).rejects.toBeInstanceOf(
+		AcceptedAlreadyError,
+	)
+	expect((await loadBoard(paths)).nodes.get(NODE)?.brief?.approval?.at).not.toBe(
+		'2026-09-05T21:06:47.698Z',
+	)
 })
 
 test('a node with no brief cannot be approved, and writing one clears the approval', async () => {
@@ -286,4 +317,107 @@ test('a node with nothing committed cannot be accepted, and says what is waiting
 	// And nothing was recorded: the node is not done.
 	expect(statusOf(await loadBoard(paths), NODE)).not.toBe('done')
 	expect((await loadBoard(paths)).nodes.get(NODE)?.accepted).toBeNull()
+})
+
+test('accepting a node whose branch is gone says so, rather than reporting a git argument', async () => {
+	const paths = await board()
+	await work(paths)
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	// Reachable through a merge: `accepted` can come back null on a clone whose
+	// branch accept already deleted (ADR 0013).
+	const record = (await readNodes(paths)).records.get(NODE)
+	if (record === undefined) throw new Error(`${NODE} vanished`)
+	await writeNode(paths, NODE, { ...record, accepted: null })
+
+	const refused = await acceptWork(paths, NODE, {
+		by: 'memoksin',
+		base: 'main',
+		scan: 'clean',
+	}).catch((error: Error) => error.message)
+	expect(refused).toContain('no branch to merge')
+	expect(refused).not.toContain('rev-list')
+})
+
+test('a review of an accepted node carries the acceptance, so a surface can say it is done', async () => {
+	const paths = await board()
+	await work(paths)
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	const found = await reviewNode(paths, NODE, 'main')
+	expect(found?.accepted).toMatchObject({ by: 'memoksin', scan: 'clean' })
+	// The branch is gone with the accept, so there is no diff left to read —
+	// and an empty diff is zero lines, never one.
+	expect(found?.diff).toBe('')
+})
+
+/**
+ * DESIGN §2.8's sentence, end to end: the flag renders in the review, and if
+ * the human accepts anyway the `accepted` record says so. That record is what
+ * puts a finished node in §7.2's stale list rather than letting the flag end
+ * at the accept.
+ *
+ * The path is a real one, not a fixture: `approveBrief` does not require a
+ * node's decisions to be answered, so a brief approved while the node is `held`
+ * and answered afterwards is flagged today — with no impact preview needed.
+ */
+test('a flag reaches the review, and survives being accepted anyway', async () => {
+	const paths = await board()
+	await writeBrief(paths, NODE, {
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await approveBrief(paths, NODE, { by: 'memoksin' })
+	await work(paths)
+
+	// Before the answer moves, there is nothing stale about it.
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(false)
+
+	await answerDecision(paths, DECISION, { option: 'redis', by: 'memoksin' })
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
+
+	const found = await reviewNode(paths, NODE, 'main')
+	await acceptWork(paths, NODE, {
+		by: 'memoksin',
+		base: 'main',
+		scan: found?.scan.result ?? 'did-not-run',
+		flagged: found?.flagged ?? false,
+	})
+
+	const record = (await loadBoard(paths)).nodes.get(NODE)
+	expect(record?.accepted?.flagged).toBe(true)
+	// Still flagged after the accept: that is what §7.2's list is made of.
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
+})
+
+test('dismissing a flag settles that answer, and the next change raises it again', async () => {
+	const paths = await board()
+	await writeBrief(paths, NODE, {
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await approveBrief(paths, NODE, { by: 'memoksin' })
+	await answerDecision(paths, DECISION, { option: 'redis', by: 'memoksin' })
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
+
+	await dismissFlag(paths, NODE, {
+		by: 'memoksin',
+		reason: 'The endpoints never read the session store.',
+	})
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(false)
+
+	// A second change to the same decision is a change nobody has judged. Editing
+	// an answered decision is still refused (ADR 0015), so the record is moved
+	// the way an impact-previewed edit will move it.
+	const record = (await loadBoard(paths)).decisions.get(DECISION)
+	await writeDecision(paths, DECISION, {
+		...(record as NonNullable<typeof record>),
+		answer: {
+			option: 'cookie',
+			rationale: '',
+			by: 'memoksin',
+			at: new Date(Date.now() + 1000).toISOString(),
+		},
+	})
+	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)
 })

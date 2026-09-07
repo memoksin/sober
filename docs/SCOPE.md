@@ -35,7 +35,8 @@ If a proposed feature does not make one of these seven steps possible or correct
 | 11 | Contributors, assignment and claim, travelling with the board | 8 | Two people cannot work in parallel without knowing who has what. Added by ADR 0005. |
 | 12 | MCP server: an agent inside a host session reads the board, proposes, opens decisions, writes brief approaches, and reviews | 1–7 | Three of the MUSTs above are agent work, and this is where that work happens — in the session the user already opened, with the repository already in context. Moved from SHOULD by ADR 0009. |
 | 13 | The first host plugin: MCP configuration, commands, one skill | 1–4 | How MUST #12 reaches a host, and how a session learns the loop without being told again every time. Added by ADR 0009. |
-| 14 | Hook enforcement in the Claude Code plugin: an agent spawn that names a held node is denied | 3 | MUST #2 is the one hard block, and MUST #12 opened the hole in it — inside a session the decision was only advice. Moved from SHOULD by ADR 0029, on the fact that the host it ships for does honour hook definitions. |
+| 14 | Live session view: watching a dispatched agent on the dashboard, and answering it | 5 | A dispatch is the longest and most expensive operation in the product, and it was the one thing the screen could not show. Moved from SHOULD by ADR 0046 — the new fact is the M3 gate's finding 4, which found the gap from inside the loop at the moment it costs most. |
+| 15 | Hook enforcement in the Claude Code plugin: an agent spawn that names a held node is denied | 3 | MUST #2 is the one hard block, and MUST #12 opened the hole in it — inside a session the decision was only advice. Moved from SHOULD by ADR 0047, on the fact that the host it ships for does honour hook definitions. |
 
 Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision**, never a "gate" — and by ADR 0009 for the three host-facing terms: an **adapter** launches a host headless, a **plugin** is installed into a host, and **hook enforcement** is what a plugin does about a held node.
 
@@ -46,8 +47,8 @@ Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision*
 - AI distribution: allocating nodes by matching each contributor's role and focus
 - Chain claim: taking a whole dependency chain as one unit
 - Plugins for hosts beyond Claude Code (Codex, OpenCode, Cursor), and the dispatch adapters that go with them — **and the hook enforcement each one can carry**, which is where "host-dependent" is still true: Codex silently ignores hook definitions until a human runs `/hooks`, and OpenCode has no elicitation for plugins (`DESIGN.md` §2.9). A plugin that cannot deny says so on install rather than implying a guard it does not have
-- Live session view — watching a dispatched agent, answering its prompts
 - Auditor — automated checks on a finished node, beyond the security scan that ADR 0002 moved into MUST #9
+- Answering a host's **tool-permission** prompts. MUST #14 is the conversation — the agent asks in a message and a human replies. A permission prompt travels a different way (`claude --permission-prompts host`, a control protocol to an SDK host), and it is a second protocol rather than a second button (ADR 0046)
 - An agent definition shipped in the plugin, beyond the skill
 
 Each of these is a real feature. None of them is required for the loop to close once. That is the whole test.

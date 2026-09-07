@@ -1,8 +1,8 @@
-# 0029 — Hook enforcement is a MUST in the Claude Code plugin
+# 0047 — Hook enforcement is a MUST in the Claude Code plugin
 
 - Status: accepted
 - Date: 2026-09-07
-- Moves: SCOPE SHOULD → MUST #14
+- Moves: SCOPE SHOULD → MUST #15
 - Refines: ADR 0003, ADR 0006, ADR 0009, `DESIGN.md` §2.9
 
 ## Context
@@ -17,7 +17,7 @@ Against that stands what the hole costs. Every other MUST assumes the block hold
 
 ## Decision
 
-**MUST #14 — hook enforcement in the Claude Code plugin.** `hooks/hooks.json` declares two hooks, both calling `sober`, the binary `.mcp.json` already names:
+**MUST #15 — hook enforcement in the Claude Code plugin.** `hooks/hooks.json` declares two hooks, both calling `sober`, the binary `.mcp.json` already names:
 
 - `PreToolUse` on `Task` → `sober hook spawn`
 - `SessionStart` → `sober hook session`
@@ -42,7 +42,7 @@ The two alternatives were weighed and rejected. *Deny every spawn while anything
 
 ## Consequences
 
-- `SCOPE.md` gains MUST #14 and its SHOULD row is rewritten: what remains host-dependent is hook enforcement in the *other* plugins, not the concept.
+- `SCOPE.md` gains MUST #15 and its SHOULD row is rewritten: what remains host-dependent is hook enforcement in the *other* plugins, not the concept.
 - `DESIGN.md` §2.9 moves hook enforcement to v1 for Claude Code and documents the shape. ADR 0009's table is left as written — it recorded what was true then.
 - `packages/cli` gains `hook.ts` and one subcommand. `core` gains nothing, which is the point: the export ceiling does not move (ADR 0028).
 - The loop skill tells the agent the guard exists and that rephrasing past it is not a route.

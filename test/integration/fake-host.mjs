@@ -26,7 +26,44 @@ if (args[0] === 'auth') {
 
 const prompt = args[args.indexOf('-p') + 1] ?? ''
 
-if (process.env.FAKE_HOST_HANG === '1') {
+/**
+ * Attended mode (ADR 0046). Recorded off the same kind of real invocation as
+ * everything else here: `--input-format stream-json` keeps the session open,
+ * a user message arrives on stdin as one JSON line, `--replay-user-messages`
+ * echoes it back on stdout, and the process exits when stdin closes.
+ */
+if (args.includes('--input-format')) {
+	say({ type: 'system', subtype: 'init', session_id: 'fake' })
+	say({
+		type: 'assistant',
+		message: { content: [{ type: 'text', text: `working on: ${prompt.split('\n')[0]}` }] },
+	})
+	// The turn ends, and the session does not: this is the state a human is
+	// meant to answer into.
+	say({ type: 'result', subtype: 'success', is_error: false })
+
+	let buffer = ''
+	process.stdin.setEncoding('utf8')
+	process.stdin.on('data', (chunk) => {
+		buffer += chunk
+		const parts = buffer.split('\n')
+		buffer = parts.pop() ?? ''
+		for (const part of parts) {
+			if (part.trim() === '') continue
+			const message = JSON.parse(part)
+			// `--replay-user-messages`: what the human said goes back on stdout, so
+			// the run log holds both halves of the conversation.
+			say(message)
+			const text = message.message?.content?.[0]?.text ?? ''
+			say({
+				type: 'assistant',
+				message: { content: [{ type: 'text', text: `you said: ${text}` }] },
+			})
+			say({ type: 'result', subtype: 'success', is_error: false })
+		}
+	})
+	process.stdin.on('end', () => process.exit(0))
+} else if (process.env.FAKE_HOST_HANG === '1') {
 	// Holds the process open so a stop or a timeout has something to kill.
 	// SIGTERM is left at its default, which is what a killed host does.
 	say({ type: 'system', subtype: 'init', session_id: 'fake' })

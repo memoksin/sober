@@ -1,0 +1,413 @@
+import { useState } from 'react'
+import { pending } from '../pending.js'
+import type { Action, BoardRead } from './data.js'
+import { actions, held, nextMove } from './data.js'
+import { Flag } from './Flag.js'
+import { Inline, Markdown } from './markdown.js'
+
+/**
+ * One node, in full. The canvas answers "what is here and what touches what";
+ * this answers "what is this one, and why is it not moving".
+ *
+ * It floats over the canvas rather than sitting beside it. Taking width from
+ * the canvas would re-fit the graph, and every node on screen would move
+ * because somebody clicked one of them — the jump `sameShape` exists to
+ * prevent, arriving through the other door.
+ */
+export const Panel = ({
+	board,
+	id,
+	flagged,
+	onClose,
+	onPick,
+	onDecide,
+	onDo,
+	onDismiss,
+	onReopen,
+	onOpen,
+}: {
+	readonly board: BoardRead
+	readonly id: string
+	/**
+	 * Derived by `core` and read off the projection the canvas already polls
+	 * (§2.8). Not on the record — a flag is two timestamps compared, and a
+	 * second derivation in the browser is a second answer.
+	 */
+	readonly flagged: boolean
+	readonly onClose: () => void
+	readonly onPick: (id: string) => void
+	readonly onDecide: (id: string) => void
+	readonly onDo: (action: Action['does']) => Promise<void>
+	readonly onDismiss: (reason: string) => Promise<void>
+	readonly onReopen: () => Promise<void>
+	readonly onOpen: (title: string) => Promise<void>
+}): React.JSX.Element => {
+	const node = board.nodes.find((one) => one.id === id)
+
+	return (
+		<aside className="pointer-events-auto absolute top-0 right-0 bottom-0 z-20 flex w-[420px] max-w-full flex-col overflow-y-auto border-[var(--line)] border-l bg-[var(--surface)]">
+			{node === undefined ? (
+				<Gone id={id} onClose={onClose} />
+			) : (
+				<>
+					<header className="flex items-start gap-3 border-[var(--line)] border-b px-4 py-3">
+						<span
+							aria-hidden
+							className="mt-1.5 size-2.5 shrink-0 rounded-full"
+							style={{ background: `var(--status-${node.status ?? 'needs-brief'})` }}
+						/>
+						<div className="min-w-0 flex-1">
+							<h2 className="text-[length:var(--text-md)] text-[var(--ink)] leading-tight">
+								{node.title}
+							</h2>
+							<p className="mt-1 flex items-center gap-2 text-[length:var(--text-xs)]">
+								<span className="text-[var(--ink-dim)]">{node.status ?? 'unknown'}</span>
+								<code className="font-[family-name:var(--font-mono)] text-[var(--ink-faint)]">
+									{node.id}
+								</code>
+							</p>
+						</div>
+						<button
+							type="button"
+							onClick={onClose}
+							aria-label="Close"
+							className="-mr-1 rounded-[var(--radius-sm)] px-2 py-0.5 text-[var(--ink-faint)] hover:bg-[var(--raised)] hover:text-[var(--ink)]"
+						>
+							×
+						</button>
+					</header>
+
+					{/*
+					  Above the ordinary actions, because it is the reason the
+					  ordinary ones may be the wrong thing to do (§7.2).
+					*/}
+					<Flag
+						flagged={flagged}
+						dismissal={node.dismissal}
+						onDismiss={onDismiss}
+						onReopen={onReopen}
+						onOpen={onOpen}
+					/>
+
+					<Doing status={node.status} onDo={onDo} id={node.id} />
+
+					<div className="flex flex-col gap-5 px-4 py-4">
+						{node.description !== '' && <Markdown text={node.description} />}
+
+						<Waiting board={board} id={id} onPick={onPick} onDecide={onDecide} />
+
+						{node.brief !== null && (
+							<Section title="Brief">
+								{/*
+								  Written by an agent, and an agent writes markdown (M3's gate,
+								  finding 3). Rendered as elements, never as a string of HTML —
+								  the approach names real files in a real repository, and a
+								  repository contains angle brackets.
+								*/}
+								<Markdown text={node.brief.approach} />
+								<ul className="mt-2 flex flex-col gap-1.5">
+									{node.brief.acceptance.map((criterion) => (
+										<li key={criterion.run} className="text-[length:var(--text-sm)]">
+											<code className="font-[family-name:var(--font-mono)] text-[var(--ink)]">
+												{criterion.run}
+											</code>
+											<span className="ml-2 text-[var(--ink-faint)]">
+												<Inline text={criterion.proves} />
+											</span>
+										</li>
+									))}
+								</ul>
+								<p className="mt-2 text-[length:var(--text-xs)] text-[var(--ink-faint)]">
+									{node.brief.approval === null
+										? 'not approved yet'
+										: `approved by ${node.brief.approval.by}${node.brief.approval.queue ? ', queued' : ''}`}
+								</p>
+							</Section>
+						)}
+
+						{node.decisions.length > 0 && (
+							<Section title="Decisions">
+								{node.decisions.map((decision) => {
+									const record = board.decisions.find((one) => one.id === decision)
+									return (
+										<Line
+											key={decision}
+											onClick={() => onDecide(decision)}
+											mark={record?.answer == null ? 'var(--status-held)' : 'var(--status-done)'}
+											label={record?.question ?? decision}
+											note={record?.answer == null ? 'unanswered' : record.answer.option}
+										/>
+									)
+								})}
+							</Section>
+						)}
+
+						{node.dependsOn.length > 0 && (
+							<Section title="Depends on">
+								{node.dependsOn.map((upstream) => {
+									const other = board.nodes.find((one) => one.id === upstream)
+									return (
+										<Line
+											key={upstream}
+											onClick={() => onPick(upstream)}
+											mark={`var(--status-${other?.status ?? 'needs-brief'})`}
+											label={other?.title ?? upstream}
+											note={other?.status ?? 'not on this board'}
+										/>
+									)
+								})}
+							</Section>
+						)}
+
+						{node.files.length > 0 && (
+							<Section title="Files">
+								<ul className="flex flex-col gap-0.5">
+									{node.files.map((glob) => (
+										<li
+											key={glob}
+											className="font-[family-name:var(--font-mono)] text-[length:var(--text-sm)] text-[var(--ink-dim)]"
+										>
+											{glob}
+										</li>
+									))}
+								</ul>
+								<p className="mt-1.5 text-[length:var(--text-xs)] text-[var(--ink-faint)]">
+									A prediction, refined when the brief is rendered — not a contract.
+								</p>
+							</Section>
+						)}
+
+						<Who node={node} />
+
+						{node.accepted !== null && (
+							<Section title="Accepted">
+								<p className="text-[length:var(--text-sm)] text-[var(--ink-dim)]">
+									by {node.accepted.by} · scan {node.accepted.scan}
+									{node.accepted.flagged ? ' · flagged' : ''}
+								</p>
+								{node.outcome !== null && node.outcome !== '' && (
+									<p className="mt-1.5 whitespace-pre-wrap text-[length:var(--text-sm)] text-[var(--ink-dim)] leading-[var(--leading-prose)]">
+										{node.outcome}
+									</p>
+								)}
+							</Section>
+						)}
+					</div>
+				</>
+			)}
+		</aside>
+	)
+}
+
+/**
+ * What this node can be moved on to next, from its status and nothing else.
+ * Directly under the title, because the panel is opened to read one thing and
+ * then do one thing, and hunting for the button is the part that makes a screen
+ * feel slower than a command.
+ *
+ * The sentence is here for M3's gate finding 2, beside the buttons rather than
+ * instead of them: three statuses offer no button at all, and those are the
+ * ones where a person was left with a colour and a word. A button is its own
+ * instruction; the sentence says what the button costs, or where the next move
+ * comes from when there is no button to press.
+ */
+const Doing = ({
+	status,
+	id,
+	onDo,
+}: {
+	readonly status: BoardRead['nodes'][number]['status']
+	readonly id: string
+	readonly onDo: (does: Action['does']) => Promise<void>
+}): React.JSX.Element | null => {
+	const can = actions(status)
+	const says = nextMove(status)
+	const [busy, setBusy] = useState<Action['does'] | null>(null)
+	const [refused, setRefused] = useState<string | null>(null)
+
+	if (can.length === 0 && says === null) return null
+
+	const go = async (does: Action['does']): Promise<void> => {
+		setBusy(does)
+		setRefused(null)
+		try {
+			await onDo(does)
+		} catch (error) {
+			// `core` is what refuses, and it refuses in a sentence. A panel that
+			// swallowed it would leave a button that does nothing and says nothing.
+			setRefused(error instanceof Error ? error.message : String(error))
+		} finally {
+			setBusy(null)
+		}
+	}
+
+	return (
+		<div className="flex flex-col gap-2 border-[var(--line)] border-b px-4 py-3">
+			{can.length > 0 && (
+				<div className="flex gap-2">
+					{can.map((action) => (
+						<button
+							key={action.does}
+							type="button"
+							onClick={() => void go(action.does)}
+							disabled={busy !== null}
+							className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:opacity-40"
+						>
+							{busy === action.does ? pending(action.does) : action.label}
+						</button>
+					))}
+				</div>
+			)}
+			{says !== null && (
+				// The id rather than the placeholder: M2's gate found that a node id
+				// cannot be typed from memory, so a command a person has to complete
+				// themselves is not a next move.
+				<p className="text-[length:var(--text-sm)] text-[var(--ink-dim)] leading-[var(--leading-prose)]">
+					<Inline text={says.replace('<node>', id)} />
+				</p>
+			)}
+			{refused !== null && (
+				<p className="text-[length:var(--text-sm)] text-[var(--danger)] leading-[var(--leading-prose)]">
+					{refused}
+				</p>
+			)}
+		</div>
+	)
+}
+
+/**
+ * The one thing a reader wants beside a node that is not moving. Rendered
+ * before the brief and before the dependency list, because it is the answer
+ * both of those are being read for.
+ */
+const Waiting = ({
+	board,
+	id,
+	onPick,
+	onDecide,
+}: {
+	readonly board: BoardRead
+	readonly id: string
+	readonly onPick: (id: string) => void
+	readonly onDecide: (id: string) => void
+}): React.JSX.Element | null => {
+	const waits = held(board, id)
+	if (waits.length === 0) return null
+
+	return (
+		<Section title="Waiting on">
+			{waits.map((wait) => (
+				<Line
+					key={`${wait.kind}:${wait.id}`}
+					onClick={() => (wait.kind === 'decision' ? onDecide(wait.id) : onPick(wait.id))}
+					mark={wait.kind === 'decision' ? 'var(--status-held)' : 'var(--status-blocked)'}
+					label={wait.label}
+					// A wait nothing can answer is the one a person needs told, not
+					// the one to leave looking like an ordinary queue (§8.4).
+					note={wait.gone ? 'nothing on this board answers it' : wait.kind}
+					warn={wait.gone}
+				/>
+			))}
+		</Section>
+	)
+}
+
+/** A claim is a fact, an assignment is a plan (DESIGN §3.3) — never the same line. */
+const Who = ({ node }: { readonly node: BoardRead['nodes'][number] }): React.JSX.Element | null => {
+	if (node.claim === null && node.assignee === null) return null
+
+	return (
+		<Section title="Who">
+			{node.claim !== null && (
+				<p className="text-[length:var(--text-sm)] text-[var(--ink)]">
+					{node.claim.by} has it
+					{node.assignee !== null && node.assignee !== node.claim.by && (
+						<span className="text-[var(--ink-faint)]"> (planned for {node.assignee})</span>
+					)}
+				</p>
+			)}
+			{node.claim === null && node.assignee !== null && (
+				<p className="text-[length:var(--text-sm)] text-[var(--ink-dim)]">
+					heading to {node.assignee}
+				</p>
+			)}
+		</Section>
+	)
+}
+
+const Section = ({
+	title,
+	children,
+}: {
+	readonly title: string
+	readonly children: React.ReactNode
+}): React.JSX.Element => (
+	<section>
+		<h3 className="mb-1.5 font-medium text-[length:var(--text-xs)] text-[var(--ink-faint)] uppercase tracking-wider">
+			{title}
+		</h3>
+		{children}
+	</section>
+)
+
+const Line = ({
+	onClick,
+	mark,
+	label,
+	note,
+	warn = false,
+}: {
+	readonly onClick: () => void
+	readonly mark: string
+	readonly label: string
+	readonly note: string
+	readonly warn?: boolean
+}): React.JSX.Element => (
+	<button
+		type="button"
+		onClick={onClick}
+		className="-mx-2 flex w-[calc(100%+1rem)] items-start gap-2.5 rounded-[var(--radius-sm)] px-2 py-1.5 text-left hover:bg-[var(--raised)]"
+	>
+		<span
+			aria-hidden
+			className="mt-1.5 size-2 shrink-0 rounded-full"
+			style={{ background: mark }}
+		/>
+		<span className="min-w-0 flex-1">
+			<span className="block text-[length:var(--text-sm)] text-[var(--ink)] leading-tight">
+				{label}
+			</span>
+			<span
+				className="block text-[length:var(--text-xs)]"
+				style={{ color: warn ? 'var(--danger)' : 'var(--ink-faint)' }}
+			>
+				{note}
+			</span>
+		</span>
+	</button>
+)
+
+/**
+ * The board moved under the panel — somebody archived the node, or a teammate's
+ * sync took it away. Said, rather than the drawer emptying itself.
+ */
+const Gone = ({
+	id,
+	onClose,
+}: {
+	readonly id: string
+	readonly onClose: () => void
+}): React.JSX.Element => (
+	<div className="flex flex-1 flex-col items-start gap-3 px-4 py-4">
+		<p className="text-[length:var(--text-sm)] text-[var(--ink)]">
+			<code className="font-[family-name:var(--font-mono)]">{id}</code> is no longer on this board.
+		</p>
+		<button
+			type="button"
+			onClick={onClose}
+			className="rounded-[var(--radius-sm)] border border-[var(--line)] px-2.5 py-1 text-[length:var(--text-xs)] text-[var(--ink-dim)] hover:text-[var(--ink)]"
+		>
+			Close
+		</button>
+	</div>
+)

@@ -39,3 +39,6 @@ yarn-error.log*
 
 # TypeScript incremental build state
 *.tsbuildinfo
+
+# Session notes — working state for the next session, not a record of the repository
+docs/sessions/

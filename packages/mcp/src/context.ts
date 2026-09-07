@@ -1,4 +1,4 @@
-import { findRoot, type Paths, paths as resolve, SoberError } from '@besober/core'
+import { findRoot, needsMigration, type Paths, paths as resolve, SoberError } from '@besober/core'
 
 export class NoBoardError extends SoberError {
 	constructor() {
@@ -9,11 +9,25 @@ export class NoBoardError extends SoberError {
 	}
 }
 
-/** Every tool but `init` starts here: the board found from where the host started us. */
+/**
+ * Every tool but `init` starts here: the board found from where the host
+ * started us.
+ *
+ * An older board is not migrated here. The migration rewrites every record, and
+ * this surface may not write to stdout — so it names the surface that can say
+ * what it did, which is §2.9's pattern rather than a silent rewrite.
+ */
 export const openBoard = async (cwd: string): Promise<Paths> => {
 	const root = findRoot(cwd)
 	if (root === null) throw new NoBoardError()
-	return resolve(root)
+
+	const paths = resolve(root)
+	if (await needsMigration(paths))
+		throw new SoberError(
+			'schema',
+			'this board was written by an older SOBER. Run `sober status` in a terminal — it brings the board forward and says what it rewrote.',
+		)
+	return paths
 }
 
 export interface ToolResult {

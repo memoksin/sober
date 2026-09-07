@@ -1,7 +1,7 @@
 # Hook enforcement — TDD evidence
 
 - Date: 2026-09-07
-- Decision record: `docs/adr/0029-hook-enforcement-in-the-claude-code-plugin.md`
+- Decision record: `docs/adr/0047-hook-enforcement-in-the-claude-code-plugin.md`
 - Code: `packages/cli/src/hook.ts`, `packages/claude-code-plugin/hooks/hooks.json`
 - Tests: `test/integration/cli.test.ts` (six), `test/integration/plugin.test.ts` (one)
 
@@ -75,6 +75,6 @@ Every one of these runs the **built binary** against a **real git repository wit
 
 **That Claude Code obeys the verdict.** The hook runs inside a host process this repository does not own, and no test here can reach it. What is tested is the contract on both ends of that boundary: SOBER emits the documented object, and the plugin declares the hook on the event that carries an agent spawn. Whether the host honours a `deny` is the host's code, and the evidence for it is its documentation, not this suite.
 
-**That every phrasing of "build the held node" is caught.** The guard matches the node id, because the id is the only handle a spawn payload gives it (ADR 0029). A spawn that describes the work without ever naming the node passes. That is a known ceiling of the chosen scope, not a defect of the implementation, and widening it was rejected with its reasons in the ADR.
+**That every phrasing of "build the held node" is caught.** The guard matches the node id, because the id is the only handle a spawn payload gives it (ADR 0047). A spawn that describes the work without ever naming the node passes. That is a known ceiling of the chosen scope, not a defect of the implementation, and widening it was rejected with its reasons in the ADR.
 
 **Coverage.** `cli` reports 0% because these tests run the packaged binary rather than importing the source; the ratchet's baseline for `cli` is 0% for that reason and is unmoved. `core` and `mcp` are unchanged at 96.54% and 90.81% — this change adds nothing to either.
