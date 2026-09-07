@@ -650,6 +650,16 @@ A node whose verification, scan and CI are all clean is **green**. Green nodes a
 
 `acceptance` is a list of commands, each carrying the one sentence it proves (ADR 0027). Every criterion runs in the worktree after `dispatch.verify`; **green** means all of them exited 0, verification passed, the scan is clean and CI is green.
 
+**The auditor runs that list, and every surface renders what each command did** (ADR 0049). Three outcomes and never two: exit 0 passed, a non-zero exit failed, and `null` did not run — a command nobody installed, or a run that ended before it got there. `null` is the scan's rule (§6.2) applied where it matters more, because a criterion is the sentence the human approved as the definition of done, and telling them a check failed when nothing checked sends them back to the diff as surely as telling them it passed.
+
+Why a command's output is not on the record: exit codes are what `green` is computed from, and the reason a command failed is prose. It goes to `local/runs/<runid>.log` under a header naming the criterion, which keeps the record small enough that a run killed mid-write leaves a torn log line and never a torn record (ADR 0021).
+
+`sober audit <node>` runs the list again against the worktree that is already there and rewrites the last run's results. A criterion that was wrong, or a check that failed for a reason outside the work, does not deserve a second dispatch. Running the list when the review is *opened* was rejected: that is the slowness M3's gate raised against the review button, and it runs commands at the moment nobody expects them.
+
+Running someone's acceptance list is executing text an agent wrote, so where it runs is stated rather than assumed. Each command runs in the node's worktree, through a shell, with this process's environment, capped by `dispatch.timeoutMinutes` — the reach `dispatch.setup` and `scan.extra` already have, and no sandbox. What holds is not isolation but provenance: **the list is read from the board at the project root, never from the branch under review.** An agent can rewrite `.sober/nodes/<id>.json` inside its own worktree; SOBER never reads that copy. What runs is the list a human approved, which is §5.2's rule reaching `acceptance` by a different route.
+
+A failed criterion holds the node out of `green` and never blocks the accept. A machine that refuses an accept is a gate, and a gate in this product is a decision (ADR 0003). The human reads what failed and still decides — and `accepted.audit` records how the list read at that moment, beside `scan` and for the same reason: the run record is local and disposable (§5.5), so without it a teammate who clones the board a week later knows the work was accepted and nothing about what was true when it was.
+
 ### 6.2 The scan sits above the diff
 
 Every dispatch result is scanned before it is shown (`SCOPE.md` MUST #9, ADR 0002). Findings render above the diff, not beside it. A failed scan never auto-rejects and never hides the result — the human still decides.

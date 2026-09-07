@@ -64,7 +64,7 @@ const decision = (answer: Answer | null = null) => ({
 })
 
 const ANSWER: Answer = { option: 'cookie', rationale: 'Simplest', by: 'alice', at: AT }
-const ACCEPTED: Accepted = { by: 'alice', at: AT, flagged: false, scan: 'clean' }
+const ACCEPTED: Accepted = { by: 'alice', at: AT, flagged: false, scan: 'clean', audit: 'passed' }
 
 const git = (cwd: string, ...args: string[]): string =>
 	execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()

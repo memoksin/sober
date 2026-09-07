@@ -60,6 +60,7 @@ test('the outcome is board state, and accepting is what makes a node done', asyn
 		at: '2026-09-04T00:00:00.000Z',
 		flagged: false,
 		scan: 'clean',
+		audit: 'passed',
 	})
 
 	const board = await loadBoard(paths)

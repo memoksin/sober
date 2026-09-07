@@ -36,6 +36,18 @@ const MIGRATIONS: readonly Migration[] = [
 		// with the flag unjudged.
 		node: (record) => ({ dismissal: null, ...record }),
 	},
+	{
+		to: 4,
+		// The auditor gave the `accepted` record how the acceptance list read
+		// (ADR 0049). On a board written before anything ran that list, nobody
+		// knows — which is exactly what `did-not-run` says, and is why it is not
+		// backfilled as `passed`.
+		node: (record) => {
+			const accepted = record.accepted as Record_ | null | undefined
+			if (accepted === null || accepted === undefined) return record
+			return { ...record, accepted: { audit: 'did-not-run', ...accepted } }
+		},
+	},
 ]
 
 export type Migrated =

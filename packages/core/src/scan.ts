@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import type { Finding, ScanReport } from '@besober/schema'
+import { notInstalled } from './audit.js'
 import { readConfigFromBase } from './config.js'
 import { type AddedFile, addedLines } from './diff.js'
 import { git, showFromRef } from './git.js'
@@ -212,7 +213,7 @@ const extraScanners = async (
 			await run(command, { cwd: worktreeOf(paths, node), shell: true, encoding: 'utf8' })
 		} catch (error) {
 			const failure = error as { code?: number | string; stdout?: string; stderr?: string }
-			if (missing(failure)) {
+			if (notInstalled(failure)) {
 				didNotRun.push(`${command}: not installed`)
 				continue
 			}
@@ -226,20 +227,6 @@ const extraScanners = async (
 	}
 	return { findings, didNotRun }
 }
-
-/**
- * A command that is not installed reports it differently in every shell: `sh`
- * exits 127, `cmd.exe` exits 9009, and spawning without one gives ENOENT. Only
- * the text is common. Getting this wrong reads an absent scanner as findings,
- * which is the one thing `PR-09-06` says must never happen quietly.
- */
-const NOT_INSTALLED = /not recognized as|not found|no such file/i
-
-const missing = (failure: { code?: number | string; stdout?: string; stderr?: string }): boolean =>
-	failure.code === 127 ||
-	failure.code === 9009 ||
-	failure.code === 'ENOENT' ||
-	NOT_INSTALLED.test(`${failure.stderr ?? ''}${failure.stdout ?? ''}`)
 
 const firstLine = (...outputs: (string | undefined)[]): string | null =>
 	outputs

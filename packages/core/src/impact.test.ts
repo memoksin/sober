@@ -75,7 +75,7 @@ describe('what changing an answer reaches', () => {
 	test('a finished node is flagged and is not reopened', () => {
 		const done = board({
 			'auth-api-k7f2': bound({
-				accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean' },
+				accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
 			}),
 		})
 
@@ -121,7 +121,7 @@ describe('saving the change', () => {
 			'auth-api-k7f2',
 			bound({
 				title: 'The auth API',
-				accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean' },
+				accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
 			}),
 		)
 	})

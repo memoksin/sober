@@ -9,14 +9,30 @@ export const ScanResult = z.enum(SCAN_RESULTS)
 export type ScanResult = z.infer<typeof ScanResult>
 
 /**
+ * How the acceptance list read at the moment it was accepted (ADR 0049).
+ * `did-not-run` covers both halves of the scan's rule: a criterion nobody could
+ * run, and a node accepted before anything had judged it. `none` is a node that
+ * asked for nothing, which is a different sentence and deserves its own word.
+ */
+export const AuditResult = z.enum(['passed', 'failed', 'did-not-run', 'none'])
+
+export type AuditResult = z.infer<typeof AuditResult>
+
+/**
  * The record of a human accepting the result. Its presence is what makes a node
  * finished — there is no `done` boolean to forget to set (ADR 0021).
+ *
+ * `scan` and `audit` are both recorded as they read at that moment rather than
+ * looked up later. The run record they came from is local and disposable
+ * (§5.5), so without this a teammate who clones the board a week later can see
+ * that the work was accepted and nothing about what was true when it was.
  */
 export const Accepted = z.strictObject({
 	by: Handle,
 	at: Timestamp,
 	flagged: z.boolean(),
 	scan: ScanResult,
+	audit: AuditResult,
 })
 
 export type Accepted = z.infer<typeof Accepted>

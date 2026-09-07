@@ -3,6 +3,7 @@ import {
 	acceptWork,
 	archiveDecision,
 	archiveNode,
+	auditNode,
 	greenNodes,
 	type Landed,
 	rejectWork,
@@ -65,12 +66,20 @@ export const review = async (node: string, base?: string, showDiff = false): Pro
 		)
 	if (scan.findings.length === 0 && scan.didNotRun.length === 0) say(dim('    nothing to look at'))
 
+	if (found.verify !== null)
+		say(
+			`\n  ${found.verify.exit === 0 ? green('✓') : red('✗')}  ${dim(`verification exited ${found.verify.exit}`)}`,
+		)
+
 	if (found.acceptance.length > 0) {
 		say()
-		say(`  ${bold('What must be true when this is done')}`)
+		say(`  ${bold('What you asked it to prove')}`)
 		say(
 			columns(
-				found.acceptance.map((criterion) => [`    ${criterion.proves}`, cyan(criterion.run)]),
+				found.acceptance.map((criterion) => [
+					`  ${mark(criterion.result)} ${criterion.proves}`,
+					cyan(criterion.run),
+				]),
 			).join('\n'),
 		)
 	}
@@ -130,6 +139,47 @@ const ciLine = (ci: Review['ci']): string => {
 			return dim('no CI on this pull request')
 	}
 }
+
+/**
+ * Running the list again against the work that is already there (ADR 0049). A
+ * criterion that was wrong, or a check that failed for a reason outside the
+ * work, does not deserve a second dispatch — the worktree still holds what the
+ * agent built.
+ */
+export const audit = async (node: string, base?: string): Promise<void> => {
+	const paths = await openBoard()
+	const ref = await baseOf(paths, base)
+	const audited = await auditNode(paths, node, ref).catch(refuse)
+	if (audited === undefined) return
+	if (audited === null) return fail(`${node} has not run — there is nothing to audit yet`)
+
+	const { verify, acceptance } = audited.audit
+	say(`${cyan(bold(node))}  ${dim(audited.run)}`)
+	say()
+	if (verify !== null)
+		say(
+			`  ${verify.exit === 0 ? green('✓') : red('✗')}  ${dim(`verification exited ${verify.exit}`)}`,
+		)
+	const criteria = (await readBoard(paths)).nodes.get(node)?.brief?.acceptance ?? []
+	say(
+		columns(
+			criteria.map((criterion, at) => [
+				`  ${mark(acceptance[at] ?? null)} ${criterion.proves}`,
+				cyan(criterion.run),
+			]),
+		).join('\n'),
+	)
+	say()
+	say(dim(`  sober review ${node}`))
+}
+
+/**
+ * Passed, failed, or never answered — three marks, because a criterion that
+ * could not run is neither of the other two and rendering it as either is the
+ * defect this feature exists to remove (ADR 0049).
+ */
+const mark = (result: { readonly exit: number } | null): string =>
+	result === null ? yellow('?') : result.exit === 0 ? green('✓') : red('✗')
 
 export const accept = async (node: string, base?: string): Promise<void> => {
 	const paths = await openBoard()

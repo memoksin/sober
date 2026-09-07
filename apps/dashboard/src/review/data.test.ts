@@ -1,6 +1,6 @@
 import type { Review } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { ciLine, verdict } from './data.js'
+import { ciLine, criterionLine, verdict } from './data.js'
 
 const AT = '2026-09-06T00:00:00.000Z'
 
@@ -11,7 +11,8 @@ const review = (over: Partial<Review> = {}): Review => ({
 	files: ['src/a.ts'],
 	run: 'run-1',
 	exit: 'finished',
-	acceptance: [{ run: 'pnpm test', proves: 'The endpoints answer.' }],
+	acceptance: [{ run: 'pnpm test', proves: 'The endpoints answer.', result: { exit: 0 } }],
+	verify: null,
 	ci: { kind: 'none' },
 	flagged: false,
 	pr: null,
@@ -64,7 +65,9 @@ test('work that never ran is not a review, and offers no answer', () => {
 
 test('accepted work is a record, and offers no second accept', () => {
 	const said = verdict(
-		review({ accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean' } }),
+		review({
+			accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
+		}),
 	)
 
 	expect(said.decidable).toBe(false)
@@ -97,4 +100,18 @@ test('CI that could not be read is never a pass', () => {
 		text: 'CI failed — build, test',
 	})
 	expect(ciLine({ kind: 'none' })).toBeNull()
+})
+
+test('a criterion says which of the three things happened to it, and never guesses', () => {
+	// A command nobody could run is neither a pass nor a failure. Rendering it
+	// as either sends the reviewer back to the diff (ADR 0049).
+	expect(criterionLine({ run: 'pnpm test', proves: 'x', result: { exit: 0 } }).text).toBe('passed')
+	expect(criterionLine({ run: 'pnpm test', proves: 'x', result: { exit: 2 } })).toEqual({
+		tone: 'warn',
+		text: 'failed · exit 2',
+	})
+	expect(criterionLine({ run: 'pnpm test', proves: 'x', result: null })).toEqual({
+		tone: 'alarm',
+		text: 'did not run',
+	})
 })

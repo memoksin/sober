@@ -134,6 +134,7 @@ test('a node that is already done cannot be approved again', async () => {
 		at: '2026-09-05T21:06:47.698Z',
 		flagged: false,
 		scan: 'clean',
+		audit: 'passed',
 	})
 
 	// M2 gate finding 3: this wrote a fresh approval onto an accepted node, so
@@ -176,7 +177,9 @@ test('a review carries the scan, the criteria and the diff together', async () =
 	const review = await reviewNode(paths, NODE, 'main')
 	expect(review).toMatchObject({ node: NODE, files: ['src/auth/token.ts'] })
 	expect(review?.scan.result).toBe('clean')
-	expect(review?.acceptance).toEqual([{ run: 'npm test', proves: 'They answer.' }])
+	// The criterion and what running it did (ADR 0049). Nothing has run here, so
+	// the result is null — which is "did not run", never a pass.
+	expect(review?.acceptance).toEqual([{ run: 'npm test', proves: 'They answer.', result: null }])
 	expect(review?.diff).toContain('+export const sign')
 	expect(await reviewNode(paths, 'no-such-node-k7f2', 'main')).toBeNull()
 })

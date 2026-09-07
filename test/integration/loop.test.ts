@@ -131,6 +131,7 @@ test('a node is briefed, run, accepted, and the node waiting on it becomes ready
 		at: AT,
 		flagged: false,
 		scan: 'clean',
+		audit: 'passed',
 	})
 	await removeWorktree(paths, 'auth-api-k7f2')
 
