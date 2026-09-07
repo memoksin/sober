@@ -42,6 +42,13 @@ Before the dashboard, by Law 2: the dashboard should consume a finished `core`.
 
 Phase 5. `packages/server` and the wire contract first, then the canvas, node panel, decision screen, review screen, digest, flagged-node flow, impact preview.
 
+**Closed 2026-09-07.** The gate ran green (§3) and its five findings landed in
+the commit after it, as M1's fourteen and M2's eight did. Four were repairs — a
+pending sentence on every slow button, the next move named in the panel, the
+brief rendered as the markdown an agent wrote it in, and a `/sober:brief`
+command for the step that had none. The fifth, a run readable on the screen, is
+answered by ADR 0045 and stays a `SCOPE.md` SHOULD.
+
 ---
 
 ## 3. M1's gate is a script, not a sentence

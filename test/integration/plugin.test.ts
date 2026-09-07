@@ -32,7 +32,9 @@ test('the server it declares is the one the CLI publishes', () => {
 
 test('every skill carries the description the model decides on', () => {
 	const skills = readdirSync(join(plugin, 'skills'))
-	expect(skills.sort()).toEqual(['decide', 'loop', 'next', 'plan'])
+	// `brief` is M3's gate finding 5: step 5 of the loop is the third thing a
+	// human asks a session for, and it had no command of its own.
+	expect(skills.sort()).toEqual(['brief', 'decide', 'loop', 'next', 'plan'])
 
 	for (const skill of skills) {
 		const text = readFileSync(join(plugin, 'skills', skill, 'SKILL.md'), 'utf8')
@@ -48,7 +50,7 @@ test('every invocable skill says the tools are tools', () => {
 	// board output since we can't call MCP from bash" — and handing the user
 	// invented ids. The instruction against it has to be in every entry point,
 	// because a weaker model reads one skill and not the others.
-	for (const skill of ['plan', 'decide', 'next', 'loop']) {
+	for (const skill of ['plan', 'decide', 'brief', 'next', 'loop']) {
 		const text = readFileSync(join(plugin, 'skills', skill, 'SKILL.md'), 'utf8')
 		expect(text, skill).toContain('MCP server')
 		expect(text, skill).toMatch(/never reproduce|do not shell out/i)

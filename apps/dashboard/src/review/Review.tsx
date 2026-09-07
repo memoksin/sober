@@ -1,6 +1,7 @@
 import type { Review } from '@besober/schema'
 import { useState } from 'react'
 import { Overlay } from '../Overlay.js'
+import { pending } from '../pending.js'
 import { ciLine, type Tone, verdict } from './data.js'
 
 const COLOUR: Record<Tone, string> = {
@@ -233,7 +234,7 @@ export const ReviewScreen = ({
 						disabled={note.trim() === '' || busy}
 						className="rounded-[var(--radius-sm)] border border-[var(--danger)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
 					>
-						{busy ? 'Sending…' : 'Send it back'}
+						{busy ? pending('reject') : 'Send it back'}
 					</button>
 				)}
 				{said.decidable && !turning && (
@@ -243,7 +244,7 @@ export const ReviewScreen = ({
 						disabled={busy}
 						className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:opacity-40"
 					>
-						{busy ? 'Accepting…' : 'Accept'}
+						{busy ? pending('accept') : 'Accept'}
 					</button>
 				)}
 			</footer>

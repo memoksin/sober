@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { pending } from '../pending.js'
 import type { Action, BoardRead } from './data.js'
-import { actions, held } from './data.js'
+import { actions, held, nextMove } from './data.js'
 import { Flag } from './Flag.js'
+import { Inline, Markdown } from './markdown.js'
 
 /**
  * One node, in full. The canvas answers "what is here and what touches what";
@@ -87,29 +89,31 @@ export const Panel = ({
 						onOpen={onOpen}
 					/>
 
-					<Doing status={node.status} onDo={onDo} />
+					<Doing status={node.status} onDo={onDo} id={node.id} />
 
 					<div className="flex flex-col gap-5 px-4 py-4">
-						{node.description !== '' && (
-							<p className="whitespace-pre-wrap text-[length:var(--text-base)] text-[var(--ink-dim)] leading-[var(--leading-prose)]">
-								{node.description}
-							</p>
-						)}
+						{node.description !== '' && <Markdown text={node.description} />}
 
 						<Waiting board={board} id={id} onPick={onPick} onDecide={onDecide} />
 
 						{node.brief !== null && (
 							<Section title="Brief">
-								<p className="whitespace-pre-wrap text-[length:var(--text-sm)] text-[var(--ink-dim)] leading-[var(--leading-prose)]">
-									{node.brief.approach}
-								</p>
+								{/*
+								  Written by an agent, and an agent writes markdown (M3's gate,
+								  finding 3). Rendered as elements, never as a string of HTML —
+								  the approach names real files in a real repository, and a
+								  repository contains angle brackets.
+								*/}
+								<Markdown text={node.brief.approach} />
 								<ul className="mt-2 flex flex-col gap-1.5">
 									{node.brief.acceptance.map((criterion) => (
 										<li key={criterion.run} className="text-[length:var(--text-sm)]">
 											<code className="font-[family-name:var(--font-mono)] text-[var(--ink)]">
 												{criterion.run}
 											</code>
-											<span className="ml-2 text-[var(--ink-faint)]">{criterion.proves}</span>
+											<span className="ml-2 text-[var(--ink-faint)]">
+												<Inline text={criterion.proves} />
+											</span>
 										</li>
 									))}
 								</ul>
@@ -200,19 +204,28 @@ export const Panel = ({
  * Directly under the title, because the panel is opened to read one thing and
  * then do one thing, and hunting for the button is the part that makes a screen
  * feel slower than a command.
+ *
+ * The sentence is here for M3's gate finding 2, beside the buttons rather than
+ * instead of them: three statuses offer no button at all, and those are the
+ * ones where a person was left with a colour and a word. A button is its own
+ * instruction; the sentence says what the button costs, or where the next move
+ * comes from when there is no button to press.
  */
 const Doing = ({
 	status,
+	id,
 	onDo,
 }: {
 	readonly status: BoardRead['nodes'][number]['status']
+	readonly id: string
 	readonly onDo: (does: Action['does']) => Promise<void>
 }): React.JSX.Element | null => {
 	const can = actions(status)
+	const says = nextMove(status)
 	const [busy, setBusy] = useState<Action['does'] | null>(null)
 	const [refused, setRefused] = useState<string | null>(null)
 
-	if (can.length === 0) return null
+	if (can.length === 0 && says === null) return null
 
 	const go = async (does: Action['does']): Promise<void> => {
 		setBusy(does)
@@ -230,19 +243,29 @@ const Doing = ({
 
 	return (
 		<div className="flex flex-col gap-2 border-[var(--line)] border-b px-4 py-3">
-			<div className="flex gap-2">
-				{can.map((action) => (
-					<button
-						key={action.does}
-						type="button"
-						onClick={() => void go(action.does)}
-						disabled={busy !== null}
-						className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:opacity-40"
-					>
-						{busy === action.does ? '…' : action.label}
-					</button>
-				))}
-			</div>
+			{can.length > 0 && (
+				<div className="flex gap-2">
+					{can.map((action) => (
+						<button
+							key={action.does}
+							type="button"
+							onClick={() => void go(action.does)}
+							disabled={busy !== null}
+							className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:opacity-40"
+						>
+							{busy === action.does ? pending(action.does) : action.label}
+						</button>
+					))}
+				</div>
+			)}
+			{says !== null && (
+				// The id rather than the placeholder: M2's gate found that a node id
+				// cannot be typed from memory, so a command a person has to complete
+				// themselves is not a next move.
+				<p className="text-[length:var(--text-sm)] text-[var(--ink-dim)] leading-[var(--leading-prose)]">
+					<Inline text={says.replace('<node>', id)} />
+				</p>
+			)}
 			{refused !== null && (
 				<p className="text-[length:var(--text-sm)] text-[var(--danger)] leading-[var(--leading-prose)]">
 					{refused}

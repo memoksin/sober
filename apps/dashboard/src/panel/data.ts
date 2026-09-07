@@ -210,3 +210,45 @@ export const actions = (status: Status | null): readonly Action[] => {
 			return []
 	}
 }
+
+/**
+ * What to do next, in a sentence, from the status and nothing else.
+ *
+ * M3's gate, finding 2. `M2-GATE.md`'s finding 6 split `needs-brief` in two so
+ * the status stopped lying, and a status still is not an instruction: the
+ * command line ends nearly everything it prints with where to go next, and the
+ * panel ended with a coloured dot and a word. It costs most on the three
+ * statuses `actions` offers no button for — `needs-brief`, `held` and `blocked`
+ * — because there a person has a colour, a word, and nothing to press.
+ *
+ * Beside `actions` for `actions`' reason: what a node's status means for a
+ * person is a fact about the board, and a fact rendered by one screen is a fact
+ * that can be tested without one.
+ */
+export const nextMove = (status: Status | null): string | null => {
+	switch (status) {
+		// There is no operation for this on any wire: a brief is written in a
+		// session against the repository, which is exactly why the screen has to
+		// say where it comes from rather than leaving an empty drawer.
+		case 'needs-brief':
+			return 'No brief yet. Ask a session for one — /sober:brief — then approve it here.'
+		case 'needs-approval':
+			return 'Read the approach and the criteria below. Nothing runs until you approve them.'
+		case 'ready':
+			return 'The brief is approved. Running cuts a worktree and spends real money.'
+		// Finding 4 is out of v1 (ADR 0045): the run cannot be read on this
+		// screen, so the screen says where it can be.
+		case 'running':
+			return 'The agent is working. `sober logs <node>` on the command line is what it has said.'
+		case 'in-review':
+			return 'The scan has run. Open the review to read what it found before accepting.'
+		case 'held':
+			return 'A decision this node binds is unanswered. Answer it below and the node frees itself.'
+		case 'blocked':
+			return 'Something it depends on is not accepted yet. Nothing here moves until that does.'
+		case 'done':
+			return 'Accepted and merged. Opening the review shows what was accepted, not a second one.'
+		default:
+			return null
+	}
+}

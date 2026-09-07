@@ -1,6 +1,7 @@
+import { STATUSES } from '@besober/schema'
 import { expect, test } from 'vitest'
 import type { BoardRead } from './data.js'
-import { actions, asksFor, FLAG_ACTIONS, flagOp, held, offer } from './data.js'
+import { actions, asksFor, FLAG_ACTIONS, flagOp, held, nextMove, offer } from './data.js'
 
 const AT = '2026-09-06T00:00:00.000Z'
 
@@ -194,4 +195,51 @@ test('each of the three is its own operation on the wire, and the fix says what 
 		'create_node',
 		{ title: 'Re-read the store', dependsOn: ['auth-api-k7f2'] },
 	])
+})
+
+/**
+ * M3's gate, finding 2. `M2-GATE.md`'s finding 6 split `needs-brief` in two, so
+ * the status no longer lies — but a status is still not an instruction, and the
+ * command line ends what it prints with the next move while the panel ended
+ * with nothing.
+ */
+test('every status a node can hold says what the next move is', () => {
+	for (const status of STATUSES) {
+		expect(nextMove(status), status).toBeTypeOf('string')
+	}
+})
+
+test('a status the board could not derive says nothing rather than guessing', () => {
+	expect(nextMove(null)).toBeNull()
+})
+
+/**
+ * The three the panel offers no button for. These are the ones the finding is
+ * about: a button is its own instruction, and a drawer with neither a button
+ * nor a sentence leaves a person with a colour and a word.
+ */
+test('the statuses with no button name what produces the move', () => {
+	for (const status of ['needs-brief', 'held', 'blocked'] as const) {
+		expect(actions(status), status).toEqual([])
+	}
+
+	// A brief is written in a session — there is no wire operation for it, which
+	// is exactly why the panel has to say where it comes from.
+	expect(nextMove('needs-brief')).toMatch(/session/i)
+	expect(nextMove('held')).toMatch(/decision/i)
+	expect(nextMove('blocked')).toMatch(/depends on/i)
+})
+
+/**
+ * Finding 4 is out of v1 (ADR 0045), and the honest thing on a screen that
+ * cannot show the run is to say where the run can be read instead.
+ */
+test('a running node points at the one place its output can be read', () => {
+	expect(nextMove('running')).toMatch(/sober logs/)
+})
+
+test('no two statuses give the same instruction', () => {
+	const said = STATUSES.map((status) => nextMove(status))
+
+	expect(new Set(said).size).toBe(said.length)
 })

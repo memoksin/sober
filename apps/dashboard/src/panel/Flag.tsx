@@ -1,5 +1,6 @@
 import type { Dismissal } from '@besober/schema'
 import { useState } from 'react'
+import { pending } from '../pending.js'
 import type { FlagAction } from './data.js'
 import { asksFor, FLAG_ACTIONS } from './data.js'
 
@@ -30,15 +31,18 @@ export const Flag = ({
 }): React.JSX.Element | null => {
 	const [asking, setAsking] = useState<Asking>(null)
 	const [words, setWords] = useState('')
-	const [busy, setBusy] = useState(false)
+	// Which one is in flight, not merely that something is: three buttons sit
+	// side by side, and a shared boolean would put "Reopening it…" on the two
+	// nobody pressed.
+	const [doing, setDoing] = useState<Asking>(null)
 	const [refused, setRefused] = useState<string | null>(null)
 
 	// A dismissal outlives the flag it settled, and that is the point: it is the
 	// judgement §7.2 keeps. Shown on its own once nothing is flagged any more.
 	if (!flagged) return dismissal === null ? null : <Kept dismissal={dismissal} />
 
-	const act = async (what: () => Promise<void>): Promise<void> => {
-		setBusy(true)
+	const act = async (does: FlagAction['does'], what: () => Promise<void>): Promise<void> => {
+		setDoing(does)
 		setRefused(null)
 		try {
 			await what()
@@ -47,7 +51,7 @@ export const Flag = ({
 		} catch (error) {
 			setRefused(error instanceof Error ? error.message : String(error))
 		} finally {
-			setBusy(false)
+			setDoing(null)
 		}
 	}
 
@@ -66,19 +70,25 @@ export const Flag = ({
 						<Choice
 							key={action.does}
 							label={action.label}
-							busy={busy}
-							onClick={() => (action.asks === null ? void act(onReopen) : setAsking(action.does))}
+							doing={doing}
+							does={action.does}
+							onClick={() =>
+								action.asks === null ? void act(action.does, onReopen) : setAsking(action.does)
+							}
 						/>
 					))}
 				</div>
 			) : (
 				<Asks
 					asks={asksFor(asking)}
+					does={asking}
 					words={words}
-					busy={busy}
+					busy={doing !== null}
 					onWords={setWords}
 					onGo={() =>
-						void act(() => (asking === 'dismiss' ? onDismiss(words.trim()) : onOpen(words.trim())))
+						void act(asking, () =>
+							asking === 'dismiss' ? onDismiss(words.trim()) : onOpen(words.trim()),
+						)
 					}
 					onNeverMind={() => {
 						setAsking(null)
@@ -98,6 +108,7 @@ export const Flag = ({
 
 const Asks = ({
 	asks,
+	does,
 	words,
 	busy,
 	onWords,
@@ -105,6 +116,7 @@ const Asks = ({
 	onNeverMind,
 }: {
 	readonly asks: FlagAction['asks']
+	readonly does: FlagAction['does']
 	readonly words: string
 	readonly busy: boolean
 	readonly onWords: (words: string) => void
@@ -137,7 +149,7 @@ const Asks = ({
 					disabled={words.trim() === '' || busy}
 					className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-40"
 				>
-					{busy ? '…' : asks.go}
+					{busy ? pending(does) : asks.go}
 				</button>
 				<button
 					type="button"
@@ -153,19 +165,21 @@ const Asks = ({
 const Choice = ({
 	onClick,
 	label,
-	busy = false,
+	does,
+	doing,
 }: {
 	readonly onClick: () => void
 	readonly label: string
-	readonly busy?: boolean
+	readonly does: FlagAction['does']
+	readonly doing: Asking
 }): React.JSX.Element => (
 	<button
 		type="button"
 		onClick={onClick}
-		disabled={busy}
+		disabled={doing !== null}
 		className="rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--ink-dim)] hover:text-[var(--ink)] disabled:opacity-40"
 	>
-		{busy ? '…' : label}
+		{doing === does ? pending(does) : label}
 	</button>
 )
 

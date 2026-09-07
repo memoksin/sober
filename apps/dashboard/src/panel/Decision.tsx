@@ -1,6 +1,7 @@
 import type { Impact } from '@besober/schema'
 import { useState } from 'react'
 import { Overlay } from '../Overlay.js'
+import { pending } from '../pending.js'
 import type { BoardRead } from './data.js'
 import { offer } from './data.js'
 
@@ -244,7 +245,7 @@ export const DecisionScreen = ({
 								disabled={chosen === null || sending}
 								className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-40"
 							>
-								{sending ? 'Answering…' : 'Answer'}
+								{sending ? pending('decide') : 'Answer'}
 							</button>
 						)}
 						{/*
@@ -260,7 +261,7 @@ export const DecisionScreen = ({
 									disabled={chosen === null || sending}
 									className="rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40"
 								>
-									{sending ? 'Reading…' : 'See what this changes'}
+									{sending ? pending('impact') : 'See what this changes'}
 								</button>
 							) : (
 								<button
@@ -269,7 +270,7 @@ export const DecisionScreen = ({
 									disabled={chosen === null || sending}
 									className="rounded-[var(--radius-sm)] bg-[var(--danger)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-40"
 								>
-									{sending ? 'Changing…' : 'Change it anyway'}
+									{sending ? pending('edit_decision') : 'Change it anyway'}
 								</button>
 							))}
 					</footer>

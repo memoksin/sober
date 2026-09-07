@@ -67,10 +67,11 @@ ${bold('The plugin, in a project with a board:')}
 
 ${dim('The host SOBER dispatches is faked, so nothing costs money.')}
 
-${bold('Four skills arrive with it:')}
+${bold('Five skills arrive with it:')}
 
   /sober:plan ${dim('<what you want built>')}   ${dim('intent in, a graph out')}
   /sober:decide                     ${dim('the open decisions, one at a time')}
+  /sober:brief ${dim('[node]')}                 ${dim('the approach and the criteria, then approval')}
   /sober:next ${dim('[node]')}                  ${dim('brief → approve → run → review → accept')}
   ${dim('and one that is not invocable: the loop itself, which the model reads')}
   ${dim('on its own the moment SOBER comes up.')}
@@ -79,9 +80,10 @@ ${bold('The run, end to end:')}
 
   1.  /sober:plan sign-in with sessions, and a billing screen behind it
   2.  /sober:decide          ${dim('it asks you — the agent has no tool that takes an answer')}
-  3.  /sober:next            ${dim('it writes the brief and asks you to approve it')}
-  4.  ${dim('let it run, review and ask you to accept')}
-  5.  ${dim('"what is next?"')}    ${dim('the downstream node has moved off blocked')}
+  3.  /sober:brief           ${dim('it writes the approach and asks you to approve it')}
+  4.  /sober:next            ${dim('or do the whole node in one: brief through accept')}
+  5.  ${dim('let it run, review and ask you to accept')}
+  6.  ${dim('"what is next?"')}    ${dim('the downstream node has moved off blocked')}
 
 ${bold('Worth trying, because the refusal is the point:')}
 
