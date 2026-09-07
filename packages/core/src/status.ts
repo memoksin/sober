@@ -154,12 +154,3 @@ export const waitingOn = (board: Board, id: string): Waiting[] => {
 
 export const ready = (board: Board): string[] =>
 	[...board.nodes.keys()].filter((id) => statusOf(board, id) === 'ready').sort()
-
-export const statuses = (board: Board): Map<string, Status> => {
-	const all = new Map<string, Status>()
-	for (const id of board.nodes.keys()) {
-		const status = statusOf(board, id)
-		if (status !== null) all.set(id, status)
-	}
-	return all
-}

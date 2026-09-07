@@ -1,11 +1,12 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SCHEMA_VERSION } from '@besober/schema'
+import { Node, SCHEMA_VERSION } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
 import { initBoard } from './board.js'
 import { DEFAULT_CONFIG, parseConfig, readConfig, setSetting } from './config.js'
 import { findRoot, paths, recordFile } from './paths.js'
+import { readRecord, readRecords } from './read.js'
 import { readNodes, readProject, writeNode } from './records.js'
 import { tmpRoot } from './tmp.fixture.js'
 import { writeRecord } from './write.js'
@@ -78,6 +79,31 @@ test('a record that will not parse is named, and the rest of the board still loa
 		recordFile(p.nodes, 'wrong-node-e5f6'),
 	])
 	expect(broken[1]?.reason).toContain('title')
+})
+
+/**
+ * §8.4 covers a file that will not parse. These two are the step before it: a
+ * path that cannot be read at all, and a directory that is not one.
+ *
+ * They are told apart on purpose. A record that is missing is a fact the board
+ * lives with every day; a record that is there and unreadable is a finding. A
+ * records directory that is a file is neither — it is a broken installation,
+ * and reporting it as an empty board would put a person in front of a graph
+ * with nothing on it and no reason given.
+ */
+test('a record path that cannot be read at all is a finding, not a missing record', async () => {
+	const { paths: p } = await initBoard(root, { title: 'SOBER', intent: '', constraints: [] })
+
+	const read = await readRecord(p.nodes, Node)
+
+	expect(read.kind).toBe('broken')
+	expect(read.kind === 'broken' && read.reason).toBeTruthy()
+})
+
+test('a records directory that is a file is loud, rather than an empty board', async () => {
+	const { paths: p } = await initBoard(root, { title: 'SOBER', intent: '', constraints: [] })
+
+	await expect(readRecords(p.project, Node)).rejects.toThrow()
 })
 
 test('a write leaves no temp file behind', async () => {

@@ -66,6 +66,27 @@ test('a torn line is reported and the rest of the log still loads', async () => 
 	expect(broken[0]?.file).toBe(`${board.log}:3`)
 })
 
+/**
+ * The other half of §8.4's rule about the log: a line that is valid JSON and is
+ * not an event. `LogEvent` is loose, so an unknown `action` and extra fields
+ * both pass — what fails is a line missing what every event has, which is the
+ * shape a different build of SOBER would leave behind.
+ *
+ * "Not valid JSON" and "not an event" are different findings. A reader that
+ * only had the first would show the second as a good line.
+ */
+test('a line that parses but is not an event is reported too, and named apart', async () => {
+	await appendEvent(board, { action: 'node.created', node: 'auth-api-k7f2' })
+	await writeFile(board.log, '{"at":"2026-09-04T00:00:00.000Z","node":"auth-api-k7f2"}\n', {
+		flag: 'a',
+	})
+
+	const { events, broken } = await readLog(board)
+
+	expect(events.map((event) => event.action)).toEqual(['node.created'])
+	expect(broken).toEqual([{ file: `${board.log}:2`, reason: 'not an event' }])
+})
+
 test('a run with no pid file cannot be stopped, and says so instead of throwing', async () => {
 	expect(await readRunPid(board, 'auth-api-k7f2-r1')).toBeNull()
 

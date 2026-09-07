@@ -50,13 +50,6 @@ export const archiveDecision = (paths: Paths, id: string): Promise<void> =>
 		await move(record.file, recordFile(paths.archivedDecisions, id), record.value)
 	})
 
-export const restoreDecision = (paths: Paths, id: string): Promise<void> =>
-	withLock(paths, 'restore', async () => {
-		const record = await readRecord(recordFile(paths.archivedDecisions, id), Decision)
-		if (record.kind !== 'ok') throw new NotOnBoardError('decision', id)
-		await move(record.file, recordFile(paths.decisions, id), record.value)
-	})
-
 /** Refused while anything still references it, and the referencing nodes are named (D41). */
 export const deleteNode = (paths: Paths, id: string): Promise<void> =>
 	withLock(paths, 'delete', async () => {

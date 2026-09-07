@@ -13,7 +13,16 @@ import {
 	stagesOf,
 } from './conflict.js'
 import { SoberError } from './errors.js'
-import { git, gitVerbatim, gitWithEnv, isAncestor, refExists, remoteName, whoami } from './git.js'
+import {
+	GitError,
+	git,
+	gitVerbatim,
+	gitWithEnv,
+	isAncestor,
+	refExists,
+	remoteName,
+	whoami,
+} from './git.js'
 import { dangling, findCycle, loadBoard } from './graph.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
@@ -595,11 +604,24 @@ const fetchBoard = async (root: string, remote: string, branch: string): Promise
 	return (await refExists(root, ref)) ? await git(root, 'rev-parse', ref) : null
 }
 
+/**
+ * The board out, and the one failure a sync cannot see coming: the remote moved
+ * between the fetch this run did and the push it is doing now.
+ *
+ * Read from `stderr` rather than from the error's message. `GitError` keeps
+ * only the first line of stderr, and the first line of a rejected push is
+ * git's, not the refusal's — a modern client sends the ref value it saw at
+ * fetch time, so the server answers `cannot lock ref … (incorrect old value
+ * provided)` and the words this looks for are two lines further down. Matching
+ * the message meant this branch never once fired, and the person got a
+ * `GitError` with a stack trace where a sentence was written for them.
+ */
 const pushBoard = async (root: string, remote: string, branch: string): Promise<void> => {
 	try {
 		await git(root, 'push', '--quiet', remote, `refs/heads/${branch}:refs/heads/${branch}`)
 	} catch (error) {
-		if (/non-fast-forward|fetch first|rejected/i.test(String(error)))
+		const said = error instanceof GitError ? error.stderr : String(error)
+		if (/non-fast-forward|fetch first|rejected|cannot lock ref|stale info/i.test(said))
 			throw new SoberError(
 				'git',
 				`the board moved on ${remote} while you were syncing — run \`sober sync\` again`,

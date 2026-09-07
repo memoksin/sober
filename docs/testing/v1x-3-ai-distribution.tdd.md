@@ -307,13 +307,10 @@ describes the tree that exists:
 cli: 0.11 · core: 97.88 · dashboard: 66.22 · mcp: 94.76 · server: 95.11
 ```
 
-**`core` in that file is now 97.88, down from 98.54, and that is a regression
-this work did not cause and did not fix.** Lowering it is the ratchet losing a
-memory. The alternative was to leave the check red on a number nobody could act
-on from inside this change, since the uncovered lines are in `status.ts`,
-`archive.ts` and `sync.ts` and writing tests to reach a number is the failure
-`STRUCTURE.md` names. Reverting the `core` line to 98.54 and fixing `main`
-first is a defensible call and is the reviewer's to make.
+`core` in that file landed at 97.88, down from 98.54 — a regression this work
+did not cause. **Settled in the commit after this one**, which found that most
+of the gap was three exports nothing calls, and that the branch behind four
+more uncovered lines had never once fired. `core` is back at **98.58**.
 
 Deliberate gaps:
 

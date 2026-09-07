@@ -321,6 +321,44 @@ test('a repository with no remote commits the board and says where it went', () 
 	)
 })
 
+/**
+ * The remote moving between the fetch and the push — the one failure a sync
+ * cannot see coming, because it happens inside the second half of its own run.
+ *
+ * Made deterministic with a `pre-push` hook rather than left to a real race:
+ * the hook fires after SOBER has fetched, merged and committed, and pushes
+ * Bob's board in the window before Alice's own push lands. What the remote
+ * then refuses is a genuine non-fast-forward, so the sentence SOBER answers
+ * with is the true one.
+ */
+test('a board that moved on the remote mid-sync is said plainly, and the fix is to run it again', () => {
+	const a = alice()
+	node(a.dir, 'first-node-aaaa', 'First')
+	sober(a.dir, 'sync')
+
+	// Bob takes what is there, adds his own, and keeps it back: his board branch
+	// is now ahead of the remote and nothing has published it.
+	const b = bob(a.remote)
+	sober(b, 'init')
+	node(b, 'bobs-node-bbbb', "Bob's")
+	sober(b, 'sync', '--no-push')
+
+	writeFileSync(
+		join(a.dir, '.git/hooks/pre-push'),
+		`#!/bin/sh\nexec env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_QUARANTINE_PATH git -C ${b} push --quiet origin sober-graph:sober-graph\n`,
+		{ mode: 0o755 },
+	)
+
+	node(a.dir, 'alices-node-cccc', "Alice's")
+	const said = refused(a.dir, 'sync')
+
+	expect(said).toContain('the board moved on origin while you were syncing')
+	expect(said).toContain('sober sync')
+	// Nothing of hers was thrown away: the board is committed locally, and the
+	// next sync is what takes Bob's in and sends hers out.
+	expect(git(a.dir, 'show', 'sober-graph:.sober/nodes/alices-node-cccc.json')).toContain("Alice's")
+})
+
 test('init writes the attributes that keep markers out of records', () => {
 	const a = alice()
 	const attributes = readFileSync(join(a.dir, '.gitattributes'), 'utf8')

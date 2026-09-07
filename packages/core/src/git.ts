@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process'
-import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { SoberError } from './errors.js'
 
@@ -145,10 +144,4 @@ export const showFromRef = async (
 	} catch {
 		return null
 	}
-}
-
-/** The repository root, so every other call can be given one place to stand. */
-export const repoRoot = async (dir: string): Promise<string> => {
-	const top = await git(dir, 'rev-parse', '--show-toplevel')
-	return join(top)
 }
