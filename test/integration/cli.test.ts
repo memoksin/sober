@@ -235,3 +235,96 @@ test('rejecting returns the node to the queue and carries the note into the next
 		seen.indexOf('Add the endpoints'),
 	)
 })
+
+/**
+ * The hook's whole contract with a host is one JSON object in and one out, so
+ * that is what these assert — on a real board, through the built binary. What
+ * they do not assert is that the host obeys the object: that is the host's own
+ * code, and nothing in this repository can reach it (ADR 0029).
+ */
+const hook = (cwd: string, event: string, payload: unknown): Record<string, unknown> =>
+	JSON.parse(
+		execFileSync(process.execPath, [SOBER, 'hook', event], {
+			cwd,
+			input: JSON.stringify(payload),
+			encoding: 'utf8',
+			env: { ...process.env, NO_COLOR: '1' },
+		}),
+	) as Record<string, unknown>
+
+const spawn = (prompt: string) => ({
+	hook_event_name: 'PreToolUse',
+	tool_name: 'Task',
+	tool_input: { description: 'build it', prompt, subagent_type: 'general-purpose' },
+})
+
+const verdict = (out: Record<string, unknown>) =>
+	(out.hookSpecificOutput as Record<string, unknown> | undefined) ?? {}
+
+test('a spawn aimed at a held node is denied, and the denial says how to answer it', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+
+	const out = hook(created.dir, 'spawn', spawn('Write the endpoints for auth-api-k7f2.'))
+
+	expect(verdict(out).permissionDecision).toBe('deny')
+	const reason = String(verdict(out).permissionDecisionReason)
+	// Which node, which decision, and what the decision actually asks.
+	expect(reason).toContain('auth-api-k7f2')
+	expect(reason).toContain('session-store-k7f2')
+	expect(reason).toContain('Where does session state live?')
+	// The one way through is answering it — on either surface.
+	expect(reason).toContain('/sober-decide')
+	expect(reason).toContain('sober decide session-store-k7f2')
+})
+
+test('the guard lets through everything the board does not hold', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+
+	// Names no node at all.
+	expect(verdict(hook(created.dir, 'spawn', spawn('Rename a variable.')))).toEqual({})
+	// Names a node the board has never heard of.
+	expect(verdict(hook(created.dir, 'spawn', spawn('Do billing-api-0000.')))).toEqual({})
+	// A held id with something stuck to it is not the held id.
+	expect(verdict(hook(created.dir, 'spawn', spawn('Do auth-api-k7f2x.')))).toEqual({})
+
+	// Answering the decision is what lifts the hold, here as everywhere else.
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	expect(verdict(hook(created.dir, 'spawn', spawn('Write auth-api-k7f2.')))).toEqual({})
+})
+
+test('a board the guard cannot read is not silently a pass', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	writeFileSync(join(created.dir, '.sober/nodes/auth-api-k7f2.json'), 'not json')
+
+	const out = hook(created.dir, 'spawn', spawn('Write the endpoints for auth-api-k7f2.'))
+
+	// The node fell off the board, so nothing is held and nothing is denied —
+	// which is exactly the case that must say so rather than read as clean.
+	expect(verdict(out)).toEqual({})
+	expect(String(out.systemMessage)).toContain('auth-api-k7f2.json')
+	expect(String(out.systemMessage)).toContain('did not run')
+})
+
+test('outside a board the guard says nothing at all', () => {
+	const created = project()
+	expect(hook(created.dir, 'spawn', spawn('Write auth-api-k7f2.'))).toEqual({})
+})
+
+test('a session is told at the start whether the guard is live', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+
+	const out = hook(created.dir, 'session', { hook_event_name: 'SessionStart', source: 'startup' })
+	const context = String(verdict(out).additionalContext)
+
+	// A guard that is not there is silent, so the one that is there says so.
+	expect(context).toContain('hook enforcement is live')
+	expect(context).toContain('auth-api-k7f2')
+})

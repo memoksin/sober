@@ -30,6 +30,29 @@ test('the server it declares is the one the CLI publishes', () => {
 	expect(read('.mcp.json')).toEqual({ mcpServers: { sober: { command: 'sober', args: ['mcp'] } } })
 })
 
+test('the guard is declared on the spawn, and announces itself at the start', () => {
+	const hooks = read('hooks/hooks.json') as {
+		hooks: Record<string, { matcher?: string; hooks: { type: string; command: string }[] }[]>
+	}
+
+	// `Task` is the agent spawn. Anything else here would be a guard on the
+	// wrong event, which is a guard that is never reached.
+	const spawn = hooks.hooks.PreToolUse?.[0]
+	expect(spawn?.matcher).toBe('Task')
+	expect(spawn?.hooks).toEqual([{ type: 'command', command: 'sober hook spawn' }])
+
+	// A guard that is not installed is silent, and silence reads as permission
+	// — so the installed one says so at the start of every session (ADR 0029).
+	expect(hooks.hooks.SessionStart?.[0]?.hooks).toEqual([
+		{ type: 'command', command: 'sober hook session' },
+	])
+
+	// `sober` off the PATH, the same binary `.mcp.json` names: one install.
+	for (const event of Object.values(hooks.hooks))
+		for (const entry of event)
+			for (const one of entry.hooks) expect(one.command.startsWith('sober ')).toBe(true)
+})
+
 test('every skill carries the description the model decides on', () => {
 	const skills = readdirSync(join(plugin, 'skills'))
 	expect(skills.sort()).toEqual(['decide', 'loop', 'next', 'plan'])

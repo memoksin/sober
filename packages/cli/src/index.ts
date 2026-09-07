@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import { init } from './board.js'
+import { hook } from './hook.js'
 import { bold, columns, dim, fail, say } from './out.js'
 import { accept, archive, reject, review } from './review.js'
 import { status } from './status.js'
@@ -60,7 +61,13 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		],
 	],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
-	['In a session', [['mcp', 'serve SOBER’s tools to a host — the plugin starts this']]],
+	[
+		'In a session',
+		[
+			['mcp', 'serve SOBER’s tools to a host — the plugin starts this'],
+			['hook <event>', 'the plugin’s guard: held work cannot be spawned on'],
+		],
+	],
 ]
 
 const help = (): void => {
@@ -148,6 +155,12 @@ const main = async (): Promise<void> => {
 		}
 		case 'archive':
 			return archive(need('node or decision'))
+		// The host calls this, never a person: a hook payload in on stdin, the
+		// verdict out on stdout. It answers whatever it is handed, so a guard
+		// that cannot read the board says so instead of exiting and being read
+		// as a pass.
+		case 'hook':
+			return hook(rest[0])
 		case 'mcp': {
 			// The MCP server ships as a subcommand, not a second package: one
 			// install, one version, one changelog (ADR 0007). It speaks over

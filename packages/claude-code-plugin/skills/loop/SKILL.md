@@ -35,6 +35,8 @@ Every node bound by an unanswered decision is held, and no amount of work routes
 
 Every option carries two things: why someone picks it, and **what it costs later**. Write both for this repository, not in general. That pair is the whole of what makes the choice theirs rather than yours.
 
+**The block reaches into this session.** This plugin installs a hook: an agent spawn whose description or prompt names a held node is denied, and the denial says which decision is unanswered. There is no way around it and no setting that turns it off — answer the decision. If you are told a spawn was denied, do not rephrase it to get past the guard; say what is held and offer `/sober-decide`.
+
 An answered decision cannot be changed in this version, and the tool says why: every brief built on it would have to be withdrawn, and the preview that shows which ones is not built yet.
 
 ## Briefs and approval

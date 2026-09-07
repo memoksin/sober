@@ -260,11 +260,28 @@ Three terms, because two words were carrying three meanings (ADR 0009):
 | --- | --- | --- |
 | **adapter** | SOBER launching a host headless, for a dispatch | v1 |
 | **plugin** | the bundle installed into a host: MCP configuration, commands, skills | v1, Claude Code |
-| **hook enforcement** | a plugin denying an agent spawn while a node is held | v1.x |
+| **hook enforcement** | a plugin denying an agent spawn while a node is held | v1, Claude Code |
 
-In v1 the block lives in SOBER itself: a held node cannot be dispatched, from any surface. That is enforceable everywhere, because it is SOBER's own code path.
+The block lives in SOBER itself: a held node cannot be dispatched, from any surface. That is enforceable everywhere, because it is SOBER's own code path.
 
-Hook enforcement inside a host is v1.x, and v0 learned two things there worth carrying: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins. A host without working hook support is a host where SOBER advises rather than enforces, and the docs must say so rather than claim enforcement everywhere.
+Inside a host session it is not, and that is the hole MUST #12 opened: a human can tell the agent to build the held node with its own tools, and there the decision is only advice. The Claude Code plugin closes it (ADR 0029). It declares two hooks, both calling the same binary `.mcp.json` names:
+
+| Hook | What it does |
+| --- | --- |
+| `PreToolUse` on `Task` | Reads the spawn's description and prompt. If either names a node the board holds, the spawn is denied, and the reason names the node, the unanswered decision, what it asks, and the two ways to answer it. |
+| `SessionStart` | Says the guard is live, and which nodes are held. |
+
+Three things about the shape:
+
+**The guard derives nothing.** `sober hook <event>` is a CLI subcommand, so it asks `statusOf` — the same function the board, the CLI and the MCP server ask. A second implementation of `held` would drift, and then be wrong in the one place being wrong is expensive.
+
+**The node id is the whole handle.** A spawn carries a description and a prompt and nothing that names the work as SOBER knows it. An id is a slug plus four characters (ADR 0020), distinctive enough to look for and specific enough that finding one means the agent is being aimed at that node. Denying every spawn while anything is held would be a product that stops you working; guarding the node's declared globs would need a prediction §3.1 does not make.
+
+**There is no override.** The way through is answering the decision. A config switch would put the one hard block behind a setting, and the setting would be turned off exactly once — the first time it was inconvenient.
+
+A guard that is not installed is silent, and silence reads as permission. So the installed one announces itself, and a guard that could not read the board says so rather than reading as clean — the scan's rule (§2.8), applied to the hook.
+
+Hooks in other hosts stay v1.x with the plugins that would carry them, and v0 learned two things there worth carrying: Codex hashes hook definitions and silently ignores them until a human runs `/hooks`, and OpenCode has no elicitation for plugins. A host without working hook support is a host where SOBER advises rather than enforces, and its plugin must say so rather than claim enforcement everywhere.
 
 The same honesty applies to elicitation (§2.4): a host that cannot ask the human directly cannot accept a decision, and the tool says which surface can.
 

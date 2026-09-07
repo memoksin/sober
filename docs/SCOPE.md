@@ -35,6 +35,7 @@ If a proposed feature does not make one of these seven steps possible or correct
 | 11 | Contributors, assignment and claim, travelling with the board | 8 | Two people cannot work in parallel without knowing who has what. Added by ADR 0005. |
 | 12 | MCP server: an agent inside a host session reads the board, proposes, opens decisions, writes brief approaches, and reviews | 1–7 | Three of the MUSTs above are agent work, and this is where that work happens — in the session the user already opened, with the repository already in context. Moved from SHOULD by ADR 0009. |
 | 13 | The first host plugin: MCP configuration, commands, one skill | 1–4 | How MUST #12 reaches a host, and how a session learns the loop without being told again every time. Added by ADR 0009. |
+| 14 | Hook enforcement in the Claude Code plugin: an agent spawn that names a held node is denied | 3 | MUST #2 is the one hard block, and MUST #12 opened the hole in it — inside a session the decision was only advice. Moved from SHOULD by ADR 0029, on the fact that the host it ships for does honour hook definitions. |
 
 Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision**, never a "gate" — and by ADR 0009 for the three host-facing terms: an **adapter** launches a host headless, a **plugin** is installed into a host, and **hook enforcement** is what a plugin does about a held node.
 
@@ -44,8 +45,7 @@ Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision*
 
 - AI distribution: allocating nodes by matching each contributor's role and focus
 - Chain claim: taking a whole dependency chain as one unit
-- **Hook enforcement**: a plugin denying an agent spawn inside a host while a node is held. Host-dependent — Codex silently ignores hook definitions until a human runs `/hooks`, and OpenCode has no elicitation for plugins (`DESIGN.md` §2.9)
-- Plugins for hosts beyond Claude Code (Codex, OpenCode, Cursor), and the dispatch adapters that go with them
+- Plugins for hosts beyond Claude Code (Codex, OpenCode, Cursor), and the dispatch adapters that go with them — **and the hook enforcement each one can carry**, which is where "host-dependent" is still true: Codex silently ignores hook definitions until a human runs `/hooks`, and OpenCode has no elicitation for plugins (`DESIGN.md` §2.9). A plugin that cannot deny says so on install rather than implying a guard it does not have
 - Live session view — watching a dispatched agent, answering its prompts
 - Auditor — automated checks on a finished node, beyond the security scan that ADR 0002 moved into MUST #9
 - An agent definition shipped in the plugin, beyond the skill
