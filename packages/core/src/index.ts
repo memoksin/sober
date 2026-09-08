@@ -33,6 +33,7 @@ export {
 	approveBrief,
 	NoBriefError,
 	NoSuchOptionError,
+	queueByDefault,
 	writeBrief,
 } from './decide.js'
 export { digest } from './digest.js'

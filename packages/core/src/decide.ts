@@ -1,5 +1,6 @@
 import type { Brief, Decision, Handle, Node } from '@besober/schema'
 import { decisionState } from '@besober/schema'
+import { readConfig } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { appendEvent } from './local.js'
 import { withLock } from './lock.js'
@@ -122,8 +123,14 @@ export const approveBrief = (
 		const brief: Brief = {
 			...record.value.brief,
 			// ADR 0017: the same human approval, plus the instruction to dispatch
-			// when the node becomes ready, without asking again.
-			approval: { by: options.by, at: new Date().toISOString(), queue: options.queue ?? false },
+			// when the node becomes ready, without asking again. A caller that says
+			// nothing gets the board's default (ADR 0056) — a broken config falls to
+			// the attended side, because that is the one nobody pays for twice.
+			approval: {
+				by: options.by,
+				at: new Date().toISOString(),
+				queue: options.queue ?? (await queueByDefault(paths)),
+			},
 		}
 		const node: Node = { ...record.value, brief }
 		await writeNode(paths, id, node)
@@ -154,3 +161,14 @@ export const writeBrief = (
 		await appendEvent(paths, { action: 'brief.written', node: id })
 		return node
 	})
+
+/**
+ * Which of the two approval actions applies when the caller does not say
+ * (`dispatch.queueByDefault`, ADR 0056). Read normally rather than from the
+ * base ref: it governs a default in a prompt a human answers on their own
+ * checkout, not how a run is prepared or judged (ADR 0019).
+ */
+export const queueByDefault = async (paths: Paths): Promise<boolean> => {
+	const config = await readConfig(paths)
+	return config.kind === 'ok' && config.value.dispatch.queueByDefault
+}

@@ -78,8 +78,18 @@ export const runQueue = async (
  * 0017's first rule: a run that failed leaves the node `ready` again, and a run
  * a human turned down does too, and neither may be started a second time by
  * something the human is not watching. From then on it is theirs.
+ *
+ * ADR 0056 settled all three conditions and left them where they are. `ready`
+ * already means approved (`status.ts`), so the flag is not a second permission:
+ * it is the difference between "start now", which a human is watching, and
+ * "start later without asking", which nobody is. A node approved with
+ * `queue: false` that never started was approved for attended work, and taking
+ * it here would hand it a trade its approver declined. What 0056 moved instead
+ * is which action a surface offers by default (`dispatch.queueByDefault`).
+ *
+ * Exported for the test that holds those three conditions in place.
  */
-const queued = (board: Board): string[] =>
+export const queued = (board: Board): string[] =>
 	[...board.nodes.keys()]
 		.filter(
 			(id) =>

@@ -14,6 +14,7 @@ import {
 	isRepo,
 	loadBoard,
 	newId,
+	queueByDefault,
 	readConfig,
 	renderBrief,
 	whoami,
@@ -490,11 +491,13 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				node: z.string(),
 				queue: z
 					.boolean()
-					.default(false)
-					.describe('start it without asking again, the moment it becomes ready'),
+					.nullish()
+					.describe(
+						'start it without asking again, the moment it becomes ready; omit it to follow the board’s dispatch.queueByDefault',
+					),
 			},
 		},
-		tool(async ({ node, queue }: { node: string; queue: boolean }) => {
+		tool(async ({ node, queue }: { node: string; queue?: boolean | null }) => {
 			const paths = await openBoard(cwd)
 			const board = await loadBoard(paths)
 			const record = board.nodes.get(node)
@@ -502,19 +505,24 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			if (record.brief === null)
 				return text(`${node} has no brief yet — write one with \`write_brief\` first.`)
 
+			// The human confirms one of two actions, so the button has to name the
+			// one that will happen — which is the board's default when the caller
+			// said nothing (ADR 0056).
+			const queued = queue ?? (await queueByDefault(paths))
+
 			// One line. The approach and the criteria are read in the conversation,
 			// where nothing truncates them; the prompt is where the human decides.
 			const yes = await askYes(
 				server.server,
 				'Approve this brief?',
 				`Approve the brief for “${record.title}”, with ${record.brief.acceptance.length} acceptance criteria?`,
-				queue ? 'Yes — approve, and start it when it is ready' : 'Yes, approve it',
+				queued ? 'Yes — approve, and start it when it is ready' : 'Yes, approve it',
 			)
 			if (!yes) return text('Not approved. Nothing was recorded.')
 
-			await approveBrief(paths, node, { by: await whoami(paths.root), queue })
+			await approveBrief(paths, node, { by: await whoami(paths.root), queue: queued })
 			return text(
-				queue
+				queued
 					? `${node} is approved and will start when it is ready.`
 					: `${node} is approved. Start it with the \`run\` tool.`,
 			)

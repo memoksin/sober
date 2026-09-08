@@ -501,7 +501,11 @@ There are two approval actions (ADR 0017):
 - **Approve** — dispatch now.
 - **Approve and queue** — the same human approval, plus the instruction to dispatch when the node becomes ready, without asking again. Stored as `queue: true` on the approval record (ADR 0021).
 
-What "approve and queue" trades is that the approach is approved before the upstream node's outcome exists. The approach is written against the decisions and the node's description rather than an upstream diff, so this is usually harmless — and sometimes it is not, which is why it is per node and never the default. D26 is untouched: approval is still human, still per node, still with no batch. §5.3 holds the rules that make an unattended chain safe.
+What "approve and queue" trades is that the approach is approved before the upstream node's outcome exists. The approach is written against the decisions and the node's description rather than an upstream diff, so this is usually harmless — and sometimes it is not. D26 is untouched: approval is still human, still per node, still with no batch. §5.3 holds the rules that make an unattended chain safe.
+
+Which of the two a surface offers when the caller does not say is `dispatch.queueByDefault`, off by default (ADR 0056). It moves the starting position, not the trade: the human still approves one node at a time, and the prompt is labelled from the resolved value, so they see which of the two actions they are confirming. It is read normally rather than from the base ref (§5.2) — it governs a default in a prompt a human answers on their own checkout, not how a run is prepared or judged.
+
+The unattended path is narrower than `ready`, and deliberately: it takes only a node whose approval carries `queue: true` and that has never run (ADR 0056). `ready` already means approved — a node with no brief is `needs-brief` and an unapproved brief is `needs-approval` — so the flag is not a second permission. It is the difference between "start now", which a human is watching, and "start later without asking", which nobody is. A node approved with `queue: false` that never started stays the human's to run.
 
 When a decision changes, approval on every affected brief is **withdrawn** and the node returns to `needs-brief` (§2.8, `PR-04-07`). A node is never dispatched carrying an answer that is no longer current.
 
@@ -633,11 +637,13 @@ A config setting, default 3 (D30). Ready nodes beyond the limit queue and start 
 
 The default is conservative on purpose: a user's first dispatch should not open twelve sessions and twelve invoices. Unlimited would make "parallel agents" mean "however many the board happens to hold".
 
-That queue is also what "approve and queue" feeds (§3.7). Three rules make an unattended chain safe:
+That queue is also what "approve and queue" feeds (§3.7). Three rules make an unattended chain safe, all three carried forward unchanged by ADR 0056:
 
 1. **The chain stops at the first rejection or failure.** Four more nodes are never built on top of a result a human turned down.
 2. **The concurrency limit applies**, unchanged.
-3. **The same-files warning blocks an automatic dispatch** (§3.4). That warning needs a human confirmation, so an overlapping node waits rather than running unattended.
+3. **The same-files warning blocks an automatic dispatch** (§3.4). That warning needs a human confirmation, so an overlapping node waits rather than running unattended. A node another teammate has claimed waits for the same reason: it is theirs to start.
+
+A fourth follows from the first: **a node that has already run is never started again unattended.** A failed run leaves the node `ready`, and so does one a human turned down — retrying either without a human watching repeats a failure, or builds on a result already refused. Retrying is a human action (ADR 0056).
 
 ### 5.4 Stopping
 
