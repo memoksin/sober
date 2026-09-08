@@ -31,6 +31,12 @@ const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.m
 /** Portable, and exits with what it is told to: no shell builtin is. */
 const exits = (code: number): string => `${process.execPath} -e "process.exit(${code})"`
 
+/**
+ * A missing tool the way a shell that is not `sh` reports one: the sentence
+ * every shell says, and an exit code that is not `sh`'s 127.
+ */
+const missing = `${process.execPath} -e "process.stderr.write('nosuchtool: command not found');process.exit(1)"`
+
 const aNode = (title: string) => ({
 	title,
 	description: 'Sign in and sign out.',
@@ -113,6 +119,22 @@ test('a criterion whose command is not installed is “did not run”, never a p
 	const found = await reviewNode(paths, 'auth-api-k7f2', 'main')
 	expect(found?.acceptance[0]?.result).toBeNull()
 	expect(found?.acceptance[1]?.result).toEqual({ exit: 0 })
+})
+
+test('a tool the shell says is missing did not run, whatever exit code it chose', async () => {
+	// `sh` exits 127 for a command it cannot find and `cmd.exe` exits 1, so the
+	// sentence is the only thing common to every shell — and the sentence was
+	// not reaching the check. `execFile` hands stdout and stderr to its
+	// callback, never to the error, so the text half of `notInstalled` tested
+	// two empty strings on every platform and POSIX passed on the exit code
+	// alone. Windows read a tool nobody installed as a criterion that failed,
+	// which is the one reading ADR 0021 exists to prevent.
+	const paths = await board()
+	await criteria(paths, { run: missing, proves: 'the login form validates' })
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	expect((await readRuns(paths)).records.get(result.run)?.acceptance).toEqual([null])
 })
 
 test('`dispatch.verify` runs in the worktree and lands on the same record', async () => {

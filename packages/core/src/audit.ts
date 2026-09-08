@@ -75,9 +75,16 @@ export const judge = (cwd: string, command: string | null): Promise<Judged> =>
 					(error, stdout, stderr) => {
 						const output = `${stdout}${stderr}`
 						if (error === null) return resolve({ result: { exit: 0 }, output })
-						const failure = error as Failure
-						if (notInstalled(failure)) return resolve({ result: null, output })
-						const code = failure.code
+						// The text goes in from the callback, not off the error:
+						// `execFile` hands stdout and stderr to the callback and never
+						// attaches them to what it rejects with. Read off the error,
+						// the message half of `notInstalled` tested two empty strings
+						// on every platform, and only `sh`'s exit 127 was doing the
+						// work — so a shell that answers differently, `cmd.exe` among
+						// them, read a tool nobody installed as a criterion that
+						// failed.
+						const code = (error as Failure).code
+						if (notInstalled({ code, stdout, stderr })) return resolve({ result: null, output })
 						resolve({ result: { exit: typeof code === 'number' ? code : 1 }, output })
 					},
 				)
