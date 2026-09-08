@@ -29,6 +29,7 @@ export const aDecision = (overrides: Partial<Decision> = {}): Decision => ({
 		{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 	],
 	suggested: null,
+	derived: null,
 	answer: null,
 	createdAt: AT,
 	...overrides,

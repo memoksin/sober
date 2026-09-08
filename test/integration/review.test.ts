@@ -63,6 +63,7 @@ const board = async (): Promise<Paths> => {
 			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 		],
 		suggested: null,
+		derived: null,
 		answer: null,
 		createdAt: AT,
 	})
@@ -420,6 +421,7 @@ test('dismissing a flag settles that answer, and the next change raises it again
 			rationale: '',
 			by: 'memoksin',
 			at: new Date(Date.now() + 1000).toISOString(),
+			derived: null,
 		},
 	})
 	expect((await reviewNode(paths, NODE, 'main'))?.flagged).toBe(true)

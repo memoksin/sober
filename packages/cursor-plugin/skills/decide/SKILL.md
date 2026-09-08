@@ -24,11 +24,13 @@ For each, in turn:
 
 1. If it has no options yet, produce them with `open_decision` — two to four, each with why someone picks it and what it costs later, written for **this** repository rather than in general. Set `suggested` to the one you would pick, and say in one sentence why.
 
-2. **Show the options here, in full** — the label, why someone picks it, and what it costs later — before you call anything. This is the only place the user reads them: the prompt that follows carries the labels alone, because a narrow terminal cuts a long line instead of wrapping it. A user who has not read cannot make the choice theirs (§2.5).
+2. If the decision carries a `derived`, say so and name it: "this repository already answers this — read from `docs/adr/0012-…`". That is context, not pressure. The user is free to pick something else, and if they do, the record simply says a person chose it.
 
-3. Call `decide` with the decision id. That tool asks the user directly; you cannot supply an answer and there is no argument for one. Wait for what comes back.
+3. **Show the options here, in full** — the label, why someone picks it, and what it costs later — before you call anything. This is the only place the user reads them: the prompt that follows carries the labels alone, because a narrow terminal cuts a long line instead of wrapping it. A user who has not read cannot make the choice theirs (§2.5).
 
-4. Say what the answer unblocked.
+4. Call `decide` with the decision id. That tool asks the user directly; you cannot supply an answer and there is no argument for one. Wait for what comes back.
+
+5. Say what the answer unblocked.
 
 Then move to the next decision. One question at a time, never a summary of all of them followed by one confirmation — that is the rubber stamp this whole mechanism exists to prevent.
 

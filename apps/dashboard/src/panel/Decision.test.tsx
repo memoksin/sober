@@ -21,7 +21,10 @@ const board = (answered: boolean): BoardRead => ({
 				{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 			],
 			suggested: null,
-			answer: answered ? { option: 'cookie', rationale: 'Simplest', by: 'memoksin', at: AT } : null,
+			derived: null,
+			answer: answered
+				? { option: 'cookie', rationale: 'Simplest', by: 'memoksin', at: AT, derived: null }
+				: null,
 			createdAt: AT,
 			archived: false,
 		},

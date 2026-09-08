@@ -139,6 +139,10 @@ export const editDecision = (paths: Paths, id: string, editing: Editing): Promis
 				rationale: editing.rationale ?? '',
 				by: editing.by,
 				at: new Date().toISOString(),
+				// An edit is a person changing their mind, whatever the first
+				// answer was read off — so the provenance does not carry over
+				// (ADR 0055).
+				derived: null,
 			},
 		}
 		await writeDecision(paths, id, answered)

@@ -5,7 +5,13 @@ import type { Board } from './graph.js'
 import { aDecision, aNode } from './records.fixture.js'
 
 const AT = '2026-09-04T00:00:00.000Z'
-const answer: Answer = { option: 'redis', rationale: 'We already run one.', by: 'memoksin', at: AT }
+const answer: Answer = {
+	option: 'redis',
+	rationale: 'We already run one.',
+	by: 'memoksin',
+	at: AT,
+	derived: null,
+}
 
 const board = (): Board => ({
 	project: {

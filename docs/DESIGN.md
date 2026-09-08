@@ -176,17 +176,21 @@ The one hard block (`CHARTER.md`). ADR 0003 fixes the vocabulary: a decision, ne
     },
   ],
   "suggested": "cookie",
+  "derived": "docs/adr/0012-session-state.md",
   "answer": {
     "option": "cookie",
     "rationale": "Single server for now; revocation matters more than scale-out.",
     "by": "memoksin",
     "at": "2026-08-27T10:12:00Z",
+    "derived": "docs/adr/0012-session-state.md",
   },
   "createdAt": "2026-08-27T09:00:00Z",
 }
 ```
 
 Options carry ids and `answer.option` names one, so a reordered or regenerated list can never move the answer silently. State is derived, never stored: `options` null means not yet opened (§2.6), `answer` null means open, otherwise answered. `suggested` is the agent's proposal; `answer` is the human's (ADR 0020).
+
+`derived` is set when the options were read off a repository that had already made this choice — a path, a file, "the import graph" (ADR 0055). It is null on a greenfield board and on anything an agent inferred rather than read. It changes nothing about how the question is put: `decide` still asks, one at a time, and `answerDecision` copies the field onto the answer so a record says whether a person worked the answer out or confirmed what the code already said. `editDecision` writes null — an edit is somebody changing their mind.
 
 Two to four options. Every option carries a reason and what it costs later — this is the whole of SOBER's education pillar in v1 (`SCOPE.md`).
 
