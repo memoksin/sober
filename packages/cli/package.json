@@ -2,6 +2,21 @@
 	"name": "@besober/cli",
 	"version": "0.1.1",
 	"description": "SOBER \u2014 agentic development platform.",
+	"keywords": [
+		"agent",
+		"orchestration",
+		"claude-code",
+		"mcp",
+		"worktree",
+		"cli"
+	],
+	"homepage": "https://github.com/memoksin/sober#readme",
+	"bugs": "https://github.com/memoksin/sober/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/memoksin/sober.git",
+		"directory": "packages/cli"
+	},
 	"type": "module",
 	"bin": {
 		"sober": "./dist/sober.js"
