@@ -57,6 +57,8 @@ Derived from `CHARTER.md`. The vocabulary is fixed by ADR 0003 — a **decision*
 
 Each of these is a real feature. None of them is required for the loop to close once. That is the whole test.
 
+**Status, 2026-09-08.** None of the five is open work, and three of them cannot be started from here. Codex and OpenCode ship no hook mechanism SOBER could enforce against, so their half of the first item is not a backlog entry but a fact about those hosts. Cursor's half and the third item share one blocker: both need Cursor's CLI installed and an account spent on it, and neither is planned. Attended dispatch needs a host that stays open, which none of the three is. The remaining two — tool-permission prompts and an agent definition — are unblocked and unstarted, by choice. Each still moves to MUST only by an ADR, and what that ADR has to name is the fact that changed.
+
 ## WON'T — v1
 
 | Not building | Why not |
