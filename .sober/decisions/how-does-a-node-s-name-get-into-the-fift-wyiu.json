@@ -1,0 +1,27 @@
+{
+	"category": "data-flow",
+	"question": "How does a node's name get into the fifteen sentences that print an id, without fifteen call sites each formatting it?",
+	"options": [
+		{
+			"id": "one-formatter",
+			"label": "One formatting function per surface — `render.ts` for the plugin, `out.ts` for the terminal — that every message calls",
+			"reason": "packages/mcp/src/render.ts already exists and already is where the plugin's sentences are shaped, so the plugin's half is a function added to a module that has the job. The call sites stay honest about what they hold: an id, formatted at the moment of printing. The terminal and the screen keep their own formatting, which is right — one has ANSI and 80 columns, the other has CSS.",
+			"costLater": "It is a convention, not a constraint. The sixteenth message can still interpolate a bare id and nothing fails; the only thing stopping it is that somebody notices in review. Each surface also needs the board in hand at the point of printing, which some of these call sites do not have today and would have to be passed."
+		},
+		{
+			"id": "labelled-at-the-read",
+			"label": "The read returns nodes already labelled, so no call site ever holds a bare id",
+			"reason": "It makes the bad case unrepresentable rather than discouraged: if what a caller receives is `{ id, name }` and not a string, a message that prints only an id is a type error, not a review comment. The board is read in one place per surface, so the label is attached once, where the record is already in hand.",
+			"costLater": "It changes the shape everything downstream passes around, including places that genuinely only want an id — a file name, a branch name, a lookup key — and those now unwrap. It is the larger diff by a wide margin, and it reaches code that has nothing to do with this complaint."
+		},
+		{
+			"id": "each-site-formats",
+			"label": "Each call site interpolates the name itself",
+			"reason": "The smallest diff that fixes what was actually complained about: fifteen edits, no new function, no new type, and each sentence can phrase it the way that sentence reads best — a list of nodes and a single denial message do not want the same shape.",
+			"costLater": "Fifteen formats drift into fifteen slightly different formats, and a reader who has to learn the shape per message learns none of them. It is also the version that quietly stops being true: the next message added copies whichever neighbour the author happened to look at."
+		}
+	],
+	"suggested": "one-formatter",
+	"answer": null,
+	"createdAt": "2026-09-08T12:35:02.425Z"
+}

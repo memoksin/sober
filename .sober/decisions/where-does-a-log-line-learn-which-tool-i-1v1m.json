@@ -1,0 +1,27 @@
+{
+	"category": "data-flow",
+	"question": "Where does a log line learn which tool it was — Read, Bash, Edit — and that the agent was thinking?",
+	"options": [
+		{
+			"id": "wire-carries-it",
+			"label": "The wire carries it: `LogLine` grows a tool field and a thinking kind, and each adapter fills them in",
+			"reason": "Every adapter already holds the tool's name at the exact line where it builds the log line — `part.name` in claude, `event.part.tool` in opencode, `call.name` in cursor, the command in codex — and then throws it into a string. Carrying it is subtraction, not new machinery. It also puts the knowledge of what a host calls its tools in the one place that already knows: the adapter that reads that host's events. Both readers, the dashboard and `sober logs`, then get the same fact without either one guessing.",
+			"costLater": "`LogLine` is a strict object on a versioned wire, so widening it touches packages/schema, its export snapshot and the surface ratchet, and every adapter has to be edited at once rather than one host at a time. Old log files written before the change hold lines with no tool on them, so both renderers need a path for a line that names nothing — forever, not just during the transition."
+		},
+		{
+			"id": "client-parses-text",
+			"label": "The client parses it back out of `line.text`",
+			"reason": "Nothing on the wire moves and nothing in packages/core is touched. The tool name is already the first word of a tool line's text for three of the four adapters, so a small parser in apps/dashboard/src/logs/data.ts gets the icons on screen without a schema change, an export-surface change, or a version question.",
+			"costLater": "It is a parser reconstructing a fact the producer had and discarded, which is the shape that quietly rots: a host renames a tool or changes its wording and the icons fall back to a generic glyph with nothing failing. It also has to be written twice, once for the screen and once for `sober logs`, or one of the two shows different icons for the same run. And it cannot recover thinking at all — the claude adapter never emits it, so no parse of the text can find it."
+		},
+		{
+			"id": "kinds-only",
+			"label": "New kinds only — `tool-read`, `tool-bash`, `thinking` — and no new field",
+			"reason": "The renderers stay exactly as they are: a flat record keyed by kind, which is what MARK, TONE and the CLI's TAIL already are, with no branching on a second field. The change is a wider enum and nothing else.",
+			"costLater": "The enum becomes a list of every tool every host will ever have, and each new one is a schema change plus a renderer change on both sides. It also fuses two independent facts — what sort of line this is, and which tool it names — into one value, so anything that wants tool lines regardless of tool, or wants to count tools by name, has to pattern-match on a string prefix."
+		}
+	],
+	"suggested": "wire-carries-it",
+	"answer": null,
+	"createdAt": "2026-09-08T12:31:26.720Z"
+}

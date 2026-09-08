@@ -1,0 +1,24 @@
+{
+	"title": "Correct the install instructions in the three existing host READMEs",
+	"description": "All three host READMEs open Install with \"From a checkout of this repository\". That is right for two of them and wrong for one, and the reader cannot tell which. Verify each against what the repository actually declares, then write what is true: Claude Code needs no checkout (root .claude-plugin/marketplace.json is fetched from GitHub by `/plugin marketplace add memoksin/sober`); Codex's .agents/plugins/marketplace.json declares `{\"source\":\"local\",\"path\":\"./packages/codex-plugin\"}`, so `codex plugin marketplace add` needs a real path on disk and a checkout is genuinely required; Cursor is a symlink into ~/.cursor/plugins/local and OpenCode is a copy of .opencode plus an mcp block merge, so both need a checkout too. Where a checkout is required, say so as a fact with the reason, not as a default. Keep every \"what is different from Claude Code\" section untouched.",
+	"notes": "",
+	"dependsOn": [
+		"a-per-host-install-section-in-the-readme-ykg6"
+	],
+	"decisions": [
+		"where-does-the-canonical-per-host-instal-elpx",
+		"when-an-install-fact-changes-a-marketpla-xq25"
+	],
+	"files": [
+		"packages/cursor-plugin/README.md",
+		"packages/codex-plugin/README.md",
+		"packages/opencode-plugin/README.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

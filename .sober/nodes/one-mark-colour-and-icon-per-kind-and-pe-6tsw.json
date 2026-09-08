@@ -1,0 +1,23 @@
+{
+	"title": "One mark, colour and icon per kind and per tool",
+	"description": "The lookup tables only — no component, no rendering. Today apps/dashboard/src/logs/data.ts holds MARK and TONE, two flat records keyed by the six `LogLine` kinds, and its own doc comment states the rule this node has to keep: a fact about how a log reads is testable without a screen, and a fact rendered by one screen is a fact nobody can check.\n\nGrow that vocabulary to cover the tools a line can now name — at minimum Read, Edit, Write, Bash, Grep, Glob, Task, WebFetch — with a glyph per tool and an explicit fallback for a tool nobody listed, because every host names its tools differently and an unknown one must still render rather than render blank. Add the entry for the new thinking kind.\n\n**The colour constraint is the hard part and is not negotiable.** ADR 0039 decides that colour in this product answers exactly one question — whose move is it — across eight statuses in three families, and every M3 screen inherits that system. Eight new hues keyed to tool names would make the log the one surface where colour means something else, and a person reading the dashboard would have to hold two colour languages at once. Separate the tools by glyph, and by the neutral ink ramp (--ink, --ink-dim, --ink-faint) which carries no status meaning; spend a status token only where the log line genuinely means what that token means — --danger for the host's stderr, as TONE already does. If the shape that comes out of this needs to break ADR 0039, that is a new ADR and a conversation, not a quiet exception.\n\nShip the table with its unit test in the same node.",
+	"notes": "",
+	"dependsOn": [
+		"the-run-log-carries-what-the-agent-actua-m105"
+	],
+	"decisions": [
+		"now-that-the-log-vocabulary-grows-from-s-0jbt"
+	],
+	"files": [
+		"apps/dashboard/src/logs/data.ts",
+		"apps/dashboard/src/logs/data.test.ts",
+		"packages/schema/src/*.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:31:26.720Z"
+}

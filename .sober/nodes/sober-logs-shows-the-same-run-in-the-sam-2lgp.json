@@ -1,0 +1,23 @@
+{
+	"title": "`sober logs` shows the same run in the same words",
+	"description": "packages/cli/src/work.ts holds TAIL, its own five-entry mark table — started ◌, tool ▸, text │, result ✓, raw ! — with a colour function each, and a `mark()` that falls back to `·` for anything unlisted. It has no entry for `answer` today, and none for the thinking kind this work adds.\n\nThe dashboard's data.ts states the rule out loud: the marks are the CLI's, deliberately, because `sober logs` and the run screen show the same run and two vocabularies for one thing is how a person ends up unsure whether they are looking at the same output. Adding kinds and tool identity to the wire without touching the CLI breaks exactly that.\n\nBring the terminal up to the same vocabulary the decision on where it lives puts in place — either import the shared table or mirror it, but the fallback stays: the terminal must render an unknown kind and an unknown tool rather than crash or print nothing. A spinner is not the terminal's shape for thinking; `out.js` already exports one for foreground work, and a scrolling log is not foreground — pick a mark instead and say why in the code. Update the CLI test alongside.",
+	"notes": "",
+	"dependsOn": [
+		"one-mark-colour-and-icon-per-kind-and-pe-6tsw"
+	],
+	"decisions": [
+		"now-that-the-log-vocabulary-grows-from-s-0jbt"
+	],
+	"files": [
+		"packages/cli/src/work.ts",
+		"packages/cli/src/*.test.ts",
+		"test/integration/cli.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:31:26.720Z"
+}

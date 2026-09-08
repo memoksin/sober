@@ -1,0 +1,26 @@
+{
+	"title": "A node gets a short name a person can read",
+	"description": "An id today is `newId(title)` in packages/core/src/id.ts: the title lowercased, non-alphanumerics collapsed to hyphens, **cut at 40 characters**, plus four random letters (ADR 0020). Cutting at 40 is what produces `the-run-panel-a-box-for-what-the-agent-s-5svv` — severed mid-word, and the half that carried the meaning is the half that got cut.\n\nThe Node record in packages/schema/src/node.ts has `title` and `description` and nothing between them: nothing short enough to print in a list and long enough to mean something. Give it one, in whatever form the decision on where it lives settles — a stored field, or a function that derives it from the title without severing a word.\n\nIf it becomes a stored field: `Node` is a `z.strictObject` whose doc comment says a board written by a newer SOBER must fail loudly rather than be quietly rewritten, so this is a schema version step. That machinery is in packages/core/src/migrate.ts and reads raw JSON; add the entry to MIGRATIONS with `to: 6`, bump `n_VERSION` in packages/schema/src/project.ts, and backfill every existing node from its title — the spread order in the existing entries is the pattern to copy, so a value already there is left alone. Every board on disk today is v5 and one of them is this repository's own.\n\nAlso settle what `newId` is seeded from. Seeding it from a short name instead of the title gives clean ids going forward and changes no id that already exists, since an id is written once. Note the constraint ADR 0020 already recorded when it rejected pure-slug ids: a slug goes stale when the title changes. The same is true of a stored name, and it is survivable for a label in a way it was not for an identifier — but say so in the code rather than discovering it later.\n\nSchema and migration and the id seed are one node: a field with no migration is a board that will not load.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"is-the-short-readable-name-a-field-store-quqp"
+	],
+	"files": [
+		"packages/schema/src/node.ts",
+		"packages/schema/src/project.ts",
+		"packages/schema/src/*.test.ts",
+		"packages/schema/src/__snapshots__/*",
+		"packages/core/src/id.ts",
+		"packages/core/src/id.test.ts",
+		"packages/core/src/migrate.ts",
+		"packages/core/src/migrate.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:35:02.425Z"
+}

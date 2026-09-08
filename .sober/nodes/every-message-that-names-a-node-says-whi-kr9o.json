@@ -1,0 +1,26 @@
+{
+	"title": "Every message that names a node says which node it is",
+	"description": "This is where the complaint actually lands. A bare id is printed, joined by commas, in roughly fifteen places, and every one of them is a sentence a human reads with no other context:\n\n- packages/mcp/src/render.ts:80 and :83 — the board's `waiting on …` tails\n- packages/mcp/src/render.ts:46 — loose decisions\n- packages/mcp/src/tools/plan.ts:315 — what `bind` wrote\n- packages/mcp/src/tools/plan.ts:360 — `… it no longer holds a, b, c` after an answer\n- packages/mcp/src/tools/plan.ts:539 and :542 — briefs withdrawn, nodes flagged\n- packages/mcp/src/tools/build.ts:29 — nodes heading for the same files\n- packages/mcp/src/tools/distribute.ts:38, :114, :117 — assigned and passed over\n\nPut the name beside the id in all of them, in one consistent form so a reader learns it once. Route it through whatever the data-flow decision settles rather than formatting it at each call site — fifteen hand-written formats is fifteen chances to print a different shape.\n\nTwo things the id is *not* decoration for and must survive verbatim: it is what the human types back into a tool, and it is the file name on disk. A message that prints only a name is a message nobody can act on. Update the tool tests in the same node — several assert on these exact strings.",
+	"notes": "",
+	"dependsOn": [
+		"a-node-gets-a-short-name-a-person-can-re-xygw"
+	],
+	"decisions": [
+		"is-the-short-readable-name-a-field-store-quqp",
+		"how-does-a-node-s-name-get-into-the-fift-wyiu"
+	],
+	"files": [
+		"packages/mcp/src/render.ts",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/tools/build.ts",
+		"packages/mcp/src/tools/distribute.ts",
+		"packages/mcp/src/**/*.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:35:02.425Z"
+}

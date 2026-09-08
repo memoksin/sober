@@ -1,0 +1,21 @@
+{
+	"title": "A per-host install section in the README, all four hosts",
+	"description": "The README must itself tell a reader how to install the SOBER plugin into the agentic tool they use — not link them elsewhere for it. Write one subsection per host under the guide's install step, each with the exact commands and each stating the shared prerequisite once: `sober` has to be on PATH (`npm i -g @besober/cli`) because every host's MCP declaration and Claude Code's hooks.json name that command.\n\nClaude Code: `/plugin marketplace add memoksin/sober` then `/plugin install sober@sober` — no checkout, Claude Code clones the repository itself from the root .claude-plugin/marketplace.json; plus the settings.json route (extraKnownMarketplaces + enabledPlugins) for a team that wants it present on checkout.\nCodex: `codex plugin marketplace add <path to checkout>` then `codex plugin add sober@sober` — a checkout is required, because .agents/plugins/marketplace.json declares source `local` with path ./packages/codex-plugin.\nCursor: symlink packages/cursor-plugin into ~/.cursor/plugins/local/sober, reload, confirm under Customize — checkout required.\nOpenCode: copy packages/opencode-plugin/.opencode into the project or ~/.config/opencode/, and merge the mcp block of opencode.json — checkout required.\n\nEach subsection ends with the one line that matters for that host, taken from the Hosts table rather than repeating it: whether decisions can be asked in session, and whether an attended run is possible. Verify every command against the repository before writing it; a command that does not run is worse than a link.",
+	"notes": "",
+	"dependsOn": [
+		"turn-the-root-readme-into-a-short-guide-0hlc"
+	],
+	"decisions": [
+		"where-does-the-canonical-per-host-instal-elpx"
+	],
+	"files": [
+		"README.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:10:25.305Z"
+}

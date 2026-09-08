@@ -1,0 +1,20 @@
+{
+	"title": "Write the missing README for packages/claude-code-plugin",
+	"description": "packages/claude-code-plugin is the only host package with no README — the root README's Hosts table links to the bare directory while the other three rows link to a README.md. Write it in the same shape as packages/cursor-plugin/README.md: what the plugin ships (hooks/hooks.json with the PreToolUse spawn deny and the SessionStart hook, six generated skills, the sober MCP server), how to install it, and what is different from the other hosts — this is the only host that enforces the block in-session. Two install paths are true and both must appear: `/plugin marketplace add memoksin/sober` then `/plugin install sober@sober` (Claude Code clones the repo itself — no manual clone, which is what .claude-plugin/marketplace.json at the root already supports), and the settings.json route via extraKnownMarketplaces + enabledPlugins for a team that wants the plugin present on checkout. State the `sober` on PATH prerequisite, because hooks.json shells out to `sober hook spawn` and `sober hook session`. Close with the same \"do not edit the skills here\" paragraph the other three carry.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-the-canonical-per-host-instal-elpx"
+	],
+	"files": [
+		"packages/claude-code-plugin/README.md",
+		"README.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

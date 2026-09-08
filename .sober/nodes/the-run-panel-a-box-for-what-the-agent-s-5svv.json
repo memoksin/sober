@@ -1,0 +1,21 @@
+{
+	"title": "The run panel: a box for what the agent said, a row for what it did, a spinner while it thinks",
+	"description": "apps/dashboard/src/logs/Logs.tsx renders every line identically: an `<ol>` of `<li className=\"flex gap-3\">`, a coloured mark, and `whitespace-pre-wrap` text, the whole scroller set in 13px mono. A paragraph the agent wrote to the human and a one-word tool name get the same treatment, which is why the panel is hard to read — there is no visual difference between the two things a reader is looking for.\n\nThree changes, all inside the scroller:\n\n**A box for the agent's messages.** Lines of kind `text` (and `answer`, which is the human's half of the same conversation) render as a contained block — the surface token, a border, radius, padding, and the UI font rather than mono, since prose in a monospace column is the other half of why this is hard to read. Bounded width so a long paragraph does not run the full 980px of the overlay. The two directions must stay distinguishable; `answer` already has its own mark pointing the other way.\n\n**A row per tool call.** Tool lines stay compact, one line each, with the glyph and treatment the vocabulary node defines. They are the texture a reader skims past, not the thing they stop on.\n\n**A spinner while it thinks.** A thinking line renders with a running indicator rather than a static mark. It has to stop: when the next line of any kind arrives, that thinking line is over and its spinner must settle into a resting state — an animation left running is a screen that claims the agent is still thinking after it has answered. Reuse the animation already in this file: `Status` renders `animate-pulse` on a dot for the running state.\n\nHold everything the file already gets right: the `following` ref and `atBottom` (a reader who scrolled up is reading something), the three-state `Status`, the answer footer, and the index-as-key on an append-only log. Update Logs.test.tsx in the same node.",
+	"notes": "",
+	"dependsOn": [
+		"one-mark-colour-and-icon-per-kind-and-pe-6tsw"
+	],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/logs/Logs.tsx",
+		"apps/dashboard/src/logs/Logs.test.tsx",
+		"apps/dashboard/src/theme.css"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:31:26.720Z"
+}

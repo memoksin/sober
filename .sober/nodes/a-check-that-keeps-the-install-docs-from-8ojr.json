@@ -1,0 +1,26 @@
+{
+	"title": "A check that keeps the install docs from drifting",
+	"description": "Install prose names things the repository owns: the marketplace names in .claude-plugin/marketplace.json and .agents/plugins/marketplace.json, the plugin directory each one points at, the package name @besober/cli, and the relative links between README.md and the four package READMEs. Today nothing fails when one of those moves. Add a check that reads the manifests and the README files and asserts they agree — in test/integration alongside plugin.test.ts, which already guards the generated skills, or as a script under scripts/ if the decision below puts the prose behind the generator. Assert at minimum: every relative link in README.md resolves to a file that exists, every host row in the Hosts table points at an existing README, and the plugin/marketplace names quoted in install snippets match the manifests. Ship the check with whatever fixture it needs; it is one node with its test, not two.",
+	"notes": "",
+	"dependsOn": [
+		"turn-the-root-readme-into-a-short-guide-0hlc",
+		"write-the-missing-readme-for-packages-cl-sshg",
+		"correct-the-install-instructions-in-the-1wxl",
+		"a-per-host-install-section-in-the-readme-ykg6"
+	],
+	"decisions": [
+		"when-an-install-fact-changes-a-marketpla-xq25"
+	],
+	"files": [
+		"test/integration/*.test.ts",
+		"scripts/*.mjs",
+		"README.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

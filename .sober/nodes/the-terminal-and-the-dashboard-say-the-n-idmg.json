@@ -1,0 +1,30 @@
+{
+	"title": "The terminal and the dashboard say the name too",
+	"description": "The MCP server is one of three surfaces that print a node id, and a name that only the plugin shows is a name that makes the three disagree.\n\nThe terminal: packages/cli/src/queue.ts:22 and packages/cli/src/distribute.ts:70 both join bare ids into a sentence, packages/cli/src/hook.ts:158 prints `<id> (waiting on …)` in the message that denies a spawn — which is the one a person reads while being stopped, and therefore the one that most needs to say what was stopped — and packages/cli/src/sync.ts:25 lists ids through `named()`. Check `status.ts` and `board.ts` for the same shape before assuming that list is complete.\n\nThe dashboard: check what the canvas and the panel show today before changing anything. If a node already renders its title on the canvas, the name may belong only where space is short — a label under a circle, a chip in a list — and not everywhere at once. Read apps/dashboard/src/canvas/paint.ts and apps/dashboard/src/panel/Panel.tsx first and say in the brief what you found; do not add a second label beside a title that is already legible.\n\nUse the same form the MCP surface uses. Two vocabularies for one board is the thing packages/cli/src/work.ts and apps/dashboard/src/logs/data.ts already argue against for the log marks, and it is the same argument here.",
+	"notes": "",
+	"dependsOn": [
+		"every-message-that-names-a-node-says-whi-kr9o"
+	],
+	"decisions": [
+		"how-does-a-node-s-name-get-into-the-fift-wyiu"
+	],
+	"files": [
+		"packages/cli/src/queue.ts",
+		"packages/cli/src/distribute.ts",
+		"packages/cli/src/hook.ts",
+		"packages/cli/src/sync.ts",
+		"packages/cli/src/status.ts",
+		"packages/cli/src/board.ts",
+		"packages/cli/src/*.test.ts",
+		"apps/dashboard/src/canvas/paint.ts",
+		"apps/dashboard/src/panel/Panel.tsx",
+		"apps/dashboard/src/**/*.test.*"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:35:02.425Z"
+}

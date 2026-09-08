@@ -1,0 +1,57 @@
+{
+	"title": "Turn the root README into a short guide",
+	"description": "README.md today is a feature description: it explains what SOBER is, lists the loop, and links to packages/*-plugin for host detail. Reshape it into a guide someone follows top to bottom on their first day: (1) what SOBER is — keep the existing opening and \"Three jobs at once\", trimmed; (2) Install — `npm i -g @besober/cli`, Node 22, then `sober init` in a git repo; (3) Install the plugin for your host — a section per host, see the decision on where that prose lives; (4) First board — the actual command sequence a new user types: `sober init`, `/sober:plan <intent>`, `/sober:decide`, `/sober:next`, `sober dashboard`; (5) The loop table and the one hard block, kept as they are; (6) When not to use it; (7) Docs and Development, kept. Keep the Hosts capability table (plugin / decisions in session / attended run) — it is the only place the per-host differences are comparable side by side, and the guide should point at it from the install section.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-the-canonical-per-host-instal-elpx"
+	],
+	"files": [
+		"README.md"
+	],
+	"brief": {
+		"approach": "Rewrite README.md in place. Nothing else is touched: the four package READMEs, docs/ and the Hosts table's link targets stay exactly as they are, and this node writes no install prose for any host — that is `a-per-host-install-section-in-the-readme-ykg6`, which lands into the anchor this node leaves behind.\n\nThe decision `where-does-the-canonical-per-host-instal-elpx` was answered `root-canonical`, so the README is being reshaped to become the place a reader installs from without leaving the page. This node builds the shape; the next one fills it.\n\nSection order after the rewrite:\n\n1. **Opening** — logo, `# BE SOBER!`, the three existing paragraphs. Keep verbatim; they are the best-written prose in the repository and nothing about the guide asks them to change.\n2. **Three jobs at once** — keep the three bullets (orchestration, automation, education) and the \"what SOBER is not\" paragraph. Trim only if a sentence repeats the opening.\n3. **Install** — `npm i -g @besober/cli`, Node 22 or newer, the existing \"that is the whole installation\" sentence, then `sober init` in a git repository and what `.sober/` and the `sober-graph` branch are. Unchanged content, moved under a step number.\n4. **Install the plugin for your host** — heading and one paragraph only: the shared prerequisite (`sober` must be on PATH, because every host's MCP declaration and Claude Code's hooks.json name that command) and a sentence saying the four hosts follow. Leave the section empty below that paragraph — a literal `<!-- per-host install sections land here: node ykg6 -->` comment marks the anchor. Do not write Claude Code's or anyone else's commands here.\n5. **Your first board** — new, and the reason this node exists. The command sequence a newcomer types, in order, each with one line on what it does and who owns it: `sober init`, `/sober:plan <what you want built>`, `/sober:decide`, `/sober:next`, `sober dashboard`. Point at the loop table below rather than explaining the loop twice.\n6. **The loop** — the existing table, unchanged, and the \"status is derived, never set\" paragraph.\n7. **The one hard block** — unchanged.\n8. **Where you work** — unchanged.\n9. **Hosts** — the existing capability table, unchanged, with a line above it saying the install commands for each are in section 4. This is the only place the per-host differences are comparable side by side and it stays a table.\n10. **When not to use it** — unchanged.\n11. **Docs** and **Development** — unchanged.\n\nRules for the rewrite: every link target that exists today still resolves afterwards. No fact about a host is invented here — sections 4 and 9 make claims only where the repository already backs them. `packages/claude-code-plugin` still has no README at this point, so the Hosts table keeps pointing at the directory; `write-the-missing-readme-for-packages-cl-sshg` changes that row, not this node.",
+		"acceptance": [
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint both pass over the rewritten README — no secret and no formatting violation was introduced by the edit"
+			},
+			{
+				"run": "git diff --stat main -- . ':!README.md' | wc -l | grep -qx '0'",
+				"proves": "README.md is the only file the node changed; the package READMEs, docs/ and the manifests are untouched"
+			},
+			{
+				"run": "rg -o '\\]\\(([^)#][^)]*)\\)' -r '$1' README.md | grep -v '^https\\?://' | while read -r p; do test -e \"$p\" || { echo \"missing: $p\"; exit 1; }; done",
+				"proves": "every relative link in the README resolves to a file or directory that exists — the Hosts table rows, the docs table and the package links all still point at something"
+			},
+			{
+				"run": "rg -q '^## Your first board' README.md && rg -q '^## Install the plugin for your host' README.md && rg -q 'per-host install sections land here' README.md",
+				"proves": "the two new sections exist and the anchor comment that node ykg6 fills is present, so the next node has somewhere to land"
+			},
+			{
+				"run": "rg -q 'npm i -g @besober/cli' README.md && rg -q 'sober init' README.md && rg -q 'sober dashboard' README.md",
+				"proves": "the install command, the init command and the dashboard command all survived the restructure — the guide can still be followed end to end"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-08T12:15:22.576Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T12:15:26.532Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T12:21:55.645Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

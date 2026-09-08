@@ -1,0 +1,32 @@
+{
+	"category": "data-flow",
+	"question": "When an install fact changes — a marketplace name, a package name, a plugin path — what makes the READMEs follow?",
+	"options": [
+		{
+			"id": "checked",
+			"label": "Hand-written prose, with a test that reads the manifests and fails when they disagree",
+			"reason": "The prose stays editable by anyone in any editor, and the facts that actually break a user's install — marketplace name, plugin path, package name, link targets — are pinned by something that runs in CI. It matches how the repository already treats correctness: plugin.test.ts asserts the generated skills match their source rather than trusting them.",
+			"costLater": "The check only catches what it was told to look for. Prose that goes stale in a way the assertions do not cover — a step that no longer exists, an option that was renamed — still ships, and every new install fact needs someone to remember to extend the check."
+		},
+		{
+			"id": "generated",
+			"label": "Generated from plugins/hosts/*.json through scripts/build-plugins.mjs",
+			"reason": "One source of truth, mechanically enforced, and the host JSON already exists as the place per-host facts live. Drift becomes impossible rather than detectable.",
+			"costLater": "Every wording change becomes a code change plus a regenerated diff, and the generator has to grow a templating layer it does not have today. Documentation quality then depends on how expressive that template is, which is the usual way generated prose ends up sounding generated."
+		},
+		{
+			"id": "unchecked",
+			"label": "Hand-written, checked by nobody",
+			"reason": "Cheapest now and honest about scale: four host READMEs and one root README are few enough that a human reviewing a PR can see when one is wrong. It is what the repository does today.",
+			"costLater": "It is also what produced the thing being fixed here — three READMEs telling people to clone a repository that one of them does not need cloned, and a Hosts table linking to a README that was never written. The same drift recurs the next time a host is added."
+		}
+	],
+	"suggested": "checked",
+	"answer": {
+		"option": "checked",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T12:13:01.615Z"
+	},
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

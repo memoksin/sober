@@ -1,0 +1,27 @@
+{
+	"category": "module-boundaries",
+	"question": "Now that the log vocabulary grows from six kinds to a dozen kinds and tools, does the dashboard still keep its own copy and the CLI its own?",
+	"options": [
+		{
+			"id": "keep-two-tables",
+			"label": "Two tables, kept aligned by hand, as today",
+			"reason": "This is what the repository does: MARK and TONE in apps/dashboard/src/logs/data.ts, TAIL in packages/cli/src/work.ts, and the dashboard's doc comment saying the marks are the CLI's deliberately. It keeps the module boundary clean — the CLI does not import from an app, the app does not import CLI colour helpers, and neither one gains a dependency on the other. A terminal and a browser also disagree honestly: one has ANSI colours and 80 columns, the other has CSS tokens and a scroller.",
+			"costLater": "Alignment by comment is alignment by memory. It already slipped — TAIL has no entry for `answer`, a kind the wire has carried since ADR 0046 — and going from six entries to a dozen plus a tool list makes the next slip larger and quieter. Nothing fails when the two disagree; a person just sees a different glyph in the terminal than on the screen and cannot tell which is right."
+		},
+		{
+			"id": "one-shared-table",
+			"label": "One table in packages/schema, imported by both",
+			"reason": "The vocabulary is a fact about the wire type, not about either renderer, and packages/schema is what both the dashboard and the CLI already depend on — `LogLine` itself comes from there. One glyph per kind and per tool, defined once, and the two surfaces cannot drift because there is nothing to drift from.",
+			"costLater": "It puts presentation in the schema package, which until now holds types and validators, and the next person with a presentational constant has a precedent to put it there too. Colour cannot come along — a CSS custom property means nothing to a terminal and an ANSI function means nothing to a browser — so the shared thing is glyphs only, and each side still keeps its own colour table. Half-shared is a boundary someone has to explain."
+		},
+		{
+			"id": "deliberate-divergence",
+			"label": "They diverge on purpose: the screen gets the rich vocabulary, the terminal keeps five marks",
+			"reason": "The two surfaces are read differently. A dashboard panel is where somebody sits and watches one run closely, which is what this whole change is for; `sober logs` is most often piped, grepped, or glanced at. Holding the terminal to five marks keeps it greppable and keeps this work off the CLI's critical path entirely.",
+			"costLater": "It retires a rule the codebase currently states in a comment, so the comment has to go and its reasoning has to be argued down — two vocabularies for one run is how a person ends up unsure they are looking at the same output. Anyone who debugs a run in the terminal after watching it on screen loses the thinking lines and the tool identity exactly when they are comparing the two."
+		}
+	],
+	"suggested": "keep-two-tables",
+	"answer": null,
+	"createdAt": "2026-09-08T12:31:26.720Z"
+}

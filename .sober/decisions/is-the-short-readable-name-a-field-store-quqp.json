@@ -1,0 +1,27 @@
+{
+	"category": "state",
+	"question": "Is the short readable name a field stored on the node, or something derived from the title every time it is shown?",
+	"options": [
+		{
+			"id": "stored-name",
+			"label": "A `name` field on the Node record, written by the agent when it proposes the node",
+			"reason": "Somebody chooses it. A person naming a node picks the word that distinguishes it from its three siblings — `log-wire` against `log-vocabulary` — which is a judgement no function makes from a title. It also lets the id be seeded from the name, so ids stop being severed at 40 characters, and it gives `sober` one canonical word for a node that the terminal, the plugin and the dashboard can all print.",
+			"costLater": "It is a schema version step: `Node` is strict, so v6, a migration for every board on disk, and a backfill from title for every node that already exists. Once stored it can go stale — the title is rewritten and the name is not, which is exactly the failure ADR 0020 cited when it rejected pure-slug ids — and it becomes another field a hand-edited board can get wrong."
+		},
+		{
+			"id": "derived-name",
+			"label": "Derived from the title at render time — one function, no new field",
+			"reason": "No schema change, no migration, no version bump, and it works on every board already on disk including the ones written last week. It cannot go stale, because it is recomputed from the title every time the title is read. It follows the rule the Node record states out loud: status is derived, a canvas position is derived, and nothing is stored that can be computed.",
+			"costLater": "A function cannot tell two nodes apart when their titles start with the same four words — `The run log carries…` and `The run panel…` collapse to the same handle and the reader is back where they started. Every surface must call the same function or they print different names for one node, and there is nothing on the record to fix by hand when the derivation reads badly."
+		},
+		{
+			"id": "just-print-the-title",
+			"label": "No name at all — print the title wherever a bare id is printed today",
+			"reason": "The record already holds a human-readable sentence, and the complaint is not that titles are missing but that fifteen messages print ids without them. Nothing is added, nothing migrates, nothing derives, and the title is the most accurate description of the node that exists.",
+			"costLater": "Titles are sentences, and these are list contexts — `it no longer holds a, b, c` with three sentences spliced into it is longer and harder to scan than three ids were. There is still no short handle for a person to say out loud or type, and the id keeps being cut mid-word because nothing changed about what seeds it."
+		}
+	],
+	"suggested": "stored-name",
+	"answer": null,
+	"createdAt": "2026-09-08T12:35:02.425Z"
+}

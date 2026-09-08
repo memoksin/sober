@@ -1,0 +1,24 @@
+{
+	"title": "The run log carries what the agent actually did",
+	"description": "The panel cannot show a Read differently from a Bash because nothing on the wire says which one it was. `LogLine` in packages/schema/src/wire.ts is `{ kind, text }` with six kinds — started, text, tool, result, raw, answer — and the tool's name is flattened into the prose.\n\nWorse, in the claude adapter in packages/core/src/hosts.ts: one `assistant` event maps its `content` parts through a single `.map()`, joins whatever survives with ` · `, and stamps the whole thing `tool` if any part was a tool_use. So the agent's sentence to the human and the name of the tool it called land on one line under one kind. And `part.type === 'thinking'` is matched by nothing, so thinking is dropped before it ever reaches a screen — there is no spinner to build until this changes.\n\nThe work: give a line somewhere to say which tool, and give thinking a kind of its own. Then split the assistant mapping so one event can produce several lines — the prose as its own line, each tool call as its own line — rather than one joined string. The other three adapters (codex `command_execution`, opencode `tool_use`, cursor `tool_call`) each already know the tool's name at the point they build the line and throw it away the same way; carry it through in all four.\n\nCheck before widening the type: the exported-surface ratchet, and whether the board's schema version covers wire types at all — `LogLine` is what a screen is sent, not a record on the board branch, and a version bump that nothing reads is noise. Update the adapter tests in the same node; this is a type and its producers, which do not land separately.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-a-log-line-learn-which-tool-i-1v1m",
+		"now-that-the-log-vocabulary-grows-from-s-0jbt"
+	],
+	"files": [
+		"packages/schema/src/wire.ts",
+		"packages/schema/src/*.test.ts",
+		"packages/schema/src/__snapshots__/*",
+		"packages/core/src/hosts.ts",
+		"packages/core/src/hosts.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:31:26.720Z"
+}
