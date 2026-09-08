@@ -44,6 +44,29 @@ This creates `.sober/`, writes a `config.jsonc` with every setting at its
 default and a comment explaining each, and cuts the orphan board branch
 (`sober-graph`).
 
+## Install the plugin for your host
+
+Every host talks to the same binary: `sober` must be on your `PATH`, because
+each host's MCP declaration names that command, and Claude Code's `hooks.json`
+names it too. With that in place, the four supported hosts follow.
+
+<!-- per-host install sections land here: node ykg6 -->
+
+## Your first board
+
+The sequence a new project actually types, in order:
+
+| | Command | What it does | Who owns it |
+| --- | --- | --- | --- |
+| 1 | `sober init` | Creates `.sober/` and the `sober-graph` branch | you |
+| 2 | `/sober:plan <what you want built>` | An agent proposes the nodes, edges and decisions | agent drafts, you accept |
+| 3 | `/sober:decide` | Answers the open decisions, one at a time | **you** |
+| 4 | `/sober:next` | Takes the next ready node from brief to merged | agent works, you approve and accept |
+| 5 | `sober dashboard` | Serves the board in a browser so you can watch it | you |
+
+Steps 2 to 4 are the loop below, run once each. From then on you repeat
+`/sober:decide` and `/sober:next` until the board is empty.
+
 ## The loop
 
 Always in this order. Nothing skips a step.
@@ -91,6 +114,9 @@ install and init.
 **The CLI does all of it headless**, for hosts with no plugin. `sober --help`.
 
 ## Hosts
+
+The install commands for each host are under **Install the plugin for your host** above. This table is what
+differs between them.
 
 | Host | Plugin | Decisions in session | Attended run |
 | --- | --- | --- | --- |
