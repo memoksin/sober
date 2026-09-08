@@ -58,6 +58,13 @@ const DecisionInput = z.object({
 	question: z.string(),
 	options: z.array(OptionInput).min(2).max(4).nullish(),
 	suggested: z.string().nullish().describe('an option id you would pick — never an answer'),
+	derived: z
+		.string()
+		.min(1)
+		.nullish()
+		.describe(
+			'where you read this project’s existing answer — a path, a file, “the import graph”. Never an answer either: it says where the options came from, and the human still picks.',
+		),
 })
 
 /**
@@ -208,6 +215,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 						question: decision.question,
 						options,
 						suggested: decision.suggested ?? null,
+						derived: decision.derived ?? null,
 						answer: null,
 						createdAt: at,
 					}
@@ -241,6 +249,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				decision: z.string(),
 				options: z.array(OptionInput).min(2).max(4),
 				suggested: z.string().nullish(),
+				derived: z.string().min(1).nullish(),
 			},
 		},
 		tool(
@@ -248,10 +257,12 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				decision,
 				options,
 				suggested,
+				derived,
 			}: {
 				decision: string
 				options: z.infer<typeof OptionInput>[]
 				suggested?: string | null
+				derived?: string | null
 			}) => {
 				const paths = await openBoard(cwd)
 				const board = await loadBoard(paths)
@@ -264,6 +275,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 					...record,
 					options: options.map((option) => ({ ...option })),
 					suggested: suggested ?? null,
+					derived: derived ?? null,
 				})
 				return text(
 					`${decision} now has ${options.length} options. Put the question to the human with the \`decide\` tool — it asks them directly, one decision at a time.`,

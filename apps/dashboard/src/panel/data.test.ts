@@ -34,6 +34,7 @@ const decision = (id: string, over: Partial<BoardRead['decisions'][number]> = {}
 		{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 	],
 	suggested: null,
+	derived: null,
 	answer: null,
 	createdAt: AT,
 	archived: false,
@@ -104,7 +105,9 @@ test('an open decision offers its options', () => {
  */
 test('an answered decision offers its options again — the edit is this same screen', () => {
 	const answered = offer(
-		decision('d1', { answer: { option: 'redis', rationale: 'We run one.', by: 'me', at: AT } }),
+		decision('d1', {
+			answer: { option: 'redis', rationale: 'We run one.', by: 'me', at: AT, derived: null },
+		}),
 	)
 
 	expect(answered.kind).toBe('answered')
@@ -114,7 +117,9 @@ test('an answered decision offers its options again — the edit is this same sc
 
 test('the answer already given is marked, so re-picking it is not offered as a change', () => {
 	const answered = offer(
-		decision('d1', { answer: { option: 'redis', rationale: 'We run one.', by: 'me', at: AT } }),
+		decision('d1', {
+			answer: { option: 'redis', rationale: 'We run one.', by: 'me', at: AT, derived: null },
+		}),
 	)
 
 	expect(answered.options.find((one) => one.id === 'redis')?.chosen).toBe(true)

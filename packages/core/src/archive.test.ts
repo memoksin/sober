@@ -11,7 +11,13 @@ import { statusOf } from './status.js'
 import { tmpRoot } from './tmp.fixture.js'
 
 const AT = '2026-09-04T00:00:00.000Z'
-const answer: Answer = { option: 'redis', rationale: 'We run one.', by: 'memoksin', at: AT }
+const answer: Answer = {
+	option: 'redis',
+	rationale: 'We run one.',
+	by: 'memoksin',
+	at: AT,
+	derived: null,
+}
 
 let paths: Paths
 

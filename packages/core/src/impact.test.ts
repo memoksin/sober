@@ -13,7 +13,13 @@ import { flagsOf, statusOf } from './status.js'
 import { tmpRoot } from './tmp.fixture.js'
 
 const AT = '2026-09-04T00:00:00.000Z'
-const answer: Answer = { option: 'cookie', rationale: 'Simplest', by: 'memoksin', at: AT }
+const answer: Answer = {
+	option: 'cookie',
+	rationale: 'Simplest',
+	by: 'memoksin',
+	at: AT,
+	derived: null,
+}
 const approval: Approval = { by: 'memoksin', at: AT, queue: false }
 const approved = {
 	approach: 'Write the endpoints, then the middleware.',

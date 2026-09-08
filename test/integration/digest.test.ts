@@ -59,11 +59,18 @@ const decision = (answer: Answer | null = null) => ({
 		{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 	],
 	suggested: null,
+	derived: null,
 	answer,
 	createdAt: AT,
 })
 
-const ANSWER: Answer = { option: 'cookie', rationale: 'Simplest', by: 'alice', at: AT }
+const ANSWER: Answer = {
+	option: 'cookie',
+	rationale: 'Simplest',
+	by: 'alice',
+	at: AT,
+	derived: null,
+}
 const ACCEPTED: Accepted = { by: 'alice', at: AT, flagged: false, scan: 'clean', audit: 'passed' }
 
 const git = (cwd: string, ...args: string[]): string =>

@@ -71,6 +71,7 @@ const seed = (dir: string) => {
 				{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 			],
 			suggested: null,
+			derived: null,
 			answer: null,
 			createdAt: at,
 		}),

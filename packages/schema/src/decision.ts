@@ -24,12 +24,26 @@ export const Option = z.strictObject({
 
 export type Option = z.infer<typeof Option>
 
-/** The human's choice. `option` names an option id, never an index (ADR 0020). */
+/**
+ * The human's choice. `option` names an option id, never an index (ADR 0020).
+ *
+ * `derived` is copied off the decision when the answer is written. It says
+ * "read off the code, confirmed by a person", which is a weaker claim than an
+ * answer somebody arrived at, and a reader of the record is entitled to know
+ * which of the two they are looking at (ADR 0055). It is not an escape from
+ * the one hard rule: the pick is still the human's, one at a time.
+ *
+ * Missing on every board written before v1.1, so it defaults rather than
+ * migrating: a decision has never had a migration hook, and adding the
+ * machinery to write `null` into records that already read as `null` is more
+ * moving parts than the field is worth.
+ */
 export const Answer = z.strictObject({
 	option: z.string().min(1),
 	rationale: z.string(),
 	by: Handle,
 	at: Timestamp,
+	derived: z.string().min(1).nullable().default(null),
 })
 
 export type Answer = z.infer<typeof Answer>
@@ -44,6 +58,13 @@ export const Decision = z
 		question: z.string().min(1),
 		options: z.array(Option).min(2).max(4).nullable(),
 		suggested: z.string().nullable(),
+		/**
+		 * Set when the options were read off a repository that had already made
+		 * this choice — a path, a file, `the import graph` (ADR 0055). It names
+		 * where, never what: the pick is still put to a human one at a time, and
+		 * `answerDecision` copies this onto the answer when they make it.
+		 */
+		derived: z.string().min(1).nullable().default(null),
 		answer: Answer.nullable(),
 		createdAt: Timestamp,
 	})

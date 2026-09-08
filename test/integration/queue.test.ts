@@ -206,6 +206,7 @@ test('answering a decision drains the queue too — it is the other thing that f
 			{ id: 'header', label: 'A header', reason: 'explicit', costLater: 'CORS' },
 		],
 		suggested: null,
+		derived: null,
 		answer: null,
 		createdAt: '2026-09-05T00:00:00.000Z',
 	})

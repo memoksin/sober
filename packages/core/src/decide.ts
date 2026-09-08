@@ -71,6 +71,12 @@ export const answerDecision = (
 				rationale: options.rationale ?? '',
 				by: options.by,
 				at: new Date().toISOString(),
+				// Where the options came from, if they were read off a repository
+				// that had already made the choice (ADR 0055). It rides on the
+				// record rather than on the call: whoever answers is usually not
+				// whoever opened it, and a session later cannot be asked where a
+				// decision came from.
+				derived: record.value.derived,
 			},
 		}
 		await writeDecision(paths, id, answered)

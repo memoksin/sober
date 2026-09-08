@@ -174,6 +174,7 @@ test('the board a panel reads says what each node is waiting for', async () => {
 			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 		],
 		suggested: null,
+		derived: null,
 		answer: null,
 		createdAt: at,
 	})
@@ -242,7 +243,8 @@ test('the impact preview is read, and the save is the same call with the flag', 
 			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 		],
 		suggested: null,
-		answer: { option: 'cookie', rationale: '', by: 'memoksin', at },
+		derived: null,
+		answer: { option: 'cookie', rationale: '', by: 'memoksin', at, derived: null },
 		createdAt: at,
 	})
 	await writeNode(there, 'auth-api-k7f2', {
@@ -315,9 +317,16 @@ test('the digest is served, and its two halves arrive separately', async () => {
 			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 		],
 		suggested: null,
+		derived: null,
 		// Answered after the brief below was approved, which is what §2.8 calls
 		// a flag: the work was approved against an answer that has since moved.
-		answer: { option: 'cookie', rationale: '', by: 'Ada', at: '2026-09-06T02:00:00.000Z' },
+		answer: {
+			option: 'cookie',
+			rationale: '',
+			by: 'Ada',
+			at: '2026-09-06T02:00:00.000Z',
+			derived: null,
+		},
 		createdAt: at,
 	})
 	await writeNode(there, 'auth-api-k7f2', {
@@ -392,9 +401,16 @@ const flaggedBoard = async (
 			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 		],
 		suggested: null,
+		derived: null,
 		// After the approval below: §2.8's flag is a bound decision that moved
 		// once the brief was already approved against the earlier answer.
-		answer: { option: 'cookie', rationale: '', by: 'Ada', at: '2026-09-06T02:00:00.000Z' },
+		answer: {
+			option: 'cookie',
+			rationale: '',
+			by: 'Ada',
+			at: '2026-09-06T02:00:00.000Z',
+			derived: null,
+		},
 		createdAt: at,
 	})
 	await writeNode(there, 'auth-api-k7f2', {

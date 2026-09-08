@@ -27,6 +27,12 @@ Plan it as a graph on the SOBER board. Work in this order and do not skip ahead.
 
    For each decision write two to four options, and for every option: why someone picks it, and **what it costs later**. That second half is the point. Someone who already knows the trade-off skims it; someone who does not gets what they need to make the choice theirs.
 
+   **A question this repository has already answered is still asked, but not from scratch.** Before you write the options, read what the project has already settled: `docs/adr/` and anything else ADR-shaped, `CLAUDE.md` or `AGENTS.md`, the dependencies in `package.json` or whatever manifest is here, and the directory layout and the imports between directories. Where that settles one of the four categories, write the choice this project already made as an option, put its id in `suggested`, and set `derived` to where you read it — a path, a file, "the import graph". Write the other options anyway: a choice with nothing beside it is not a choice, and a project changes its mind.
+
+   `derived` is not an answer and does not skip anything. The question still goes to the user through `{{decide}}`, one decision at a time, and the record then says the answer was read off the code and confirmed rather than arrived at. Never set it to a guess: if you are inferring what somebody would probably have chosen rather than reading what they did choose, leave it empty.
+
+   What you read off the code that is not one of the four categories is not a decision. Do not stretch a category to hold it and do not invent a fifth. Say it back to the user at the end, in one line each — "this repository also settles X, which is not one of the four, so it is not on the board" — and leave the board alone.
+
 5. **Every decision must be bound.** Put its `key` in the `decisions` list of each node whose shape the answer changes. A decision nothing binds holds no work — it reads as a question waiting on the user and blocks nobody, which is the opposite of what it is for. `propose` refuses a proposal with a loose decision in it, and writes nothing.
 
 6. Write it all in one `propose` call — nodes, edges and decisions together, using `key` to point one at another. If the proposal closes a cycle it is refused whole and nothing is written; break the cycle and propose again.

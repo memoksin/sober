@@ -75,7 +75,14 @@ test('a node is briefed, run, accepted, and the node waiting on it becomes ready
 			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
 		],
 		suggested: null,
-		answer: { option: 'redis', rationale: 'We already run one.', by: 'memoksin', at: AT },
+		derived: null,
+		answer: {
+			option: 'redis',
+			rationale: 'We already run one.',
+			by: 'memoksin',
+			at: AT,
+			derived: null,
+		},
 		createdAt: AT,
 	})
 	await writeNode(
