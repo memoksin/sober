@@ -17,6 +17,7 @@
 		"url": "git+https://github.com/memoksin/sober.git",
 		"directory": "packages/cli"
 	},
+	"license": "Apache-2.0",
 	"type": "module",
 	"bin": {
 		"sober": "./dist/sober.js"
