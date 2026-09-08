@@ -19,7 +19,7 @@
 		"coverage:check": "node scripts/coverage-ratchet.mjs",
 		"coverage:update": "vitest run --coverage && node scripts/coverage-ratchet.mjs --update",
 		"demo:mcp": "pnpm --filter @besober/cli build && node scripts/demo-mcp.mjs",
-		"release": "pnpm publish --recursive --access public --no-git-checks",
+		"release": "node scripts/release.mjs",
 		"demo:plugin": "pnpm --filter @besober/cli build && node scripts/demo-plugin.mjs",
 		"gate:m1": "pnpm --filter @besober/cli build && node scripts/m1-gate.mjs",
 		"demo:sync": "pnpm --filter @besober/cli build && node scripts/demo-sync.mjs",
