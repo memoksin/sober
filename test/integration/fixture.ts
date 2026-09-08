@@ -35,6 +35,10 @@ export function createTempRepo(): TempRepo {
 		dir,
 		remote,
 		git: (...args: string[]) => run(dir, args),
-		cleanup: () => rmSync(root, { recursive: true, force: true }),
+		// `maxRetries` is Node's own answer to Windows, where a file another
+		// process still holds open makes the whole tree undeletable. `force`
+		// covers a directory that is already gone; it does nothing for one that
+		// is busy, and every fixture here has git processes that just exited.
+		cleanup: () => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
 	}
 }

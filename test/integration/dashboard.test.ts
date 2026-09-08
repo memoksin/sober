@@ -21,9 +21,22 @@ beforeAll(() => {
 let repo: TempRepo | undefined
 let running: ReturnType<typeof spawn> | undefined
 
-afterEach(() => {
-	running?.kill('SIGKILL')
+afterEach(async () => {
+	// `kill` sends the signal and returns — the process is still alive when the
+	// next line runs. POSIX lets a directory be removed while a process has it
+	// as its cwd, so the race was invisible there; Windows refuses, and the
+	// cleanup failed the test whose assertions had all passed. So the exit is
+	// waited for rather than assumed.
+	const child = running
 	running = undefined
+	if (child !== undefined) {
+		const exited = new Promise<void>((resolve) => {
+			child.once('exit', () => resolve())
+			if (child.exitCode !== null || child.signalCode !== null) resolve()
+		})
+		child.kill('SIGKILL')
+		await exited
+	}
 	repo?.cleanup()
 	repo = undefined
 })
