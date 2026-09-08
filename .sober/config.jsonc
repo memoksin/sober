@@ -1,0 +1,65 @@
+{
+	// SOBER's machine settings. Project intent lives in project.json.
+	"$schema": "https://besober.dev/schema/config.json",
+
+	"dispatch": {
+		// The host CLI SOBER launches headless. It is the tool you already
+		// installed and logged into: SOBER never asks for an API key and
+		// never chooses the model (DESIGN §5.1).
+		"host": "claude",
+
+		// Shell command run in a fresh worktree before the agent starts.
+		// null runs nothing. Read from the base ref, never from the branch
+		// being worked on (ADR 0019).
+		"setup": "pnpm install --frozen-lockfile",
+
+		// Shell command run in the worktree when the agent finishes.
+		// null runs nothing.
+		"verify": null,
+
+		// A run past this is killed and recorded as failed. Only this caps
+		// how long one run burns.
+		"timeoutMinutes": 30,
+
+		// How many runs may burn at once. Ready nodes beyond it queue.
+		"concurrency": 3,
+
+		// When a run finishes, push its branch and open the node's pull
+		// request as a draft, so CI runs before a human looks. A draft asks
+		// nobody to review anything, and the review stays in SOBER either
+		// way (DESIGN §6.1). Needs a remote and the `gh` CLI; without
+		// either, everything else is identical.
+		"draftPr": true,
+
+		// What accepting does: "merge" lands the branch locally,
+		// "pull-request" marks the draft ready and merges it on the host.
+		// A protected main cannot take a local merge; a repository with no
+		// remote cannot take a pull request (DESIGN §6.3).
+		"accept": "merge"
+	},
+
+	"board": {
+		// The orphan branch the board travels on. Created by `sober init`,
+		// and never checked out in your working copy (DESIGN §1.2).
+		"branch": "sober-graph"
+	},
+
+	"scan": {
+		// Extra scanners run in the worktree beside the bundled secretlint,
+		// as commands — for example ["semgrep scan --error --quiet"]. A
+		// non-zero exit is a finding; a command that is not installed is
+		// reported, never silently skipped (DESIGN §6.2). Read from the base
+		// ref, never from the branch under review.
+		"extra": []
+	},
+
+	"lock": {
+		// A lock whose heartbeat is older than this is broken and taken
+		// over, and the takeover is reported (ADR 0025).
+		"staleSeconds": 60,
+
+		// A writer that cannot acquire the lock within this fails, naming
+		// the action holding it. It never waits forever.
+		"waitSeconds": 30
+	}
+}

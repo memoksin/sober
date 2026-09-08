@@ -42,3 +42,7 @@ yarn-error.log*
 
 # Session notes — working state for the next session, not a record of the repository
 docs/sessions/
+
+# SOBER: the board travels on its own branch, and local/ is disposable.
+.sober/*
+!.sober/config.jsonc

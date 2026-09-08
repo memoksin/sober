@@ -8,3 +8,5 @@
 .sober/decisions/*.json merge=binary -text
 .sober/archive/nodes/*.json merge=binary -text
 .sober/archive/decisions/*.json merge=binary -text
+
+# SOBER: board records are merged field by field by SOBER, never by git (DESIGN §1.2.1).
