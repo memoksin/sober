@@ -30,8 +30,17 @@ jobs:
         if: github.event_name == 'pull_request'
         run: pnpm exec commitlint --from origin/${{ github.base_ref }} --to HEAD --verbose
       # A dependency bump ships no behaviour, and the bot writes no changesets.
+      #
+      # Neither does the version pull request, and for it that is the point:
+      # consuming every pending changeset is the whole of what it does. On the
+      # branch changesets owns, "packages changed and nothing is pending" is the
+      # correct state rather than the mistake this step exists to catch — so
+      # without the exclusion no release could ever go green.
       - name: a changeset, or nothing to release
-        if: github.event_name == 'pull_request' && github.actor != 'renovate[bot]'
+        if: >-
+          github.event_name == 'pull_request'
+          && github.actor != 'renovate[bot]'
+          && !startsWith(github.head_ref, 'changeset-release/')
         run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
 
   typecheck:
