@@ -118,9 +118,14 @@ test('a package outside core that reaches for the filesystem fails the boundarie
 			// The two drifted once already — the script grew `apps` and a copy of
 			// it here would have gone on checking the old set.
 			const [, ...args] = (manifest.scripts.boundaries ?? '').split(' ')
+			// `shell` on Windows, where `node_modules/.bin/depcruise` is a shim
+			// with no extension that `execFileSync` cannot start: without it the
+			// spawn fails instantly, `failed` reads true for the wrong reason, and
+			// the check that would have caught a real violation never runs.
 			execFileSync(join(repoRoot, 'node_modules/.bin/depcruise'), args, {
 				cwd: repoRoot,
 				encoding: 'utf8',
+				shell: process.platform === 'win32',
 			})
 		} catch (error) {
 			failed = true

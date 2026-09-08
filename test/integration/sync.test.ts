@@ -343,9 +343,14 @@ test('a board that moved on the remote mid-sync is said plainly, and the fix is 
 	node(b, 'bobs-node-bbbb', "Bob's")
 	sober(b, 'sync', '--no-push')
 
+	// Git for Windows runs the hook through its own `sh`, where a native path's
+	// backslashes are escapes rather than separators — so the path goes in with
+	// forward slashes and in quotes, or the hook pushes to nowhere and the
+	// refusal under test never happens.
+	const bobs = b.replaceAll('\\', '/')
 	writeFileSync(
 		join(a.dir, '.git/hooks/pre-push'),
-		`#!/bin/sh\nexec env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_QUARANTINE_PATH git -C ${b} push --quiet origin sober-graph:sober-graph\n`,
+		`#!/bin/sh\nexec env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_QUARANTINE_PATH git -C '${bobs}' push --quiet origin sober-graph:sober-graph\n`,
 		{ mode: 0o755 },
 	)
 

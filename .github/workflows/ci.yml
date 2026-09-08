@@ -57,6 +57,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # Without this a hung suite holds a runner for GitHub's default six hours
+    # and the log only arrives when it is killed, which is the one thing a
+    # hang needs to be diagnosed.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -75,6 +79,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
