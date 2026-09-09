@@ -3,6 +3,13 @@
 - Status: accepted
 - Date: 2026-08-28
 - Extends: D26
+- Superseded by [ADR 0056](0056-an-unattended-dispatcher-takes-what-was-queued-and-the-default-moves.md):
+  the two approval actions and all three safety rules below still describe what
+  the product does. Two things below no longer do. "Never the default" is now
+  the `dispatch.queueByDefault` setting, which still ships off. And the reason
+  given for rejecting automatic dispatch — that it removes D26's approval — is
+  not accurate about the code: `ready` is only reachable through a human
+  approval, and 0056 rejects automatic dispatch on a different ground.
 
 ## Context
 

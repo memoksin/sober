@@ -67,6 +67,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "proposeDistribution",
   "publish",
   "pullRequestOf",
+  "queueByDefault",
   "readArchivedNodes",
   "readConfig",
   "readContributors",

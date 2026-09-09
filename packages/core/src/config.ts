@@ -26,6 +26,7 @@ export const Config = z.strictObject({
 		concurrency: z.int().positive(),
 		draftPr: z.boolean(),
 		accept: z.enum(['merge', 'pull-request']),
+		queueByDefault: z.boolean(),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -51,6 +52,7 @@ export const DEFAULT_CONFIG: Config = {
 		concurrency: 3,
 		draftPr: true,
 		accept: 'merge',
+		queueByDefault: false,
 	},
 	board: {
 		branch: 'sober-graph',
@@ -105,7 +107,14 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// "pull-request" marks the draft ready and merges it on the host.
 		// A protected main cannot take a local merge; a repository with no
 		// remote cannot take a pull request (DESIGN §6.3).
-		"accept": "${DEFAULT_CONFIG.dispatch.accept}"
+		"accept": "${DEFAULT_CONFIG.dispatch.accept}",
+
+		// Which approval action is offered when nobody says: false asks for
+		// "approve", true asks for "approve and queue", which starts the node
+		// unattended the moment it is ready. Approval stays human and per
+		// node either way — this moves the starting position, not the trade
+		// (ADR 0056).
+		"queueByDefault": ${DEFAULT_CONFIG.dispatch.queueByDefault}
 	},
 
 	"board": {
