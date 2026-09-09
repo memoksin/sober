@@ -232,7 +232,7 @@ const main = async (): Promise<void> => {
 		case 'brief':
 			return brief(need('node'), values.write)
 		case 'approve':
-			return approve(need('node'), values.queue === true)
+			return approve(need('node'), values.queue)
 		case 'run':
 			if (rest.length === 0) fail('which node? `sober status` shows what is ready')
 			return run(rest, values.base, values.anyway === true, values.watch === true)

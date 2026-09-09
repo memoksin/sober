@@ -216,15 +216,19 @@ export const brief = async (node: string, write?: string): Promise<void> => {
 	)
 }
 
-export const approve = async (node: string, queue: boolean): Promise<void> => {
+export const approve = async (node: string, queue: boolean | undefined): Promise<void> => {
 	const paths = await openBoard()
+	// Without `--queue` the board's default decides (ADR 0056), so what was
+	// recorded is read back off the record rather than guessed from the flag.
+	let queued = false
 	try {
-		await approveBrief(paths, node, { by: await whoami(paths.root), queue })
+		const record = await approveBrief(paths, node, { by: await whoami(paths.root), queue })
+		queued = record.brief?.approval?.queue === true
 	} catch (error) {
 		refuse(error)
 	}
 	say(
-		queue
+		queued
 			? `${green('✓')} ${cyan(node)} is approved and will start when it is ready`
 			: `${green('✓')} ${cyan(node)} is approved. Start it with \`sober run ${node}\`.`,
 	)
