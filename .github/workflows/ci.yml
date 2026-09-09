@@ -29,6 +29,11 @@ jobs:
       - name: commit messages
         if: github.event_name == 'pull_request'
         run: pnpm exec commitlint --from origin/${{ github.base_ref }} --to HEAD --verbose
+      # Only on the way into `main`, because only that merge releases. A pull
+      # request into `development` publishes nothing, so demanding a changeset
+      # there makes every node's agent name a bump — patch, minor or major —
+      # that is the human's to choose at the release, not the node's to guess.
+      #
       # A dependency bump ships no behaviour, and the bot writes no changesets.
       #
       # Neither does the version pull request, and for it that is the point:
@@ -39,6 +44,7 @@ jobs:
       - name: a changeset, or nothing to release
         if: >-
           github.event_name == 'pull_request'
+          && github.base_ref == 'main'
           && github.actor != 'renovate[bot]'
           && !startsWith(github.head_ref, 'changeset-release/')
         run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
