@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeAll, expect, test } from 'vitest'
@@ -133,6 +133,25 @@ test('init writes the board, the branch, and a setup command it detected', () =>
 
 	// Idempotent: a second init reports the board it found and changes nothing.
 	expect(sober(created.dir, 'init')).toContain('already a board')
+})
+
+test('init in a repository with no commits refuses and writes nothing', () => {
+	const created = createTempRepo()
+	repo = created
+
+	expect(failed(created.dir, 'init')).toContain('no commits yet')
+	expect(existsSync(join(created.dir, '.sober'))).toBe(false)
+	expect(created.git('branch', '--list', 'sober-graph')).toBe('')
+})
+
+test('an unexpected error prints one line, not a stack trace', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	writeFileSync(join(created.dir, '.git/HEAD'), 'not-a-ref\n')
+
+	const output = failed(created.dir, 'run', 'anything')
+	expect(output.startsWith('×')).toBe(true)
+	expect(output).not.toContain('    at ')
 })
 
 test('`sober` and `sober --help` print the same usable overview', () => {
@@ -551,6 +570,7 @@ test('a node that is done cannot be approved a second time', () => {
 test('a run of linked nodes is taken, refused and given back from the terminal', async () => {
 	const repo = createTempRepo()
 	try {
+		repo.git('commit', '--allow-empty', '-m', 'chore: first')
 		const cli = (...args: string[]) => sober(repo.dir, ...args)
 		const as = (who: string) => execFileSync('git', ['config', 'user.name', who], { cwd: repo.dir })
 		const me = execFileSync('git', ['config', 'user.name'], {

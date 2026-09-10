@@ -5,7 +5,7 @@ import { distribute } from './distribute.js'
 import { dismiss, open, reopen } from './flag.js'
 import { hook } from './hook.js'
 import { widen } from './name.js'
-import { bold, columns, dim, fail, say } from './out.js'
+import { bold, columns, dim, fail, refuse, say } from './out.js'
 import { listConflicts, resolve } from './resolve.js'
 import { accept, acceptGreen, archive, audit, reject, review } from './review.js'
 import { status } from './status.js'
@@ -311,4 +311,4 @@ const main = async (): Promise<void> => {
 	}
 }
 
-await main()
+await main().catch(refuse)
