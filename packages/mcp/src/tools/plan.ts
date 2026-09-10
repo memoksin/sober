@@ -349,6 +349,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			)
 			if (picked === null) return text('The human did not answer. Nothing was recorded.')
 
+			const base = await currentBranch(paths.root)
 			const answered = await answerDecision(paths, decision, {
 				option: picked,
 				by: await whoami(paths.root),
@@ -358,7 +359,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				.filter(([id, node]) => node.decisions.includes(decision) && id !== undefined)
 				.map(([id]) => id)
 			return text(
-				`${decision} is answered: ${answered.answer?.option}. It no longer holds ${freed.join(', ') || 'any node'}.${await drained(paths, await currentBranch(paths.root))}`,
+				`${decision} is answered: ${answered.answer?.option}. It no longer holds ${freed.join(', ') || 'any node'}.${await drained(paths, base)}`,
 			)
 		}),
 	)

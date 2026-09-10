@@ -545,6 +545,18 @@ test('a decision with no options is opened before it is put to anyone', async ()
 	expect(await call(client, 'decide', { decision })).toContain('post')
 })
 
+test('decide whose base cannot be resolved refuses, and the answer does not land', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()] as [string]
+	writeFileSync(join(created.dir, '.git/HEAD'), 'not-a-ref\n')
+
+	const result = await client.callTool({ name: 'decide', arguments: { decision } })
+	expect(result.isError).toBe(true)
+	expect((await loadBoard(paths)).decisions.get(decision)?.answer).toBeNull()
+})
+
 test('a run goes through the same dispatch the CLI uses, and the log reads back', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)

@@ -73,6 +73,11 @@ export const init = async (options: { title?: string; intent?: string }): Promis
 	const root = process.cwd()
 	if (!(await isRepo(root)))
 		return fail('this is not a git repository — SOBER plans work that git tracks')
+	// An unborn HEAD is why this fails in practice; a corrupt .git gets the same sentence.
+	if ((await currentBranch(root).catch(() => null)) === null)
+		return fail(
+			'this repository has no commits yet — SOBER cuts every node from a branch, so make the first commit, then run `sober init`',
+		)
 
 	// A second person clones the repository and runs the same command. The board
 	// is already on its branch, so init takes it rather than writing a second
