@@ -2,8 +2,10 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ElicitResultSchema } from '@modelcontextprotocol/sdk/types.js'
 
 /**
- * A host that cannot ask the human cannot accept (ADR 0010, `PR-03-09`). The
- * refusal names the surface that can, rather than failing with a protocol
+ * A host that cannot ask the human cannot confirm what these forms ask (ADR
+ * 0010, `PR-03-09`). `decide`, `approve` and `accept` no longer come through
+ * here: the host's own question tool asks, and the agent relays the pick (ADR
+ * 0057). The refusal names the surface that can, rather than failing with a protocol
  * error nobody can act on — §2.9's rule: where SOBER cannot enforce, it says
  * so.
  */
@@ -88,61 +90,6 @@ export const askFields = async (
 		answers[field.name] = answer
 	}
 	return answers
-}
-
-/**
- * The pick comes from the human, never from the agent that opened the question
- * (ADR 0010). One question, one answer, one call — a list would be the batch
- * accept the rule exists to prevent.
- *
- * Two protocol eras are alive at once. The 2026 revision splits the capability
- * into `elicitation.form` and `elicitation.url`, and the SDK refuses to send a
- * form request without the first; hosts written against the 2025 revision
- * declare a bare `elicitation` and would be refused for something they support.
- * So the capability is read, and the older shape goes out as a plain request.
- */
-export const askChoice = async (
-	server: Server,
-	what: string,
-	message: string,
-	choices: readonly Choice[],
-): Promise<string | null> => {
-	// One line of question, one short label per option. Found in the M1 gate:
-	// a host truncates rather than wraps, so anything long enough to matter is
-	// exactly what gets cut. Whatever the human has to *read* to choose is put
-	// in front of them in the conversation first; this prompt is where they
-	// choose, and the choice is a message they send, not one the agent relays
-	// (ADR 0010).
-
-	const elicitation = server.getClientCapabilities()?.elicitation
-	if (elicitation === undefined) throw new NoElicitationError(what)
-
-	const params = {
-		message,
-		requestedSchema: {
-			type: 'object' as const,
-			properties: {
-				choice: {
-					type: 'string' as const,
-					title: what,
-					enum: choices.map((choice) => choice.id),
-					enumNames: choices.map((choice) => choice.label),
-				},
-			},
-			required: ['choice'],
-		},
-	}
-
-	const result =
-		'form' in elicitation
-			? await server.elicitInput({ mode: 'form', ...params }, { timeout: WHILE_THEY_THINK })
-			: await server.request({ method: 'elicitation/create', params }, ElicitResultSchema, {
-					timeout: WHILE_THEY_THINK,
-				})
-
-	if (result.action !== 'accept') return null
-	const choice = result.content?.choice
-	return typeof choice === 'string' ? choice : null
 }
 
 /**

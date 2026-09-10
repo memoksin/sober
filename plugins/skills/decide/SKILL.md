@@ -11,10 +11,10 @@ argument-hint: "[decision id] — or nothing, for all of them"
 > with real ids in it is worse than no answer. If a tool is not available, say
 > so and stop — `sober --help` on the command line does all of it.
 
-What the user gave you, if anything, is a **decision id and nothing else**. There is no second
-argument and no way to pass an answer — not here, not to the `decide` tool, not
-anywhere. If the user hands you an option along with an id, take the id and
-leave the option: the pick is theirs to make when they are asked.
+What the user gave you, if anything, is a **decision id and nothing else**. If the user hands
+you an option along with an id, take the id and leave the option: the pick is
+theirs to make when they are asked, and a pick carried over from earlier in the
+conversation is not one.
 
 Read the open decisions (`decisions`). If {{args}} names one, that is the only one you handle.
 
@@ -26,7 +26,7 @@ For each, in turn:
 
 3. **Show the options here, in full** — the label, why someone picks it, and what it costs later — before you call anything. This is the only place the user reads them: the prompt that follows carries the labels alone, because a narrow terminal cuts a long line instead of wrapping it. A user who has not read cannot make the choice theirs (§2.5).
 
-4. Call `decide` with the decision id. That tool asks the user directly; you cannot supply an answer and there is no argument for one. Wait for what comes back.
+4. **Ask with this host's own question tool** — the question, and the option labels only, the suggested one first. Only labels: a narrow terminal cuts a long line instead of wrapping it (ADR 0024). Then call `decide` with the decision id and the option id whose label they picked. If they pick "Other", or answer with text that matches no option, do not map it to the nearest one: say so and ask again. Never pass an option they did not pick (ADR 0057).
 
 5. Say what the answer unblocked.
 

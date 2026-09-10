@@ -31,7 +31,7 @@ A decision is a question whose answer changes the shape of more than one node. F
 
 Every node bound by an unanswered decision is held, and no amount of work routes around it. That is deliberate: the alternative is an agent guessing at an architectural choice and twenty files inheriting the guess.
 
-**The answer is the user's.** There is no tool that takes one. `decide` asks them and returns what they picked, one decision per call — never a list, never a summary followed by a single confirmation. {{ask}} Do not pick for them, and do not treat their earlier remarks as an answer.
+**The answer is the user's.** Ask with this host's own question tool and pass `decide` exactly the option they picked, one decision per call — never a list, never a summary followed by a single confirmation. {{ask}} Do not pick for them, and do not treat their earlier remarks as an answer.
 
 Every option carries two things: why someone picks it, and **what it costs later**. Write both for this repository, not in general. That pair is the whole of what makes the choice theirs rather than yours.
 

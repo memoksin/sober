@@ -212,26 +212,13 @@ test('a proposal that closes a cycle is refused, and nothing is written', async 
 	expect((await loadBoard(paths)).nodes.size).toBe(0)
 })
 
-test('the human picks the option; the agent cannot supply one', async () => {
+test('a relayed pick is recorded, and the node it held is freed', async () => {
 	const { repo: created, paths } = await board()
-	const asked: string[] = []
-	const asked_choices: string[][] = []
-	const client = await connect(created.dir, (message, choices, labels) => {
-		asked.push(message)
-		asked_choices.push(labels)
-		return choices[1] ?? null
-	})
+	const client = await connect(created.dir)
 	await call(client, 'propose', PROPOSAL)
 
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
-	const answered = await call(client, 'decide', { decision })
-
-	// The message is the question and nothing else: a host truncates a long one,
-	// and a truncated option list is a choice made blind (found in the M1 gate).
-	expect(asked[0]).toBe('Where does session state live?')
-	// Labels alone: a narrow terminal cuts what it cannot fit, so nothing that
-	// has to be read whole is put where it can be cut (found in the M1 gate).
-	expect(asked_choices[0]).toEqual(['A cookie', 'Redis'])
+	const answered = await call(client, 'decide', { decision, option: 'redis' })
 	expect(answered).toContain('redis')
 
 	const after = await loadBoard(paths)
@@ -240,14 +227,18 @@ test('the human picks the option; the agent cannot supply one', async () => {
 	expect(statusOf(after, auth?.[0] ?? '')).toBe('needs-brief')
 })
 
-test('a human who walks away answers nothing', async () => {
+test('a relayed option the decision does not offer is refused, and nothing is written', async () => {
 	const { repo: created, paths } = await board()
-	const client = await connect(created.dir, () => null)
+	const client = await connect(created.dir)
 	await call(client, 'propose', PROPOSAL)
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()] as [string]
 
-	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
-	expect(await call(client, 'decide', { decision })).toContain('did not answer')
-	expect((await loadBoard(paths)).decisions.get(decision ?? '')?.answer).toBeNull()
+	const result = await client.callTool({
+		name: 'decide',
+		arguments: { decision, option: 'postgres' },
+	})
+	expect(result.isError).toBe(true)
+	expect((await loadBoard(paths)).decisions.get(decision)?.answer).toBeNull()
 })
 
 /**
@@ -267,7 +258,7 @@ test('changing an answer asks once, and names every node the change reaches', as
 	await call(client, 'propose', PROPOSAL)
 
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
-	await call(client, 'decide', { decision })
+	await call(client, 'decide', { decision, option: 'cookie' })
 	const [node] = [...(await loadBoard(paths)).nodes.keys()].filter((id) =>
 		id.startsWith('the-auth'),
 	)
@@ -276,7 +267,7 @@ test('changing an answer asks once, and names every node the change reaches', as
 		approach: 'Write the endpoints.',
 		acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
 	})
-	await call(client, 'approve', { node })
+	await call(client, 'approve', { node, confirmed: true })
 
 	asked = []
 	const changed = await call(client, 'edit_decision', { decision: decision ?? '', option: 'redis' })
@@ -309,7 +300,7 @@ test('the edit refuses before it asks, so a typo never costs a person a question
 		await call(client, 'edit_decision', { decision: decision ?? '', option: 'redis' }),
 	).toContain('no answer yet')
 
-	await call(client, 'decide', { decision })
+	await call(client, 'decide', { decision, option: 'cookie' })
 	asked = 0
 	expect(
 		await call(client, 'edit_decision', { decision: decision ?? '', option: 'postgres' }),
@@ -324,7 +315,7 @@ test('a human who does not confirm the fan-out changes nothing', async () => {
 	)
 	await call(client, 'propose', PROPOSAL)
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
-	await call(client, 'decide', { decision })
+	await call(client, 'decide', { decision, option: 'cookie' })
 	const answered = (await loadBoard(paths)).decisions.get(decision ?? '')?.answer?.option
 
 	expect(
@@ -333,19 +324,44 @@ test('a human who does not confirm the fan-out changes nothing', async () => {
 	expect((await loadBoard(paths)).decisions.get(decision ?? '')?.answer?.option).toBe(answered)
 })
 
-test('a host that cannot ask cannot accept, and says which surface can', async () => {
-	const { repo: created, paths } = await board()
-	// A client declaring no elicitation capability at all: the 2025 hosts that
-	// have none, and every host with the feature switched off (`PR-03-09`).
+/**
+ * A client declaring no elicitation capability at all: the 2025 hosts that have
+ * none, and every host where it is declared and never rendered (ADR 0057).
+ */
+const mute = async (dir: string): Promise<Client> => {
 	const client = new Client({ name: 'mute-host', version: '0.0.0' }, { capabilities: {} })
 	const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
-	await Promise.all([createServer(created.dir).connect(serverSide), client.connect(clientSide)])
+	await Promise.all([createServer(dir).connect(serverSide), client.connect(clientSide)])
+	return client
+}
+
+test('a host with no elicitation records a relayed pick and names the node it freed', async () => {
+	const { repo: created, paths } = await board()
+	const client = await mute(created.dir)
 
 	await call(client, 'propose', PROPOSAL)
-	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
-	const refused = await call(client, 'decide', { decision })
-	expect(refused).toContain('command line')
-	expect((await loadBoard(paths)).decisions.get(decision ?? '')?.answer).toBeNull()
+	const board_ = await loadBoard(paths)
+	const [decision] = [...board_.decisions.keys()] as [string]
+	const auth = [...board_.nodes].find(([, node]) => node.title === 'The auth API')?.[0] as string
+
+	const answered = await call(client, 'decide', { decision, option: 'cookie' })
+	expect((await loadBoard(paths)).decisions.get(decision)?.answer?.option).toBe('cookie')
+	expect(answered).toContain(auth)
+})
+
+test('a host with no elicitation approves on a relayed yes', async () => {
+	const { repo: created, paths } = await board()
+	const client = await mute(created.dir)
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone' }] })
+	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
+	await call(client, 'write_brief', {
+		node,
+		approach: 'Write it.',
+		acceptance: [{ run: 'npm test', proves: 'It answers.' }],
+	})
+
+	await call(client, 'approve', { node, confirmed: true })
+	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
 })
 
 test('a brief is written, approved by the human, and nothing runs before that', async () => {
@@ -353,7 +369,7 @@ test('a brief is written, approved by the human, and nothing runs before that', 
 	const client = await connect(created.dir)
 	await call(client, 'propose', PROPOSAL)
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
-	await call(client, 'decide', { decision })
+	await call(client, 'decide', { decision, option: 'cookie' })
 	const node = [...(await loadBoard(paths)).nodes].find(
 		([, record]) => record.title === 'The auth API',
 	)?.[0] as string
@@ -369,7 +385,7 @@ test('a brief is written, approved by the human, and nothing runs before that', 
 	expect(brief).toContain('Endpoints first')
 	expect(brief).toContain('Not approved')
 
-	await call(client, 'approve', { node })
+	await call(client, 'approve', { node, confirmed: true })
 	expect(await call(client, 'brief', { node })).toContain('Approved by')
 	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
 })
@@ -387,7 +403,7 @@ test('a rewritten approach is not the approved one', async () => {
 			acceptance: [{ run: 'npm test', proves: 'It answers.' }],
 		})
 	await write('The first way.')
-	await call(client, 'approve', { node })
+	await call(client, 'approve', { node, confirmed: true })
 	await write('Actually, the second way.')
 
 	expect((await loadBoard(paths)).nodes.get(node)?.brief?.approval).toBeNull()
@@ -423,7 +439,44 @@ test('review reads the scan, the criteria and the files; accept merges what the 
 		'+export const sign',
 	)
 
-	expect(await call(client, 'accept', { node, base: 'main' })).toContain('is done')
+	expect(await call(client, 'accept', { node, base: 'main', confirmed: true })).toContain('is done')
+	expect(statusOf(await loadBoard(paths), node)).toBe('done')
+})
+
+test('a relayed answer is refused where there is nothing to answer', async () => {
+	const { repo: created, paths } = await board()
+	const client = await mute(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const board_ = await loadBoard(paths)
+	const [decision] = [...board_.decisions.keys()] as [string]
+	const auth = [...board_.nodes].find(([, node]) => node.title === 'The auth API')?.[0] as string
+
+	await call(client, 'decide', { decision, option: 'cookie' })
+	expect(await call(client, 'decide', { decision, option: 'redis' })).toContain('already answered')
+	expect((await loadBoard(paths)).decisions.get(decision)?.answer?.option).toBe('cookie')
+	expect(await call(client, 'approve', { node: auth, confirmed: true })).toContain('no brief yet')
+	expect(await call(client, 'accept', { node: 'gone-x9y8', confirmed: true })).toContain(
+		'not on this board',
+	)
+})
+
+test('a host with no elicitation merges on a relayed yes', async () => {
+	const { repo: created, paths } = await board()
+	const client = await mute(created.dir)
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'The auth API', files: ['src/**'] }] })
+	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
+	await call(client, 'write_brief', {
+		node,
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'The endpoints answer.' }],
+	})
+	const { path: worktree } = await addWorktree(paths, node, 'main')
+	mkdirSync(join(worktree, 'src'), { recursive: true })
+	writeFileSync(join(worktree, 'src/token.ts'), 'export const sign = () => "ok"\n')
+	execFileSync('git', ['add', '-A'], { cwd: worktree })
+	execFileSync('git', ['commit', '-m', 'feat: work'], { cwd: worktree })
+
+	expect(await call(client, 'accept', { node, base: 'main', confirmed: true })).toContain('is done')
 	expect(statusOf(await loadBoard(paths), node)).toBe('done')
 })
 
@@ -527,7 +580,7 @@ test('a decision with no options is opened before it is put to anyone', async ()
 	})
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
 
-	expect(await call(client, 'decide', { decision })).toContain('no options yet')
+	expect(await call(client, 'decide', { decision, option: 'post' })).toContain('no options yet')
 	await call(client, 'open_decision', {
 		decision,
 		options: [
@@ -542,7 +595,7 @@ test('a decision with no options is opened before it is put to anyone', async ()
 		suggested: 'post',
 	})
 	expect(await call(client, 'decisions')).toContain('Suggested: post')
-	expect(await call(client, 'decide', { decision })).toContain('post')
+	expect(await call(client, 'decide', { decision, option: 'post' })).toContain('post')
 })
 
 test('decide whose base cannot be resolved refuses, and the answer does not land', async () => {
@@ -552,7 +605,10 @@ test('decide whose base cannot be resolved refuses, and the answer does not land
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()] as [string]
 	writeFileSync(join(created.dir, '.git/HEAD'), 'not-a-ref\n')
 
-	const result = await client.callTool({ name: 'decide', arguments: { decision } })
+	const result = await client.callTool({
+		name: 'decide',
+		arguments: { decision, option: 'cookie' },
+	})
 	expect(result.isError).toBe(true)
 	expect((await loadBoard(paths)).decisions.get(decision)?.answer).toBeNull()
 })
@@ -567,7 +623,7 @@ test('a run goes through the same dispatch the CLI uses, and the log reads back'
 		approach: 'Endpoints first.',
 		acceptance: [{ run: 'npm test', proves: 'The endpoints answer.' }],
 	})
-	await call(client, 'approve', { node })
+	await call(client, 'approve', { node, confirmed: true })
 
 	expect(await call(client, 'stop', { node })).toContain('Nothing is running')
 	// Answering something that has not run yet is refused for the honest reason,
@@ -872,7 +928,7 @@ test('a run that meets another node’s files asks the human, and starts when th
 			approach: 'Write it.',
 			acceptance: [{ run: 'true', proves: 'it works' }],
 		})
-		await call(client, 'approve', { node })
+		await call(client, 'approve', { node, confirmed: true })
 	}
 	await call(client, 'claim', { node: ui })
 
@@ -900,7 +956,7 @@ test('a run the human declines is not started, and nothing was cut', async () =>
 		approach: 'Write it.',
 		acceptance: [{ run: 'true', proves: 'it works' }],
 	})
-	await call(client, 'approve', { node: auth })
+	await call(client, 'approve', { node: auth, confirmed: true })
 	await call(client, 'claim', { node: ui })
 
 	expect(await call(client, 'run', { nodes: [auth], base: 'main' })).toContain('was not started')
@@ -925,12 +981,12 @@ test('accepting starts what was approved and queued behind it, and says it did',
 			approach: 'Write it.',
 			acceptance: [{ run: 'true', proves: 'it works' }],
 		})
-	await call(client, 'approve', { node: auth })
-	await call(client, 'approve', { node: ui, queue: true })
+	await call(client, 'approve', { node: auth, confirmed: true })
+	await call(client, 'approve', { node: ui, queue: true, confirmed: true })
 
 	process.env.FAKE_HOST_COMMIT = 'src/auth/api.ts'
 	await call(client, 'run', { nodes: [auth], base: 'main' })
-	const accepted = await call(client, 'accept', { node: auth, base: 'main' })
+	const accepted = await call(client, 'accept', { node: auth, base: 'main', confirmed: true })
 	delete process.env.FAKE_HOST_COMMIT
 
 	expect(accepted).toContain('The queue moved')
@@ -964,7 +1020,7 @@ test('a wave asks once about every node it warned on, and starts them when the h
 			approach: 'Write it.',
 			acceptance: [{ run: 'true', proves: 'it works' }],
 		})
-		await call(client, 'approve', { node })
+		await call(client, 'approve', { node, confirmed: true })
 	}
 
 	// Both of them meet, so the wave starts neither until it has an answer — and
@@ -992,8 +1048,8 @@ const flagged = async (client: Client, paths: Paths): Promise<string> => {
 	})
 	// Approving does not require the decision to be answered, so answering it
 	// afterwards is a real user path rather than a fixture (§2.8).
-	await call(client, 'approve', { node })
-	await call(client, 'decide', { decision: [...board.decisions.keys()][0] ?? '' })
+	await call(client, 'approve', { node, confirmed: true })
+	await call(client, 'decide', { decision: [...board.decisions.keys()][0] ?? '', option: 'cookie' })
 	expect(flagsOf(await loadBoard(paths), node).flagged).toBe(true)
 	return node
 }

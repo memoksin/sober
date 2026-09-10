@@ -25,7 +25,7 @@ Then, for that one node:
    - **The approach** — how the work gets done here, naming real files and real functions. Enough that an agent with the repository and this text asks no second question, because it will not get to.
    - **The acceptance list** — each entry a command that can actually be run in this repository, and what passing it proves. A criterion nobody can run is not a criterion, and "it works" is not what passing proves.
 
-3. **Show it and approve it.** Put the approach and the criteria in front of the user, then call `approve`. That tool asks them; you cannot approve on their behalf, and nothing runs without it. If they want it changed, rewrite with `write_brief` — a rewritten approach clears the approval it had, because the approved thing was the old approach.
+3. **Show it and approve it.** Put the approach and the criteria in front of the user, then ask a yes or a no with this host's own question tool. Call `approve` with `confirmed: true` only on an explicit yes; on a no, do nothing. You cannot approve on their behalf, and nothing runs without it. If they want it changed, rewrite with `write_brief` — a rewritten approach clears the approval it had, because the approved thing was the old approach.
 
 Then say the node is `ready` and stop. Running it is `the **next** skill`, and it is a separate decision: a run cuts a worktree and spends real money.
 

@@ -1,6 +1,6 @@
 # 0048 — Codex and OpenCode get a plugin and an adapter, and the skills get one source
 
-- Status: accepted
+- Status: accepted; superseded in part by [ADR 0057](0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md) — "no tool takes an answer"
 - Date: 2026-09-07
 - Moves: SCOPE SHOULD → MUST #16
 - Refines: ADR 0009, ADR 0010, ADR 0046, ADR 0047, `DESIGN.md` §2.9, §5.1

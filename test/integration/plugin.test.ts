@@ -147,14 +147,13 @@ test('a host that cannot enforce the block says so, rather than claiming it can'
 	}
 })
 
-test('where a host cannot put a question on screen, the decision skill says what to do', () => {
-	// A decision that cannot be asked cannot be answered, and the honest
-	// behaviour is to stop and say so (§2.9, ADR 0010). Every host's skill has
-	// to carry the fallback, because the one that needs it most is the one
-	// where the tool refuses.
+test('every host’s decision skill asks with the host’s own question, and relays only the pick', () => {
+	// The host's question tool asks; the agent passes on what was picked and
+	// nothing else (ADR 0057). No host is told `decide` will ask for it.
 	for (const host of Object.keys(SKILL_DIRS)) {
 		const decide = buildSkills(host).get('decide') ?? ''
-		expect(decide, host).toContain('sober decide <id> <option>')
-		expect(decide, host).toMatch(/cannot ask|no way for a tool to put a question/)
+		expect(decide, host).toContain('Never pass an option they did not pick')
+		expect(decide, host).toMatch(/question tool/)
+		expect(decide, host).not.toContain('`decide` is what opens it')
 	}
 })

@@ -112,7 +112,7 @@ ${step(2, `${bold('claude')}  ${dim('then')}  ${bold(`/plugin marketplace add ${
 
 ${step(3, dim('read the proposed nodes and edges; accept them as a batch'))}
 
-${step(4, `${bold('/sober:decide')}  ${dim('— options are produced, you pick through elicitation')}`)}
+${step(4, `${bold('/sober:decide')}  ${dim('— options are produced, you pick in the host’s question')}`)}
 
 ${step(5, dim('ask for a node’s brief, read the approach, approve it'))}
 
