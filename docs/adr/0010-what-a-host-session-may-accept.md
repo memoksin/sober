@@ -1,6 +1,6 @@
 # 0010 — What a host session may accept
 
-- Status: accepted
+- Status: accepted; superseded in part by [ADR 0057](0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md) — the elicitation mechanism and the refusal on a host without it
 - Date: 2026-08-28
 
 ## Context

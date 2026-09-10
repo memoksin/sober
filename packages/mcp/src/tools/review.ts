@@ -10,7 +10,6 @@ import {
 } from '@besober/core'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
 import { drained } from '../queue.js'
 import { renderReview } from '../render.js'
@@ -18,8 +17,8 @@ import { renderReview } from '../render.js'
 /**
  * Review, and the two ways out of it. Accepting is a human act — it is recorded
  * with their name and with how the scan read at that moment (`PR-09-06`) — so,
- * like a decision and like an approval, it goes to them through elicitation and
- * never through the agent that did the work.
+ * like a decision and like an approval, the host's own question tool asks them
+ * and the agent relays their yes (ADR 0057).
  */
 export const registerReview = (server: McpServer, cwd: string): void => {
 	server.registerTool(
@@ -45,10 +44,14 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 	server.registerTool(
 		'accept',
 		{
-			title: 'Ask the human to accept the work',
+			title: 'Record the human’s acceptance of the work',
 			description:
-				'Put the result to the human. If they accept, the work is merged into the base, the node is done, and the worktree goes away. One node per call.',
-			inputSchema: { node: z.string(), base: z.string().nullish() },
+				'Merge a node’s work into the base once the human accepted it: the node is done and the worktree goes away. Before calling, tell them what the review found, ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes. Never on a yes they did not give, never on one carried over from earlier in the conversation, one node per call (ADR 0057).',
+			inputSchema: {
+				node: z.string(),
+				base: z.string().nullish(),
+				confirmed: z.literal(true).describe('the human said yes to merging this node, just now'),
+			},
 		},
 		tool(async ({ node, base }: { node: string; base?: string | null }) => {
 			const paths = await openBoard(cwd)
@@ -57,23 +60,6 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 			if (found === null) return text(`${node} is not on this board.`)
 
 			const scan = found.scan.result
-			// One line, and the line says the two things that decide it: how the
-			// scan read, and where it lands. The findings are read in the
-			// conversation, where nothing truncates them.
-			const yes = await askYes(
-				server.server,
-				`Accept ${node}?`,
-				`Merge ${found.files.length} file(s) into ${ref}? The scan reads: ${scan}${
-					scan === 'clean'
-						? ''
-						: ` (${found.scan.findings.length + found.scan.didNotRun.length} to read above)`
-				}.`,
-				scan === 'clean'
-					? `Yes, merge it into ${ref}`
-					: `Yes — merge it, knowing the scan says ${scan}`,
-			)
-			if (!yes) return text('Not accepted. Nothing was merged and nothing was deleted.')
-
 			const landed = await acceptWork(paths, node, {
 				by: await whoami(paths.root),
 				base: ref,

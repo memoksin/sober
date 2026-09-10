@@ -25,7 +25,7 @@ import {
 import { CATEGORIES, type Decision, type Impact, type Node, type Option } from '@besober/schema'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { askChoice, askYes } from '../ask.js'
+import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
 import { drained } from '../queue.js'
 import { renderBoard, renderDecisions } from '../render.js'
@@ -322,12 +322,12 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 	server.registerTool(
 		'decide',
 		{
-			title: 'Ask the human to answer one decision',
+			title: 'Record the human’s pick for one decision',
 			description:
-				'Put one decision to the human and record what they pick. The choice comes from them, never from you: this tool takes no answer and never a list of decisions.',
-			inputSchema: { decision: z.string() },
+				'Record the option the human picked for one decision. Before calling, ask them with this host’s own question tool — one question per call, the option labels exactly as listed — and pass exactly the option they picked. Never an option they did not pick, never a pick carried over from earlier in the conversation, never a list (ADR 0057).',
+			inputSchema: { decision: z.string(), option: z.string() },
 		},
-		tool(async ({ decision }: { decision: string }) => {
+		tool(async ({ decision, option }: { decision: string; option: string }) => {
 			const paths = await openBoard(cwd)
 			const board = await loadBoard(paths)
 			const record = board.decisions.get(decision)
@@ -337,21 +337,9 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			if (record.answer !== null)
 				return text(`${decision} is already answered: ${record.answer.option}.`)
 
-			const picked = await askChoice(
-				server.server,
-				record.question,
-				record.question,
-				// Labels only. A narrow terminal cuts the line rather than wrapping
-				// it, and half a trade-off read is worse than none — so the reason
-				// and what it costs later are read in the conversation, which the
-				// decide skill shows in full before this is called (ADR 0024, §2.5).
-				record.options.map((option) => ({ id: option.id, label: option.label })),
-			)
-			if (picked === null) return text('The human did not answer. Nothing was recorded.')
-
 			const base = await currentBranch(paths.root)
 			const answered = await answerDecision(paths, decision, {
-				option: picked,
+				option,
 				by: await whoami(paths.root),
 			})
 			const after = await loadBoard(paths)
@@ -485,11 +473,12 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 	server.registerTool(
 		'approve',
 		{
-			title: 'Ask the human to approve one brief',
+			title: 'Record the human’s approval of one brief',
 			description:
-				'Put one node’s brief to the human. Approval is theirs, per node, never a batch — this tool takes one node and asks them directly.',
+				'Record that the human approved one node’s brief. Before calling, show them the approach and the criteria, ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes. Never on a yes they did not give, never on one carried over from earlier in the conversation, never a batch (ADR 0057).',
 			inputSchema: {
 				node: z.string(),
+				confirmed: z.literal(true).describe('the human said yes to this brief, just now'),
 				queue: z
 					.boolean()
 					.nullish()
@@ -506,20 +495,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			if (record.brief === null)
 				return text(`${node} has no brief yet — write one with \`write_brief\` first.`)
 
-			// The human confirms one of two actions, so the button has to name the
-			// one that will happen — which is the board's default when the caller
-			// said nothing (ADR 0056).
 			const queued = queue ?? (await queueByDefault(paths))
-
-			// One line. The approach and the criteria are read in the conversation,
-			// where nothing truncates them; the prompt is where the human decides.
-			const yes = await askYes(
-				server.server,
-				'Approve this brief?',
-				`Approve the brief for “${record.title}”, with ${record.brief.acceptance.length} acceptance criteria?`,
-				queued ? 'Yes — approve, and start it when it is ready' : 'Yes, approve it',
-			)
-			if (!yes) return text('Not approved. Nothing was recorded.')
 
 			await approveBrief(paths, node, { by: await whoami(paths.root), queue: queued })
 			return text(

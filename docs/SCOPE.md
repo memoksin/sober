@@ -109,7 +109,6 @@ Ported from v0, where each was considered and rejected for a stated reason, and 
 - **Publishing and freezing `schema` at the end of phase 1.** A contract is learned by consuming it; freezing it before four consumers exist is the brake the publishing table already refused for `core`. ADR 0007.
 - **An advisory subprocess for decomposition, options and brief writing.** Eight unanswered questions — JSON enforcement, timeouts, cancellation, session cost, where it runs — for a worse result than a session that already holds the repository in context. ADR 0009.
 - **Read-only MCP tools, with every acceptance in the dashboard.** Safest, and friction with nothing to show for it: the human has just read the options in the session. ADR 0010.
-- **Letting the session's agent supply a decision's answer.** Unenforceable — it can write the rationale too. The pick comes from elicitation. ADR 0010.
 - **`gitleaks`, `trufflehog`, or hand-written secret regexes.** The first two are separate binaries to fetch, against `PR-00-01`; the third is the reinvention this rebuild exists to avoid. ADR 0011.
 - **A branch, worktree and draft pull request per attempt.** Two rejections left three of each, nothing collected the branches or the pull requests, and CI ran on every push. ADR 0012.
 - **Whole-record conflict resolution.** Discards a co-editor's work whenever two people touch one record for different reasons. Field-level three-way merge instead. ADR 0013.
@@ -131,5 +130,7 @@ Ported from v0, where each was considered and rejected for a stated reason, and 
 - **Giving Cursor a full event renderer of its own.** Four of its five shapes are Claude Code's, key for key, so a second copy would be two renderers for one shape waiting to disagree, and half of it would be unreachable behind the adapter that runs first. ADR 0052.
 - **Leaving the prompt echo labelled as an answer.** The smallest possible diff: Cursor's `type: "user"` event already rendered, through Claude Code's adapter. What it rendered was the whole brief, `NO_HUMAN` included, in the half of the transcript ADR 0046 keeps for what the human said — on a host nobody can be watching. ADR 0052.
 - **Shipping a hook in the Cursor plugin.** Cursor has hooks, so this is the first plugin beyond Claude Code where the guard could be real rather than advisory. It is also a SHOULD, and building it here would move a second scope line inside one ADR. ADR 0052.
+
+"Letting the session's agent supply a decision's answer", rejected here by ADR 0010, is no longer on this list: the host's own question tool asks and the agent relays the pick. ADR 0057.
 
 v0 rejections tied to its Bun stack (`bun build --compile` single binaries, `bundleDependencies`) are not carried: v1's stack differs, so they have to be re-decided rather than inherited.

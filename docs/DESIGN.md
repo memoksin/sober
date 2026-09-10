@@ -227,8 +227,8 @@ The human sees the draft pre-filled and accepts **one decision at a time** — n
 Since planning happens in a host session (ADR 0009), the rule needs a mechanism that survives a conversation, where "they all look fine, accept them" is one line. ADR 0010 settles it:
 
 - the accept tool takes a single decision id, never a list;
-- **the choice comes from MCP elicitation**, not from the agent. The server asks the host to put the question to the human; the human picks; the answer returns. The agent opens the decision and does not supply its answer;
-- a host without elicitation cannot accept. The tool refuses and points at the decision screen or the CLI. This is §2.9's pattern applied: where SOBER cannot enforce, it says so rather than claiming enforcement everywhere.
+- **the choice comes from the human, asked through the host's own question tool** (ADR 0057). The agent asks — the question and the option labels — and passes `decide` exactly the option picked; it never supplies a pick of its own;
+- the record cannot tell a relayed pick from a human one. The skills and hooks hold the rule, not the protocol — §2.9's pattern applied: where SOBER cannot enforce, it says so rather than claiming enforcement everywhere.
 
 This is D1 in mechanism form: the agent drafts, the human approves, and "approved" is a real state in the file, not an assumption.
 
@@ -319,7 +319,7 @@ Hooks in the other three plugins stay v1.x, and v0's two observations are why: C
 
 Cursor is the one of the three that has hooks SOBER could use, and shipping none of them is a scope decision rather than a host limitation. `SCOPE.md` keeps hook enforcement beyond Claude Code in SHOULD, and the plugin says what is true today: this host gets no such hook.
 
-The same honesty applies to elicitation (§2.4): a host that cannot put a question on screen cannot accept a decision, and the tool says so rather than guessing. What follows from it is the agent's job, not a workaround: stop, put the one question to the user in the conversation, wait, and let `sober decide <id> <option>` record what they say. The pick comes from the human either way — that is ADR 0010's rule, and ADR 0048 keeps the rule while dropping the assumption that elicitation is the only shape it has. Cursor is the second host where the mechanism is available rather than merely described: its MCP client supports elicitation, so `decide` asks there instead of refusing.
+The same honesty applies to asking (§2.4). The host's own question tool puts the question on screen — AskUserQuestion in Claude Code and Claude Desktop, the equivalent in Codex and Cursor — and the agent relays the pick to `decide`, `approve` or `accept` (ADR 0057). OpenCode has none, so the agent asks in the conversation and waits for a reply that names the option. The pick comes from the human either way — ADR 0010's rule, kept by 0048 and 0057 while its mechanism moved from elicitation to the host's question tool.
 
 ---
 
@@ -529,7 +529,7 @@ Three surfaces, one contract. `PR-09-08`: every **state-changing** operation is 
 
 The MCP server ships as `sober mcp`, a subcommand of the same binary rather than a second package — one install, one version, one changelog (ADR 0007). It offers one tool per operation: `init` and `board` and `decisions` to read, `propose` to write a graph with its edges in one call, `open_decision` and `write_brief` to author, `run` and `stop` and `logs` to dispatch, `review` and `reject` and `archive` to judge, and `decide`, `approve` and `accept` — the three the agent cannot perform alone.
 
-Those three go to the human through elicitation (ADR 0010). A host that declares no elicitation capability is refused and told to use the command line; the board is the same one either way. Two revisions of the protocol are in the field at once — the newer splits the capability into `form` and `url`, the older declares a bare `elicitation` — so the capability is read before the request is made, and a host is never refused for something it supports.
+Those three are asked with the host's own question tool, and the agent relays the pick: `decide` takes `option`, `approve` and `accept` take `confirmed: true` (ADR 0057). The tools that still elicit — `edit_decision`, the overlap confirmation in `run`, the conflict form in `sync` — refuse a host that declares no elicitation capability and point at the command line. Two revisions of the protocol are in the field at once — the newer splits the capability into `form` and `url`, the older declares a bare `elicitation` — so the capability is read before the request is made, and a host is never refused for something it supports.
 
 ### 4.1 The dashboard has a server — M3
 
