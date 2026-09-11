@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { sync as syncBoard } from '@besober/core'
-import { openBoard, settingsOf } from './board.js'
+import { openBoard, settingsOf, takeBoard } from './board.js'
 import { bold, columns, dim, green, say, yellow } from './out.js'
 
 const records = (count: number): string => `${count} record${count === 1 ? '' : 's'}`
@@ -32,6 +32,7 @@ const listed = (label: string, ids: readonly string[], gone = false): void => {
  * without publishing your own edits yet.
  */
 export const sync = async (noPush: boolean): Promise<void> => {
+	await takeBoard()
 	const paths = await openBoard()
 	const settings = await settingsOf(paths)
 	const result = await syncBoard(paths, settings.board.branch, { push: !noPush })

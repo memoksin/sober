@@ -59,6 +59,23 @@ const noBoard = async (root: string): Promise<string> => {
 		: `this repository's board is on ${branch} and is not in this clone yet — \`sober init\` takes it, and does not make a second one`
 }
 
+/**
+ * `sync` on a fresh clone takes the team's board, the same as `init` does. A
+ * teammate who clones and syncs means exactly that; stopping them to run a
+ * second command was the M2 gate's four syncs with a better sentence.
+ */
+export const takeBoard = async (): Promise<void> => {
+	const root = findRoot(process.cwd()) ?? process.cwd()
+	if (!(await isRepo(root))) return
+	const paths = resolve(root)
+	if ((await readProject(paths)).kind !== 'missing') return
+	const branch = (await settingsOf(paths)).board.branch
+	const adopted = await adoptBoard(paths, branch).catch(refuse)
+	if (adopted === null) return
+	say(`${green('✓')} the team’s board is here — ${adopted} records, taken from ${branch}`)
+	say()
+}
+
 export const settingsOf = async (paths: Paths) => {
 	const config = await readConfig(paths)
 	if (config.kind !== 'ok') return fail(`${config.file} cannot be read: ${config.reason}`)

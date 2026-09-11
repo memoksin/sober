@@ -105,6 +105,16 @@ const bob = (remote: string): string => {
 	return dir
 }
 
+test('sync on a fresh clone takes the team’s board, as init does', () => {
+	const a = alice()
+	node(a.dir, 'ship-the-thing-aaaa', 'Ship the thing')
+	sober(a.dir, 'sync')
+
+	const b = bob(a.remote)
+	expect(sober(b, 'sync')).toContain('the team’s board is here')
+	expect(sober(b, 'status')).toContain('Ship the thing')
+})
+
 test('a board pushed by one person is the board the next one gets', () => {
 	const a = alice()
 	node(a.dir, 'ship-the-thing-aaaa', 'Ship the thing')
