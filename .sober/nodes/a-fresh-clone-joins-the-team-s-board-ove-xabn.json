@@ -1,0 +1,21 @@
+{
+	"title": "A fresh clone joins the team's board over MCP and the server too, not only the CLI",
+	"description": "On a fresh clone `.sober/config.jsonc` is tracked, so `.sober/` exists and `findRoot` succeeds while `project.json` is missing. The CLI catches this (packages/cli/src/board.ts noBoard + adoptBoard). MCP and the server do not:\n- MCP `init` says 'already a board here' and never adopts (packages/mcp/src/tools/plan.ts).\n- MCP `board`/`decisions` render an empty board silently (loadBoard treats a missing project as null).\n- MCP `sync` creates a fresh orphan board branch and merges it with the remote's unrelated history (merge-base → ''), pushing a second root commit and skipping the project check.\n- Server `init` route calls initBoard without adoptBoard (packages/server/src/routes.ts).\nNo data is lost (materialize only writes under .sober/, push is not forced), but the history is polluted and the person is misled.\nFix: MCP openBoard throws NoBoardError (naming `init` as the way to take the team's board) when project.json is missing; MCP `init` and server `init` try adoptBoard first, the way the CLI does. One test each.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/mcp/src/context.ts",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/*.test.ts",
+		"packages/server/src/routes.ts",
+		"packages/server/src/*.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T07:30:57.725Z"
+}

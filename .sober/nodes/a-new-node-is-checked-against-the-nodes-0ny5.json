@@ -1,0 +1,27 @@
+{
+	"title": "A new node is checked against the nodes already on the board, not only against its own session",
+	"description": "Today `propose` and `open_node` check edges only inside the call: keys resolve to each other, `findCycle` runs, loose decisions are refused (packages/mcp/src/tools/plan.ts ~136-235, packages/mcp/src/tools/flag.ts `open_node`). Nothing compares a new node with what earlier sessions put on the board, and the planning agent has no way to: the `board` tool renders titles only, no files and no description. So a node planned today that must wait on (or must hold) a node from last week lands with no edge — e.g. a design node that should build on earlier design nodes.\n\nTwo halves, one node:\n1. Mechanical. After the write, `propose` and `open_node` list every open (not accepted, not dismissed) node that shares a file glob with a new node and has no edge to it either way — id, title, the shared globs. Reuse `touches` from packages/core/src/team.ts (today `overlaps` there only looks at claimed nodes; add a sibling that looks at every open node, export it from packages/core/src/index.ts). It warns, it does not refuse: two nodes can share a file without one waiting on the other, and SOBER already warns about overlap at run time.\n2. Semantic. plugins/skills/plan/SKILL.md gets a step before `propose`: for each new node, name which existing nodes it must wait on and which existing nodes must now wait on it — same area, same design surface, same record or tool — and put the first in `dependsOn`; after `propose`, act on the overlap list and call `bind` for the second (passing the full existing `dependsOn`, since `bind` replaces it). Regenerate packages/*-plugin/skills/plan/SKILL.md with `pnpm plugins`.\n\nAcceptance: an MCP test where a board holds node A with files X, a later `propose` adds B with files X and no edge, and the reply names A; the same with an edge present names nothing; the generated skills match the source (test/integration/plugin.test.ts).",
+	"notes": "",
+	"dependsOn": [
+		"the-plan-skill-asks-what-it-does-not-kno-7spu"
+	],
+	"decisions": [],
+	"files": [
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/tools/flag.ts",
+		"packages/mcp/src/**/*.test.ts",
+		"packages/core/src/team.ts",
+		"packages/core/src/team.test.ts",
+		"packages/core/src/index.ts",
+		"plugins/skills/plan/SKILL.md",
+		"packages/*-plugin/skills/plan/SKILL.md",
+		"test/integration/plugin.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T07:41:18.983Z"
+}
