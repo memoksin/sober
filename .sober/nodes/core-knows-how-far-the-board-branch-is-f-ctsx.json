@@ -1,0 +1,23 @@
+{
+	"title": "Core knows how far the board branch is from the remote",
+	"description": "Add to packages/core/src/sync.ts (reusing git.ts helpers: remoteName, refExists, isAncestor) a read that fetches the board branch and returns { ahead, behind, remote } or 'no-remote' / 'offline'. The fetch has a short timeout so an offline machine answers 'offline' instead of hanging. Under the ff-auto answer, also add a fast-forward-only pull: taken only when behind > 0, ahead === 0 and nothing uncommitted under .sober/; it takes the ADR 0025 lock like sync() does. Export through packages/core/src/index.ts and update the exports snapshot (ADR 0028 ceiling). Tests in packages/core/src/sync.test.ts (or next to it) with a bare remote: behind, ahead, diverged, no remote, and the fast-forward refused when there is local work.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"when-a-session-opens-or-the-dashboard-lo-qnr9"
+	],
+	"files": [
+		"packages/core/src/sync.ts",
+		"packages/core/src/git.ts",
+		"packages/core/src/index.ts",
+		"packages/core/src/*.test.ts",
+		"packages/core/src/__snapshots__/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T07:22:40.280Z"
+}

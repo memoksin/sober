@@ -1,0 +1,21 @@
+{
+	"title": "A sync conflict is answered on the dashboard, field by field",
+	"description": "When the Sync button gets `conflicted`, show each record both sides changed with its fields, and per field the two values to pick from — nothing preselected (same rule as the MCP sync elicitation). Submitting calls the existing `resolve` route (packages/server/src/routes.ts:245, core resolveConflict), then syncs again to push. So nobody needs a terminal to finish a sync. Build it as its own component under apps/dashboard/src/sync/ with its test.",
+	"notes": "",
+	"dependsOn": [
+		"a-sync-button-on-the-dashboard-upby"
+	],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/sync/**",
+		"apps/dashboard/src/App.tsx",
+		"apps/dashboard/src/wire.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T07:22:40.280Z"
+}

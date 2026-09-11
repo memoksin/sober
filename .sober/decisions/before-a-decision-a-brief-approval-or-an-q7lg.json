@@ -1,0 +1,28 @@
+{
+	"category": "data-flow",
+	"question": "Before a decision, a brief approval or an accept, where does the text the human reads in the chat come from?",
+	"options": [
+		{
+			"id": "tool-renders",
+			"label": "The tool returns it; the agent pastes it verbatim",
+			"reason": "write_brief, brief, decisions and review already return text (renderDecisions, renderReview in packages/mcp/src/render.ts). If they return the full brief / options / findings as a ready block, the agent only copies it, so it cannot shorten it or say 'see the board' — on all four hosts the same.",
+			"costLater": "The tool output becomes a contract the dashboard and the CLI must match; long briefs fill the context twice (tool result + chat). A change to the format touches render.ts and its snapshots."
+		},
+		{
+			"id": "prose-only",
+			"label": "Only the instructions say so; the agent writes it",
+			"reason": "Smallest change: one rule in the skills, the MCP server instructions and the decide/approve/accept descriptions. No code, no format contract.",
+			"costLater": "It relies on the model following prose. Agents already had 'show the approach' and still pointed at the board; a weaker model or a long session drifts again, and nothing tests it."
+		},
+		{
+			"id": "both",
+			"label": "Tool renders it and the instructions require it",
+			"reason": "The block exists and the prose says paste it before asking; one fails, the other still holds.",
+			"costLater": "Two places to keep in step: a new field in the brief means a render change and a wording check."
+		}
+	],
+	"suggested": "both",
+	"derived": null,
+	"answer": null,
+	"createdAt": "2026-09-11T07:19:14.723Z"
+}

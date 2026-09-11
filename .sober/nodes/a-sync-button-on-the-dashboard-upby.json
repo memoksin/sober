@@ -1,0 +1,20 @@
+{
+	"title": "A sync button on the dashboard",
+	"description": "The server already has a `sync` route (packages/server/src/routes.ts:239) calling core sync() with push on. Add a Sync button to the dashboard shell (apps/dashboard/src/App.tsx) that calls it through apps/dashboard/src/wire.ts, disables itself while it runs, and says the result in words for every SyncResult kind: synced (what came in, what went out), no-remote, invalid (the findings), conflicted (the records both sides changed). The board reloads after a sync. Tests in App.test.tsx / wire.test.ts with the wire stubbed, one per kind.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/App.tsx",
+		"apps/dashboard/src/wire.ts",
+		"apps/dashboard/src/*.test.ts*",
+		"apps/dashboard/src/theme.css"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T07:22:40.280Z"
+}

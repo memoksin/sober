@@ -1,0 +1,23 @@
+{
+	"title": "The brief, the options and the review come back from the tool as text the human can read in the chat",
+	"description": "Today write_brief returns only '<node> has a brief. Show it to the human…' (packages/mcp/src/tools/plan.ts ~466), so the agent has to rebuild the brief itself and often just points at the board. Add a renderBrief(node, brief) to packages/mcp/src/render.ts: title, approach, and every acceptance criterion (command + what passing proves). Return it from write_brief and from the brief tool. Check renderDecisions gives every option with label, reason and costLater, and renderReview the findings and criteria — fill whatever is missing. End each block with one line: 'Paste this above the question before you ask.' Test: snapshot/unit tests next to render.ts covering a brief with two criteria and a decision with three options. Scope follows the relay decision: under prose-only this node shrinks to only checking what renderDecisions/renderReview already carry.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"before-a-decision-a-brief-approval-or-an-q7lg"
+	],
+	"files": [
+		"packages/mcp/src/render.ts",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/tools/review.ts",
+		"packages/mcp/src/**/*.test.ts",
+		"packages/mcp/test/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T07:19:14.723Z"
+}

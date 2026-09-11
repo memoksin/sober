@@ -1,0 +1,27 @@
+{
+	"title": "Every agent writes the context in the chat before it asks — never 'read it on the board'",
+	"description": "Add one explicit rule wherever the agent asks the human something: before any question for decide, approve or accept, write the full context in this conversation — the decision's options with reason and costLater, or the whole approach and every acceptance criterion, or the review findings. Never replace it with a pointer to the board, the dashboard or `sober` CLI; the board is a second copy, not the only one. Sources: plugins/skills/{decide,brief,next,plan,loop}/SKILL.md (edit the source, then `pnpm plugins` regenerates packages/*-plugin skills), the server instructions in packages/mcp/src/index.ts:29, and the decide/approve/accept descriptions in packages/mcp/src/tools/plan.ts and review.ts. Under tool-renders/both, the rule says 'paste the block the tool returned'. Test: a check (in the existing plugin build/drift test) that each of those skills contains the rule sentence; `pnpm plugins` leaves no diff.",
+	"notes": "",
+	"dependsOn": [
+		"the-brief-the-options-and-the-review-com-uwco"
+	],
+	"decisions": [
+		"before-a-decision-a-brief-approval-or-an-q7lg"
+	],
+	"files": [
+		"plugins/skills/*/SKILL.md",
+		"packages/*-plugin/**/SKILL.md",
+		"packages/mcp/src/index.ts",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/tools/review.ts",
+		"scripts/build-plugins.mjs",
+		"scripts/**/*.test.*"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T07:19:14.723Z"
+}

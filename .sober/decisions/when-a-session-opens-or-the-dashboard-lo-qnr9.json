@@ -1,0 +1,28 @@
+{
+	"category": "data-flow",
+	"question": "When a session opens or the dashboard loads and the board branch differs from the remote, what does SOBER do on its own?",
+	"options": [
+		{
+			"id": "ff-auto",
+			"label": "Pull on its own when it is a fast-forward, otherwise remind",
+			"reason": "The common case — a new machine, the remote ahead, nothing local unsent — fixes itself with no act and no risk: a fast-forward cannot conflict. Anything else (local commits, a diverged branch) only gets a 'N behind / M ahead, sync' line, so push and conflicts stay the human's.",
+			"costLater": "The board can change under you without you pressing anything; the session hook pays a network fetch at startup (needs a timeout and an offline path); core needs a fast-forward-only path next to sync()."
+		},
+		{
+			"id": "remind",
+			"label": "Only remind: fetch and say how far apart they are",
+			"reason": "Nothing is written without an act. The hook and the dashboard only report ahead/behind counts.",
+			"costLater": "The person still has to remember to act on the reminder; a reminder shown every session turns into noise that is skipped, which is how the problem started."
+		},
+		{
+			"id": "full-auto",
+			"label": "Run the full sync (commit, pull, push) automatically",
+			"reason": "Nobody ever has to think about it; both directions stay current.",
+			"costLater": "A hook has no human: a conflict mid-sync cannot be answered and leaves the board half-merged; local work is pushed without being asked; a network failure at session start becomes a board failure."
+		}
+	],
+	"suggested": "ff-auto",
+	"derived": null,
+	"answer": null,
+	"createdAt": "2026-09-11T07:22:40.280Z"
+}
