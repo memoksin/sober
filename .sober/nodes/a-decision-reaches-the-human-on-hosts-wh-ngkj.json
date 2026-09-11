@@ -1,0 +1,62 @@
+{
+	"title": "A decision reaches the human on hosts whose elicitation does not render",
+	"description": "Found 2026-09-10 in Claude Desktop: `decide` on kullanici-isini-yaparken-yakalanan-bir-o-bqou returned \"The human did not answer. Nothing was recorded.\" — no prompt ever appeared on screen. The host declares the elicitation capability, so `NoElicitationError` (packages/mcp/src/ask.ts:55,118,164) never fires; the form is simply not shown and the result comes back as a non-accept, which `askChoice` reads as a dismissal. So the refusal path ADR 0010 and 0048 rely on is skipped, and the human is told they declined something they never saw. Codex is likely the same; unverified.\n\nADR 0048 already moved the rule from mechanism to reason — \"the pick comes from the human, never from the agent\" — and told the skills to use the host's own way of asking. But it kept \"no tool takes an answer\", so a host's built-in question tool (AskUserQuestion in Claude Code and Desktop, and its equivalents in the other adapters) has nowhere to hand the answer except the CLI. The proposal from the user is to make the built-in question tool the path on every adapter. How the answer then reaches the board without the agent being able to invent it is the decision below; whichever is picked is written as an ADR that supersedes the relevant part of 0048. The same path covers `approve` and `accept`, which use `askYes` and fail the same way.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"when-the-host-s-built-in-question-tool-a-uhdc"
+	],
+	"files": [
+		"packages/mcp/src/ask.ts",
+		"packages/mcp/src/tools/**",
+		"plugins/skills/**",
+		"packages/*-plugin/**",
+		"docs/adr/**",
+		"docs/DESIGN.md"
+	],
+	"brief": {
+		"approach": "The decision is answered: `agent-relays`, and the human narrowed it on 2026-09-10: no elicitation on this path at all. The agent always asks with the host's own question tool (AskUserQuestion in Claude Code and Claude Desktop; each other host's equivalent), formats the pick, and passes it to the tool. `decide`, `approve` and `accept` stop opening elicitation. No schema change: `Answer` in packages/schema/src/decision.ts stays as it is — the decision accepted that the record cannot tell a relayed pick from a human one.\n\n**1. The tools — packages/mcp/src/tools/plan.ts and review.ts.**\n- `decide` (plan.ts:322): `inputSchema` becomes `{ decision: z.string(), option: z.string() }` — required. Remove the `askChoice` call and the 'The human did not answer' branch; pass `option` straight to the existing `answerDecision` call. Core already refuses an option that is not offered (`NoSuchOptionError`, packages/core/src/decide.ts) and an already-answered decision, and `tool()` in packages/mcp/src/context.ts turns those throws into refusals — do not duplicate the checks. Keep the hoisted `const base = await currentBranch(...)` before `answerDecision` (landed in vze3). The early returns for an unknown decision and for `options === null` stay.\n- `approve` (plan.ts:485): gains `confirmed: z.literal(true)` — required, so the call itself is the human's yes. Remove the `askYes` call and its 'Not approved' branch. `queue` stays as it is.\n- `accept` (review.ts:45): same — `confirmed: z.literal(true)` required, `askYes` removed.\n- Rewrite the three `description` strings in the house voice: before calling, ask the user with this host's own question tool — one question per call, the option labels exactly as listed (for approve/accept: a yes and a no) — and pass exactly what they picked. Never an option they did not pick, never a pick carried over from earlier in the conversation, never a list.\n- `askChoice` in packages/mcp/src/ask.ts is left with no caller: delete it and its `Choice` export if nothing else imports them (check with rg). `askYes`, `askFields` and `NoElicitationError` stay — other tools still use them. Update the doc comments at ask.ts:4-16 and review.ts:18-23 so they no longer say decide/approve/accept go through elicitation.\n\nOut of scope, do not touch: `edit_decision`, the `run` overlap confirmation in build.ts:25, `sync`'s `askFields`, `team.ts`, `distribute.ts`. They keep elicitation; name them in the ADR as the known remainder.\n\n**2. The skills — edit the sources in plugins/, then run `pnpm plugins` so packages/*-plugin is regenerated (test/integration/plugin.test.ts fails if it is stale).**\n- plugins/skills/decide/SKILL.md: replace lines 13-17 (\"no second argument and no way to pass an answer\") and step 4 (line 29). New step: after showing the options in full, ask with the host's question tool — the question, and the option labels only (a narrow terminal cuts long lines, ADR 0024; put the suggested one first) — then call `decide` with the id and the option id matching the label they picked. If they pick \"Other\" or answer with text that matches no option, do not map it: say so and ask again. Keep: one decision at a time, the options shown in full before asking.\n- plugins/skills/next/SKILL.md steps 2 and 5, plugins/skills/brief/SKILL.md step 3, plugins/skills/loop/SKILL.md:34 (\"There is no tool that takes one\"): ask a yes/no with the question tool; call `approve`/`accept` with `confirmed: true` only on an explicit yes; on a no, do nothing (for accept, offer `reject`).\n- plugins/hosts/{claude,codex,cursor,opencode}.json `ask` text: name each host's question control (Claude: AskUserQuestion; Codex and Cursor: their own; OpenCode has none — ask in the conversation and wait for a reply that names the option). Drop the claim that `decide` opens the question or refuses when it cannot ask.\n\n**3. The ADR — docs/adr/0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md**, same format as 0056. Context: the Claude Desktop failure (`decide` on kullanici-isini-yaparken-yakalanan-bir-o-bqou, 2026-09-10: elicitation declared, never rendered, reported as a decline). Decision: the host's question tool asks, the agent relays the pick; decide/approve/accept require it and no longer elicit. Supersedes the \"choice comes from MCP elicitation\" and \"a host without elicitation cannot accept\" paragraphs of 0010 and the \"no tool takes an answer\" sentence of 0048; add a superseded-in-part note to both pointing at 0057. Consequences, stated plainly: the record cannot distinguish a relayed pick from a human one; an agent that ignores the skill can answer alone; accepted because a question that never renders is worse. List the elicitation-only remainder from section 1.\n- Update docs/DESIGN.md:97, :230-231, :322 and :532 to the new rule, and docs/SCOPE.md:112, which lists \"Letting the session's agent supply a decision's answer\" as rejected — take it off the rejected list with a pointer to 0057.\n\n**4. Tests — test/integration/mcp.test.ts. Put \"relayed\" in each new test name.**\n- Every existing call of `decide`, `approve` and `accept` in test/integration (mcp.test.ts and any other file — rg for them) now passes `option` / `confirmed: true`. Where a test relied on the fake human in `connect()` (line 45) to pick, pass the option it would have picked. Tests whose whole point was the human declining through elicitation for these three tools are removed; ones for edit_decision and the other out-of-scope tools stay untouched.\n- Replace \"a host that cannot ask cannot accept, and says which surface can\" (line 336) with: on the mute client (`capabilities: {}`), decide with a valid `option` records it — `(await loadBoard(paths)).decisions.get(id)?.answer?.option` equals it, and the reply names the freed node.\n- decide with an option the decision does not offer is refused and `answer` stays `null`.\n- approve with `confirmed: true` on the mute client makes `statusOf(...)` `ready`.\n- accept with `confirmed: true`: reuse the setup of an existing accept test if one runs on the in-memory client; if none does, say so in the summary rather than building a dispatch fixture.\n- scripts/demo-mcp.mjs and scripts/m*-gate.mjs, if they call these three tools, pass the new arguments too (rg first); they are not in CI, so only keep them from breaking.",
+		"acceptance": [
+			{
+				"run": "pnpm test",
+				"proves": "The whole suite is green with the new arguments — every existing decide/approve/accept test updated, the relayed tests added, and plugin.test.ts proving the regenerated skills in packages/*-plugin match their sources in plugins/."
+			},
+			{
+				"run": "pnpm integration -t 'relayed'",
+				"proves": "decide and approve record the relayed answer on a host with no elicitation at all, and decide refuses an option the decision does not offer without writing anything."
+			},
+			{
+				"run": "pnpm typecheck && pnpm lint",
+				"proves": "The required arguments compile, the removed askChoice leaves no dangling import, and the sources, ADR and docs pass biome and secretlint."
+			},
+			{
+				"run": "pnpm coverage:check",
+				"proves": "The coverage ratchet did not fall after removing the elicitation branches from the three tools."
+			},
+			{
+				"run": "ls docs/adr/0057-*.md && rg -q '0057' docs/adr/0010-what-a-host-session-may-accept.md docs/adr/0048-codex-and-opencode-get-a-plugin-and-an-adapter.md docs/SCOPE.md docs/DESIGN.md",
+				"proves": "ADR 0057 exists, and 0010, 0048, SCOPE.md and DESIGN.md each point at it, so no document still states the superseded rule as current."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-10T15:41:39.227Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T15:42:57.538Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T16:04:18.643Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-10T07:59:16.770Z"
+}

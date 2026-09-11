@@ -1,0 +1,17 @@
+{
+	"title": "The run log says what it is waiting on, never goes silent",
+	"description": "Found on run toou of a-repository-with-no-commits-either-work-vze3 (2026-09-10). The agent's session ended at 07:35:27Z and its last log line read `result: finished`, but `finishRun` wrote `endedAt` only at 07:38:40Z. For those ~3 minutes the board said `running`, the log said nothing new, and the run looked hung.\n\nCause: after the session, `runAudit` (packages/core/src/audit.ts:111-119) runs `dispatch.verify` and then every acceptance criterion in turn, and `log()` (audit.ts:188) appends the header and the output only after each command has finished. The long one was `pnpm test` — 164s in the run, 158s re-measured on development; the other three criteria together took ~7s. The build was a full turbo cache hit, so the time is vitest, not the build.\n\nThe work: no silent waiting. Before each command, write what is being waited on — which criterion, the command, that it has started — and after it, the exit and how long it took. The same for `dispatch.verify`. A reader of `logs`, `sober logs` or the panel mid-audit should see \"running acceptance 1 of 4: `pnpm test`\", not a finished-looking tail. Probably its own line kind (e.g. a check starting / a check done) rather than `raw`, which is why this waits on m105: that node widens `LogLine` in packages/schema/src/wire.ts, and two nodes widening the same type at once would collide.\n\nOut of scope, and a separate decision if wanted: the audit re-runs the whole suite the agent already ran. That is ADR 0019's trust model (work under review does not judge itself) and costs ~3 minutes a run; changing it is the human's call, not this node's.\n\nThe visual nodes that render line kinds (one-mark-colour-and-icon-per-kind-and-pe-6tsw, and through it the run panel and `sober logs`) depend on this, so the waiting line gets its mark and is not forgotten.",
+	"notes": "",
+	"dependsOn": [
+		"the-run-log-carries-what-the-agent-actua-m105"
+	],
+	"decisions": [],
+	"files": [],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-10T07:47:55.330Z"
+}

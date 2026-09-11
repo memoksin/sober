@@ -1,0 +1,19 @@
+{
+	"title": "The plan skill asks what it does not know before it proposes",
+	"description": "`plugins/skills/plan/SKILL.md` goes from step 2 (read the repository) straight to step 3 (decompose into nodes) with nothing in between that returns to the user, so an ambiguous request becomes nodes with no scope check and the misreading is only found after the board has been written.\n\nAdd one step between the current 2 and 3: where two readings of the request would produce different nodes, put the question to the user and wait for the answer before decomposing; where the request is already specific, do not invent a question to have one. Say what this is not — it is not one of the four decision categories, and a question about state, module boundaries, data flow or error handling still goes on the board through `propose` rather than being asked here. Keep it short: this file is prose four hosts read, and the part that drifts first is the part nobody re-reads.\n\nThen run `pnpm plugins` and commit the generated files. `test/integration/plugin.test.ts` fails if they are not current.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"plugins/skills/plan/SKILL.md",
+		"packages/*/skills/plan/SKILL.md",
+		"test/integration/plugin.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

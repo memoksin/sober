@@ -1,0 +1,23 @@
+{
+	"title": "A model per tier, per host, in the config",
+	"description": "Add `dispatch.models` to `Config` in `packages/core/src/config.ts`: one table per adapter id — `claude`, `codex`, `opencode`, `cursor` — each naming what runs at the high, middle and low tier, plus `dispatch.thresholds` giving the two score boundaries between them. Keyed by adapter so all four tables survive a change to `dispatch.host`, and edited by hand because OpenCode alone can name any model any provider offers, which no enum will ever hold.\n\nEvery table empty by default, which is today's behaviour exactly: `DEFAULT_CONFIG` is conservative on purpose (`packages/core/src/config.ts:44`), and a first dispatch after an upgrade should cost what it cost before. Write the block into `DEFAULT_CONFIG_TEXT` with the comments the rest of that file carries — it is documentation people edit, and `setSetting` is what keeps the comments alive when a surface writes to it.\n\nWhether a table cell holds a bare model name or the flag with it is the decision this node binds. If the adapter has to know the flag, it goes in the `Adapter` table in `packages/core/src/hosts.ts`, which is where everything a host differs in already lives — as data, never as a subclass.",
+	"notes": "",
+	"dependsOn": [
+		"an-adr-that-lets-sober-choose-the-model-vki3"
+	],
+	"decisions": [
+		"how-is-a-host-told-which-model-to-use-do-4wh2"
+	],
+	"files": [
+		"packages/core/src/config.ts",
+		"packages/core/src/hosts.ts",
+		"packages/core/src/hosts.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

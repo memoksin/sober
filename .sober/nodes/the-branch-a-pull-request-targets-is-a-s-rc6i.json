@@ -1,0 +1,26 @@
+{
+	"title": "The branch a pull request targets is a setting, not wherever you are standing",
+	"description": "`baseOf` in packages/cli/src/board.ts:69 is `given ?? currentBranch(paths.root)`, so the branch a run is cut from and the branch its draft targets are both an accident of what happens to be checked out. Start a run while standing on `main` and SOBER opens a pull request into `main` — the release nobody asked for.\n\nGive the target a home in `.sober/config.jsonc` under `dispatch` — the zod schema and the commented jsonc template both live in packages/core/src/config.ts, beside `draftPr` and `accept`. `baseOf` falls back to that setting before it falls back to the current branch, and the existing `--base` flag (packages/cli/src/index.ts:158) stays the per-invocation override. packages/core/src/pr.ts:125 already hands whatever it is given to `gh pr create --base`, so the publish path itself does not change. The same fallback has to reach the `accept`, `review`, `audit` and `reject` call sites in packages/cli/src/review.ts, which all go through `baseOf`.\n\nAcceptance: a run started from any checked-out branch opens its draft against the configured target; `--base` still wins; a config with no target behaves exactly as today. Tests land with the code.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-the-branch-a-pull-request-tar-45n1",
+		"how-does-a-release-s-bump-patch-minor-ma-65rt"
+	],
+	"files": [
+		"packages/core/src/config.ts",
+		"packages/core/src/config.test.ts",
+		"packages/cli/src/board.ts",
+		"packages/cli/src/board.test.ts",
+		"packages/cli/src/index.ts",
+		"packages/core/src/pr.ts",
+		".sober/config.jsonc"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:08:54.828Z"
+}

@@ -1,0 +1,43 @@
+{
+	"title": "The two Turkish documents are rewritten in English",
+	"description": "`docs/PLAYBOOK.md` (185 lines) and `docs/REVIEW-2026-08-29.md` (217 lines) are written in Turkish; every other file in `docs/`, including `REVIEW-2026-08-28.md`, is English. Rewrite both in English, keeping every heading, table, ADR reference, file path and line citation exactly where it is — these are dated records of what was judged on those days, so the job is translation and never revision.\n\nTwo things stay Turkish and the node should not touch them: the Turkish strings in `packages/core/src/id.ts` and `packages/core/src/id.test.ts` are fixtures for the transliteration table and are the whole point of that test (`Ayrıştırma` → `ayristirma`), and the author's name in `LICENSE`, `.claude-plugin/marketplace.json` and the three `plugin.json` files is a name.\n\nAcceptance is a command: a search for Turkish-specific letters and a short Turkish word list over tracked files returns only those two exclusions.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"docs/PLAYBOOK.md",
+		"docs/REVIEW-2026-08-29.md"
+	],
+	"brief": {
+		"approach": "Translation, not revision. Two files, `docs/PLAYBOOK.md` (185 lines) and `docs/REVIEW-2026-08-29.md` (217 lines), rewritten in English in place. Same paths, same filenames — do not rename either, and do not add a note saying it was translated.\n\n**What must survive byte-for-byte.** Every heading number, every table, every ADR reference, every `file:line` citation, every backticked path. Eight documents cite these two by section number and there are no markdown anchors anywhere — the references are plain `§N.M`, verified: `docs/BUILD-PLAN.md:95,241,242,243`, `docs/REVIEW-2026-08-28.md:218`, `docs/adr/0008:47`, `docs/adr/0015:70`, `docs/adr/0022:11` (§4.1), `docs/adr/0023:9,33`, `docs/adr/0024:26`, `docs/adr/0028:12` (§3.6). So `§1.2/2`, `§1.2/3`, `§2.1`, `§3.6` and `§4.1` must still be the sections they are today. Renumber nothing, merge no sections, split none.\n\nNumbers are measurements and are copied, never recomputed: 201 commits / 11 calendar days / 45 commits on the peak day, 22 commits/day over 9 active days, 8,892 dashboard lines against `core`'s 13,352, 41 minutes human-active with 18 reading diffs, the scores in `REVIEW`'s §0 table (9/10, 7/10, 6/10, 6/10). If a sentence reads as wrong, translate it as it stands — these are dated records of what was judged on those days.\n\n**The two in-document markers are prose and get translated with everything else.** `PLAYBOOK.md` uses **→ ADR** in five places to mark a correction that binds only through an ADR; keep the arrow and the letters, it is already English. `REVIEW-2026-08-29.md` uses **[KARAR]** in three places for an item that needs a ruling; it becomes **[DECISION]** in all three, and nothing outside that file greps for the word (checked).\n\n**Register.** Match the English already in `docs/` — `REVIEW-2026-08-28.md` is the same kind of document by the same author and is the model. Short sentences, verdict first. Turkish `Hüküm:` opens a ruling; render it `Ruling:` and keep the bold. `Kapı` in `PLAYBOOK.md §2.2` is the gate the rest of the repository already calls a gate.\n\n**Three things stay Turkish; do not touch them.** The fixtures in `packages/core/src/id.ts` and `packages/core/src/id.test.ts` (`Ayrıştırma` → `ayristirma`) are the transliteration table's whole point. The author's name in `LICENSE`, `packages/cli/LICENSE`, `.claude-plugin/marketplace.json` and the three `plugin.json` files is a name. And `docs/M1-GATE.md:46` quotes the letter `ı` inside an English sentence about NFD decomposition — that is English prose, leave the line alone.\n\nNothing outside `docs/` changes: no code, no test, no CI file.",
+		"acceptance": [
+			{
+				"run": "! git grep -lwI -e 'için' -e 'değil' -e 'olarak' -e 'ile' -e 'bir' -e 'ama' -e 'daha' -e 'kadar' -e 'yok' -e 'hüküm'",
+				"proves": "No tracked file contains Turkish prose any more. Run today this lists exactly docs/PLAYBOOK.md and docs/REVIEW-2026-08-29.md and nothing else, so it goes green only when both are rewritten."
+			},
+			{
+				"run": "! git grep -lI -e 'ı' -e 'ş' -e 'ğ' -e 'İ' -e 'Ş' -e 'Ğ' -- ':!LICENSE' ':!packages/cli/LICENSE' ':!.claude-plugin/marketplace.json' ':!**/plugin.json' ':!packages/core/src/id.ts' ':!packages/core/src/id.test.ts' ':!docs/M1-GATE.md'",
+				"proves": "No Turkish-only letter is left outside the three deliberate exclusions — the name, the transliteration fixtures, and the English sentence in M1-GATE.md that quotes the letter itself."
+			},
+			{
+				"run": "for s in 1.2 2.1 3.6 4.1; do grep -q \"^### $s\\|^## $s\" docs/REVIEW-2026-08-29.md || { echo \"§$s is gone\"; exit 1; }; done && echo sections intact",
+				"proves": "The four section numbers the ADRs and BUILD-PLAN.md cite still exist in the rewritten review — the eight incoming §N.M references still resolve."
+			},
+			{
+				"run": "git diff --stat main -- docs/ packages/ apps/ scripts/ .github/",
+				"proves": "Only docs/PLAYBOOK.md and docs/REVIEW-2026-08-29.md changed: no code, no test, no CI file was touched, and neither document was renamed."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-10T15:52:27.506Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

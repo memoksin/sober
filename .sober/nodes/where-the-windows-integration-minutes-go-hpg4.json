@@ -1,0 +1,19 @@
+{
+	"title": "Where the Windows integration minutes go — measure it, report it, change nothing",
+	"description": "ADR 0014 accepted the integration harness with a recorded cost: \"CI gets 2–5 minutes slower per pull request.\" Measured on run 34283791186 of pull request #8, the integration job took 2m49s on ubuntu-latest, 4m11s on macos-latest, and 14m16s on windows-latest — roughly three times the estimate on the slowest leg, and 5x the fastest OS. The timeout is 25 minutes, so nothing is failing and nothing is blocked; the number is simply not the number the ADR wrote down.\n\nThis node measures and reports. It does not optimise, does not restructure a fixture, and does not touch a single test's behaviour. The fix, if there is one, is decided after reading what this produces.\n\nWhat to find out, with numbers rather than reasoning:\n\n1. The split between install, build and the suite itself. The job runs `pnpm install --frozen-lockfile`, then `pnpm integration`, which is `turbo run build && vitest run --project integration`. Three phases, and today one wall-clock number covers all three. pnpm's content store uses hardlinks that behave differently on NTFS, so install may be a large share before a single test runs.\n2. Per-file durations from the suite. Vitest already reports them; surface them in the log for all three operating systems so the same list can be compared side by side rather than guessed at.\n3. How much of it is process spawning. `test/integration/fixture.ts`'s `createTempRepo()` spawns six synchronous `git` processes per repository, and ADR 0014 requires real git everywhere — never a mock. Count the repositories created across a full run and multiply; that gives an upper bound on spawn cost without changing anything.\n4. How much is the Windows cleanup path. The same fixture already carries a Windows-specific workaround: `rmSync(..., { maxRetries: 10, retryDelay: 100 })`, with a comment saying a file another process still holds open makes the whole tree undeletable. Ten retries at 100ms is up to a second per fixture, and there are hundreds. Measure whether the retries are actually firing, and how often — a counter and a log line is enough.\n\nThe three causes ADR 0014 named for running Windows at all — path separators, line endings, file locking on worktree removal — are why this job exists and are not in question here. The output is the numbers, not a recommendation to drop it.\n\nDeliverable: a short report committed under docs/, naming the three phase timings per operating system, the ten slowest test files per operating system, the repository-creation count, and whether the cleanup retries fire. It ends with the options it did NOT take, one line each, so the follow-up node has somewhere to start. Whatever instrumentation is needed to produce those numbers may stay in the workflow or the fixture only if it changes no test's behaviour and costs nothing measurable; otherwise it is run once and removed, with the numbers recorded in the report.\n\nExplicitly out of scope, and a reviewer should reject the work if any of it appears: sharing a temp repository between tests, mocking git, dropping or narrowing the Windows matrix leg, reordering or splitting the suite, and touching ADR 0014's decision. Correcting ADR 0014's Consequences line to the measured figure is allowed and expected — that is reporting, not deciding.\n\nAcceptance: the report exists with real measured numbers in it, no test's behaviour changed, and the suite is still green on all three operating systems.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"docs/**",
+		".github/workflows/ci.yml",
+		"test/integration/fixture.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:20:21.914Z"
+}

@@ -1,0 +1,19 @@
+{
+	"title": "A screen that lists every decision and what was chosen",
+	"description": "The dashboard has one view of the board — the canvas — and a decision is only reachable by clicking a node it holds. A decision is board-global and binds many nodes, so there is no place that answers “what has this project decided”.\n\nAdd a list, opened from the header beside the `done` toggle. Every decision on the board: answered ones showing the option that was picked, the rationale, and `derived` when the answer was read off the code (ADR 0055); open ones saying they are still unanswered and what they hold. Expanding a row shows the options that were **not** picked — `Decision.options` keeps all of them beside `answer.option` (`packages/schema/src/decision.ts:55`), so nothing new is stored — and the nodes bound to it.\n\nNew directory `apps/dashboard/src/decisions/` beside `panel/` and `review/`, wired into `App.tsx` the way the other overlays are and closing on Escape in the same chain. The data is already in the `board` read the panel uses (`apps/dashboard/src/panel/data.ts:12`), but `App.tsx:56` only asks for it while a drawer is open — that gate has to move, and the poll cost of doing so belongs in the approach. Archived decisions stay out of the list; the board read already marks them.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/decisions/**",
+		"apps/dashboard/src/App.tsx",
+		"apps/dashboard/src/App.test.tsx"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

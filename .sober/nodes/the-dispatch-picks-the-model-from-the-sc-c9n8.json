@@ -1,0 +1,28 @@
+{
+	"title": "The dispatch picks the model from the score, and the record says which one ran",
+	"description": "`dispatch.ts` reads `config.dispatch.host` in four places — `checkHost` at :103, `adapterFor` at :110, `startRun` at :122 and `startAgent` at :147. Put one resolution in front of all four: read the node's brief, turn `complexity` into a tier through `dispatch.thresholds`, and look the model up in the table for the adapter `dispatch.host` resolves to. `adapterFor` still finds the adapter by program name, so whatever the resolution produces must not break that — an unknown host is refused rather than defaulted, and it should stay refused.\n\nRecord the model on the run beside the host: `startRun` already stores which host ran, and “why did this node cost that” is unanswerable without it. Render it where the host is already shown, in `sober logs` and the dashboard's run panel.\n\nSettings that govern how a run is prepared and judged are read from the base ref and never from the branch being worked on (ADR 0019). The model is one of them and must come through `settings(paths, options.base)` like the rest of `dispatch` — read from its own branch, a dispatched agent could raise its own model on its own dispatch.",
+	"notes": "",
+	"dependsOn": [
+		"the-brief-carries-how-hard-the-node-is-g2au",
+		"a-model-per-tier-per-host-in-the-config-idyd"
+	],
+	"decisions": [
+		"how-is-a-host-told-which-model-to-use-do-4wh2",
+		"a-brief-written-before-the-score-existed-2cv5"
+	],
+	"files": [
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/run.ts",
+		"packages/schema/src/run.ts",
+		"packages/cli/src/work.ts",
+		"apps/dashboard/src/logs/**",
+		"test/integration/dispatch.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

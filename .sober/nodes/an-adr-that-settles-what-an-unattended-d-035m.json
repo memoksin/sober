@@ -1,0 +1,63 @@
+{
+	"title": "An ADR that settles what an unattended dispatcher may take, superseding 0017",
+	"description": "The ask: the dispatcher should start every node that reaches `ready`, not only those whose brief carries `queue: true`. ADR 0017 lists \"Dispatch every ready node automatically\" under rejected alternatives, so this is an ADR that supersedes it — not a predicate edited quietly in packages/core/src/queue.ts.\n\nFirst, the fact that changes the argument, because ADR 0017's own wording obscures it. `ready` already means approved. packages/core/src/status.ts:46-48 reads: no brief, `needs-brief`; a brief with no approval, `needs-approval`; otherwise `ready`. So dispatching every ready node does not remove D26's human approval and does not contradict the charter's \"nothing runs without a human-approved brief\". 0017's stated reason — \"Removes D26's approval, which is the last thing a human sees before an agent starts working\" — is not accurate about the code as it stands, and the ADR written here has to say that out loud rather than inherit it.\n\nWhat the flag actually distinguishes is narrower, and it is the real question:\n\n- Plain **Approve** means start now. The human approved an approach and expected an agent immediately.\n- **Approve and queue** means start later, unattended, without asking again — and 0017 names what that trades: the approach was approved before the upstream node's result existed, which is \"usually harmless — and sometimes it is not\". That is why it is per node and never the default.\n\nSo a ready node with `queue: false` is one that was approved for now and did not start: its dispatch failed, it was stopped, or it was approved while something still blocked it. Taking it hours later, unattended, gives it the trade the human declined — quietly, and for a brief written against a different state of the graph.\n\nThe ADR must therefore decide, with the reasons written down and not implied:\n\n1. Whether an unattended dispatcher may take a ready node with no `queue` flag at all.\n2. If not, whether the gap should close from the other side instead — make `queue: true` easier to reach (a config default, a board-wide setting, a prompt that offers it) so that the flag stops being the reason the queue sits idle. This is the version that keeps 0017's trade explicit while removing the friction the ask is actually about.\n3. Whether a node that went ready and failed to start should be retried by the dispatcher, which is a third thing and is arguably the honest reading of the original complaint.\n4. What it does to ADR 0017's rejected-alternatives list, and to the two safety rules the supersede must carry forward or drop by name: a queued chain stops at the first rejection or failure, and an overlapping node is never started unattended.\n\nWhichever way it lands, the outcome is a written ADR under docs/adr/ with a number past the current highest, marking 0017 superseded and saying in one line what changed, plus whatever predicate change in packages/core/src/queue.ts the ADR licenses — and no predicate change it does not.\n\nThe reason this is a node and not a decision on the board: SOBER's four decision categories are state, module boundaries, data flow and error handling. This is none of them — it is a policy about what SOBER is allowed to spend money on unattended, and this repository's mechanism for that is an ADR.\n\nAcceptance: docs/adr/ holds a new accepted ADR that names 0017 as superseded and states the answer to all four questions above; 0017 is marked superseded with a pointer to it; any change to `queued()` matches what the ADR licenses, with a test naming the ADR; and the two safety rules are either carried forward in the new ADR's text or explicitly retired in it.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"docs/adr/**",
+		"packages/core/src/queue.ts",
+		"packages/core/src/queue.test.ts",
+		"packages/schema/src/brief.ts",
+		"docs/DESIGN.md"
+	],
+	"brief": {
+		"approach": "Write ADR 0056 — the next free number after docs/adr/0055-a-decision-the-code-already-made-is-derived-and-still-asked.md — settling what an unattended dispatcher may take, and marking ADR 0017 superseded.\n\nRead first, and quote in the ADR rather than paraphrasing:\n\n- packages/core/src/status.ts:46-48. `ready` already means approved: no brief is `needs-brief`, a brief with no approval is `needs-approval`, otherwise `ready`. This is the fact that breaks ADR 0017's stated reason for rejecting automatic dispatch (\"Removes D26's approval, which is the last thing a human sees before an agent starts working\"). It does not remove that approval, and the ADR must say so plainly instead of inheriting a reason that is not accurate about the code.\n- packages/core/src/queue.ts:81-89, `queued()`. Three conditions, not one: `approval.queue === true`, `statusOf === 'ready'`, and `lastRun === null`. The doc comment above it already explains the third — a run that failed leaves the node ready again, and so does one a human turned down, and \"neither may be started a second time by something the human is not watching. From then on it is theirs.\" That answers the node's third question in the code's own words: retry is already deliberately excluded, and the ADR records that rather than reopening it.\n- docs/adr/0017-approve-and-queue.md in full, especially its two safety rules and its three rejected alternatives.\n- docs/DESIGN.md §3.7 (lines around 499-504, the two approval actions) and §5.3 (lines around 632-644, the concurrency queue and the three rules that make an unattended chain safe). Both describe the behaviour this ADR changes or confirms, so both are edited to match whatever lands.\n\nThen write the ADR against the real trade, which is narrower than the node's title suggests. Plain Approve means start now; Approve and queue means start later, unattended, without asking again, and ADR 0017 names what that trades — the approach was approved before the upstream node's result existed. So a ready node with `queue: false` and no run yet is one approved for immediate work that did not start. Taking it hours later gives it the trade its approver declined. The ADR decides, with reasons written and not implied:\n\n1. Whether an unattended dispatcher may take a ready node carrying no `queue` flag.\n2. If not, whether the friction closes from the other side instead — a `dispatch.queueByDefault` key in .sober/config.jsonc beside the existing dispatch settings, or `approve` offering the queue option rather than defaulting it off — so the flag stops being the reason a correct queue sits idle. The MCP `approve` tool already takes a `queue` boolean, so this is a default and a prompt, not new machinery.\n3. That retry stays out, citing `lastRun === null` and the comment above it, so the exclusion becomes a recorded decision instead of an unexplained filter.\n4. What happens to 0017's two safety rules — a queued chain stops at the first rejection or failure, and an overlapping node is never started unattended. Each is carried forward by name in the new ADR's text, or retired by name with a reason. Silence about either is a failure of this node.\n\nFollow the repository's supersede convention exactly, as ADR 0040 and 0038 already do it: the new ADR's header carries `**Supersedes:** [ADR 0017](0017-approve-and-queue.md)` with a clause saying what survives and what does not, and docs/adr/0017-approve-and-queue.md gains a `- Superseded by [ADR 0056](...)` line in its header block, keeping its Status line intact so the history stays readable.\n\nChange code only where the ADR licenses it. If the ADR keeps the flag requirement, packages/core/src/queue.ts is untouched and its doc comment gains a pointer to 0056. If the ADR removes it, the predicate changes in `queued()` and nowhere else, and packages/core/src/queue.test.ts gains a test named for the ADR that asserts the new predicate — including that the overlap and claim paths above it still hold, because those are the rules that make the wider predicate safe. If the ADR adds a config default, the key goes into both halves of packages/core/src/config.ts (the zod schema and DEFAULT_CONFIG_TEXT, with its comment) and into .sober/config.jsonc.\n\nDo not change dispatchWave, the concurrency limit, or the lock. They are named in the ADR as inherited, not modified.",
+		"acceptance": [
+			{
+				"run": "ls docs/adr/0056-*.md",
+				"proves": "the ADR exists at the next free number, following the repository's docs/adr/NNNN-slug.md naming"
+			},
+			{
+				"run": "grep -n 'Supersedes' docs/adr/0056-*.md && grep -n 'Superseded by' docs/adr/0017-approve-and-queue.md",
+				"proves": "the supersede is recorded in both directions, the way ADR 0040 and 0038 already do it — the new ADR names 0017, and 0017 points forward so nobody reads it as current"
+			},
+			{
+				"run": "grep -c 'status.ts\\|lastRun\\|queue: false\\|overlapping' docs/adr/0056-*.md",
+				"proves": "the ADR argues from the code as it actually is — that ready already means approved, that retry is excluded by lastRun, and what happens to the overlap rule — rather than inheriting 0017's inaccurate reason"
+			},
+			{
+				"run": "grep -n '0056' docs/DESIGN.md",
+				"proves": "DESIGN §3.7 and §5.3, which describe the two approval actions and the rules that make an unattended chain safe, were brought in line with the ADR instead of being left contradicting it"
+			},
+			{
+				"run": "pnpm test",
+				"proves": "the whole workspace builds and every test passes, including any new test in packages/core/src/queue.test.ts covering the predicate the ADR licensed"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean, so the change meets the same bar as the eight CI checks on main"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-08T21:32:27.788Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T21:32:36.878Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-09T09:23:57.754Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:30:38.804Z"
+}

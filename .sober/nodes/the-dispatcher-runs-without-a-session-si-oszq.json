@@ -1,0 +1,27 @@
+{
+	"title": "The dispatcher runs without a session sitting open",
+	"description": "`runQueue` in packages/core/src/queue.ts:29 already does the dispatching: it takes every node that is ready and whose brief was approved with `queue: true` (ADR 0017), skips one another person has claimed, skips one heading for the same files as another in the wave, and hands the rest to `dispatchWave` — which is where the concurrency limit and the stop-at-the-first-failure rule already live. None of that needs building.\n\nWhat is missing is stated in that file's own doc comment: \"There is no daemon and no watcher.\" The only caller is `drain` in packages/cli/src/queue.ts, and `drain` is reached from exactly two places — packages/cli/src/work.ts:178 after an accept, and packages/mcp/src/tools/plan.ts:360 after a decision is answered. So a node becomes ready and starts only if a human happened to be in the session that moved the graph. A run that finishes at 02:00, a teammate's accept arriving through `sync`, a decision answered in another clone — none of those start anything. The queue is correct and mostly idle.\n\nBuild the long-lived half: a process that drains on a cycle instead of on an event. It calls the same `runQueue`, so every safety rule in ADR 0017 is inherited rather than reimplemented — do not fork the logic. It must hold or respect the writer lock from ADR 0025 (`lock.staleSeconds`, `lock.waitSeconds` in .sober/config.jsonc), because a drainer that writes while a human's `accept` writes is exactly what that lock exists to stop. It must also be safe to start twice: the second one finds the first and says so rather than doubling every dispatch.\n\nWhat it does NOT do, and why this is worth saying in the code: it does not dispatch a ready node whose brief carries no `queue: true`. ADR 0017 lists \"Dispatch every ready node automatically\" under its rejected alternatives — \"Removes D26's approval, which is the last thing a human sees before an agent starts working\" — and the charter says nothing runs without a human-approved brief. The user asked for every ready node; that is one predicate in `queued()` away, and it is deliberately not taken here. If it is wanted, it is an ADR superseding 0017, not a line changed quietly.\n\nAcceptance: with the dispatcher running and nobody in any session, approving a node with queue and then accepting its last dependency starts it within one cycle; starting a second dispatcher refuses and names the first; stopping it leaves running agents in a state `sober status` reports honestly. Tests beside the code, with the cycle driven rather than slept through.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-the-fact-that-a-dispatcher-is-0gma",
+		"a-queued-node-fails-while-nobody-is-watc-65ui"
+	],
+	"files": [
+		"packages/cli/src/queue.ts",
+		"packages/cli/src/queue.test.ts",
+		"packages/cli/src/index.ts",
+		"packages/core/src/queue.ts",
+		"packages/core/src/queue.test.ts",
+		"packages/core/src/lock.ts",
+		".sober/config.jsonc",
+		"docs/adr/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:29:25.884Z"
+}

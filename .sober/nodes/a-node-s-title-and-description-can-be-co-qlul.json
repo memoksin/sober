@@ -1,0 +1,22 @@
+{
+	"title": "A node's title and description can be corrected after it is opened",
+	"description": "Today a node's title and description are written once, by `propose` or `open_node`, and nothing changes them afterwards. The MCP surface has `edit_decision` but no node counterpart; the CLI's `edit <id> <option>` only changes a decision's answer. Re-proposing does not help: a new id gets a random suffix, so it opens a second node instead of fixing the first. `bind` changes edges and `write_brief` rewrites the approach, but the node's own words stay as first written — and the node text is what the brief renders under \"This node\" and what every agent reads.\n\nThe work: one tool and one CLI command that rewrite a node's title and/or description in place, keeping its id, edges and history, and logging the edit as an event. Whether an edit touches an approved brief is the decision below.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"when-a-node-s-title-or-description-is-ed-rl05"
+	],
+	"files": [
+		"packages/core/src/**",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/cli/src/**",
+		"test/integration/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-10T07:59:16.770Z"
+}

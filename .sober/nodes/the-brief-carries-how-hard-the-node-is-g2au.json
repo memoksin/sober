@@ -1,0 +1,28 @@
+{
+	"title": "The brief carries how hard the node is",
+	"description": "The score is set where the work is actually understood — `write_brief`, not `propose`. A brief already names real files and real functions; a node title does not.\n\nAdd `complexity` to `Brief` in `packages/schema/src/brief.ts`, an integer on a 1–10 scale beside `approach` and `acceptance`. Raise `SCHEMA_VERSION` to 6 in `packages/schema/src/project.ts` and add the step to `MIGRATIONS` in `packages/core/src/migrate.ts` — a migration reads raw JSON rather than a parsed record, and the four before it are the pattern. What that migration does to a brief written before the field existed is the decision this node binds.\n\nCarry the field through `writeBrief` in `packages/core/src/brief.ts` and the `write_brief` tool in `packages/mcp/`. Add one line to step 2 of `plugins/skills/brief/SKILL.md` telling the agent to score the node and justify the number in the approach, then run `pnpm plugins`. Nothing here reads the score — that is the dispatch node — so this one is finished when a brief round-trips with it and a v5 board opens without complaint.",
+	"notes": "",
+	"dependsOn": [
+		"an-adr-that-lets-sober-choose-the-model-vki3"
+	],
+	"decisions": [
+		"a-brief-written-before-the-score-existed-2cv5"
+	],
+	"files": [
+		"packages/schema/src/brief.ts",
+		"packages/schema/src/brief.test.ts",
+		"packages/schema/src/project.ts",
+		"packages/core/src/migrate.ts",
+		"packages/core/src/brief.ts",
+		"packages/mcp/src/**",
+		"plugins/skills/brief/SKILL.md",
+		"packages/*/skills/brief/SKILL.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

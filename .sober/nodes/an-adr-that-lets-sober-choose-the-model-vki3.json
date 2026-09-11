@@ -1,0 +1,21 @@
+{
+	"title": "An ADR that lets SOBER choose the model, and what it costs",
+	"description": "`docs/DESIGN.md:579` says SOBER “never asks for an API key and never chooses the model”, and `:583` gives the reason: choosing makes SOBER an agent framework that owns the tool loop, file access and sandboxing. Picking a model per node contradicts the first half and not the second, and that difference has to be written down before any code moves.\n\nWrite ADR 0057. SOBER still shells out to the host CLI the user installed and logged into, still holds no key, still owns no tool loop — what changes is that the invocation it builds may name a model, chosen from a number the brief carries. Record both decisions this node binds: the option that was picked, and the ones that were not.\n\nThen amend §5.1 and the paragraph at `docs/DESIGN.md:613` about `dispatch.host` being a command line, so the design document and the ADR do not disagree about who chooses.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"how-is-a-host-told-which-model-to-use-do-4wh2",
+		"a-brief-written-before-the-score-existed-2cv5"
+	],
+	"files": [
+		"docs/adr/0057-*.md",
+		"docs/DESIGN.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

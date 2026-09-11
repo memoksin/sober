@@ -1,0 +1,32 @@
+{
+	"category": "module-boundaries",
+	"question": "How is a host told which model to use — does the adapter know the flag, or does the config carry it?",
+	"options": [
+		{
+			"id": "config-carries",
+			"label": "The config carries the flag and its value",
+			"reason": "`hosts.ts:6-16` already treats `dispatch.host` as a command line rather than a program name, and `hosts.test.ts:10` proves `opencode --model anthropic/claude-sonnet-4-5` resolves to the OpenCode adapter. This is the choice the repository already made, extended one level down: SOBER learns nothing about any model, and OpenCode's unbounded model list costs it nothing.",
+			"costLater": "Nothing validates the flag. A host that renames it fails at dispatch as an exit code three minutes in, with no sentence saying why, and the person filling in the config has to know four CLIs' flags rather than four model names."
+		},
+		{
+			"id": "adapter-knows",
+			"label": "The adapter knows the flag; the config holds a bare model name",
+			"reason": "`dispatch.models` stays four short tables of names — `\"claude\": {\"high\": \"opus\"}` — which is what the setting is actually about. A wrong flag becomes a bug in `hosts.ts` with a test beside it instead of a typo in every user's config file, and the config gains something to validate against.",
+			"costLater": "Four CLIs' model flags become SOBER's to keep current, and they version independently. OpenCode's `provider/model` spelling, and any host that renames `--model`, land in `hosts.ts` as maintenance nobody planned — which is the surface ADR 0009 kept thin on purpose."
+		},
+		{
+			"id": "whole-command",
+			"label": "Each tier is a whole command line",
+			"reason": "A tier can differ in more than the model — `npx`, a different binary, an extra flag — and `dispatch.host` stays as the fallback for a node with no score. It is the same shape `dispatch.host` already has, three times, so there is nothing new to learn.",
+			"costLater": "The host name repeats in every cell. Changing `dispatch.host` means editing every tier by hand, and two settings can then disagree about which host is running — which is exactly the ambiguity `adapterFor` refuses to guess at today."
+		}
+	],
+	"suggested": "config-carries",
+	"answer": {
+		"option": "config-carries",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T07:19:19.933Z"
+	},
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

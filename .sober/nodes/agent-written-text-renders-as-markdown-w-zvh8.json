@@ -1,0 +1,24 @@
+{
+	"title": "Agent-written text renders as markdown wherever it lands, not only in the panel",
+	"description": "`apps/dashboard/src/panel/markdown.tsx` renders the subset of markdown an agent writes, and `Panel.tsx` is its only caller — so the brief reads properly and every other screen shows the source.\n\nMove it to `apps/dashboard/src/markdown.tsx`: it stopped being the panel's the moment a second screen wanted it. Then use it everywhere an agent wrote the words: the decision question and each option's `reason` and `costLater` in `panel/Decision.tsx`, the same fields in the new decisions list, `because` on each match in `distribute/Distribution.tsx`, the scan findings and the rejection text in `review/Review.tsx`, and the node description wherever else it is printed.\n\nTwo places stay as they are, and the node says so rather than leaving a reviewer to wonder: `logs/Logs.tsx` is a monospace line-per-event transcript where a backtick is what the agent typed, and the CLI is a terminal with no renderer.\n\nKeep the renderer's shape. It returns React elements and never an HTML string, and it has no links — which together are why there is no sanitiser to get wrong, and it ships to every user inside the CLI bundle (ADR 0007).",
+	"notes": "",
+	"dependsOn": [
+		"a-screen-that-lists-every-decision-and-w-p6qj"
+	],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/markdown.tsx",
+		"apps/dashboard/src/markdown.test.tsx",
+		"apps/dashboard/src/panel/**",
+		"apps/dashboard/src/review/**",
+		"apps/dashboard/src/distribute/**",
+		"apps/dashboard/src/decisions/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

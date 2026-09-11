@@ -1,0 +1,26 @@
+{
+	"title": "Watching the dispatcher: what it started, what it is holding, what broke",
+	"description": "The dispatcher from the node above runs unattended, which means by default nobody sees it work. Today the only live views are per node — `sober run <node> --watch` follows one agent, `sober logs <node>` reads the last run — and `sober dashboard` serves the board without a queue view. There is no surface that answers \"what has it started since I left, and what is it refusing to start\".\n\n`runQueue` already returns exactly that shape and it is currently thrown away outside `drain`: `started`, `dispatched` one-per-started, and `held` — each held node with a `why` string already written for a human (\"x, y are heading for the same files\", \"someone has claimed it\"). The work is carrying it to a surface, not computing it.\n\nWhat it shows, per cycle: what started and on which base, what finished and how, what is held and why, and what the concurrency limit is currently refusing. A held node is the important half — an unattended queue that is quietly holding four nodes for a reason nobody reads is worse than one that stopped.\n\nAcceptance: with the dispatcher running, the watch surface shows a node moving from held to started to finished without a restart; a held node shows the same `why` the drain prints today; and closing the watch does not stop the dispatcher. Tests beside the code.",
+	"notes": "",
+	"dependsOn": [
+		"the-dispatcher-runs-without-a-session-si-oszq"
+	],
+	"decisions": [
+		"where-does-the-fact-that-a-dispatcher-is-0gma",
+		"a-queued-node-fails-while-nobody-is-watc-65ui"
+	],
+	"files": [
+		"packages/cli/src/queue.ts",
+		"packages/cli/src/queue.test.ts",
+		"packages/cli/src/work.ts",
+		"packages/cli/src/index.ts",
+		"apps/dashboard/src/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:29:25.884Z"
+}

@@ -1,0 +1,45 @@
+{
+	"title": "Rewriting a decision's options: possible and unsaid, or impossible and unexplained",
+	"description": "Reported from a session: \"there is no way to rewrite an existing decision's options in SOBER — you have to archive it and open a new one in its place\". Half of that is wrong, and the wrong half is a bug of its own.\n\nWhat the code actually does, packages/mcp/src/tools/plan.ts:265-283. `open_decision` loads the record, refuses only when `record.answer !== null`, and otherwise calls `writeDecision` with the new options outright — overwriting whatever was there. So an unanswered decision's options *can* be rewritten today, with the tool that is already installed.\n\nWhy nobody knows that: the tool's own description, plan.ts:247, says \"Fill in the options for a decision that has none.\" An agent reads that, concludes the door is shut, and goes around it — archive the decision, open a replacement, rebind every node that pointed at the old one. That is a long, lossy detour past a door that was open. The description is the bug: it describes a narrower tool than the one it is attached to.\n\nWhat is genuinely closed: an answered decision. `edit_decision` (plan.ts, around 393) reads `record.options` and rejects any option id that is not already in the list, so it swaps the answer and never the choices. There is a good reason — the answer names an option id, and rewriting the options underneath it orphans the record. But it is nowhere stated, so it reads as an oversight rather than a rule, and the same detour follows.\n\nThe fix is small and mostly words:\n\n1. Say what `open_decision` does. Its description should read as what it is — it writes the options for a decision that has no answer yet, replacing any that are there — so the capability stops being a secret.\n2. When `open_decision` refuses an answered decision, the refusal should say what to do instead rather than only that it will not: `edit_decision` changes the answer among the options that exist; a question whose options turned out wrong after it was answered is archived and reopened, and that is deliberate.\n3. Check the same wording in the plan and decide skills under plugins/skills, which is where a planning agent reads its instructions — if they repeat \"a decision that has none\", the detour survives the tool fix.\n\nThe shape question this settles in passing, since nothing outside these files changes: should an answered decision's options become rewritable at all? No. The answer points at an option id and a rewrite orphans it, and archive-and-reopen leaves an honest record of the question having changed. This node writes that rule down rather than lifting it.\n\nAcceptance: `open_decision` on an unanswered decision that already has options replaces them and says so; on an answered one it refuses with the alternative named; a test covers both; and no skill text still says the tool only fills in options that are missing.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/tools/plan.test.ts",
+		"plugins/skills/plan/SKILL.md",
+		"plugins/skills/decide/SKILL.md"
+	],
+	"brief": {
+		"approach": "Words in three places and one test. No behaviour of `open_decision` changes: what it already does is what gets described.\n\n**1. `packages/mcp/src/tools/plan.ts:248` — the description.** Replace \"Fill in the options for a decision that has none.\" with wording that names the real capability: it writes the options for a decision that has no answer yet, replacing any that are already there, so a question whose options came out wrong is rewritten in place rather than archived and reopened. Keep the two sentences that follow (\"Options are pitched at the answerer…\", \"Never supply the answer…\") verbatim — they are correct.\n\n**2. `packages/mcp/src/tools/plan.ts:274` — the refusal.** Today the answered branch returns `${decision} is already answered — its options are settled.` and stops there. Extend that one string to name the two ways forward: `edit_decision` changes the answer among the options that exist, and a question whose options themselves turned out wrong after it was answered is archived and reopened — deliberately, because the answer names an option id and rewriting the list underneath it orphans the record. Do not touch `edit_decision` itself (plan.ts:393 onward); its rejection of unknown option ids is the rule this node writes down, not a bug.\n\n**3. `plugins/skills/decide/SKILL.md:23` — the skill text.** Step 1 currently reads \"If it has no options yet, produce them with `open_decision`\", which is the same narrower claim in the place a planning agent actually reads. Reword so the condition is *unanswered*, not *empty*: options are produced with `open_decision` when there are none, and rewritten with the same tool when the ones there are wrong and nobody has answered yet. `plugins/skills/plan/SKILL.md` does not mention `open_decision` at all — leave it alone. `plugins/skills/` is the source; the copies under `packages/claude-code-plugin/skills/`, `packages/codex-plugin/`, `packages/opencode-plugin/` and `packages/cursor-plugin/` are generated, so run `pnpm plugins` and commit what it regenerates. Never hand-edit those copies.\n\n**4. The test — in `test/integration/mcp.test.ts`, not `packages/mcp/src/tools/plan.test.ts`.** The declared file list predicted a unit test, but `packages/mcp` has no test setup of its own (no vitest config, no `test` script, no `*.test.ts` anywhere in it), and these tools are only reachable through a client and a transport. The harness that already does that is `test/integration/mcp.test.ts`; put the new test directly after `'a decision with no options is opened before it is put to anyone'` (line 521), reusing its `board()`, `connect()` and `call()` helpers and the same two-option `propose` shape. One test, two halves:\n- Call `open_decision` a second time on the same unanswered decision with a different pair of options, then assert `decisions` shows the new labels and not the old ones — the rewrite is real and the board reads it back.\n- Answer it through `decide`, call `open_decision` again, and assert the refusal both says it is answered and names `edit_decision` — the refusal points somewhere instead of only saying no.\n\nNothing else moves: no schema change, no core change, no CLI surface (`open_decision` is deliberately absent from `CLI_COVERS`, and `test/integration/contract.test.ts` asserts that planning stays in the session — leave that assertion standing).",
+		"acceptance": [
+			{
+				"run": "pnpm test",
+				"proves": "The whole suite is green, including the new mcp.test.ts test: a second open_decision on an unanswered decision replaces its options and the board reads the new ones back, and on an answered one the refusal names edit_decision."
+			},
+			{
+				"run": "pnpm plugins && git diff --exit-code packages",
+				"proves": "The generated host skill copies were regenerated from plugins/skills/decide/SKILL.md and committed — the reworded step 1 reaches every host, and no copy was hand-edited."
+			},
+			{
+				"run": "! grep -rq 'a decision that has none' packages/mcp/src plugins/skills packages/claude-code-plugin/skills packages/codex-plugin packages/opencode-plugin packages/cursor-plugin",
+				"proves": "No tool description or skill text still claims open_decision only fills in options that are missing — the wording that caused the archive-and-reopen detour is gone from every surface an agent reads."
+			},
+			{
+				"run": "pnpm typecheck && pnpm lint",
+				"proves": "The edited strings and the new test compile and pass biome and secretlint, so the change is mergeable as it stands."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-09T09:37:52.657Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:20:35.857Z"
+}

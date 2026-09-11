@@ -1,0 +1,27 @@
+{
+	"title": "A merge into main is a release, and it names its bump",
+	"description": "Day-to-day work lands on the configured target branch. Reaching `main` is a separate act the user asks for, and it is a release: it must name patch, minor or major.\n\nWhat is already here: .changeset/config.json pins `baseBranch: \"main\"` and `commit: false`; releases run through a version-packages pull request (see `chore: version packages (#6)`) and a staged npm publish (docs/adr/0053). Nothing today connects a SOBER node, or a merge, to a bump — a release can ship with no changeset and no version move, silently.\n\nClose that: make the bump an explicit step on the way to `main`, wire it into the changeset the release pull request consumes, and write the ADR that says a merge into `main` is a release. CLAUDE.md already states the rule for agents; the ADR is the record behind it.\n\nAcceptance: a merge into `main` cannot happen without a named bump, and the resulting version move matches the bump that was named. Tests land with the code.",
+	"notes": "",
+	"dependsOn": [
+		"the-branch-a-pull-request-targets-is-a-s-rc6i"
+	],
+	"decisions": [
+		"where-does-the-branch-a-pull-request-tar-45n1",
+		"how-does-a-release-s-bump-patch-minor-ma-65rt"
+	],
+	"files": [
+		".changeset/**",
+		"packages/cli/src/review.ts",
+		"packages/cli/src/review.test.ts",
+		"packages/core/src/pr.ts",
+		"docs/adr/**",
+		"CLAUDE.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:08:54.828Z"
+}

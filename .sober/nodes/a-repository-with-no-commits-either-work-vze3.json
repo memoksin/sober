@@ -1,0 +1,57 @@
+{
+	"title": "A repository with no commits either works, or is refused — not both",
+	"description": "Reproduced against packages/cli/dist/sober.js in a fresh `git init` with no commit.\n\nWhat happens today: `sober init` succeeds. It writes .sober/, the config, the gitignore and gitattributes, and creates the `sober-graph` branch with a real commit on it. The working branch's HEAD stays unborn. From then on every command that resolves a base ref dies:\n\n    GitError: git rev-parse --abbrev-ref HEAD failed:\n    fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.\n\nThe chain is `baseOf` in packages/cli/src/board.ts:69 (`given ?? currentBranch(paths.root)`) into `currentBranch` in packages/core/src/git.ts:78. It reaches `run`, `review`, `audit`, `accept`, `reject` and the queue drain in packages/cli/src/work.ts:178.\n\nThree separate faults, and the middle one is the dangerous one:\n\n1. `init` guards `isRepo` — it says \"this is not a git repository\" — but not \"this repository has no commits\". The intent is plainly there; the guard is half written. So SOBER builds a board it cannot then use.\n\n2. The MCP `decide` tool, packages/mcp/src/tools/plan.ts:360, calls `answerDecision` and writes the answer to disk, and only then calls `currentBranch` while assembling its reply. The call throws, the human is told it failed, and the board has already moved. An answer that landed while reporting that it did not is worse than either outcome alone.\n\n3. packages/cli/src/index.ts:314 is a bare `await main()` with no top-level catch. Known failures print properly through `fail()` (`× foo is not on this board`); anything unexpected prints a raw node stack trace at the user.\n\nNot a fault: a repository with commits and no remote is handled correctly — `sync` says \"this repository has no remote, so the board was committed here and went nowhere\", `publish` returns skipped, `remoteName` is null-safe. Verified separately; leave it alone.\n\nThe shape question this node settles in passing, since it changes nothing outside these files: refuse an unborn HEAD at `init` with a message naming the first commit, or teach `baseOf` to work without one. Refusing is the smaller diff and the honest one — a board whose nodes cannot be cut from anything is not a board yet.\n\nNote for whoever runs it: this touches `baseOf` in packages/cli/src/board.ts, the same function the PR-target node changes. Land them one at a time.\n\nAcceptance: `sober init` in a commit-less repository refuses with a readable message and writes nothing; `decide` resolves its base before it writes the answer, so a failure leaves the board untouched; an unexpected error anywhere in the CLI prints one line, not a stack trace. Each of the three has a test beside the code, and the init test asserts nothing was written.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/cli/src/board.ts",
+		"packages/cli/src/board.test.ts",
+		"packages/cli/src/index.ts",
+		"packages/core/src/git.ts",
+		"packages/core/src/git.test.ts",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/tools/plan.test.ts"
+	],
+	"brief": {
+		"approach": "Three small fixes, in the order they fail. Nothing in `packages/core` changes, and the `sync`/`publish` no-remote path is left alone.\n\n**1. `init` refuses an unborn HEAD — `packages/cli/src/init` in `packages/cli/src/board.ts:73`.** The `isRepo` guard is half the check. Directly after it, add the other half using the helper that already exists rather than a new core export:\n\n```ts\nconst branch = await currentBranch(root).catch(() => null)\nif (branch === null)\n\treturn fail('this repository has no commits yet — SOBER cuts every node from a branch, so make the first commit, then run `sober init`')\n```\n\n`currentBranch` is already imported in this file (line 7) and is exactly the call that dies later in `baseOf`, so what `init` checks is what every other command needs. Deliberately do **not** add a `hasCommits` export to `packages/core/src/git.ts`: it would move the `packages/core/src/exports.test.ts` snapshot and push the count past the ceiling of 107, which is an ADR-sized change for one guard. Cost of the reuse: a corrupt `.git` gets the no-commits sentence too. Take it, and leave a one-line comment saying so — an unborn HEAD is why this call fails in practice.\n\nThe guard must sit **before** `readProject`/`adoptBoard` and before `initBoard`, so nothing is written: no `.sober/`, no config, no gitignore or gitattributes, no `sober-graph` branch.\n\n**2. `decide` resolves its base before it writes — `packages/mcp/src/tools/plan.ts:361`.** The reply string calls `await currentBranch(paths.root)` inline, *after* `answerDecision` has already written the answer to disk. Hoist it: resolve the base into a `const` immediately before the `answerDecision` call, then pass that const into `drained(paths, base)`. That is the whole fix — `tool()` in `packages/mcp/src/context.ts:58` already turns a throw into a refusal message, so once the resolve happens first, a failure returns a refusal and the board is untouched. Do not add a try/catch and do not change `drained` in `packages/mcp/src/queue.ts`. `packages/mcp/src/tools/review.ts:97` already passes a `ref` it resolved earlier — leave it.\n\n**3. One line, not a stack trace — `packages/cli/src/index.ts:314`.** `await main()` becomes `await main().catch(refuse)`. `refuse` is the existing helper in `packages/cli/src/out.js` (out.ts:36): it prints `× <message>` to stderr and exits 1, the same shape every known failure already prints. Add it to the existing `./out.js` import in this file if it is not there.\n\n**Tests — in `test/integration/`, not beside the code.** The declared list predicted `packages/cli/src/board.test.ts` and `packages/mcp/src/tools/plan.test.ts`; neither package has any test setup (no vitest config, no `test` script, no `*.test.ts` in either). The integration project is where both surfaces are already driven, and `createTempRepo()` in `test/integration/fixture.ts` returns a real repo **with no commits** — the exact fixture this node needs, before `project()` adds the first one.\n\n- `test/integration/cli.test.ts`, beside the other `init` tests: call `createTempRepo()` directly (never `project()`), assign it to `repo` so `afterEach` cleans it up, then `failed(created.dir, 'init')` and assert the output names the missing first commit. Then assert nothing was written: `.sober/` does not exist, and `git branch --list sober-graph` on the fixture is empty.\n- A second cli test for the top-level catch: run `project()` and `sober init`, then write garbage into `.git/HEAD` (`writeFileSync(join(dir, '.git/HEAD'), 'not-a-ref\\n')`) and `failed(dir, 'run', ...)`. Assert the output starts with `×` and contains no `    at ` stack frame.\n- `test/integration/mcp.test.ts`, after the `open_decision` tests: propose a node with a decision, `open_decision`, corrupt `.git/HEAD` the same way, then `decide`. Assert the reply reads as a refusal **and** that `(await loadBoard(paths)).decisions.get(id)?.answer` is still `null` — the answer did not land while the tool said it failed.\n\nNote for sequencing: this touches `packages/cli/src/board.ts`, the same file the PR-target node (`the-branch-a-pull-request-targets-is-a-s-rc6i`) changes. It does not touch `baseOf` itself, but land the two one at a time.",
+		"acceptance": [
+			{
+				"run": "pnpm test",
+				"proves": "The whole suite is green with the three new integration tests: init in a commit-less repository refuses and writes nothing, an unexpected CLI error prints one line instead of a stack trace, and decide leaves the answer unwritten when its base cannot be resolved."
+			},
+			{
+				"run": "pnpm integration -t 'no commits'",
+				"proves": "The init refusal runs against the built binary in a real commit-less git repository — the exact reproduction from the node report, not a mock."
+			},
+			{
+				"run": "pnpm typecheck && pnpm lint",
+				"proves": "The guard, the hoisted base resolve and the top-level catch compile and pass biome and secretlint."
+			},
+			{
+				"run": "pnpm coverage:check",
+				"proves": "The coverage ratchet did not fall — the new branches in board.ts, index.ts and plan.ts are covered by the tests that came with them."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-09T09:42:11.612Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T07:28:36.883Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T07:39:42.218Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:15:04.815Z"
+}

@@ -22,6 +22,11 @@
 		}
 	],
 	"suggested": "keep-two-tables",
-	"answer": null,
+	"answer": {
+		"option": "keep-two-tables",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T21:26:40.259Z"
+	},
 	"createdAt": "2026-09-08T12:31:26.720Z"
 }

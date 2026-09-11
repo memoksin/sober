@@ -1,0 +1,34 @@
+{
+	"category": "state",
+	"question": "When a node's title or description is edited, what happens to an approval already on its brief?",
+	"options": [
+		{
+			"id": "clears",
+			"label": "Any edit clears the approval",
+			"reason": "Same rule as write_brief: the node text is rendered into the brief the agent reads, so the human approved words that no longer exist. One rule, nothing to judge.",
+			"costLater": "A typo fix costs a re-approval, and a queued node (ADR 0056) drops out of the queue until someone approves it again."
+		},
+		{
+			"id": "keeps",
+			"label": "Edits keep the approval; the edit is logged",
+			"reason": "Corrections are usually small and the approach did not move. The event log shows what changed, and review still judges the work against the criteria.",
+			"costLater": "An agent can run on a description the human never saw. It breaks the rule that nothing runs without a human-approved brief, which is the rule SOBER is built on."
+		},
+		{
+			"id": "ask",
+			"label": "The edit asks whether to keep the approval",
+			"reason": "The human who knows whether the change was a typo or a scope change says which, per edit.",
+			"costLater": "One more prompt, on the same mechanism that just failed in Claude Desktop — so it depends on how the other node settles asking."
+		}
+	],
+	"suggested": "clears",
+	"derived": "packages/mcp/src/tools write_brief: writing a brief clears its approval, because the approved thing was the old approach",
+	"answer": {
+		"option": "clears",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T15:29:14.725Z",
+		"derived": "packages/mcp/src/tools write_brief: writing a brief clears its approval, because the approved thing was the old approach"
+	},
+	"createdAt": "2026-09-10T07:59:16.770Z"
+}

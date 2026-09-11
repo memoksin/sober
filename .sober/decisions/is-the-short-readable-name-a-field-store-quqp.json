@@ -22,6 +22,11 @@
 		}
 	],
 	"suggested": "stored-name",
-	"answer": null,
+	"answer": {
+		"option": "stored-name",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T21:19:54.510Z"
+	},
 	"createdAt": "2026-09-08T12:35:02.425Z"
 }

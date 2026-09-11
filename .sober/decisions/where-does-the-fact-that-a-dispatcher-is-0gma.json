@@ -1,0 +1,32 @@
+{
+	"category": "state",
+	"question": "Where does the fact that a dispatcher is running live — a detached process with a file saying so, a terminal you leave open, or the dashboard server that already runs?",
+	"options": [
+		{
+			"id": "foreground-command",
+			"label": "A foreground `sober dispatch` you leave running, Ctrl-C stops it",
+			"reason": "This is the shape the repository already has: `sober dashboard` is described in the help as \"serve the board in a browser — Ctrl-C stops it and its runs\", so a second long-lived command is a pattern the user has already met. Liveness is the process itself — nothing on disk to go stale, nothing to reap, and a crash is visible in the window where it happened. It composes with whatever the user already uses to keep a process alive.",
+			"costLater": "It occupies a terminal, and closing the laptop lid or the window ends it silently — the user believes work is draining and it is not. There is no way to ask \"is one running\" from another shell without looking for the process, so the twice-started case has to be caught through the writer lock rather than a straight answer."
+		},
+		{
+			"id": "detached-daemon",
+			"label": "A detached process with a pidfile under .sober/local",
+			"reason": "It survives the terminal, which is the whole point of unattended dispatch — approve a chain, close the window, come back to reviews. `.sober/local/` already exists and is already disposable by design, so a pidfile there is in a directory that expects exactly this kind of thing, and `start`/`stop`/`status` become answerable questions from any shell.",
+			"costLater": "A pidfile is a second copy of a truth the operating system already holds, and it goes stale in every way files do — killed process, reused pid, a machine that slept. That is a staleness rule to write, test and explain, on top of the one ADR 0025 already has for the writer lock. Detached also means its output goes to a log nobody is watching, so a dispatcher failing in a loop is silent until someone looks."
+		},
+		{
+			"id": "inside-the-dashboard",
+			"label": "A loop inside the dashboard server, which is already a long-lived process",
+			"reason": "SOBER already has exactly one long-lived process and ADR 0008 gave the dashboard a server; adding the drain loop there means no new process, no new lifecycle, and no second thing to start. The watch surface is then free — the queue view is a page on a server that is already serving the board.",
+			"costLater": "It ties dispatching to having a browser-facing server running, which is the one part of SOBER a headless or remote user does not want. It also puts spending money on agents inside the process whose job was to display things, so anyone stopping the dashboard to free a port stops the queue without meaning to."
+		}
+	],
+	"suggested": "foreground-command",
+	"answer": {
+		"option": "foreground-command",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T07:21:59.807Z"
+	},
+	"createdAt": "2026-09-08T21:29:25.884Z"
+}

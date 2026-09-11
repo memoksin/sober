@@ -22,6 +22,11 @@
 		}
 	],
 	"suggested": "one-formatter",
-	"answer": null,
+	"answer": {
+		"option": "one-formatter",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T21:24:40.816Z"
+	},
 	"createdAt": "2026-09-08T12:35:02.425Z"
 }

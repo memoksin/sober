@@ -1,0 +1,34 @@
+{
+	"category": "data-flow",
+	"question": "When the host's built-in question tool asks the human, how does their pick reach the board without the agent being able to supply it?",
+	"options": [
+		{
+			"id": "hook-witnessed",
+			"label": "A hook records the answer the question tool returned",
+			"reason": "In Claude Code and Desktop a PostToolUse hook sees the built-in question tool's real result, which the human produced. The hook writes the pick itself, so the agent never carries it. Keeps 0048's \"no tool takes an answer\" and ADR 0047's enforcement model.",
+			"costLater": "Only works where the host runs hooks. Codex, OpenCode and Cursor each need their own proof or fall back to the CLI, so the fix is uneven across adapters until each is checked."
+		},
+		{
+			"id": "agent-relays",
+			"label": "decide takes the answer; the agent relays what the tool returned",
+			"reason": "Works the same on every adapter that has a question tool, today, with one code path. The simplest change and it matches what the user sees: they click, it is recorded.",
+			"costLater": "Supersedes 0010/0048's core guarantee. Nothing stops an agent from supplying a pick the human never made; the record cannot tell the two apart. Every accept and approve inherits the same hole."
+		},
+		{
+			"id": "detect-and-refuse",
+			"label": "Keep elicitation; detect that nothing rendered and refuse with the CLI command",
+			"reason": "No trust model changes. A non-accept that came back too fast to be a person, or a known non-rendering host, is reported as \"this host cannot ask\" with the exact `sober decide` line, instead of \"you declined\".",
+			"costLater": "The human still leaves the conversation to answer on the command line or dashboard in Desktop and Codex. The UX complaint stays; only the lie goes away."
+		}
+	],
+	"suggested": "hook-witnessed",
+	"derived": "docs/adr/0010 and docs/adr/0048 (the pick comes from the human; no tool takes an answer); packages/mcp/src/ask.ts; docs/adr/0047 (hook enforcement in the Claude Code plugin)",
+	"answer": {
+		"option": "agent-relays",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T15:31:17.978Z",
+		"derived": "docs/adr/0010 and docs/adr/0048 (the pick comes from the human; no tool takes an answer); packages/mcp/src/ask.ts; docs/adr/0047 (hook enforcement in the Claude Code plugin)"
+	},
+	"createdAt": "2026-09-10T07:59:16.770Z"
+}

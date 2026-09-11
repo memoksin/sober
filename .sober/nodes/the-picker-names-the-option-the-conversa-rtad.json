@@ -1,0 +1,20 @@
+{
+	"title": "The picker names the option the conversation just named",
+	"description": "Reported from a live session, and reproducible from the code.\n\nThe conversation prints each option keyed by its id — `a) text-only — Hiç görüntü saklama…`, with its reason and what it costs later underneath. Then the elicitation prompt opens and shows three rows:\n\n    ◯ Hiç görüntü saklama; sadece Türkçe metin günlük…\n    ◯ Sadece hata anında, sadece arama bölgesi, kulla…\n    ◯ Son N adımın küçültülmüş karesi yalnızca bellek…\n\nNo ids, and every row cut mid-word. The one token the reader was given to hold on to — `text-only`, `redacted-on-failure`, `ram-ring` — is the one token the prompt does not show, so the human scrolls back up and matches prefixes by eye, twice, to be sure. On a decision whose options open with similar words that check cannot be made at all.\n\nWhere it comes from: packages/mcp/src/ask.ts:104, `askChoice`, builds the requested schema as `enum: choices.map(c => c.id)` and `enumNames: choices.map(c => c.label)`. The host renders `enumNames` and truncates them; the id is the value sent back and never reaches the screen. The call site is packages/mcp/src/tools/plan.ts:339-348, which maps the options to `{ id, label }` with a comment saying labels only, on purpose — a host truncates rather than wraps, so long text is exactly what gets cut. That reasoning is right and is not what this node overturns. The bug is that truncation eats the handle instead of the prose.\n\nThe fix, and the whole of it: put the id in front, so what survives the cut is the part that identifies the row — `text-only — Hiç görüntü saklama…`. One expression, at the plan.ts call site or inside `askChoice` where every caller gets it. `askYes` and any other caller should be checked for the same shape.\n\nThe contributing half, worth one line while in there: `OptionInput.label` at plan.ts:37 has no length constraint, so a planning agent writes a sentence into the field the picker prints as a row. A short bound, or a describe() that says a label is a handle and not a description, keeps the rows readable even where the id is already visible.\n\nThe shape question this settles in passing, since it changes nothing outside these two files: prefix the id at the prompt, rather than teaching every host to wrap. SOBER does not control the host's renderer, and the M1 gate already established that it truncates; the only thing SOBER controls is what it puts in the first forty characters.\n\nAcceptance: the elicitation rows begin with the option id, so a row cut short still says which option it is; the ids shown in the conversation and the ids shown in the prompt are the same tokens; a test asserts the leading token of each `enumNames` entry is that option's id.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/mcp/src/ask.ts",
+		"packages/mcp/src/ask.test.ts",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/tools/plan.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:22:29.716Z"
+}

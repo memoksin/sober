@@ -1,0 +1,32 @@
+{
+	"category": "error-handling",
+	"question": "A queued node fails while nobody is watching — does the dispatcher stop, or skip that node and keep draining?",
+	"options": [
+		{
+			"id": "stop-and-wait",
+			"label": "Stop draining entirely and wait for a human",
+			"reason": "It is what ADR 0017 already decided for one drain — \"a queued chain stops at the first rejection or failure\", so that four more nodes are never built on top of a result a human turned down. A dispatcher that loops forever would quietly convert that rule into \"stops until the next cycle\", which is not stopping at all. Halting also makes the failure impossible to miss: the queue stops moving, which is the loudest signal an unattended process has.",
+			"costLater": "One unrelated failure — a flaky setup command, a network blip in `dispatch.setup` — idles the whole queue until somebody returns, which is the cost the dispatcher existed to remove. It also needs a resume that is not just a restart, or the user's fix is \"turn it off and on again\"."
+		},
+		{
+			"id": "skip-and-continue",
+			"label": "Skip the failed node and its dependents, keep draining the rest",
+			"reason": "The rule ADR 0017 protects is about a chain: nothing is built on a result a human has not seen. A node in a different part of the graph is not on that chain and is not endangered by this failure. Skipping the subtree and continuing keeps the unattended run productive through a flake instead of parking it.",
+			"costLater": "It has to compute the dependent subtree correctly every time, and a mistake there is exactly the failure ADR 0017 forbids — work built on a rejected result, produced unattended, found later. The user also returns to a mixed pile: some finished, some skipped, some failed, and has to reconstruct what happened from logs rather than from where the queue stopped."
+		},
+		{
+			"id": "stop-after-a-budget",
+			"label": "Keep going, but stop the whole dispatcher after N failures in a cycle",
+			"reason": "It separates a flake from a fault: one failure is noise and the queue rides through it, several in a row means something is broken about this machine or this base and no further spending is justified. The threshold is one number in .sober/config.jsonc, beside `concurrency` and `timeoutMinutes` which are already exactly this kind of governor.",
+			"costLater": "N is a number nobody can pick correctly, and the wrong value fails in both directions — too low and it is stop-and-wait with extra machinery, too high and it burns a chain of runs on a broken base before noticing. It is also the only option here that still spends money after the first failure, so its worst case costs the most."
+		}
+	],
+	"suggested": "stop-and-wait",
+	"answer": {
+		"option": "stop-and-wait",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T07:22:41.644Z"
+	},
+	"createdAt": "2026-09-08T21:29:25.884Z"
+}

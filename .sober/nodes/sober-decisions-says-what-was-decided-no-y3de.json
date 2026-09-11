@@ -1,0 +1,21 @@
+{
+	"title": "`sober decisions` says what was decided, not only what is still open",
+	"description": "`decisions()` in `packages/cli/src/work.ts:61` iterates `openDecisions(board)`, so an answered decision vanishes from the only place the command line lists them — and the help line says as much: “every decision still waiting on you” (`packages/cli/src/index.ts:41`).\n\nAdd `--all`. It prints answered decisions too: the question, the option that was picked, the rationale, `derived` when there is one, and the options that were not picked, in the same two colours the open list already uses for `because` and `later` (ADR 0024). The bare command keeps its current output — it is what a person runs to find their next move, and burying that under a month of settled decisions is a worse default.\n\nThe words are the ones the dashboard list settled, which is why this node comes after it. A run that says one thing in the terminal and another on the screen is the defect `every-message-that-names-a-node-says-which-node-it-is` is already open about.",
+	"notes": "",
+	"dependsOn": [
+		"a-screen-that-lists-every-decision-and-w-p6qj"
+	],
+	"decisions": [],
+	"files": [
+		"packages/cli/src/work.ts",
+		"packages/cli/src/index.ts",
+		"test/integration/cli.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}
