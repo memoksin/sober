@@ -245,7 +245,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		{
 			title: 'Produce the options for a decision',
 			description:
-				'Fill in the options for a decision that has none. Options are pitched at the answerer: each carries why someone picks it and what it costs later. Never supply the answer — that is the human’s, through `decide`.',
+				'Write the options for a decision that has no answer yet, replacing any already there — a question whose options came out wrong is rewritten in place, not archived and reopened. Options are pitched at the answerer: each carries why someone picks it and what it costs later. Never supply the answer — that is the human’s, through `decide`.',
 			inputSchema: {
 				decision: z.string(),
 				options: z.array(OptionInput).min(2).max(4),
@@ -270,7 +270,9 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				const record = board.decisions.get(decision)
 				if (record === undefined) return text(`${decision} is not on this board.`)
 				if (record.answer !== null)
-					return text(`${decision} is already answered — its options are settled.`)
+					return text(
+						`${decision} is already answered — its options are settled. To change the answer among these options, use \`edit_decision\`. If the options themselves turned out wrong, archive the decision and open a new one: the answer names an option id, and rewriting the list underneath it would orphan the record.`,
+					)
 
 				await writeDecision(paths, decision, {
 					...record,
