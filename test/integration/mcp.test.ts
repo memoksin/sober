@@ -598,6 +598,44 @@ test('a decision with no options is opened before it is put to anyone', async ()
 	expect(await call(client, 'decide', { decision, option: 'post' })).toContain('post')
 })
 
+test('an unanswered decision has its options rewritten in place, and an answered one points at edit_decision', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', {
+		nodes: [{ key: 'form', title: 'The sign-up form', decisions: ['d'] }],
+		decisions: [{ key: 'd', category: 'data-flow', question: 'How does the form submit?' }],
+	})
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
+	await call(client, 'open_decision', {
+		decision,
+		options: [
+			{ id: 'post', label: 'A form post', reason: 'Works with no script', costLater: 'Full reloads' },
+			{ id: 'fetch', label: 'fetch()', reason: 'No reload', costLater: 'You own the error states' },
+		],
+	})
+	await call(client, 'open_decision', {
+		decision,
+		options: [
+			{ id: 'action', label: 'A server action', reason: 'One file', costLater: 'Framework lock-in' },
+			{ id: 'rpc', label: 'A typed RPC', reason: 'Types end to end', costLater: 'A client to keep' },
+		],
+	})
+	const listed = await call(client, 'decisions')
+	expect(listed).toContain('A server action')
+	expect(listed).not.toContain('A form post')
+
+	await call(client, 'decide', { decision, option: 'rpc' })
+	const refused = await call(client, 'open_decision', {
+		decision,
+		options: [
+			{ id: 'x', label: 'X', reason: 'r', costLater: 'c' },
+			{ id: 'y', label: 'Y', reason: 'r', costLater: 'c' },
+		],
+	})
+	expect(refused).toContain('already answered')
+	expect(refused).toContain('edit_decision')
+})
+
 test('decide whose base cannot be resolved refuses, and the answer does not land', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)

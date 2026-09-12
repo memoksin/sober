@@ -22,7 +22,7 @@ Read the open decisions (`decisions`). If $ARGUMENTS names one, that is the only
 
 For each, in turn:
 
-1. If it has no options yet, produce them with `open_decision` — two to four, each with why someone picks it and what it costs later, written for **this** repository rather than in general. Set `suggested` to the one you would pick, and say in one sentence why.
+1. If it has no options yet, produce them with `open_decision`; if its options are wrong and nobody has answered it yet, rewrite them with the same tool — it replaces what is there. Two to four, each with why someone picks it and what it costs later, written for **this** repository rather than in general. Set `suggested` to the one you would pick, and say in one sentence why.
 
 2. If the decision carries a `derived`, say so and name it: "this repository already answers this — read from `docs/adr/0012-…`". That is context, not pressure. The user is free to pick something else, and if they do, the record simply says a person chose it.
 
