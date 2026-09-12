@@ -27,6 +27,17 @@ export const Config = z.strictObject({
 		draftPr: z.boolean(),
 		accept: z.enum(['merge', 'pull-request']),
 		queueByDefault: z.boolean(),
+		tiers: z.strictObject({
+			high: z.string().min(1).nullable().default(null),
+			mid: z.string().min(1).nullable().default(null),
+			low: z.string().min(1).nullable().default(null),
+		}),
+		thresholds: z
+			.strictObject({
+				mid: z.int().min(1).max(10),
+				high: z.int().min(1).max(10),
+			})
+			.refine((t) => t.high > t.mid, { message: 'high must be above mid' }),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -53,6 +64,8 @@ export const DEFAULT_CONFIG: Config = {
 		draftPr: true,
 		accept: 'merge',
 		queueByDefault: false,
+		tiers: { high: null, mid: null, low: null },
+		thresholds: { mid: 4, high: 8 },
 	},
 	board: {
 		branch: 'sober-graph',
@@ -76,8 +89,8 @@ export const DEFAULT_CONFIG_TEXT = `{
 
 	"dispatch": {
 		// The host CLI SOBER launches headless. It is the tool you already
-		// installed and logged into: SOBER never asks for an API key and
-		// never chooses the model (DESIGN §5.1).
+		// installed and logged into: SOBER never asks for an API key. This
+		// is what runs a node whose tier names nothing (ADR 0058).
 		"host": "${DEFAULT_CONFIG.dispatch.host}",
 
 		// Shell command run in a fresh worktree before the agent starts.
@@ -114,7 +127,25 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// unattended the moment it is ready. Approval stays human and per
 		// node either way — this moves the starting position, not the trade
 		// (ADR 0056).
-		"queueByDefault": ${DEFAULT_CONFIG.dispatch.queueByDefault}
+		"queueByDefault": ${DEFAULT_CONFIG.dispatch.queueByDefault},
+
+		// A tier is how hard a node's brief scores it. Each names the command
+		// that runs it, the same shape as "host" — for example
+		// "claude --model claude-fable-5-1" or "opencode --model minimax/m3-free".
+		// null falls back to "host". Read from the base ref, never from the
+		// branch being worked on (ADR 0019, ADR 0058).
+		"tiers": {
+			"high": null,
+			"mid": null,
+			"low": null
+		},
+
+		// Where the tiers split on a brief's complexity (1–10): at or above
+		// "high" is the high tier, at or above "mid" is mid, below is low.
+		"thresholds": {
+			"mid": ${DEFAULT_CONFIG.dispatch.thresholds.mid},
+			"high": ${DEFAULT_CONFIG.dispatch.thresholds.high}
+		}
 	},
 
 	"board": {
@@ -143,6 +174,27 @@ export const DEFAULT_CONFIG_TEXT = `{
 	}
 }
 `
+
+export type Tier = 'high' | 'mid' | 'low'
+
+/** No score, no tier. */
+export const tierFor = (
+	thresholds: Config['dispatch']['thresholds'],
+	complexity: number | null,
+): Tier | null => {
+	if (complexity === null) return null
+	if (complexity >= thresholds.high) return 'high'
+	return complexity >= thresholds.mid ? 'mid' : 'low'
+}
+
+/** `fallback` is what the run record and `sober status` report (ADR 0058). */
+export const hostForTier = (
+	dispatch: Config['dispatch'],
+	tier: Tier,
+): { host: string; fallback: boolean } => {
+	const line = dispatch.tiers[tier]
+	return line === null ? { host: dispatch.host, fallback: true } : { host: line, fallback: false }
+}
 
 export type ReadConfig =
 	| { readonly kind: 'ok'; readonly value: Config }
