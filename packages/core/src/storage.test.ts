@@ -4,7 +4,14 @@ import { join } from 'node:path'
 import { Node, SCHEMA_VERSION } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
 import { initBoard } from './board.js'
-import { DEFAULT_CONFIG, parseConfig, readConfig, setSetting } from './config.js'
+import {
+	DEFAULT_CONFIG,
+	hostForTier,
+	parseConfig,
+	readConfig,
+	setSetting,
+	tierFor,
+} from './config.js'
 import { findRoot, paths, recordFile } from './paths.js'
 import { readRecord, readRecords } from './read.js'
 import { readNodes, readProject, writeNode } from './records.js'
@@ -145,4 +152,58 @@ test('editing a setting keeps the comments around it', async () => {
 	expect(after).toContain('// How many runs may burn at once.')
 	expect(after).toContain('"concurrency": 1')
 	expect(parseConfig(p.config, after)).toMatchObject({ value: { dispatch: { concurrency: 1 } } })
+})
+
+test('a partial tiers table parses, and the missing tiers are null', () => {
+	expect(
+		parseConfig('c', '{ "dispatch": { "tiers": { "low": "opencode --model minimax/m3-free" } } }'),
+	).toMatchObject({
+		kind: 'ok',
+		value: {
+			dispatch: { tiers: { high: null, mid: null, low: 'opencode --model minimax/m3-free' } },
+		},
+	})
+})
+
+test('thresholds out of order or out of range are broken, naming the path', () => {
+	expect(parseConfig('c', '{ "dispatch": { "thresholds": { "mid": 5, "high": 5 } } }')).toEqual({
+		kind: 'broken',
+		file: 'c',
+		reason: 'dispatch.thresholds: high must be above mid',
+	})
+	expect(
+		parseConfig('c', '{ "dispatch": { "thresholds": { "mid": 4, "high": 11 } } }'),
+	).toMatchObject({
+		kind: 'broken',
+		reason: expect.stringContaining('dispatch.thresholds.high'),
+	})
+})
+
+test('tierFor splits complexity at the thresholds', () => {
+	const t = DEFAULT_CONFIG.dispatch.thresholds
+	expect([tierFor(t, 8), tierFor(t, 4), tierFor(t, 3), tierFor(t, null)]).toEqual([
+		'high',
+		'mid',
+		'low',
+		null,
+	])
+})
+
+test('hostForTier falls back to dispatch.host when a tier names nothing', () => {
+	const dispatch = {
+		...DEFAULT_CONFIG.dispatch,
+		tiers: { high: 'claude --model x', mid: null, low: null },
+	}
+	expect(hostForTier(dispatch, 'high')).toEqual({ host: 'claude --model x', fallback: false })
+	expect(hostForTier(dispatch, 'low')).toEqual({ host: 'claude', fallback: true })
+})
+
+test('editing a tier keeps the comment above it', async () => {
+	const { paths: p } = await initBoard(root, { title: 'SOBER', intent: '', constraints: [] })
+	const after = setSetting(await readFile(p.config, 'utf8'), ['dispatch', 'tiers', 'low'], 'codex')
+
+	expect(after).toContain('// A tier is how hard')
+	expect(parseConfig(p.config, after)).toMatchObject({
+		value: { dispatch: { tiers: { low: 'codex' } } },
+	})
 })
