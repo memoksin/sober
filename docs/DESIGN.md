@@ -576,7 +576,7 @@ This is the ordinary pull request flow — review comments, more commits, one pu
 
 ### 5.1 The host runs the agent, not SOBER
 
-SOBER shells out to the user's own host CLI, headless — `claude -p`, `codex exec`, `opencode run`, `agent -p` (D28). It never asks for an API key and never chooses the model: the tool the user already installed and logged into does the work.
+SOBER shells out to the user's own host CLI, headless — `claude -p`, `codex exec`, `opencode run`, `agent -p` (D28). It never asks for an API key. Which host and model run a node is a setting per tier (ADR 0058), but the tool the user already installed and logged into still does the work.
 
 A dispatch has a second mode, **attended**, chosen per run and never the default (ADR 0046). It opens the session's input, adds `--input-format stream-json`, and tells the agent a human is reading — so a person watching on the dashboard, or holding `sober run --watch` in a terminal, can answer it. Everything else is identical: same worktree, same judging, same records. A headless run is still told that nobody can answer it, which is the M2 gate's finding 1 and the reason the two modes are separate rather than one mode with a flag on the prompt.
 
@@ -610,7 +610,7 @@ Three things in it are not obvious, and each was a surprise worth recording:
 - **stdin is closed.** A `claude -p` with an inherited stdin waits three seconds for input that never arrives, on every dispatch.
 - `--permission-mode bypassPermissions` is what an unattended run needs: an agent that must build and test its own work cannot answer a permission prompt nobody is watching. The containment is the worktree and the review, not the prompt — which is the trade `PR-09-05` already makes explicit by never letting an agent land its own work.
 
-`dispatch.host` is a command line, not just a program name, so `npx claude` and `claude --model opus` are both settable. It is split on whitespace: a host whose path contains a space needs a wrapper script. Which adapter it selects is read off the program name, so a wrapper has to be named after what it wraps.
+`dispatch.host` is a command line, not just a program name, so `npx claude` and `claude --model opus` are both settable. It is split on whitespace: a host whose path contains a space needs a wrapper script. Which adapter it selects is read off the program name, so a wrapper has to be named after what it wraps. `dispatch.tiers.<tier>` is the same shape, chosen per node by the brief's score through `dispatch.thresholds`; `dispatch.host` is what an unscored node or an empty tier gets. Three hosts may run at once under one `dispatch.concurrency` (ADR 0058).
 
 Each host's invocation was read off its own installed CLI when its adapter was written — never ported from this one. The recordings are in `docs/testing/v1x-4-other-hosts.tdd.md`.
 
