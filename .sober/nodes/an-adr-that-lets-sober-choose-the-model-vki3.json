@@ -11,11 +11,49 @@
 		"docs/adr/0057-*.md",
 		"docs/DESIGN.md"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Two files, no code. The node text says \"ADR 0057\"; that number is taken (`docs/adr/0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md`), so this is **ADR 0058**.\n\n**1. `docs/adr/0058-a-tier-names-its-host-and-model.md`**, in the shape of 0057 (Status / Date 2026-09-12 / Refines: DESIGN §5.1, ADR 0048; Context / Decision / Consequences / Alternatives rejected).\n\nContext: `docs/DESIGN.md:579` says SOBER \"never asks for an API key and never chooses the model\"; `:583` gives the reason — choosing would make SOBER an agent framework owning the tool loop. The reason survives, the sentence does not: a board that scores a brief (1–10, `complexity`, the g2au node) and a user who wants low work on a free OpenCode model, middle work on Codex and hard work on Claude Code needs SOBER to *name* a model, which is not the same as *calling* one. The four adapters already run one at a time behind `dispatch.host`; nothing in `hosts.ts` or `dispatch.ts` needs a host per board, only a host per run.\n\nDecision, in one paragraph and then four recorded decisions: SOBER still shells out to the host CLI the user installed and logged into, still holds no key, still owns no tool loop. What changes is that the invocation is chosen **per node** from `dispatch.tiers.high | mid | low` — each a command line in the exact shape `dispatch.host` already has (`claude --model claude-fable-5-1`, `codex --model …`, `opencode --model minimax/m3-free`) — by the brief's score through `dispatch.thresholds`; three hosts may burn at once under one `dispatch.concurrency`; the tiers are read from the base ref like every setting that governs a run (ADR 0019). Then the four decisions the board has answered, each with why and what it costs later, copied from the board's option text rather than paraphrased:\n- the config carries the model flag, the adapter does not learn it (vs. a fifth adapter row);\n- a brief with no score runs on `dispatch.host` as today (vs. a backfilled default score);\n- one command line per tier (vs. a `{host, model}` pair; vs. tier→host beside host→model);\n- a tier with no line falls back to `dispatch.host`, and the run record says so (vs. refuse; vs. all-three-or-broken).\n\nConsequences: the run record names the host line that ran and whether it was the fallback; `sober status`, `sober logs` and the run panel show it (node 0o4s); a refusal — unknown host, not logged in, not attendable — names the tier (node w01q); the adapter table in `hosts.ts` does not change; SOBER cannot read the model back out of the line, which is the cost the first and third decisions accepted. Alternatives rejected: calling a model API (§5.1's original ground, still rejected), a model chosen by the agent at run time, and a host chosen by the score alone with one shared model table.\n\n**2. `docs/DESIGN.md` §5.1**: replace the sentence at `:579` with one that says SOBER never asks for an API key, and that which host and model run a node is a setting per tier while the host CLI still does the work; extend the paragraph at `:613` about `dispatch.host` being a command line with two sentences — `dispatch.tiers.<tier>` is the same shape, `dispatch.host` is what an unscored node or an unnamed tier gets, and three hosts may run at once — pointing at ADR 0058. The table and everything about the adapters stays.\n\nNothing else moves: `config.ts`, the schema and `dispatch.ts` are the three nodes downstream.",
+		"acceptance": [
+			{
+				"run": "ls docs/adr/0058-*.md",
+				"proves": "the ADR exists under the next free number — 0057 is already taken"
+			},
+			{
+				"run": "for k in 'dispatch.tiers' 'dispatch.host' 'dispatch.thresholds' 'ADR 0019' 'Alternatives rejected' 'fall'; do git grep -q -- \"$k\" -- 'docs/adr/0058-*.md' || { echo \"missing: $k\"; exit 1; }; done && echo adr complete",
+				"proves": "the ADR names the config keys, the base-ref rule, the fallback and the rejected alternatives — the four decisions are recorded, not summarised"
+			},
+			{
+				"run": "! git grep -q 'never chooses the model' -- docs/DESIGN.md",
+				"proves": "the sentence the ADR contradicts is gone from §5.1"
+			},
+			{
+				"run": "git grep -q 'ADR 0058' -- docs/DESIGN.md && git grep -q 'dispatch.tiers' -- docs/DESIGN.md",
+				"proves": "§5.1 points at the ADR and names the per-tier setting, so the design document and the ADR agree about who chooses"
+			},
+			{
+				"run": "[ -z \"$(git diff --stat development -- packages apps scripts test plugins .github)\" ] && echo docs only",
+				"proves": "no code, test or CI file changed — the ADR is the whole node"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-12T18:25:43.630Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T18:26:02.691Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T18:28:33.371Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "did-not-run"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-09T09:36:42.245Z"
 }

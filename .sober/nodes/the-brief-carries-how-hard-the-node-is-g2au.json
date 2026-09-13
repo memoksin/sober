@@ -18,7 +18,40 @@
 		"plugins/skills/brief/SKILL.md",
 		"packages/*/skills/brief/SKILL.md"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "The score lives on the brief, where the work is understood. Five files, one generated set, in this order:\n\n**1. Schema — `packages/schema/src/brief.ts`.** Add `complexity: z.int().min(1).max(10).nullable()` to `Brief`, beside `approach`. `null` is a brief written before the score existed (the decision this node binds: no score → no tier → `dispatch.host`). No `.default()` on it — node records are migrated, not defaulted (contrast `Run` in `run.ts`, which is a local file). Tests in `brief.test.ts`: `null` parses, 0 and 11 and 7.5 do not.\n\n**2. Version — `packages/schema/src/project.ts`.** `SCHEMA_VERSION = 6`.\n\n**3. Migration — `packages/core/src/migrate.ts`.** One entry `{ to: 6, node }` after the `to: 5` step, in the voice of the ones above it: a node with `brief: null` is left alone; one with a brief gets `{ complexity: null, ...brief }` — spread order leaves a value already there alone, as `to: 2` does. Two tests in `migrate.test.ts`: a v5 node with a brief arrives with `complexity: null` and still parses; a v5 node with no brief is untouched. The existing \"board written by an older SOBER is brought forward\" tests keep passing with the new number.\n\n**4. Writers.**\n- `packages/core/src/decide.ts` `writeBrief`: keep every existing caller compiling — the six integration tests and the CLI pass `{ approach, acceptance }`. Type the parameter as `Omit<Brief, 'approval' | 'complexity'> & { complexity?: number | null }` and write `complexity: brief.complexity ?? null`.\n- `packages/mcp/src/tools/plan.ts` `write_brief`: add `complexity: z.int().min(1).max(10)` to `inputSchema` — **required** there, because the tool is the agent scoring the node, and a tool that lets it skip the score is a board that never gets one. Pass it through to `writeBrief`.\n- `packages/cli/src/work.ts` `brief --write` and `packages/server/src/routes.ts` use `Brief.omit({ approval: true })`, so they take the field as the schema defines it; nothing to change unless typecheck says so.\n- `packages/core/src/brief.ts` (the rendered skeleton `sober brief <node>` prints): one line under the title, `Complexity: 7 / 10`, or `Complexity: not scored` — so the number a human approves is on the page they approve.\n\n**5. Skill — `plugins/skills/brief/SKILL.md`**, step 2, one more bullet: score the node 1–10 for how hard it is for one agent in one run in this repository — files touched, how much has to be understood first, how easy it is to check — and say in one sentence of the approach why that number. Then `pnpm plugins`, and commit the generated `packages/*/skills/brief/SKILL.md` files with it; `test/integration/plugin.test.ts` is the drift check.\n\nNothing reads the score yet — that is `the-dispatch-picks-the-model-from-the-sc-c9n8`. The dashboard panel (`apps/dashboard/src/panel/Panel.tsx:107`) renders `approach` only; leave it, the surfaces node `0o4s` owns what a screen shows.",
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/schema/src/brief.test.ts packages/core/src/migrate.test.ts",
+				"proves": "a brief round-trips with the score and refuses one outside 1–10; a v5 board arrives at v6 with `complexity: null` on every brief and no other field touched"
+			},
+			{
+				"run": "git grep -q \"SCHEMA_VERSION = 6\" -- packages/schema/src/project.ts",
+				"proves": "the version moved, so an older SOBER refuses this board instead of dropping the field on its next write"
+			},
+			{
+				"run": "pnpm vitest run test/integration/plugin.test.ts",
+				"proves": "the four generated brief skills match `plugins/skills/brief/SKILL.md` after `pnpm plugins` — the scoring instruction reaches every host"
+			},
+			{
+				"run": "git grep -q \"complexity\" -- packages/mcp/src/tools/plan.ts plugins/skills/brief/SKILL.md packages/core/src/brief.ts",
+				"proves": "the tool takes the score, the skill asks for it, and the rendered brief shows it"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "every `writeBrief` caller — six integration tests, the CLI, the server route — still compiles against the new `Brief`"
+			},
+			{
+				"run": "pnpm vitest run packages/schema/src/exports.test.ts packages/core/src/exports.test.ts",
+				"proves": "no export ceiling moved (ADR 0028)"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": null
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,

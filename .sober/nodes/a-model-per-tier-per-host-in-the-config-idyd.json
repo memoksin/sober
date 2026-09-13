@@ -6,18 +6,61 @@
 		"an-adr-that-lets-sober-choose-the-model-vki3"
 	],
 	"decisions": [
-		"how-is-a-host-told-which-model-to-use-do-4wh2"
+		"where-do-a-tier-s-host-and-model-live-in-nn4v",
+		"a-node-is-scored-to-a-tier-that-names-no-w8ka"
 	],
 	"files": [
 		"packages/core/src/config.ts",
 		"packages/core/src/hosts.ts",
 		"packages/core/src/hosts.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "The node text predates two decisions; the shape it lands is the one the board chose (ADR 0058): **one command line per tier, `dispatch.host` as the fallback** — not a table per adapter. Everything is in `packages/core/src/config.ts` and its tests in `packages/core/src/storage.test.ts`. No other file changes; nothing reads the new settings yet (that is `the-dispatch-picks-the-model-from-the-sc-c9n8`).\n\n**1. Schema.** Add to `Config.dispatch`:\n- `tiers: z.strictObject({ high, mid, low })`, each `z.string().min(1).nullable().default(null)`. `null` means \"no line for this tier — `dispatch.host` runs it\". The keys are defaulted rather than required so `{ \"tiers\": { \"low\": \"opencode --model minimax/m3-free\" } }` parses: `parseConfig` merges only one level deep, and a partial table must not become a broken config (decision `a-node-is-scored-to-a-tier-that-names-no-w8ka`).\n- `thresholds: z.strictObject({ mid: z.int().min(1).max(10), high: z.int().min(1).max(10) })` — a brief's `complexity` (1–10, node g2au) at or above `high` is the high tier, at or above `mid` is mid, below is low. Refine with `high > mid`, and let the refine's message read as `dispatch.thresholds: high must be above mid` through the existing `broken` path.\n\n`DEFAULT_CONFIG`: all three tiers `null`, thresholds `{ mid: 4, high: 8 }`. Today's behaviour exactly — a first dispatch after an upgrade costs what it cost before.\n\n**2. Two pure helpers, exported from config.ts** (and through `packages/core/src/index.ts` only if the export ceiling test in `exports.test.ts` allows it without moving — otherwise leave them internal and the dispatch node exports them):\n- `tierFor(thresholds, complexity: number | null): 'high' | 'mid' | 'low' | null` — `null` in, `null` out (no score → no tier).\n- `hostForTier(dispatch, tier): { host: string; fallback: boolean }` — the tier's line, or `dispatch.host` with `fallback: true`, which is what the run record and `sober status` will say.\n\n**3. `DEFAULT_CONFIG_TEXT`.** Add a `tiers` block and a `thresholds` block inside `dispatch`, commented in the voice of the rest of the file: what a tier is, that it is the same shape as `host` (`\"claude --model claude-fable-5-1\"`, `\"opencode --model minimax/m3-free\"`), that `null` falls back to `host`, that all three are read from the base ref (ADR 0019), and what the two thresholds mean. Rewrite the comment above `\"host\"`: it says SOBER \"never chooses the model\", which ADR 0058 retired — it now says `host` is what runs when a tier names nothing.\n\n**4. Tests in storage.test.ts**, beside the existing config tests:\n- the config init writes still parses back to `DEFAULT_CONFIG` (the existing test — it must keep passing with the new blocks);\n- a partial `tiers` table parses, the missing tiers are `null`;\n- `thresholds` with `high <= mid`, or a value outside 1–10, is `broken` with the path in the reason;\n- `tierFor`: 8→high, 4→mid, 3→low at the defaults, `null`→`null`;\n- `hostForTier`: a named tier returns its line with `fallback: false`; a `null` tier returns `dispatch.host` with `fallback: true`;\n- `setSetting` on `['dispatch', 'tiers', 'low']` keeps the comment above it.",
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/storage.test.ts",
+				"proves": "the new schema, defaults, helpers and the comment-preserving edit all pass, and the existing config tests still do"
+			},
+			{
+				"run": "pnpm --filter @besober/core typecheck",
+				"proves": "the new fields are on the `Config` type and nothing that reads it broke"
+			},
+			{
+				"run": "git grep -q \"tiers\" -- packages/core/src/config.ts",
+				"proves": "the setting exists in the schema and the written default text"
+			},
+			{
+				"run": "git grep -q \"never chooses the model\" -- packages/core/src/config.ts && exit 1 || exit 0",
+				"proves": "the comment ADR 0058 retired is gone from the config text"
+			},
+			{
+				"run": "pnpm vitest run packages/core/src/exports.test.ts",
+				"proves": "the export ceiling did not move by accident (ADR 0028)"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean on the change"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-12T18:33:45.447Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T18:34:03.013Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T18:36:36.396Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-09T09:36:42.245Z"
 }
