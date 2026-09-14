@@ -158,3 +158,23 @@ pnpm plugins      # regenerate the per-host plugins from plugins/skills
 
 Skills under `packages/*-plugin/skills/` are **generated** from
 `plugins/skills/`. Edit the source and run `pnpm plugins`.
+
+### A second machine, Windows included
+
+SOBER runs natively on Windows, macOS and Linux (PR-09-04): no container,
+no WSL, and the integration suite runs on all three in CI. A new machine
+needs only `git`, `gh`, Node 22 (`.nvmrc`) and pnpm (`corepack enable`, or
+`npm i -g pnpm`). Then:
+
+```sh
+git config --global core.longpaths true   # Windows only: pnpm paths get long
+git clone <repo> && cd sober && pnpm install && pnpm build
+cd packages/cli && pnpm link --global      # puts the local `sober` on PATH
+sober sync                                 # the board lives on its own branch
+claude plugin marketplace add <absolute path to this clone>
+claude plugin install sober@sober
+```
+
+Line endings are settled by `.gitattributes` (`eol=lf`), so `core.autocrlf`
+does not matter. The marketplace path is the one thing that differs per
+machine; it lives in your `~/.claude/settings.json`, not in the repo.
