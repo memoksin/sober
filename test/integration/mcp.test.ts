@@ -609,30 +609,15 @@ test('an unanswered decision has its options rewritten in place, and an answered
 	await call(client, 'open_decision', {
 		decision,
 		options: [
-			{
-				id: 'post',
-				label: 'A form post',
-				reason: 'Works with no script',
-				costLater: 'Full reloads',
-			},
+			{ id: 'post', label: 'A form post', reason: 'Works with no script', costLater: 'Full reloads' },
 			{ id: 'fetch', label: 'fetch()', reason: 'No reload', costLater: 'You own the error states' },
 		],
 	})
 	await call(client, 'open_decision', {
 		decision,
 		options: [
-			{
-				id: 'action',
-				label: 'A server action',
-				reason: 'One file',
-				costLater: 'Framework lock-in',
-			},
-			{
-				id: 'rpc',
-				label: 'A typed RPC',
-				reason: 'Types end to end',
-				costLater: 'A client to keep',
-			},
+			{ id: 'action', label: 'A server action', reason: 'One file', costLater: 'Framework lock-in' },
+			{ id: 'rpc', label: 'A typed RPC', reason: 'Types end to end', costLater: 'A client to keep' },
 		],
 	})
 	const listed = await call(client, 'decisions')
