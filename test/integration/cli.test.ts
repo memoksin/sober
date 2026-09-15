@@ -653,6 +653,26 @@ test('a prefix names a node, and an ambiguous one lists what it could have meant
 	expect(said).toContain('names only one')
 })
 
+test('correcting a node’s words sends its approved brief back to needs-approval', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+	expect(sober(created.dir, 'status')).toContain('ready')
+
+	expect(sober(created.dir, 'correct', 'auth-api', '--title', 'The sign-in API')).toContain(
+		'auth-api-k7f2 corrected',
+	)
+	const status = sober(created.dir, 'status')
+	expect(status).toContain('needs-approval')
+	expect(status).toContain('The sign-in API')
+	expect(failed(created.dir, 'correct', 'auth-api-k7f2')).toContain('nothing to correct')
+})
+
 test('a node that is done cannot be approved a second time', () => {
 	const created = project()
 	sober(created.dir, 'init')

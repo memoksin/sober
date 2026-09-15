@@ -169,6 +169,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'brief',
 			'claim',
 			'contributors',
+			'correct_node',
 			'decide',
 			'decisions',
 			'dismiss',
@@ -648,7 +649,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(27)
+		expect((await client.listTools()).tools.length).toBe(28)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -1297,6 +1298,24 @@ test('a session reopens a finished node, and reopening does not run it', async (
 	expect(await call(client, 'reopen', { node })).toContain('back in the loop')
 	// Its brief is still approved, so it lands on `ready` — and nothing started.
 	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
+})
+
+test('a session corrects a node’s words, and its approved brief waits for approval again', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	const node = await flagged(client, paths)
+	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
+
+	const said = await call(client, 'correct_node', { node, title: 'The sign-in API' })
+	expect(said).toContain('title corrected')
+	expect(said).toContain('approving again')
+
+	const loaded = await loadBoard(paths)
+	expect(loaded.nodes.get(node)?.title).toBe('The sign-in API')
+	expect(loaded.nodes.get(node)?.brief?.approach).toBe('Write the endpoints.')
+	expect(statusOf(loaded, node)).toBe('needs-approval')
+
+	expect(await call(client, 'correct_node', { node })).toContain('nothing to correct')
 })
 
 test('a session opens one node for the fix, and it is not a plan', async () => {
