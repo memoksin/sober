@@ -1,7 +1,7 @@
 import type { Approval, Node } from '@besober/schema'
 import { expect, test } from 'vitest'
 import type { Board } from './graph.js'
-import { queued } from './queue.js'
+import { plan, queued } from './queue.js'
 import { aNode, aRun } from './records.fixture.js'
 
 const AT = '2026-09-04T00:00:00.000Z'
@@ -65,4 +65,13 @@ test('an unapproved brief is needs-approval, not ready, so the flag cannot exist
 	})
 
 	expect(queued(board({ a: unapproved, b: aNode({}) }))).toEqual([])
+})
+
+test('plan splits the queue the way runQueue acts on it: a claim held by someone else is held, the rest starts', () => {
+	const theirs = ready(true, { claim: { by: 'someone-else', at: AT } as Node['claim'] })
+
+	expect(plan(board({ a: ready(true), b: theirs, c: ready(false) }), 'memoksin')).toEqual({
+		start: ['a'],
+		held: [{ id: 'b', why: 'someone-else has claimed it — it is theirs to start' }],
+	})
 })

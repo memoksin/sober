@@ -64,6 +64,10 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['say <node> -m "…"', 'answer a run you are watching'],
 			['say <node> -m "…" --done', 'answer it and let the session finish'],
 			['dispatch', 'start queued nodes as they become ready — Ctrl-C or a failure stops it'],
+			[
+				'queue [--watch]',
+				'what the dispatcher holds, runs and finished — closing it stops nothing',
+			],
 		],
 	],
 	[
@@ -298,6 +302,12 @@ const main = async (): Promise<void> => {
 				config: await settingsOf(paths),
 			})
 			return process.exit(code)
+		}
+		case 'queue': {
+			const { queue } = await import('./queue.js')
+			const { openBoard, settingsOf } = await import('./board.js')
+			const paths = await openBoard()
+			return queue(paths, { config: await settingsOf(paths), watch: values.watch === true })
 		}
 		case 'dashboard': {
 			// Imported here rather than at the top so that every other command

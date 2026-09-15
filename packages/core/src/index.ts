@@ -76,7 +76,7 @@ export {
 	publish,
 	pullRequestOf,
 } from './pr.js'
-export { type Queued, runQueue } from './queue.js'
+export { plan, type Queued, runQueue } from './queue.js'
 export type { BrokenRecord } from './read.js'
 export {
 	readArchivedNodes,

@@ -2,9 +2,13 @@ import {
 	acquire,
 	type Config,
 	LockBusyError,
+	lastRun,
+	loadBoard,
 	type Paths,
+	plan,
 	runQueue,
 	SoberError,
+	whoami,
 } from '@besober/core'
 import { columns, cyan, dim, green, red, say, spinner, yellow } from './out.js'
 
@@ -63,11 +67,77 @@ export const drain = async (
 	say(
 		`${yellow('·')} ${queued.held.length} queued node${queued.held.length === 1 ? '' : 's'} waiting for you`,
 	)
-	say(columns(queued.held.map((one) => [`  ${cyan(one.id)}`, dim(one.why)])).join('\n'))
+	say(heldLines(queued.held))
 	say(
 		dim('  Start one yourself with `sober run <node>`, which says if anything else is in the way.'),
 	)
 	return { failed }
+}
+
+const heldLines = (held: readonly { readonly id: string; readonly why: string }[]): string =>
+	columns(held.map((one) => [`  ${cyan(one.id)}`, dim(one.why)])).join('\n')
+
+/**
+ * A reader beside the dispatcher: what it is holding and why, what it started
+ * and how that ended, and whether one is draining at all. It starts nothing, so
+ * closing it leaves the dispatcher running. The held list comes from core's
+ * `plan`, the same author `drain` prints from.
+ */
+export const queue = async (
+	paths: Paths,
+	options: {
+		readonly config: Config
+		readonly watch?: boolean
+		/** Injected so a test drives the cycle instead of sleeping through it. */
+		readonly wait?: (ms: number) => Promise<void>
+	},
+): Promise<void> => {
+	const wait = options.wait ?? ((ms) => new Promise<void>((done) => setTimeout(done, ms)))
+	for (;;) {
+		if (options.watch === true) process.stdout.write('\x1b[2J\x1b[H')
+		say(await liveness(paths, options.config))
+		const board = await loadBoard(paths)
+		const { start, held } = plan(board, await whoami(paths.root))
+		for (const id of start) say(`  ${cyan(id)} ${dim('ready — the next cycle starts it')}`)
+		if (held.length > 0) say(heldLines(held))
+		const ran = [...board.nodes]
+			.filter(
+				([id, node]) =>
+					node.brief?.approval?.queue === true &&
+					node.accepted === null &&
+					lastRun(board, id) !== null,
+			)
+			.map(([id]) => id)
+			.sort()
+		for (const id of ran) {
+			const last = lastRun(board, id)
+			if (last === null) continue
+			say(
+				last.run.endedAt === null
+					? `  ${cyan(id)} ${yellow('running')} ${dim(last.id)}`
+					: `  ${cyan(id)} ${last.run.exit === 'finished' ? green('finished') : red(last.run.exit ?? 'ended')} ${dim(last.id)}`,
+			)
+		}
+		if (start.length + held.length + ran.length === 0) say(dim('  nothing is queued'))
+		if (options.watch !== true) return
+		await wait(options.config.dispatch.pollSeconds * 1000)
+	}
+}
+
+// The dispatcher holds the ADR 0025 lock for its whole life, so a lock we cannot
+// take is a dispatcher draining; one we can take is released straight away.
+const liveness = async (paths: Paths, config: Config): Promise<string> => {
+	const probe = await acquire({ ...paths, lock: `${paths.lock}-dispatch` }, 'queue', {
+		staleSeconds: config.lock.staleSeconds,
+		waitSeconds: 0,
+	}).catch((error: unknown) => {
+		if (error instanceof LockBusyError) return error
+		throw error
+	})
+	if (probe instanceof LockBusyError)
+		return `${green('✓')} a dispatcher is draining this board: ${probe.action} on ${probe.host}`
+	await probe.release()
+	return `${yellow('·')} nothing is draining — start one with \`sober dispatch\``
 }
 
 /**

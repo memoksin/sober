@@ -39,27 +39,7 @@ export const runQueue = async (
 	const waiting = queued(board)
 	if (waiting.length === 0) return { started: [], dispatched: [], held: [] }
 
-	const held: { id: string; why: string }[] = []
-	const started: string[] = []
-	for (const id of waiting) {
-		// Someone else's claim, on a node nobody has run: they are on it, and this
-		// would cut the worktree and spend the money at the wrong machine. Found by
-		// driving it: a teammate's claimed node started from the other clone.
-		const claim = board.nodes.get(id)?.claim
-		if (claim !== null && claim !== undefined && claim.by !== me) {
-			held.push({ id, why: `${claim.by} has claimed it — it is theirs to start` })
-			continue
-		}
-		// The whole queue counts as active against itself: none of these is
-		// claimed, and all of them are about to go out together.
-		const found = overlaps(board.nodes, id, waiting)
-		if (found.length === 0) started.push(id)
-		else
-			held.push({
-				id,
-				why: `${found.map((one) => one.id).join(', ')} ${found.length === 1 ? 'is' : 'are'} heading for the same files — an overlapping node is never started unattended`,
-			})
-	}
+	const { start: started, held } = plan(board, me)
 	if (started.length === 0) return { started: [], dispatched: [], held }
 	options.onStart?.(started)
 
@@ -98,3 +78,36 @@ export const queued = (board: Board): string[] =>
 				lastRun(board, id) === null,
 		)
 		.sort()
+
+/**
+ * The split `runQueue` acts on: what it would start, and what it holds with the
+ * reason. Exported so `sober queue` shows the same `why` the drain prints.
+ */
+export const plan = (
+	board: Board,
+	me: string,
+): { start: string[]; held: { id: string; why: string }[] } => {
+	const waiting = queued(board)
+	const held: { id: string; why: string }[] = []
+	const start: string[] = []
+	for (const id of waiting) {
+		// Someone else's claim, on a node nobody has run: they are on it, and this
+		// would cut the worktree and spend the money at the wrong machine. Found by
+		// driving it: a teammate's claimed node started from the other clone.
+		const claim = board.nodes.get(id)?.claim
+		if (claim !== null && claim !== undefined && claim.by !== me) {
+			held.push({ id, why: `${claim.by} has claimed it — it is theirs to start` })
+			continue
+		}
+		// The whole queue counts as active against itself: none of these is
+		// claimed, and all of them are about to go out together.
+		const found = overlaps(board.nodes, id, waiting)
+		if (found.length === 0) start.push(id)
+		else
+			held.push({
+				id,
+				why: `${found.map((one) => one.id).join(', ')} ${found.length === 1 ? 'is' : 'are'} heading for the same files — an overlapping node is never started unattended`,
+			})
+	}
+	return { start, held }
+}
