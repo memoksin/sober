@@ -314,3 +314,33 @@ test('your own claim on a queued node does not stop it — it is yours already',
 
 	expect((await runQueue(paths, 'main')).started).toEqual(['auth-api-k7f2'])
 })
+
+// ------------------------------------------------------------- the dispatcher
+
+test('the dispatcher starts a queued node made ready between ticks, and leaves an unapproved one', async () => {
+	const { dispatcher } = await import('../../packages/cli/src/queue.js')
+	const { DEFAULT_CONFIG } = await import('../../packages/core/src/config.js')
+	const paths = await board()
+	await chain(paths, true)
+	await approved(paths, 'billing-x9c1', { files: ['src/billing/**'], dependsOn: ['auth-api-k7f2'] })
+	const ticks: string[][] = []
+	let waits = 0
+
+	const code = await dispatcher(paths, 'main', {
+		config: DEFAULT_CONFIG,
+		tick: async (p, b) => {
+			const queued = await runQueue(p, b)
+			ticks.push([...queued.started])
+			return { failed: false }
+		},
+		wait: async () => {
+			waits += 1
+			if (waits === 1)
+				await acceptWork(paths, 'auth-api-k7f2', { by: 'Alice', base: 'main', scan: 'clean' })
+			else throw new Error('stop')
+		},
+	}).catch((error: Error) => error.message)
+
+	expect(code).toBe('stop')
+	expect(ticks).toEqual([[], ['session-ui-m3q8']])
+})

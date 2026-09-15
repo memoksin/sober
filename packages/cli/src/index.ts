@@ -63,6 +63,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['logs <node>', 'what the agent said, from the last run'],
 			['say <node> -m "…"', 'answer a run you are watching'],
 			['say <node> -m "…" --done', 'answer it and let the session finish'],
+			['dispatch', 'start queued nodes as they become ready — Ctrl-C or a failure stops it'],
 		],
 	],
 	[
@@ -289,6 +290,15 @@ const main = async (): Promise<void> => {
 		}
 		case 'archive':
 			return archive(need('node or decision'))
+		case 'dispatch': {
+			const { dispatcher } = await import('./queue.js')
+			const { baseOf, openBoard, settingsOf } = await import('./board.js')
+			const paths = await openBoard()
+			const code = await dispatcher(paths, await baseOf(paths), {
+				config: await settingsOf(paths),
+			})
+			return process.exit(code)
+		}
 		case 'dashboard': {
 			// Imported here rather than at the top so that every other command
 			// pays nothing for a server it does not start.
