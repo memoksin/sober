@@ -58,10 +58,7 @@
 	},
 	"outcome": null,
 	"assignee": null,
-	"claim": {
-		"by": "Mehmet Yiğit Keskin",
-		"at": "2026-09-15T08:18:11.598Z"
-	},
+	"claim": null,
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-11T07:41:18.983Z"
