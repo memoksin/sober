@@ -43,7 +43,8 @@ import { warn } from './team.js'
 /**
  * A tool call, a sentence and an ending do not read alike, so they do not look
  * alike. A mark rather than the word: the word `tool` beside every tool name is
- * eight columns saying what the colour already said.
+ * eight columns saying what the colour already said. The dashboard's copy is
+ * `MARK` in apps/dashboard/src/logs/data.ts, aligned by hand.
  */
 const TAIL: Record<string, readonly [string, (text: string) => string] | undefined> = {
 	started: ['◌', dim],
@@ -58,9 +59,21 @@ const TAIL: Record<string, readonly [string, (text: string) => string] | undefin
 	answer: ['›', magenta],
 }
 
-const mark = (kind: string): string => {
+// Same glyphs as `TOOL` in apps/dashboard/src/logs/data.ts; unknown names fall back.
+const TOOL: Record<string, string | undefined> = {
+	read: '◧',
+	edit: '✎',
+	write: '✍',
+	bash: '$',
+	grep: '⌕',
+	glob: '✱',
+	task: '⧉',
+	webfetch: '⇣',
+}
+
+const mark = (kind: string, tool: string | null = null): string => {
 	const [glyph, colour] = TAIL[kind] ?? ['·', dim]
-	return colour(glyph)
+	return tool === null ? colour(glyph) : colour(TOOL[tool.trim().toLowerCase()] ?? glyph)
 }
 
 const ORDER = { open: 0, unopened: 1, answered: 2 } as const
@@ -315,7 +328,7 @@ export const run = async (
 					const [rendered] = tail(line)
 					if (rendered === undefined) return
 					spin.clear()
-					say(`  ${mark(rendered.kind)} ${rendered.text}`)
+					say(`  ${mark(rendered.kind, rendered.tool)} ${rendered.text}`)
 				},
 			})
 			spin.stop()
@@ -436,7 +449,7 @@ export const logs = async (node: string): Promise<void> => {
 	say(`  ran ${cyan(host)} (${scored})`)
 	say(
 		tail(text)
-			.map((line) => `  ${mark(line.kind)} ${line.text}`)
+			.map((line) => `  ${mark(line.kind, line.tool)} ${line.text}`)
 			.join('\n'),
 	)
 }
