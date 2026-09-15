@@ -287,3 +287,21 @@ test('a config the base cannot be read from stops the audit rather than skipping
 
 	await expect(auditNode(paths, 'auth-api-k7f2', 'main')).rejects.toThrow('config.jsonc')
 })
+
+test('the log names each command before it runs, and its exit and duration after', async () => {
+	const paths = await board()
+	await criteria(paths, { run: exits(0), proves: 'first' }, { run: exits(3), proves: 'second' })
+
+	const result = await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' })
+
+	const lines = readFileSync(runLog(paths, result.run), 'utf8').split('\n')
+	const at = (prefix: string) => lines.findIndex((line) => line.startsWith(prefix))
+	const check1 = at('--- check: acceptance 1 of 2:')
+	const done1 = at('--- checked: acceptance 1 of 2:')
+	const check2 = at('--- check: acceptance 2 of 2:')
+	expect(check1).toBeGreaterThanOrEqual(0)
+	expect(done1).toBeGreaterThan(check1)
+	expect(check2).toBeGreaterThan(done1)
+	expect(lines[done1]).toMatch(/\(exit 0, \d+\.\d+s\)$/)
+	expect(lines[at('--- checked: acceptance 2 of 2:')]).toMatch(/\(exit 3, \d+\.\d+s\)$/)
+})

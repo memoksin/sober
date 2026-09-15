@@ -118,6 +118,10 @@ export const followRun = async (
  * and the log needs to carry no host of its own.
  */
 const tailLine = (line: string): readonly LogLine[] => {
+	// The audit's own lines (`audit.ts`), written between the host's events.
+	const check = /^--- (check|checked): (.*)$/.exec(line.trim())
+	if (check !== null)
+		return [{ kind: check[1] as 'check' | 'checked', text: check[2] ?? '', tool: null }]
 	try {
 		return renderLine(JSON.parse(line) as Event)
 	} catch {

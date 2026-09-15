@@ -161,7 +161,17 @@ export type Impact = z.infer<typeof Impact>
  * cannot import `core` (ADR 0008).
  */
 export const LogLine = z.strictObject({
-	kind: z.enum(['started', 'text', 'thinking', 'tool', 'result', 'raw', 'answer']),
+	kind: z.enum([
+		'started',
+		'text',
+		'thinking',
+		'tool',
+		'result',
+		'check',
+		'checked',
+		'raw',
+		'answer',
+	]),
 	text: z.string(),
 	// Not under SCHEMA_VERSION: that versions board records, and this is read off a local log.
 	/** Which tool, where the line is one. Null on a line that names none, and on every line written before this existed. */

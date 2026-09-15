@@ -51,6 +51,9 @@ const TAIL: Record<string, readonly [string, (text: string) => string] | undefin
 	text: ['│', dim],
 	thinking: ['…', dim],
 	result: ['✓', green],
+	// The audit's own lines: 'check' is a command started, 'checked' the same command done.
+	check: ['◌', dim],
+	checked: ['■', dim],
 	raw: ['!', red],
 	answer: ['›', magenta],
 }

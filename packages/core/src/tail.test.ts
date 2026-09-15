@@ -264,3 +264,15 @@ test('one host’s events are never read as another’s', () => {
 		tail(log({ type: 'assistant', message: { content: [{ type: 'text', text: 'from claude' }] } })),
 	).toEqual([{ kind: 'text', text: 'from claude', tool: null }])
 })
+
+test('the audit’s check lines render as their own kinds, not as stderr', () => {
+	expect(
+		tail(
+			'\n--- check: acceptance 1 of 2: `pnpm test`\nok\n--- checked: acceptance 1 of 2: `pnpm test` (exit 0, 1.2s)\n',
+		),
+	).toEqual([
+		{ kind: 'check', text: 'acceptance 1 of 2: `pnpm test`', tool: null },
+		{ kind: 'raw', text: 'ok', tool: null },
+		{ kind: 'checked', text: 'acceptance 1 of 2: `pnpm test` (exit 0, 1.2s)', tool: null },
+	])
+})

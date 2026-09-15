@@ -15,6 +15,8 @@ export const MARK: Readonly<Record<LogLine['kind'], string>> = {
 	thinking: '…',
 	tool: '⚒',
 	result: '■',
+	check: '◌',
+	checked: '■',
 	raw: '!',
 	// What the human said back, echoed into the log by the host. It points the
 	// other way because it is the one line that came from this side.
@@ -27,6 +29,8 @@ export const TONE: Readonly<Record<LogLine['kind'], string>> = {
 	thinking: 'var(--ink-faint)',
 	tool: 'var(--status-ready)',
 	result: 'var(--ink)',
+	check: 'var(--ink-faint)',
+	checked: 'var(--ink)',
 	// The host's own stderr. It is the one thing a failing run always has, so
 	// it is the one thing that must not read like ordinary output.
 	raw: 'var(--danger)',
