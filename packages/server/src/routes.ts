@@ -157,7 +157,12 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 	),
 
 	write_brief: route(
-		z.strictObject({ node: Id, brief: Brief.omit({ approval: true }) }),
+		z.strictObject({
+			node: Id,
+			brief: Brief.omit({ approval: true }).extend({
+				complexity: Brief.shape.complexity.optional(),
+			}),
+		}),
 		async (paths, { node: id, brief }) => writeBrief(paths, id, brief),
 	),
 

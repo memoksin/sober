@@ -256,6 +256,7 @@ test('the impact preview is read, and the save is the same call with the flag', 
 		files: [],
 		brief: {
 			approach: 'Write the endpoints.',
+			complexity: null,
 			acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
 			approval: { by: 'memoksin', at, queue: false },
 		},
@@ -338,6 +339,7 @@ test('the digest is served, and its two halves arrive separately', async () => {
 		files: [],
 		brief: {
 			approach: 'Write the endpoints.',
+			complexity: null,
 			acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
 			approval: { by: 'Ada', at: '2026-09-06T01:00:00.000Z', queue: false },
 		},
@@ -422,6 +424,7 @@ const flaggedBoard = async (
 		files: [],
 		brief: {
 			approach: 'Write the endpoints.',
+			complexity: null,
 			acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
 			approval: { by: 'Ada', at: '2026-09-06T01:00:00.000Z', queue: false },
 		},

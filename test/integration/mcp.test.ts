@@ -264,6 +264,7 @@ test('changing an answer asks once, and names every node the change reaches', as
 	)
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Write the endpoints.',
 		acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
 	})
@@ -356,6 +357,7 @@ test('a host with no elicitation approves on a relayed yes', async () => {
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Write it.',
 		acceptance: [{ run: 'npm test', proves: 'It answers.' }],
 	})
@@ -375,6 +377,7 @@ test('a host that declares elicitation is never asked again to approve', async (
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Write it.',
 		acceptance: [{ run: 'npm test', proves: 'It answers.' }],
 	})
@@ -398,6 +401,7 @@ test('a brief is written, approved by the human, and nothing runs before that', 
 
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Endpoints first, then the middleware.',
 		acceptance: [{ run: 'npm test', proves: 'The endpoints answer.' }],
 	})
@@ -419,6 +423,7 @@ test('a rewritten approach is not the approved one', async () => {
 	const write = (approach: string) =>
 		call(client, 'write_brief', {
 			node,
+			complexity: 3,
 			approach,
 			acceptance: [{ run: 'npm test', proves: 'It answers.' }],
 		})
@@ -436,6 +441,7 @@ test('review reads the scan, the criteria and the files; accept merges what the 
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Endpoints first.',
 		acceptance: [{ run: 'npm test', proves: 'The endpoints answer.' }],
 	})
@@ -487,6 +493,7 @@ test('a host with no elicitation merges on a relayed yes', async () => {
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Endpoints first.',
 		acceptance: [{ run: 'npm test', proves: 'The endpoints answer.' }],
 	})
@@ -693,6 +700,7 @@ test('a run goes through the same dispatch the CLI uses, and the log reads back'
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Endpoints first.',
 		acceptance: [{ run: 'npm test', proves: 'The endpoints answer.' }],
 	})
@@ -998,6 +1006,7 @@ test('a run that meets another node’s files asks the human, and starts when th
 	for (const node of [auth, ui]) {
 		await call(client, 'write_brief', {
 			node,
+			complexity: 3,
 			approach: 'Write it.',
 			acceptance: [{ run: 'true', proves: 'it works' }],
 		})
@@ -1026,6 +1035,7 @@ test('a run the human declines is not started, and nothing was cut', async () =>
 	const ui = ids.find((id) => id.startsWith('the-session-panel')) as string
 	await call(client, 'write_brief', {
 		node: auth,
+		complexity: 3,
 		approach: 'Write it.',
 		acceptance: [{ run: 'true', proves: 'it works' }],
 	})
@@ -1051,6 +1061,7 @@ test('accepting starts what was approved and queued behind it, and says it did',
 	for (const node of [auth, ui])
 		await call(client, 'write_brief', {
 			node,
+			complexity: 3,
 			approach: 'Write it.',
 			acceptance: [{ run: 'true', proves: 'it works' }],
 		})
@@ -1090,6 +1101,7 @@ test('a wave asks once about every node it warned on, and starts them when the h
 	for (const node of nodes) {
 		await call(client, 'write_brief', {
 			node,
+			complexity: 3,
 			approach: 'Write it.',
 			acceptance: [{ run: 'true', proves: 'it works' }],
 		})
@@ -1116,6 +1128,7 @@ const flagged = async (client: Client, paths: Paths): Promise<string> => {
 
 	await call(client, 'write_brief', {
 		node,
+		complexity: 3,
 		approach: 'Write the endpoints.',
 		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
 	})

@@ -8,6 +8,7 @@ const AT = '2026-09-04T00:00:00.000Z'
 
 const approved = (approval: Approval) => ({
 	approach: 'Write the endpoints, then the middleware.',
+	complexity: null,
 	acceptance: [{ run: 'pnpm test', proves: 'The endpoints answer.' }],
 	approval,
 })
@@ -60,7 +61,7 @@ test('a node still waiting on a dependency or an unanswered decision is not read
 
 test('an unapproved brief is needs-approval, not ready, so the flag cannot exist without the approval', () => {
 	const unapproved = aNode({
-		brief: { approach: 'Something.', acceptance: [], approval: null },
+		brief: { approach: 'Something.', complexity: null, acceptance: [], approval: null },
 	})
 
 	expect(queued(board({ a: unapproved, b: aNode({}) }))).toEqual([])

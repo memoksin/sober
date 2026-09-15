@@ -16,6 +16,7 @@ const answer: Answer = {
 const approval: Approval = { by: 'memoksin', at: AT, queue: false }
 const approved = {
 	approach: 'Write the endpoints, then the middleware.',
+	complexity: null,
 	acceptance: [{ run: 'pnpm test', proves: 'The endpoints answer.' }],
 	approval,
 }
