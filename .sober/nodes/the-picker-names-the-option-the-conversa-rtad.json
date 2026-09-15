@@ -10,7 +10,41 @@
 		"packages/mcp/src/tools/plan.ts",
 		"packages/mcp/src/tools/plan.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 3: one expression and one schema constraint, but the node's own text points at code that has since moved, so the first job is saying where the bug actually lives now.\n\n**Where it moved, and where it still is.** The node names `askChoice` at `packages/mcp/src/ask.ts:104` and the decision picker at `packages/mcp/src/tools/plan.ts:339-348`. Neither is there today. ADR 0057 took the elicitation out of `decide`, `approve` and `accept` — the decision picker is now the host's own question tool, driven by the agent off `renderDecisions` text, and the ids are in that text. What is left of `ask.ts` is `askFields` (line 50) and `askYes` (line 104), and `askFields` builds exactly the schema the node describes:\n\n```ts\nenum: field.choices.map((choice) => choice.id),\nenumNames: field.choices.map((choice) => choice.label),\n```\n\nIts one caller is `packages/mcp/src/tools/sync.ts:72` — resolving a merge conflict — and it is the worse case of the two the node was written about. `formFor` at `sync.ts:28-35` builds the choices as `{ id: 'ours', label: short(field.ours) }` and `{ id: 'theirs', label: short(field.theirs) }`: the labels are two truncated slices of the same record's text, which begin with the same words far more often than two decision options do. The host truncates the row, the reader sees two nearly identical cut-off strings, and the one token that says which side is which — `ours`, `theirs` — is the one token the prompt never shows. The archived form's `keep` / `restore` has the same shape.\n\n**The fix, and the whole of it.** In `askFields`, put the id in front of the label:\n\n```ts\nenumNames: field.choices.map((choice) => `${choice.id} — ${choice.label}`),\n```\n\nInside `askFields`, so every caller now and later gets it rather than each call site remembering. `enum` — the value sent back — does not change, so `resolveConflict` still receives `'ours'` / `'theirs'` and nothing downstream moves. Put one comment on the line saying why the id leads: the host truncates rather than wraps (the M1 gate established that, and it is why `sync.ts` passes `short(...)` in the first place), so whatever SOBER puts in the first forty characters is what survives, and the handle has to be in them. That is the shape question the node settles in passing — prefix at the prompt, do not try to teach four hosts to wrap.\n\n`askYes` takes a `yes: string` for a single checkbox title, not a list of rows, so there is nothing to prefix there. Check it and leave it; say so in the commit rather than editing it.\n\n**The contributing half.** `OptionInput` at `packages/mcp/src/tools/plan.ts:38` is `label: z.string()` with no constraint and no `.describe()`, while every other field in that object has one. A planning agent therefore writes a sentence into the field a picker prints as a row. Add a `.describe()` in the voice of its siblings — a label is a short handle a person reads in a list, not a description; the reasoning goes in `reason` and `costLater`. Prefer the `.describe()` over a hard `.max()`: a refused proposal for a label three characters too long costs more than a long label does, and the description is what the agent actually reads.\n\n**Tests.** `packages/mcp/src/ask.test.ts` if it exists, otherwise beside the existing MCP unit tests — find them with `fd -e test.ts . packages/mcp/src`. One assertion is the node's: every `enumNames` entry begins with its own choice's id, so a row cut short still says which option it is, and the `enum` values are unchanged. If `askFields` cannot be tested without a live server, assert it through the conflict path in `test/integration/mcp.test.ts`, which already drives sync with a conflict and a fake elicitation client — extend that case rather than starting a file.\n\nNothing else changes: not `resolveConflict`, not `formFor`'s `short()`, not the decision tools, not the CLI.",
+		"complexity": 3,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/mcp.test.ts -t 'conflict'",
+				"proves": "the merge-conflict form still round-trips end to end: the rows now lead with `ours` and `theirs`, the values sent back are unchanged, and resolveConflict lands the same result"
+			},
+			{
+				"run": "git grep -q 'choice.id' -- packages/mcp/src/ask.ts && git grep -q 'enumNames' -- packages/mcp/src/ask.ts",
+				"proves": "the id is built into the rendered row inside askFields, so every caller inherits it rather than each call site remembering"
+			},
+			{
+				"run": "node -e \"const s=require('node:fs').readFileSync('packages/mcp/src/ask.ts','utf8');const m=s.match(/enumNames:[^\\n]*/);process.exit(m && m[0].includes('choice.id') ? 0 : 1)\"",
+				"proves": "it is the display list that carries the id — the `enum` of values sent back was left alone, which is what keeps 'ours'/'theirs' flowing into resolveConflict"
+			},
+			{
+				"run": "node -e \"const s=require('node:fs').readFileSync('packages/mcp/src/tools/plan.ts','utf8');const i=s.indexOf('OptionInput');const b=s.slice(i,i+400);process.exit(/label:\\s*z\\.string\\(\\)\\.describe|label:\\s*z\\s*\\n?\\s*\\.string\\(\\)\\s*\\n?\\s*\\.describe/.test(b) ? 0 : 1)\"",
+				"proves": "OptionInput.label now tells the planning agent it is a handle and not a description — the contributing half, without a hard length refusal"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!packages/mcp' ':!test/integration/mcp.test.ts')\"",
+				"proves": "only the MCP package and its own integration test changed: core, the schema, the CLI and the dashboard are untouched"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the widened row strings and the described field compile"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": null
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,
