@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { paths, writeDecision, writeNode } from '@besober/core'
@@ -535,4 +535,26 @@ test('a node opened for the fix arrives with no brief, bound to what it corrects
 
 	// A dependency the board does not hold is refused, not written.
 	expect((await post('create_node', { title: 'A fix', dependsOn: ['gone-x9y8'] })).status).toBe(409)
+})
+
+test('init on a fresh clone takes the team’s board instead of writing a second project', async () => {
+	repo = board()
+	repo.git('add', '-A')
+	repo.git('commit', '-m', 'chore: sober')
+	repo.git('push', '-u', 'origin', 'main')
+	sober(repo.dir, 'sync')
+	const clone = join(repo.remote, '..', 'fresh')
+	execFileSync('git', ['clone', '--quiet', repo.remote, clone])
+	const cloned = paths(clone)
+	server = await serve({ paths: cloned })
+
+	const init = await post('init', {
+		project: { title: 'Not the team’s', intent: '', constraints: [] },
+	})
+
+	expect(init.status).toBe(200)
+	expect(readFileSync(cloned.project, 'utf8')).not.toContain('Not the team’s')
+	expect(execFileSync('git', ['rev-parse', 'sober-graph'], { cwd: clone, encoding: 'utf8' })).toBe(
+		execFileSync('git', ['rev-parse', 'sober-graph'], { cwd: repo.remote, encoding: 'utf8' }),
+	)
 })

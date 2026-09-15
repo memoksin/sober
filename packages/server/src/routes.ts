@@ -2,6 +2,7 @@ import {
 	acceptDistribution,
 	acceptWork,
 	addContributor,
+	adoptBoard,
 	answerDecision,
 	answerRun,
 	approveBrief,
@@ -25,7 +26,9 @@ import {
 	loadBoard,
 	NotOnBoardError,
 	type Paths,
+	readConfig,
 	readDistribution,
+	readProject,
 	rejectWork,
 	releaseChain,
 	releaseNode,
@@ -116,7 +119,15 @@ const target = z
 export const OPS: Readonly<Record<Operation, Route>> = {
 	init: route(
 		z.strictObject({ project: Project.omit({ schemaVersion: true }) }),
-		async (paths, { project }) => initBoard(paths.root, project),
+		async (paths, { project }) => {
+			// A fresh clone takes the team's board instead of writing a second project record.
+			if ((await readProject(paths)).kind === 'missing') {
+				const config = await readConfig(paths)
+				if (config.kind === 'ok' && (await adoptBoard(paths, config.value.board.branch)) !== null)
+					return { paths, created: false }
+			}
+			return initBoard(paths.root, project)
+		},
 	),
 
 	bind: route(
