@@ -13,7 +13,41 @@
 		"packages/cli/src/hook.ts",
 		"packages/cli/src/*.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 4: one branch in one function, but it runs on every session start on every host, so the offline and no-remote paths matter more than the happy one.\n\n**The two pieces it stands on already exist.** `boardDistance(paths, branch, { pull, timeoutMs })` landed in `c0057bf6` (`packages/core/src/sync.ts`): it answers `{ kind: 'ok', ahead, behind, remote, pulled }`, `{ kind: 'no-remote' }` or `{ kind: 'offline' }`, takes the fast-forward only when `behind > 0 && ahead === 0` and nothing under `.sober/` is uncommitted, has a five-second fetch timeout, and never throws for an unreachable remote. `a-fresh-clone-joins-the-team-s-board-ove-xabn` landed the adopt paths. Neither is this node's to change.\n\n**Where the line goes.** `packages/cli/src/hook.ts`, the `event === 'session'` branch at line 69: `return { ...warning, ...live(held) }`. `live()` (line 149) builds `hookSpecificOutput.additionalContext` from an array of sentences joined by newlines — a third sentence is the natural shape, so pass the distance line into `live()` and let it push one more entry when there is something to say, rather than assembling a second `systemMessage`.\n\n**What it says**, one sentence, chosen off the result:\n\n- `ok` with `pulled` non-null → `pulled N changes from <remote>` (N is `pulled.updated.length`).\n- `ok`, `behind > 0`, nothing pulled → `<branch> is N behind <remote> — sync`. This is the diverged or locally-ahead case the accepted decision leaves to the human.\n- `ok`, `ahead > 0`, `behind === 0` → `M unsent — sync`.\n- `ok` with both zero → nothing. A session that opens in step with the remote should hear no line at all.\n- `no-remote` or `offline` → **nothing**, and never a failure. A laptop on a train must open its session exactly as fast and as quietly as one on a network.\n\n**The two rules this branch must not break**, both already load-bearing in this file:\n\n1. **A repository with no board stays silent.** `decide` returns `{}` when `findRoot` is null (line 51), and that must still happen before any fetch — so the distance read goes *after* the board loads, not before. A session in an unrelated repository must not hear from SOBER at all, and must not pay a network call either.\n2. **Never fail the session.** `loadBoard` is already wrapped in try/catch returning a `didNotRun` message. Wrap the `boardDistance` call the same way and swallow: a hook that throws is a host that shows an error box on every session start. `boardDistance` is written not to throw for the offline case, but the branch must survive one anyway.\n\nThe branch name comes from the config the CLI already reads — `settingsOf(paths)` in `packages/cli/src/board.ts` returns `board.branch`. Read it the same way; do not hardcode `sober-graph`.\n\n**Timeout.** Pass `boardDistance`'s default (5s) rather than naming a new number here. A session start that waits five seconds is already the outer edge of tolerable, and the number belongs in one place.\n\n**Tests** beside the existing session and spawn cases in the hook's own test file (find it with `fd hook packages/cli`; if the hook is only covered from `test/integration/cli.test.ts`, extend there — that file already drives `sober hook` through the built binary, which is the honest test for something a host executes). Four cases: a clone whose remote is ahead with nothing local gets the pulled line and the records actually arrive; one that is behind with local commits gets the behind line and nothing is pulled; one with no remote gets no extra line and exits zero; and a repository with no board still returns `{}` with no line at all. Build the remote the way `test/integration/sync.test.ts` builds its bare-remote pair.\n\nNothing outside `packages/cli` changes: `core` gains no export, and the dashboard's own behind-count is `the-dashboard-shows-how-far-behind-the-b-o5si`, not this node.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/cli.test.ts -t 'hook'",
+				"proves": "a session opening against a remote that is ahead pulls and says so, one that is behind with local work only gets the reminder, and one with no remote gets no line and still exits zero"
+			},
+			{
+				"run": "git grep -q 'boardDistance' -- packages/cli/src/hook.ts && test -z \"$(git diff --name-only development -- packages/core)\"",
+				"proves": "the hook uses the core read that already exists rather than reimplementing a fetch, and core was not touched"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/sync.test.ts",
+				"proves": "the sync path the hook borrows still behaves for two clones of one remote — the hook reads, it does not change what sync does"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!packages/cli' ':!test/integration')\"",
+				"proves": "only the CLI hook and its tests changed: no core, no schema, no dashboard, no MCP tool, no server route"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the widened `live()` and the new branch compile"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:27:51.684Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,
