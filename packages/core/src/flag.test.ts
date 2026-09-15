@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest'
 import { initBoard } from './board.js'
 import { NotOnBoardError } from './errors.js'
-import { createNode, dismissFlag, reopenNode } from './flag.js'
+import { correctNode, createNode, dismissFlag, reopenNode } from './flag.js'
 import { readLog } from './local.js'
 import type { Paths } from './paths.js'
 import { aDecision, aNode } from './records.fixture.js'
@@ -85,6 +85,67 @@ describe('on a board', () => {
 	test('a new node bound to a node that is not here is refused', async () => {
 		await expect(
 			createNode(paths, { title: 'A fix', by: 'memoksin', dependsOn: ['gone-x9y8'] }),
+		).rejects.toThrow(NotOnBoardError)
+	})
+
+	test('a correction rewrites the words and keeps the id, edges, claim and accepted record', async () => {
+		await writeNode(
+			paths,
+			'plain-node-m3q8',
+			aNode({
+				dependsOn: ['auth-api-k7f2'],
+				decisions: ['auth-model-k7f2'],
+				claim: { by: 'memoksin', at: AT },
+				accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
+			}),
+		)
+
+		const node = await correctNode(paths, 'plain-node-m3q8', {
+			title: 'The right title',
+			by: 'memoksin',
+		})
+
+		expect(node.title).toBe('The right title')
+		expect(node.name).toBe('Session endpoints')
+		expect(node.dependsOn).toEqual(['auth-api-k7f2'])
+		expect(node.decisions).toEqual(['auth-model-k7f2'])
+		expect(node.claim).toEqual({ by: 'memoksin', at: AT })
+		expect(node.accepted?.by).toBe('memoksin')
+		// Same id: the record is still where it was, under the name it had.
+		const written = await readNode(paths, 'plain-node-m3q8')
+		expect(written.kind === 'ok' && written.value.title).toBe('The right title')
+		expect((await readLog(paths)).events.map((event) => event.action)).toEqual(['node.corrected'])
+	})
+
+	test('a correction clears the approval, and the approach survives', async () => {
+		const brief = {
+			approach: 'Write the endpoints.',
+			complexity: 3,
+			acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+			approval: { by: 'memoksin', at: AT, queue: true },
+		}
+		await writeNode(paths, 'plain-node-m3q8', aNode({ brief }))
+
+		const node = await correctNode(paths, 'plain-node-m3q8', {
+			description: 'Now with the right words.',
+			by: 'memoksin',
+		})
+
+		expect(node.brief?.approval).toBeNull()
+		expect(node.brief?.approach).toBe('Write the endpoints.')
+		expect(node.description).toBe('Now with the right words.')
+	})
+
+	test('a correction with nothing in it is refused, and writes nothing', async () => {
+		await expect(correctNode(paths, 'auth-api-k7f2', { by: 'memoksin' })).rejects.toThrow(
+			'nothing to correct',
+		)
+		expect((await readLog(paths)).events).toEqual([])
+	})
+
+	test('a correction to a node that is not here is refused', async () => {
+		await expect(
+			correctNode(paths, 'gone-x9y8', { title: 'A fix', by: 'memoksin' }),
 		).rejects.toThrow(NotOnBoardError)
 	})
 
