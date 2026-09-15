@@ -188,7 +188,9 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	).toContain('no longer waiting on it')
 	// Answered: gone from the bare list, and `--all` says what was chosen over what.
 	expect(sober(created.dir, 'decisions')).not.toContain('session-store-k7f2')
-	expect(sober(created.dir, 'decisions', '--all')).toMatch(/A cookie[\s\S]*Nothing to run[\s\S]*Redis/)
+	expect(sober(created.dir, 'decisions', '--all')).toMatch(
+		/A cookie[\s\S]*Nothing to run[\s\S]*Redis/,
+	)
 	// Answering is once. Changing an answer is a different command, because it
 	// withdraws every brief built on the answer it replaces (§2.8).
 	expect(failed(created.dir, 'decide', 'session-store-k7f2', 'redis')).toContain(
