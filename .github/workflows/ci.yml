@@ -121,7 +121,12 @@ jobs:
           git config --global init.defaultBranch main
           git config --global user.name "SOBER CI"
           git config --global user.email "ci@besober.dev"
-      - run: pnpm integration
+      # `pnpm integration`, split so GitHub times build and suite separately
+      # (docs/WINDOWS-CI-2026-09.md).
+      - run: pnpm build
+      - run: pnpm vitest run --project integration
+        env:
+          SOBER_FIXTURE_STATS: '1'
 
   boundaries:
     runs-on: ubuntu-latest

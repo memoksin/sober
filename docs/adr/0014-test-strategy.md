@@ -35,7 +35,7 @@ The fixture is built in phase 0, before the first git code, per `BUILD-PLAN.md`'
 ## Consequences
 
 - Roughly two focused days: one in phase 0, one in phase 2. Phase 0's estimate moves from 2–3 days to 3–4.
-- CI gets 2–5 minutes slower per pull request.
+- CI gets slower per pull request: the integration job measured 2m49s on ubuntu, 4m11s on macOS and 14m16s on Windows (run 34283791186, PR #8; see `docs/WINDOWS-CI-2026-09.md`).
 - In exchange, the riskiest half of `core` becomes testable, and M3 can be built without paying for a model on every iteration.
 
 ## Alternatives rejected
