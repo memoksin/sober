@@ -1,4 +1,4 @@
-import type { Board } from '@besober/core'
+import type { Board, Overlap } from '@besober/core'
 import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
 import type { Node, Review } from '@besober/schema'
 import { decisionState } from '@besober/schema'
@@ -189,4 +189,21 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 	if (review.accepted !== null)
 		lines.push('', 'This node is already done. There is nothing here to accept or reject.')
 	return lines.join('\n')
+}
+
+/**
+ * New nodes set against open nodes already on the board that share their files
+ * with no edge either way. Empty when there is nothing to say.
+ */
+export const renderUnlinked = (found: ReadonlyMap<string, readonly Overlap[]>): string => {
+	const named = [...found].filter(([, overlaps]) => overlaps.length > 0)
+	if (named.length === 0) return ''
+	return [
+		'Open nodes that share files with a new node and have no edge to it either way:',
+		...named.flatMap(([id, overlaps]) => [
+			`  ${id}`,
+			...overlaps.map((one) => `    ${one.id}  ${one.title}  (${one.files.join(', ')})`),
+		]),
+		'These are not refusals — two nodes can share a file without one waiting on the other. Where an edge belongs, add it with `bind`, passing the full `dependsOn` of the node that waits: `bind` replaces the list, it does not append.',
+	].join('\n')
 }
