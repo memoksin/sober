@@ -50,7 +50,74 @@ Every host talks to the same binary: `sober` must be on your `PATH`, because
 each host's MCP declaration names that command, and Claude Code's `hooks.json`
 names it too. With that in place, the four supported hosts follow.
 
-<!-- per-host install sections land here: node ykg6 -->
+### Claude Code
+
+No checkout needed. In a session:
+
+```
+/plugin marketplace add memoksin/sober
+/plugin install sober@sober
+```
+
+Claude Code clones the repository itself and reads the root
+`.claude-plugin/marketplace.json`, which points at `packages/claude-code-plugin`.
+
+For a team that wants the plugin present on checkout, put the same two in the
+project's `.claude/settings.json` instead:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "sober": { "source": { "source": "github", "repo": "memoksin/sober" } }
+  },
+  "enabledPlugins": { "sober@sober": true }
+}
+```
+
+Decisions can be asked in session. An attended run is possible.
+
+### Cursor
+
+A checkout of this repository is needed. Link the package in:
+
+```
+ln -s /path/to/sober/packages/cursor-plugin ~/.cursor/plugins/local/sober
+```
+
+Then reload Cursor and confirm the skills and the MCP server under
+**Customize**. Local plugin imports have to be allowed, which they are unless a
+team admin has turned them off.
+
+Decisions can be asked in session. An attended run is not possible.
+
+### Codex
+
+A checkout of this repository is needed. Add the repository root, not the
+package, as a marketplace:
+
+```
+codex plugin marketplace add /path/to/sober
+codex plugin add sober@sober
+```
+
+The root `.agents/plugins/marketplace.json` declares source `local` with path
+`./packages/codex-plugin`.
+
+Decisions cannot be asked in session. An attended run is not possible.
+
+### OpenCode
+
+A checkout of this repository is needed. It is not a marketplace package. Per
+project:
+
+```
+cp -r packages/opencode-plugin/.opencode <your project>/.opencode
+```
+
+and merge `opencode.json`'s `mcp` block into the project's own `opencode.json`.
+Globally, the same two into `~/.config/opencode/`.
+
+Decisions cannot be asked in session. An attended run is not possible.
 
 ## Your first board
 
