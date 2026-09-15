@@ -40,6 +40,7 @@ afterEach(() => {
 
 const aNode = (fields: Record<string, unknown>) => ({
 	title: 'A node',
+	name: 'A node',
 	description: 'Sign in and sign out.',
 	notes: '',
 	dependsOn: [],

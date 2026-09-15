@@ -69,6 +69,7 @@ const board = async (): Promise<Paths> => {
 	})
 	await writeNode(paths, NODE, {
 		title: 'The auth API',
+		name: 'The auth API',
 		description: 'Sign in and sign out.',
 		notes: '',
 		dependsOn: [],

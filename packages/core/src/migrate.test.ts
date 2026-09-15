@@ -62,6 +62,7 @@ test('every field a migrated record already had survives the move', async () => 
 	expect(broken).toEqual([])
 	expect(records.get('auth-api-k7f2')).toEqual({
 		...v1Node,
+		name: 'Session endpoints',
 		assignee: null,
 		claim: null,
 		dismissal: null,
@@ -98,14 +99,44 @@ test('a v5 brief arrives unscored and still parses', async () => {
 	expect(records.get('auth-api-k7f2')?.brief).toEqual({ ...brief, complexity: null })
 })
 
-test('a v5 node with no brief is left untouched', async () => {
+test('a v5 node with no brief has no brief added', async () => {
 	const node = { ...v1Node, assignee: null, claim: null, dismissal: null }
 	await writeV1(5)
 	await writeFile(join(board.nodes, 'auth-api-k7f2.json'), `${JSON.stringify(node)}\n`)
 
 	await migrateBoard(board)
 
-	expect(JSON.parse(await readFile(join(board.nodes, 'auth-api-k7f2.json'), 'utf8'))).toEqual(node)
+	expect(JSON.parse(await readFile(join(board.nodes, 'auth-api-k7f2.json'), 'utf8'))).toEqual({
+		...node,
+		name: 'Session endpoints',
+	})
+})
+
+test('a v6 node arrives with a name cut from its title on a word boundary, and still parses', async () => {
+	const title = 'The run panel: a box for what the agent is doing right now'
+	await writeV1(6)
+	await writeFile(
+		join(board.nodes, 'auth-api-k7f2.json'),
+		`${JSON.stringify({ ...v1Node, title, assignee: null, claim: null, dismissal: null })}\n`,
+	)
+
+	await migrateBoard(board)
+
+	const { records, broken } = await readNodes(board)
+	expect(broken).toEqual([])
+	expect(records.get('auth-api-k7f2')?.name).toBe('The run panel: a box for what the agent')
+})
+
+test('a node that already has a name keeps it', async () => {
+	await writeV1(6)
+	await writeFile(
+		join(board.nodes, 'auth-api-k7f2.json'),
+		`${JSON.stringify({ ...v1Node, name: 'log-wire', assignee: null, claim: null, dismissal: null })}\n`,
+	)
+
+	await migrateBoard(board)
+
+	expect((await readNodes(board)).records.get('auth-api-k7f2')?.name).toBe('log-wire')
 })
 
 test('a board already at this version is left alone', async () => {
@@ -135,7 +166,9 @@ test('a migrated record is written in schema order, so it is not a whole-file di
 		JSON.parse(await readFile(join(board.nodes, 'auth-api-k7f2.json'), 'utf8')),
 	)
 	expect(written).toEqual([
-		...Object.keys(v1Node).slice(0, -2),
+		'title',
+		'name',
+		...Object.keys(v1Node).slice(1, -2),
 		'assignee',
 		'claim',
 		'accepted',

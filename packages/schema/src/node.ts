@@ -77,6 +77,13 @@ export type Claim = z.infer<typeof Claim>
  */
 export const Node = z.strictObject({
 	title: z.string().min(1),
+	// The word a person tells this node from its siblings by — `log-wire`
+	// against `log-vocabulary` — and what a new node's id is seeded from. It
+	// goes stale when the title is rewritten and the name is not: the reason
+	// ADR 0020 refused pure-slug ids. That is survivable here and was not
+	// there, because an id is written once and referenced forever, while a
+	// label is only read.
+	name: z.string().min(1).max(40),
 	description: z.string(),
 	notes: z.string(),
 	dependsOn: z.array(Id),

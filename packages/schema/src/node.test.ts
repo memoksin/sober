@@ -3,6 +3,7 @@ import { Node } from './node.js'
 
 const node = {
 	title: 'Session endpoints',
+	name: 'Session endpoints',
 	description: 'Login, logout, and the middleware that reads the session.',
 	notes: '',
 	dependsOn: ['db-schema-m3q8'],
@@ -79,4 +80,10 @@ test('a dismissal keeps who judged the flag, when, and why (DESIGN §7.2)', () =
 	// The reason is the record. A dismissal without one is a mute button, and
 	// §7.2 asks for a judgement that is kept.
 	expect(Node.safeParse({ ...node, dismissal: { ...dismissal, reason: '' } }).success).toBe(false)
+})
+
+test('a node without a name is refused, and so is one too long to print in a list', () => {
+	const { name: _, ...nameless } = node
+	expect(Node.safeParse(nameless).success).toBe(false)
+	expect(Node.safeParse({ ...node, name: 'x'.repeat(41) }).success).toBe(false)
 })

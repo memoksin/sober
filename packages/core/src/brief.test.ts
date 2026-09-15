@@ -32,6 +32,7 @@ const board = (): Board => ({
 			'auth-api-k7f2',
 			aNode({
 				title: 'Session endpoints',
+				name: 'Session endpoints',
 				description: 'Login, logout, and the middleware that reads the session.',
 				notes: 'The mobile client sends the token in a header, not a cookie.',
 				dependsOn: ['db-schema-m3q8'],

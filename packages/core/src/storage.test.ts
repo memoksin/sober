@@ -22,6 +22,7 @@ let root: string
 
 const node = (title: string) => ({
 	title,
+	name: title,
 	description: '',
 	notes: '',
 	dependsOn: [],

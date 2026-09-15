@@ -75,6 +75,7 @@ const node = (dir: string, id: string, title: string, dependsOn: string[] = []):
 		`${JSON.stringify(
 			{
 				title,
+				name: title,
 				description: title,
 				notes: '',
 				dependsOn,

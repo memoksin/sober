@@ -67,6 +67,7 @@ const node = (dir: string, id: string, title: string, over: Record<string, unkno
 		`${JSON.stringify(
 			{
 				title,
+				name: title,
 				description: '',
 				notes: '',
 				dependsOn: [],

@@ -35,6 +35,7 @@ afterEach(() => {
 
 const node = (title: string) => ({
 	title,
+	name: title,
 	description: title,
 	notes: '',
 	dependsOn: [],

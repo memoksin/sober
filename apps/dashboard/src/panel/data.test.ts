@@ -8,6 +8,7 @@ const AT = '2026-09-06T00:00:00.000Z'
 const node = (id: string, over: Partial<BoardRead['nodes'][number]> = {}) => ({
 	id,
 	title: `Title of ${id}`,
+	name: id,
 	description: '',
 	notes: '',
 	dependsOn: [],

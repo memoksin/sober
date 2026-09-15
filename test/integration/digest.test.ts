@@ -37,6 +37,7 @@ const AT = '2026-09-05T00:00:00.000Z'
 
 const node = (title: string, accepted: Accepted | null = null) => ({
 	title,
+	name: title,
 	description: title,
 	notes: '',
 	dependsOn: [],

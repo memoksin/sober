@@ -22,6 +22,7 @@ test('the id is the file name, never a field on the record', () => {
 	const node = {
 		id: 'auth-api-k7f2',
 		title: 'Session endpoints',
+		name: 'Session endpoints',
 		description: '',
 		notes: '',
 		dependsOn: [],

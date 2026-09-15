@@ -80,6 +80,7 @@ const seed = (dir: string) => {
 		join(dir, '.sober/nodes/auth-api-k7f2.json'),
 		JSON.stringify({
 			title: 'The auth API',
+			name: 'The auth API',
 			description: 'Sign in and sign out.',
 			notes: '',
 			dependsOn: [],
@@ -519,6 +520,7 @@ test('a node heading for a claimed node’s files is refused, and the second com
 		join(created.dir, '.sober/nodes/session-ui-m3q8.json'),
 		JSON.stringify({
 			title: 'The session panel',
+			name: 'The session panel',
 			description: '',
 			notes: '',
 			dependsOn: [],
@@ -556,6 +558,7 @@ test('accepting starts what was approved and queued behind it', () => {
 		join(created.dir, '.sober/nodes/session-ui-m3q8.json'),
 		JSON.stringify({
 			title: 'The session panel',
+			name: 'The session panel',
 			description: '',
 			notes: '',
 			dependsOn: ['auth-api-k7f2'],

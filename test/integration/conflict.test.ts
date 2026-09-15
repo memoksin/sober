@@ -36,6 +36,7 @@ afterEach(() => {
 
 const node = (fields: Partial<Record<string, unknown>> = {}) => ({
 	title: 'A node',
+	name: 'A node',
 	description: 'what it is',
 	notes: '',
 	dependsOn: [] as string[],

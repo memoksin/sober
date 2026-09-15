@@ -136,8 +136,19 @@ const PROPOSAL = {
 		},
 	],
 	nodes: [
-		{ key: 'auth', title: 'The auth API', files: ['src/auth/**'], decisions: ['store'] },
-		{ key: 'billing', title: 'The billing screen', dependsOn: ['auth'] },
+		{
+			key: 'auth',
+			title: 'The auth API',
+			name: 'The auth API',
+			files: ['src/auth/**'],
+			decisions: ['store'],
+		},
+		{
+			key: 'billing',
+			title: 'The billing screen',
+			name: 'The billing screen',
+			dependsOn: ['auth'],
+		},
 	],
 }
 
@@ -201,17 +212,19 @@ test('one call writes the graph, its edges and the decision holding it', async (
 test('propose names an open node sharing files with no edge, and stays quiet once the edge is there', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Node A', files: ['src/x.ts'] }] })
+	await call(client, 'propose', {
+		nodes: [{ key: 'a', title: 'Node A', name: 'Node A', files: ['src/x.ts'] }],
+	})
 	const [a] = [...(await loadBoard(paths)).nodes.keys()] as [string]
 
 	const loose = await call(client, 'propose', {
-		nodes: [{ key: 'b', title: 'Node B', files: ['src/x.ts'] }],
+		nodes: [{ key: 'b', title: 'Node B', name: 'Node B', files: ['src/x.ts'] }],
 	})
 	expect(loose).toContain(a)
 	expect(loose).toContain('Node A  (src/x.ts)')
 
 	const linked = await call(client, 'propose', {
-		nodes: [{ key: 'c', title: 'Node C', files: ['src/y.ts'] }],
+		nodes: [{ key: 'c', title: 'Node C', name: 'Node C', files: ['src/y.ts'] }],
 	})
 	expect(linked).not.toContain('share files')
 	const edged = await call(client, 'propose', {
@@ -219,6 +232,7 @@ test('propose names an open node sharing files with no edge, and stays quiet onc
 			{
 				key: 'd',
 				title: 'Node D',
+				name: 'Node D',
 				files: ['src/y.ts'],
 				dependsOn: [
 					[...(await loadBoard(paths)).nodes].find(([, node]) => node.title === 'Node C')?.[0],
@@ -228,7 +242,11 @@ test('propose names an open node sharing files with no edge, and stays quiet onc
 	})
 	expect(edged).not.toContain('share files')
 
-	const opened = await call(client, 'open_node', { title: 'Node E', files: ['src/x.ts'] })
+	const opened = await call(client, 'open_node', {
+		title: 'Node E',
+		name: 'Node E',
+		files: ['src/x.ts'],
+	})
 	expect(opened).toContain('Node A  (src/x.ts)')
 })
 
@@ -238,8 +256,8 @@ test('a proposal that closes a cycle is refused, and nothing is written', async 
 
 	const said = await call(client, 'propose', {
 		nodes: [
-			{ key: 'a', title: 'A', dependsOn: ['b'] },
-			{ key: 'b', title: 'B', dependsOn: ['a'] },
+			{ key: 'a', title: 'A', name: 'A', dependsOn: ['b'] },
+			{ key: 'b', title: 'B', name: 'B', dependsOn: ['a'] },
 		],
 	})
 	expect(said).toContain('closes a cycle')
@@ -387,7 +405,7 @@ test('a host with no elicitation records a relayed pick and names the node it fr
 test('a host with no elicitation approves on a relayed yes', async () => {
 	const { repo: created, paths } = await board()
 	const client = await mute(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone' }] })
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone', name: 'Alone' }] })
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
@@ -407,7 +425,7 @@ test('a host that declares elicitation is never asked again to approve', async (
 		asked += 1
 		return 'no'
 	})
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone' }] })
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone', name: 'Alone' }] })
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
@@ -469,7 +487,7 @@ test('a brief is written, approved by the human, and nothing runs before that', 
 test('a rewritten approach is not the approved one', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone' }] })
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone', name: 'Alone' }] })
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 
 	const write = (approach: string) =>
@@ -489,7 +507,9 @@ test('a rewritten approach is not the approved one', async () => {
 test('review reads the scan, the criteria and the files; accept merges what the human accepts', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'The auth API', files: ['src/**'] }] })
+	await call(client, 'propose', {
+		nodes: [{ key: 'a', title: 'The auth API', name: 'The auth API', files: ['src/**'] }],
+	})
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
@@ -541,7 +561,9 @@ test('a relayed answer is refused where there is nothing to answer', async () =>
 test('a host with no elicitation merges on a relayed yes', async () => {
 	const { repo: created, paths } = await board()
 	const client = await mute(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'The auth API', files: ['src/**'] }] })
+	await call(client, 'propose', {
+		nodes: [{ key: 'a', title: 'The auth API', name: 'The auth API', files: ['src/**'] }],
+	})
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
@@ -562,7 +584,9 @@ test('a host with no elicitation merges on a relayed yes', async () => {
 test('a rejected node keeps its work, and the rejection is what takes it out of review', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'The auth API' }] })
+	await call(client, 'propose', {
+		nodes: [{ key: 'a', title: 'The auth API', name: 'The auth API' }],
+	})
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 
 	const said = await call(client, 'reject', { node, feedback: 'Nothing checks the session.' })
@@ -573,7 +597,7 @@ test('a rejected node keeps its work, and the rejection is what takes it out of 
 test('an archived node leaves the board and keeps its record', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone' }] })
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone', name: 'Alone' }] })
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 
 	expect(await call(client, 'archive', { id: node })).toContain('archived')
@@ -654,7 +678,7 @@ test('a decision with no options is opened before it is put to anyone', async ()
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
 	await call(client, 'propose', {
-		nodes: [{ key: 'form', title: 'The sign-up form', decisions: ['d'] }],
+		nodes: [{ key: 'form', title: 'The sign-up form', name: 'The sign-up form', decisions: ['d'] }],
 		decisions: [{ key: 'd', category: 'data-flow', question: 'How does the form submit?' }],
 	})
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
@@ -681,7 +705,7 @@ test('an unanswered decision has its options rewritten in place, and an answered
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
 	await call(client, 'propose', {
-		nodes: [{ key: 'form', title: 'The sign-up form', decisions: ['d'] }],
+		nodes: [{ key: 'form', title: 'The sign-up form', name: 'The sign-up form', decisions: ['d'] }],
 		decisions: [{ key: 'd', category: 'data-flow', question: 'How does the form submit?' }],
 	})
 	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
@@ -748,7 +772,9 @@ test('decide whose base cannot be resolved refuses, and the answer does not land
 test('a run goes through the same dispatch the CLI uses, and the log reads back', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'The auth API' }] })
+	await call(client, 'propose', {
+		nodes: [{ key: 'a', title: 'The auth API', name: 'The auth API' }],
+	})
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 	await call(client, 'write_brief', {
 		node,
@@ -793,7 +819,7 @@ test('a decision nothing binds is refused, and nothing is written', async () => 
 	// Found in the M1 gate: two of three decisions bound no node, so answering
 	// them would have unblocked nothing and the node they were about was ready.
 	const said = await call(client, 'propose', {
-		nodes: [{ key: 'auth', title: 'The auth API' }],
+		nodes: [{ key: 'auth', title: 'The auth API', name: 'The auth API' }],
 		decisions: [
 			{
 				key: 'store',
@@ -842,8 +868,8 @@ test('an edge that would close a cycle is refused after the fact too', async () 
 	const client = await connect(created.dir)
 	await call(client, 'propose', {
 		nodes: [
-			{ key: 'a', title: 'A' },
-			{ key: 'b', title: 'B', dependsOn: ['a'] },
+			{ key: 'a', title: 'A', name: 'A' },
+			{ key: 'b', title: 'B', name: 'B', dependsOn: ['a'] },
 		],
 	})
 	const nodes = await loadBoard(paths)
@@ -894,7 +920,7 @@ const teammate = async (created: TempRepo) => {
 test('the session syncs the board, and says what went out', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'A node' }] })
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'A node', name: 'A node' }] })
 
 	expect(await call(client, 'sync')).toContain('your board went out')
 	expect(await sync(paths, 'sober-graph')).toMatchObject({ kind: 'synced' })
@@ -907,15 +933,23 @@ test('a conflict both of you changed is put to the human, one form, and lands', 
 		rows.push([choices, labels])
 		return message.includes('title') ? 'theirs' : (choices[0] ?? null)
 	})
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Ours' }] })
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Ours', name: 'Ours' }] })
 	await sync(paths, 'sober-graph')
 
 	const other = await teammate(created)
 	const [id] = [...(await loadBoard(paths)).nodes.keys()]
 	const mine = (await loadBoard(paths)).nodes.get(id as string)
-	await writeNode(other, id as string, { ...mine, title: 'Theirs', notes: 'from Bob' } as never)
+	await writeNode(
+		other,
+		id as string,
+		{ ...mine, title: 'Theirs', name: 'Theirs', notes: 'from Bob' } as never,
+	)
 	await sync(other, 'sober-graph')
-	await writeNode(paths, id as string, { ...mine, title: 'Mine again' } as never)
+	await writeNode(
+		paths,
+		id as string,
+		{ ...mine, title: 'Mine again', name: 'Mine again' } as never,
+	)
 
 	const answered = await call(client, 'sync')
 	expect(answered).toContain('Records both of you changed')
@@ -939,15 +973,19 @@ test('a human who walks away merges nothing', async () => {
 	const client = await connect(created.dir, (message, choices) =>
 		message.includes('title') ? null : (choices[0] ?? null),
 	)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Ours' }] })
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Ours', name: 'Ours' }] })
 	await sync(paths, 'sober-graph')
 
 	const other = await teammate(created)
 	const [id] = [...(await loadBoard(paths)).nodes.keys()]
 	const mine = (await loadBoard(paths)).nodes.get(id as string)
-	await writeNode(other, id as string, { ...mine, title: 'Theirs' } as never)
+	await writeNode(other, id as string, { ...mine, title: 'Theirs', name: 'Theirs' } as never)
 	await sync(other, 'sober-graph')
-	await writeNode(paths, id as string, { ...mine, title: 'Mine again' } as never)
+	await writeNode(
+		paths,
+		id as string,
+		{ ...mine, title: 'Mine again', name: 'Mine again' } as never,
+	)
 
 	const stopped = await call(client, 'sync')
 	expect(stopped).toContain('You stopped at')
@@ -1004,7 +1042,7 @@ test('an older board is not rewritten inside a session — it names the surface 
 	const client = await connect(created.dir)
 	writeFileSync(
 		board_.project,
-		JSON.stringify({ schemaVersion: 1, title: 'Acme', intent: '', constraints: [] }),
+		JSON.stringify({ schemaVersion: 1, title: 'Acme', name: 'Acme', intent: '', constraints: [] }),
 	)
 
 	const said_ = await call(client, 'board')
@@ -1056,8 +1094,13 @@ test('a run that meets another node’s files asks the human, and starts when th
 	})
 	await call(client, 'propose', {
 		nodes: [
-			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
-			{ key: 'ui', title: 'The session panel', files: ['src/auth/session.ts'] },
+			{ key: 'auth', title: 'The auth API', name: 'The auth API', files: ['src/auth/**'] },
+			{
+				key: 'ui',
+				title: 'The session panel',
+				name: 'The session panel',
+				files: ['src/auth/session.ts'],
+			},
 		],
 	})
 	const ids = [...(await loadBoard(paths)).nodes.keys()]
@@ -1086,8 +1129,13 @@ test('a run the human declines is not started, and nothing was cut', async () =>
 	)
 	await call(client, 'propose', {
 		nodes: [
-			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
-			{ key: 'ui', title: 'The session panel', files: ['src/auth/session.ts'] },
+			{ key: 'auth', title: 'The auth API', name: 'The auth API', files: ['src/auth/**'] },
+			{
+				key: 'ui',
+				title: 'The session panel',
+				name: 'The session panel',
+				files: ['src/auth/session.ts'],
+			},
 		],
 	})
 	const ids = [...(await loadBoard(paths)).nodes.keys()]
@@ -1111,8 +1159,14 @@ test('accepting starts what was approved and queued behind it, and says it did',
 	const client = await connect(created.dir)
 	await call(client, 'propose', {
 		nodes: [
-			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
-			{ key: 'ui', title: 'The session panel', files: ['src/ui/**'], dependsOn: ['auth'] },
+			{ key: 'auth', title: 'The auth API', name: 'The auth API', files: ['src/auth/**'] },
+			{
+				key: 'ui',
+				title: 'The session panel',
+				name: 'The session panel',
+				files: ['src/ui/**'],
+				dependsOn: ['auth'],
+			},
 		],
 	})
 	const ids = [...(await loadBoard(paths)).nodes.keys()]
@@ -1153,8 +1207,13 @@ test('a wave asks once about every node it warned on, and starts them when the h
 	})
 	await call(client, 'propose', {
 		nodes: [
-			{ key: 'auth', title: 'The auth API', files: ['src/auth/**'] },
-			{ key: 'ui', title: 'The session panel', files: ['src/auth/session.ts'] },
+			{ key: 'auth', title: 'The auth API', name: 'The auth API', files: ['src/auth/**'] },
+			{
+				key: 'ui',
+				title: 'The session panel',
+				name: 'The session panel',
+				files: ['src/auth/session.ts'],
+			},
 		],
 	})
 	const nodes = [...(await loadBoard(paths)).nodes.keys()]
@@ -1247,6 +1306,7 @@ test('a session opens one node for the fix, and it is not a plan', async () => {
 
 	const made = await call(client, 'open_node', {
 		title: 'Re-read the session store',
+		name: 'Re-read the session store',
 		dependsOn: [node],
 	})
 	expect(made).toContain('needs a brief')
@@ -1259,16 +1319,18 @@ test('a session opens one node for the fix, and it is not a plan', async () => {
 
 	// A dependency the board does not hold is refused in a sentence, and nothing
 	// is written.
-	expect(await call(client, 'open_node', { title: 'A fix', dependsOn: ['gone-x9y8'] })).toContain(
-		'not on this board',
-	)
+	expect(
+		await call(client, 'open_node', { title: 'A fix', name: 'A fix', dependsOn: ['gone-x9y8'] }),
+	).toContain('not on this board')
 	expect((await loadBoard(paths)).nodes.size).toBe(3)
 })
 
 test('a session can answer a run somebody is watching, and finish it', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
-	await call(client, 'propose', { nodes: [{ key: 'a', title: 'The auth API' }] })
+	await call(client, 'propose', {
+		nodes: [{ key: 'a', title: 'The auth API', name: 'The auth API' }],
+	})
 	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
 
 	// A live attended run, written directly: `answerRun` appends to a file the

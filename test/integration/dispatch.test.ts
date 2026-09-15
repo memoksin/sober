@@ -35,6 +35,7 @@ const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.m
 
 const aNode = (title: string) => ({
 	title,
+	name: title,
 	description: 'Sign in and sign out.',
 	notes: '',
 	dependsOn: [],
