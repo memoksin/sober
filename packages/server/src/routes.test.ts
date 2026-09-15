@@ -37,6 +37,7 @@ test('every read a screen asked for, and no speculative seventh', () => {
 	expect(Object.keys(READS).sort()).toEqual([
 		'board',
 		'digest',
+		'distance',
 		'distribution',
 		'impact',
 		'projection',

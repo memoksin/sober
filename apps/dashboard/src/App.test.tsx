@@ -253,3 +253,32 @@ test('a second press while a sync is in flight sends nothing', async () => {
 	await waitFor(() => expect(screen.getByRole('button', { name: 'sync' })).toBeTruthy())
 	expect(sent).toEqual(['sync'])
 })
+
+const level = { kind: 'ok', ahead: 0, behind: 0, remote: 'origin', pulled: null }
+
+test.each([
+	[{ ...level, behind: 3 }, '3 behind'],
+	[{ ...level, ahead: 2 }, '2 unsent'],
+	[{ ...level, behind: 3, ahead: 2 }, '3 behind · 2 unsent'],
+	[{ ...level, behind: 4, pulled: { updated: [], removed: [] } }, 'pulled 4'],
+	[{ kind: 'offline' }, 'offline'],
+])('the distance %j is said as %s beside the sync button', async (distance, phrase) => {
+	serving({ ...reads, distance })
+	render(<App token="t" />)
+	expect(await screen.findByText(phrase)).toBeTruthy()
+})
+
+test.each([level, { kind: 'no-remote' }])('%j says nothing about distance', async (distance) => {
+	serving({ ...reads, distance })
+	render(<App token="t" />)
+	await waitFor(() => expect(screen.getByText('1 nodes')).toBeTruthy())
+	expect(screen.queryByText(/behind|unsent|offline|pulled/)).toBeNull()
+})
+
+test('a distance that cannot be read leaves the header usable', async () => {
+	serving(reads)
+	render(<App token="t" />)
+	await waitFor(() => expect(screen.getByText('1 nodes')).toBeTruthy())
+	expect(screen.getByRole('button', { name: 'sync' })).toBeTruthy()
+	expect(screen.getByTestId('canvas')).toBeTruthy()
+})

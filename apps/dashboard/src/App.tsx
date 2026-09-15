@@ -1,4 +1,4 @@
-import type { SyncResult } from '@besober/core'
+import type { BoardDistance, SyncResult } from '@besober/core'
 import type {
 	Digest as DigestRead,
 	Distribution,
@@ -60,6 +60,8 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [syncing, setSyncing] = useState(false)
 	const [synced, setSynced] = useState<SyncResult | null>(null)
 	const [syncFailure, setSyncFailure] = useState<string | null>(null)
+	// Read on load and after a sync, never on the poll: it fetches the remote.
+	const [distance, setDistance] = useState<BoardDistance | null>(null)
 
 	// The full board is only read while something is open. The canvas needs the
 	// slim projection every couple of seconds (ADR 0008); a drawer that is not
@@ -169,6 +171,20 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		setProjection(next)
 	}, [token])
 
+	// A failed read shows nothing: a board that cannot reach its remote is still usable.
+	const measure = useCallback(async (): Promise<void> => {
+		if (token === null) return
+		setDistance(
+			await wire(token)
+				.read<BoardDistance>('distance')
+				.catch(() => null),
+		)
+	}, [token])
+
+	useEffect(() => {
+		void measure()
+	}, [measure])
+
 	const sync = useCallback(async (): Promise<void> => {
 		if (token === null || syncing) return
 		setSyncing(true)
@@ -182,8 +198,9 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			setSyncFailure(error instanceof Error ? error.message : String(error))
 		} finally {
 			setSyncing(false)
+			void measure()
 		}
-	}, [token, syncing, refresh])
+	}, [token, syncing, refresh, measure])
 
 	const answer = useCallback(
 		async (option: string, rationale: string): Promise<void> => {
@@ -361,6 +378,11 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				>
 					{syncing ? 'syncing…' : 'sync'}
 				</button>
+				{distance !== null && distancePhrase(distance) !== null && (
+					<span className="text-[var(--ink-faint)] text-xs tabular-nums">
+						{distancePhrase(distance)}
+					</span>
+				)}
 
 				<button
 					type="button"
@@ -521,6 +543,18 @@ const Adrift = (): React.JSX.Element => (
 const plural = (count: number, one: string): string => `${count} ${one}${count === 1 ? '' : 's'}`
 
 /** One sentence per kind, read off the record's fields. */
+/** The hook's words for the same board, so the terminal and the screen agree. */
+export const distancePhrase = (distance: BoardDistance): string | null => {
+	if (distance.kind === 'offline') return 'offline'
+	if (distance.kind === 'no-remote') return null
+	if (distance.pulled !== null) return `pulled ${distance.behind}`
+	const said = [
+		...(distance.behind > 0 ? [`${distance.behind} behind`] : []),
+		...(distance.ahead > 0 ? [`${distance.ahead} unsent`] : []),
+	]
+	return said.length === 0 ? null : said.join(' · ')
+}
+
 export const syncSentence = (result: SyncResult): string => {
 	switch (result.kind) {
 		case 'synced': {
