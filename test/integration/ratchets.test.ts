@@ -212,3 +212,34 @@ test('changesets still treat main as the base branch', () => {
 	const config = JSON.parse(readFileSync(join(repoRoot, '.changeset/config.json'), 'utf8'))
 	expect(config.baseBranch).toBe('main')
 })
+
+/**
+ * The CLI's log marks and the dashboard's are two tables by decision, aligned by
+ * hand. This pins only which kinds and tools exist, never the glyphs: a terminal
+ * and a browser may honestly draw a thing differently, but must not disagree on
+ * what things there are.
+ */
+test('the CLI and the dashboard mark the same log kinds and tools', () => {
+	const keys = (file: string, table: string): string[] => {
+		const source = readFileSync(join(repoRoot, file), 'utf8')
+		const body = new RegExp(`const ${table}\\b[^{]*\\{([^}]*)\\}`).exec(source)?.[1] ?? ''
+		return [...body.matchAll(/^\s*(\w+):/gm)].map((match) => match[1] as string).sort()
+	}
+	const cli = 'packages/cli/src/work.ts'
+	const app = 'apps/dashboard/src/logs/data.ts'
+	for (const [cliTable, appTable] of [
+		['TAIL', 'MARK'],
+		['TOOL', 'TOOL'],
+	] as const) {
+		const ours = keys(cli, cliTable)
+		const theirs = keys(app, appTable)
+		expect(ours.length).toBeGreaterThan(0)
+		expect(
+			{
+				onlyInCli: ours.filter((key) => !theirs.includes(key)),
+				onlyInDashboard: theirs.filter((key) => !ours.includes(key)),
+			},
+			`${cliTable} in ${cli} vs ${appTable} in ${app}`,
+		).toEqual({ onlyInCli: [], onlyInDashboard: [] })
+	}
+})

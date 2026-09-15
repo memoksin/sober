@@ -171,7 +171,7 @@ test('a command outside a board says how to make one, rather than crashing', () 
 	expect(failed(created.dir, 'status')).toContain('sober init')
 })
 
-test('the loop closes: decide, brief, approve, run, review, accept', () => {
+test('the loop closes: decide, brief, approve, run, logs, review, accept', () => {
 	const created = project()
 	sober(created.dir, 'init')
 	seed(created.dir)
@@ -222,7 +222,11 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	expect(run).toContain('finished')
 	// The agent was handed the brief, not a file path to go and read.
 	expect(readFileSync(saw, 'utf8')).toContain('Add the endpoints, then the middleware.')
-	expect(sober(created.dir, 'logs', 'auth-api-k7f2')).toContain('wrote the file')
+	const logged = sober(created.dir, 'logs', 'auth-api-k7f2')
+	expect(logged).toContain('wrote the file')
+	// Thinking and a known tool get their own marks, never the unknown-kind dot.
+	expect(logged).toMatch(/… weighing the endpoints/)
+	expect(logged).toMatch(/✍ Write/)
 	expect(sober(created.dir, 'status')).toContain('in-review')
 
 	const review = sober(created.dir, 'review', 'auth-api-k7f2')

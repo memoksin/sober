@@ -73,6 +73,10 @@ if (args.includes('--input-format')) {
 } else {
 	say({ type: 'system', subtype: 'hook_started', hook: 'noise-a-tail-must-drop' })
 	say({ type: 'system', subtype: 'init', session_id: 'fake' })
+	say({
+		type: 'assistant',
+		message: { content: [{ type: 'thinking', thinking: 'weighing the endpoints' }] },
+	})
 	say({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write' }] } })
 	say({
 		type: 'assistant',
