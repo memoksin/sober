@@ -30,6 +30,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "assignNode",
   "auditNode",
   "bind",
+  "boardDistance",
   "boardTravels",
   "checkHost",
   "checksOf",
