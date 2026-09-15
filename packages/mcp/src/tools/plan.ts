@@ -20,6 +20,7 @@ import {
 	readProject,
 	renderBrief,
 	paths as resolvePaths,
+	unlinked,
 	whoami,
 	writeBrief,
 	writeDecision,
@@ -31,7 +32,7 @@ import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
 import { drained } from '../queue.js'
-import { renderBoard, renderDecisions } from '../render.js'
+import { renderBoard, renderDecisions, renderUnlinked } from '../render.js'
 
 const CriterionInput = z.object({
 	run: z.string().describe('the command that proves it, exactly as it is typed'),
@@ -242,6 +243,8 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 					await writeDecision(paths, idOf(decision.key), record)
 				}
 				for (const [id, record] of records) await writeNode(paths, id, record)
+				const after = (await loadBoard(paths)).nodes
+				const warning = renderUnlinked(new Map(records.map(([id]) => [id, unlinked(after, id)])))
 
 				const lines = [
 					...decisions.map((decision) => `decision ${idOf(decision.key)}  ${decision.question}`),
@@ -253,6 +256,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 						...lines,
 						'',
 						'Show these to the human. Decisions are answered one at a time with the `decide` tool.',
+						...(warning === '' ? [] : ['', warning]),
 					].join('\n'),
 				)
 			},

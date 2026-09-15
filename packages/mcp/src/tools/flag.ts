@@ -1,7 +1,8 @@
-import { createNode, dismissFlag, reopenNode, whoami } from '@besober/core'
+import { createNode, dismissFlag, loadBoard, reopenNode, unlinked, whoami } from '@besober/core'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { openBoard, text, tool } from '../context.js'
+import { renderUnlinked } from '../render.js'
 
 /**
  * DESIGN §7.2's three actions on a flagged node, in a session. Nothing here
@@ -54,6 +55,7 @@ export const registerFlags = (server: McpServer, cwd: string): void => {
 			inputSchema: {
 				title: z.string().min(1),
 				description: z.string().nullish(),
+				files: z.array(z.string()).nullish(),
 				dependsOn: z.array(z.string()).nullish(),
 				decisions: z.array(z.string()).nullish(),
 			},
@@ -62,6 +64,7 @@ export const registerFlags = (server: McpServer, cwd: string): void => {
 			async (input: {
 				title: string
 				description?: string | null
+				files?: string[] | null
 				dependsOn?: string[] | null
 				decisions?: string[] | null
 			}) => {
@@ -70,10 +73,19 @@ export const registerFlags = (server: McpServer, cwd: string): void => {
 					title: input.title,
 					by: await whoami(paths.root),
 					description: input.description ?? undefined,
+					files: input.files ?? undefined,
 					dependsOn: input.dependsOn ?? undefined,
 					decisions: input.decisions ?? undefined,
 				})
-				return text(`${id} is on the board. It needs a brief before anything can run.`)
+				const warning = renderUnlinked(
+					new Map([[id, unlinked((await loadBoard(paths)).nodes, id)]]),
+				)
+				return text(
+					[
+						`${id} is on the board. It needs a brief before anything can run.`,
+						...(warning === '' ? [] : ['', warning]),
+					].join('\n'),
+				)
 			},
 		),
 	)

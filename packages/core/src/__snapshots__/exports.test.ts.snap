@@ -102,6 +102,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "sync",
   "tail",
   "unbound",
+  "unlinked",
   "waitingOn",
   "wasStopped",
   "whoami",

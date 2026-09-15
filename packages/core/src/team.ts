@@ -57,6 +57,28 @@ export const overlaps = (
 }
 
 /**
+ * Every open node — started or not — that shares a glob with this one and has
+ * no edge to it either way. It is what a planning session cannot see from the
+ * board's titles alone. A transitive path is not checked on purpose: the
+ * question is whether this pair was ever joined, not whether the graph happens
+ * to order them.
+ */
+export const unlinked = (nodes: ReadonlyMap<string, Node>, id: string): Overlap[] => {
+	const mine = nodes.get(id)
+	if (mine === undefined) return []
+
+	const found: Overlap[] = []
+	for (const [other, node] of nodes) {
+		if (other === id || node.accepted !== null || node.dismissal !== null) continue
+		if (mine.dependsOn.includes(other) || node.dependsOn.includes(id)) continue
+		const shared = mine.files.filter((glob) => node.files.some((theirs) => touches(glob, theirs)))
+		if (shared.length > 0)
+			found.push({ id: other, title: node.title, by: node.claim?.by ?? null, files: shared })
+	}
+	return found.sort((left, right) => left.id.localeCompare(right.id))
+}
+
+/**
  * The confirmation §3.4 asks for, in the only shape a surface that never prompts
  * has: the run is refused once, with the overlap named, and the human says go.
  * It is not a block — it is the same thing a dialog would be, spread over two

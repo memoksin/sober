@@ -126,6 +126,7 @@ export {
 	OverlapError,
 	releaseChain,
 	releaseNode,
+	unlinked,
 } from './team.js'
 export {
 	addWorktree,

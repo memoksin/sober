@@ -198,6 +198,40 @@ test('one call writes the graph, its edges and the decision holding it', async (
 	expect(statusOf(loaded, auth?.[0] ?? '')).toBe('held')
 })
 
+test('propose names an open node sharing files with no edge, and stays quiet once the edge is there', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Node A', files: ['src/x.ts'] }] })
+	const [a] = [...(await loadBoard(paths)).nodes.keys()] as [string]
+
+	const loose = await call(client, 'propose', {
+		nodes: [{ key: 'b', title: 'Node B', files: ['src/x.ts'] }],
+	})
+	expect(loose).toContain(a)
+	expect(loose).toContain('Node A  (src/x.ts)')
+
+	const linked = await call(client, 'propose', {
+		nodes: [{ key: 'c', title: 'Node C', files: ['src/y.ts'] }],
+	})
+	expect(linked).not.toContain('share files')
+	const edged = await call(client, 'propose', {
+		nodes: [
+			{
+				key: 'd',
+				title: 'Node D',
+				files: ['src/y.ts'],
+				dependsOn: [
+					[...(await loadBoard(paths)).nodes].find(([, node]) => node.title === 'Node C')?.[0],
+				],
+			},
+		],
+	})
+	expect(edged).not.toContain('share files')
+
+	const opened = await call(client, 'open_node', { title: 'Node E', files: ['src/x.ts'] })
+	expect(opened).toContain('Node A  (src/x.ts)')
+})
+
 test('a proposal that closes a cycle is refused, and nothing is written', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)

@@ -6,13 +6,69 @@ import { addContributor, readContributors, removeContributor } from './contribut
 import type { Paths } from './paths.js'
 import { aNode } from './records.fixture.js'
 import { readNode, writeNode } from './records.js'
-import { assignNode, claimChain, claimNode, overlaps, releaseChain, releaseNode } from './team.js'
+import {
+	assignNode,
+	claimChain,
+	claimNode,
+	overlaps,
+	releaseChain,
+	releaseNode,
+	unlinked,
+} from './team.js'
 import { tmpRoot } from './tmp.fixture.js'
 
 const claimed = (by: string, files: string[], rest: Partial<Node> = {}): Node =>
 	aNode({ claim: { by, at: '2026-09-05T09:00:00.000Z' }, files, ...rest })
 
 const board = (entries: Record<string, Node>) => new Map(Object.entries(entries))
+
+describe('unlinked', () => {
+	const open = (files: string[], rest: Partial<Node> = {}): Node => aNode({ files, ...rest })
+
+	test('an unclaimed open node sharing a glob is found', () => {
+		const nodes = board({
+			'new-k7f2': open(['src/auth/**']),
+			'old-m3q8': open(['src/auth/session.ts'], { title: 'Old' }),
+		})
+		expect(overlaps(nodes, 'new-k7f2')).toEqual([])
+		expect(unlinked(nodes, 'new-k7f2')).toEqual([
+			{ id: 'old-m3q8', title: 'Old', by: null, files: ['src/auth/**'] },
+		])
+	})
+
+	test('a pair joined by an edge in either direction is not', () => {
+		const forward = board({
+			'new-k7f2': open(['x'], { dependsOn: ['old-m3q8'] }),
+			'old-m3q8': open(['x']),
+		})
+		const backward = board({
+			'new-k7f2': open(['x']),
+			'old-m3q8': open(['x'], { dependsOn: ['new-k7f2'] }),
+		})
+		expect(unlinked(forward, 'new-k7f2')).toEqual([])
+		expect(unlinked(backward, 'new-k7f2')).toEqual([])
+	})
+
+	test('accepted, dismissed and unrelated nodes are not', () => {
+		const nodes = board({
+			'new-k7f2': open(['x']),
+			'done-a1b2': open(['x'], {
+				accepted: {
+					by: 'a',
+					at: '2026-09-05T10:00:00.000Z',
+					flagged: false,
+					scan: 'clean',
+					audit: 'passed',
+				},
+			}),
+			'gone-c3d4': open(['x'], {
+				dismissal: { by: 'a', at: '2026-09-05T10:00:00.000Z', reason: 'no' },
+			}),
+			'far-e5f6': open(['y']),
+		})
+		expect(unlinked(nodes, 'new-k7f2')).toEqual([])
+	})
+})
 
 test('two claimed nodes whose globs meet are named, with who is on them', () => {
 	const nodes = board({
