@@ -17,10 +17,51 @@
 		"packages/cli/src/index.ts",
 		"apps/dashboard/src/**"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "The dispatcher `sober dispatch` already computes everything this node has to show — `runQueue` returns `started`, `dispatched` and `held`, each held node with a `why` written for a human — and `drain` in `packages/cli/src/queue.ts` already renders all of it. What is missing is that it renders it **once, into the terminal that owns the dispatcher**. Decision `0gma` chose the foreground command, so that terminal is the one you left open and walked away from. There is no second surface that answers \"what has it started since I left, and what is it refusing to start\".\n\nThis node adds that second surface, as a reader. It starts nothing, spends nothing, and closing it does not touch the dispatcher — which is the third acceptance line and the reason it cannot simply be \"more output from `sober dispatch`\".\n\n## The command\n\n`sober queue` — a new case in `packages/cli/src/index.ts` beside `dispatch`, a new row in the help under **Build**, implemented beside `drain` and `dispatcher` in `packages/cli/src/queue.ts`.\n\n- `sober queue` prints the queue once and exits.\n- `sober queue --watch` redraws it on the same `dispatch.pollSeconds` cycle until Ctrl-C.\n\nPer queued node it shows one of: **held** with the `why`, **running** with the run id, **finished** with how it exited. That is the node's \"from held to started to finished without a restart\" — the watch re-reads the board each cycle, so a node that moved between cycles shows its new state.\n\nIt also prints whether a dispatcher is running at all. The ADR 0025 lock on `${paths.lock}-dispatch` is where that already lives — `dispatcher()` holds it for its whole life and reports the holder when a second one starts. Read it the same way and say \"a dispatcher is draining this board\" or \"nothing is draining — start one with `sober dispatch`\". Do not add a pidfile; decision `0gma` rejected on-disk liveness and the lock is the mechanism it chose instead.\n\n## One source for `why`\n\n**Do not re-derive the held list in the CLI.** The `why` strings are written inside `runQueue`'s loop in `packages/core/src/queue.ts`, and a second copy in the CLI is two sentences that drift apart on the first edit — the node's own text is explicit that this is carrying, not computing.\n\nExtract the loop body — the claim check and the `overlaps` check — into an exported pure function beside `queued`:\n\n```ts\nexport const plan = (board: Board, me: string): { start: string[]; held: { id: string; why: string }[] }\n```\n\n`runQueue` then calls it and keeps doing exactly what it does now with the result; nothing about its behaviour changes, and its existing tests are the proof. The new command calls the same function with the same board, so a held node reads identically in both places.\n\n`packages/core/src/queue.ts` and `packages/core/src/index.ts` are **not** in this node's declared files. That is deliberate and known — the review will report them as undeclared. The extraction is what keeps the two surfaces honest, and it is smaller than the duplication it avoids.\n\n## What is not in this node\n\n**The dashboard.** `apps/dashboard/src/**` is on the declared list as permission, not as an obligation, and a browser panel needs a server route that is on nobody's list. Every line of the node's acceptance is met in the terminal. Leave `apps/` alone.\n\n**A log file.** The watch reads the board, the runs and the lock — all of which are already on disk and already the truth. A dispatch log would be a fourth copy that goes stale like every file does.\n\n## Tests\n\n`packages/cli/src/queue.test.ts`, beside the existing dispatcher cases, with the same injected-clock shape they already use:\n\n1. A queued node held by an overlap renders the same `why` string `drain` renders — assert the two are equal rather than matching a substring, which is the whole point of the extraction.\n2. A board with a held node, then the same board with that node running, then finished, renders three different lines across three cycles of `--watch` without the command restarting.\n3. With the dispatch lock free the header says nothing is draining; with it held it names the holder.\n\nAnd in `packages/core/src/queue.test.ts`, one case that `plan` returns the same split `runQueue` acted on before the extraction.\n",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/cli/src/queue.test.ts",
+				"proves": "a held node renders the same why the drain prints, and a held, a running and a finished node each read differently across three cycles of the watch without it restarting"
+			},
+			{
+				"run": "git grep -qE 'plan\\(' -- packages/cli/src/queue.ts && pnpm vitest run packages/core/src/queue.test.ts",
+				"proves": "the held list has one author — the CLI calls core plan(), and runQueue still behaves exactly as its own tests describe"
+			},
+			{
+				"run": "! git grep -qiE 'pidfile|pid file' -- packages/cli/src/queue.ts",
+				"proves": "liveness is still the ADR 0025 lock and not a file somebody left behind — decision 0gma rejected on-disk liveness"
+			},
+			{
+				"run": "git grep -qE \"case 'queue'\" -- packages/cli/src/index.ts && pnpm vitest run --project integration test/integration/cli.test.ts -t 'help'",
+				"proves": "the command is wired and findable in sober --help without reading the source"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only $(git merge-base development HEAD)...HEAD -- apps packages/server)\"",
+				"proves": "the dashboard and the server were left alone — a browser panel needs a route nobody declared, and every acceptance line is met in the terminal"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the extraction and the new command compile across the monorepo"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T10:09:02.269Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T10:09:04.403Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-08T21:29:25.884Z"
