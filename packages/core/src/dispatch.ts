@@ -14,6 +14,7 @@ import {
 	clearRunPid,
 	clearStopped,
 	markStopped,
+	readRun,
 	readRunInput,
 	readRunPid,
 	wasStopped,
@@ -267,7 +268,9 @@ const relayInput = (paths: Paths, id: string) => {
  *
  * The worktree is preserved and nothing is deleted. The stopping process does
  * not write the run record — the process that owns the run does, when its child
- * dies.
+ * dies. The one exception is an owner that is already gone: nobody will ever
+ * write that record, so the stopper closes it as failed and the node can run
+ * again. Still `false`, because nothing was killed.
  */
 export const stopRun = async (paths: Paths, id: string): Promise<boolean> => {
 	const pid = await readRunPid(paths, id)
@@ -279,10 +282,18 @@ export const stopRun = async (paths: Paths, id: string): Promise<boolean> => {
 	try {
 		process.kill(pid, 'SIGTERM')
 	} catch {
-		// Already gone: a run that ended between the read and the kill is not
-		// an error, it is the outcome the caller wanted.
+		// Already gone. A run that ended between the read and the kill has its
+		// record written; one whose owner died never will, so it is closed here.
 		await clearStopped(paths, id)
 		await clearRunPid(paths, id)
+		const run = await readRun(paths, id)
+		if (run.kind === 'ok' && run.value.exit === null) {
+			await finishRun(paths, id, {
+				exit: 'failed',
+				error: 'the process that owned this run is gone',
+				acceptance: (await unjudged(paths, run.value.node)).acceptance,
+			})
+		}
 		return false
 	}
 	await appendEvent(paths, { action: 'run.stopped', run: id })

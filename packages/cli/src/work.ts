@@ -409,7 +409,7 @@ export const stop = async (node: string): Promise<void> => {
 	say(
 		stopped
 			? `${yellow('·')} ${node} was stopped. Its worktree is untouched; run it again when you are ready.`
-			: `${yellow('·')} ${live[0]} had already ended`,
+			: `${yellow('·')} the process that owned ${live[0]} is gone; the run is now recorded as failed, so ${node} can run again`,
 	)
 }
 

@@ -151,7 +151,7 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 			return text(
 				stopped
 					? `${node} was stopped. Its worktree is untouched; run it again when you are ready.`
-					: `${live[0]} had already ended.`,
+					: `The process that owned ${live[0]} is gone. The run is now recorded as failed, so ${node} can be run again.`,
 			)
 		}),
 	)
