@@ -37,7 +37,11 @@ const CriterionInput = z.object({
 
 const OptionInput = z.object({
 	id: z.string().describe('a short slug, unique within this decision'),
-	label: z.string(),
+	label: z
+		.string()
+		.describe(
+			'a short handle a person reads in a list, not a description — the reasoning goes in reason and costLater',
+		),
 	reason: z.string().describe('why someone would pick this one'),
 	costLater: z.string().describe('what it costs later — the half people find out too late'),
 })

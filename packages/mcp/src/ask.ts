@@ -67,7 +67,8 @@ export const askFields = async (
 						type: 'string' as const,
 						title: field.title,
 						enum: field.choices.map((choice) => choice.id),
-						enumNames: field.choices.map((choice) => choice.label),
+						// The host truncates rather than wraps, so the id leads: a row cut short still names its option.
+						enumNames: field.choices.map((choice) => `${choice.id} — ${choice.label}`),
 					},
 				]),
 			),
