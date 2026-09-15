@@ -1,4 +1,4 @@
-import { createNode, dismissFlag, reopenNode, whoami } from '@besober/core'
+import { correctNode, createNode, dismissFlag, reopenNode, whoami } from '@besober/core'
 import { openBoard } from './board.js'
 import { bold, dim, green, refuse, say } from './out.js'
 
@@ -30,6 +30,25 @@ export const reopen = async (node: string): Promise<void> => {
 	say()
 	say(dim(`Next: ${bold(`sober run ${node}`)}. Its brief is still approved.`))
 	say(dim('The work it already landed stays landed — this reopens the node, not the merge.'))
+}
+
+/** The node's own words, fixed in place. Same id, same edges; an approval goes. */
+export const correct = async (
+	node: string,
+	words: { title?: string; description?: string; name?: string },
+): Promise<void> => {
+	const paths = await openBoard()
+	const updated = await correctNode(paths, node, {
+		...words,
+		by: await whoami(paths.root),
+	}).catch(refuse)
+
+	say(`${green('✓')} ${node} corrected`)
+	if (updated.brief !== null) {
+		say()
+		say(dim(`Its brief is read beside these words, so it needs approving again.`))
+		say(dim(`Next: ${bold(`sober approve ${node}`)}.`))
+	}
 }
 
 /** The correction is its own piece of work (§7.2). One node, and no brief yet. */

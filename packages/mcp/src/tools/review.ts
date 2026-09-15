@@ -12,7 +12,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { openBoard, text, tool } from '../context.js'
 import { drained } from '../queue.js'
-import { renderReview } from '../render.js'
+import { namedAll, renderReview } from '../render.js'
 
 /**
  * Review, and the two ways out of it. Accepting is a human act — it is recorded
@@ -80,7 +80,7 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 					? ` Draft #${landed.openPr.number} is still open — it closes when the human pushes ${landed.base}.`
 					: ''
 			return text(
-				`${node} is done — ${where}.${draft}${freed.length > 0 ? ` ${freed.join(', ')} can move now.` : ''}${await drained(paths, ref)}`,
+				`${node} is done — ${where}.${draft}${freed.length > 0 ? ` ${namedAll(after, freed)} can move now.` : ''}${await drained(paths, ref)}`,
 			)
 		}),
 	)

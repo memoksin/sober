@@ -11,6 +11,21 @@ import { decisionState } from '@besober/schema'
 /** Ends every block a human reads before being asked; tests import it rather than repeat it. */
 export const PASTE = 'Paste this above the question before you ask.'
 
+/**
+ * A node as every message names it: the id verbatim, then its name in
+ * parentheses. The id is what a human types back into a tool and the file name
+ * on disk, so the name explains it and never replaces it. A node the board does
+ * not hold is its bare id — a broken record must not take a reply down (§8.4).
+ * Decisions have no name, so they never go through here.
+ */
+export const named = (board: Board, id: string): string => {
+	const name = board.nodes.get(id)?.name
+	return name === undefined ? id : `${id} (${name})`
+}
+
+export const namedAll = (board: Board, ids: readonly string[]): string =>
+	ids.map((id) => named(board, id)).join(', ')
+
 export const renderBoard = (board: Board): string => {
 	const lines: string[] = []
 	if (board.project !== null) {
@@ -83,7 +98,7 @@ const waiting = (board: Board, id: string): string => {
 	if (held.length > 0) return ` — waiting on ${held.join(', ')}`
 
 	const blocked = node.dependsOn.filter((dep) => board.nodes.get(dep)?.accepted == null)
-	return blocked.length > 0 ? ` — waiting on ${blocked.join(', ')}` : ''
+	return blocked.length > 0 ? ` — waiting on ${namedAll(board, blocked)}` : ''
 }
 
 export const renderDecisions = (board: Board): string => {
