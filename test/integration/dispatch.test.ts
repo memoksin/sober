@@ -445,14 +445,39 @@ test('an unscored node runs dispatch.host with no tier', async () => {
 	expect(await ran(paths)).toMatchObject({ host: FAKE_HOST, tier: null, fallback: false })
 })
 
-test('an unknown tier host is refused before a worktree, naming the tier', async () => {
+test('a tier host that is not installed is refused before a worktree, naming the node, tier and key', async () => {
 	const paths = await board({ tiers: { ...TIERS, high: '/nonexistent/bin/claude --model big' } })
 	await score(paths, 9)
 
-	await expect(dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })).rejects.toThrow(
-		/high tier/,
+	const refusal = dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+	await expect(refusal).rejects.toBeInstanceOf(HostError)
+	await expect(refusal).rejects.toThrow(
+		/^auth-api-k7f2 was not started \(the high tier\): .*not installed.*or change `dispatch\.tiers\.high`$/,
 	)
 	expect(existsSync(join(paths.local, 'worktrees', 'auth-api-k7f2'))).toBe(false)
+})
+
+test('a tier naming a host no adapter knows is refused the same way, not as a bare unknown host', async () => {
+	const paths = await board({ tiers: { ...TIERS, high: 'claud --model big' } })
+	await score(paths, 9)
+
+	const refusal = dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+	await expect(refusal).rejects.toBeInstanceOf(HostError)
+	await expect(refusal).rejects.toThrow(
+		'auth-api-k7f2 was not started (the high tier): SOBER has no adapter for `claud --model big` — change `dispatch.tiers.high`',
+	)
+})
+
+test('an unscored node’s refusal names dispatch.host and no tier key', async () => {
+	const paths = await board({ tiers: TIERS })
+	await score(paths, null)
+	process.env.FAKE_HOST_LOGGED_OUT = '1'
+
+	const refusal = dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+	await expect(refusal).rejects.toThrow(
+		/^auth-api-k7f2 was not started: .*or change `dispatch\.host`$/,
+	)
+	await expect(refusal).rejects.not.toThrow(/dispatch\.tiers|tier\)/)
 })
 
 test('tiers are read from the base, never from the working copy', async () => {
