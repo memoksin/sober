@@ -848,11 +848,13 @@ test('the session syncs the board, and says what went out', async () => {
 	expect(await sync(paths, 'sober-graph')).toMatchObject({ kind: 'synced' })
 })
 
-test('a record both of you changed is put to the human, one form, and lands', async () => {
+test('a conflict both of you changed is put to the human, one form, and lands', async () => {
 	const { repo: created, paths } = await board()
-	const client = await connect(created.dir, (message, choices) =>
-		message.includes('title') ? 'theirs' : (choices[0] ?? null),
-	)
+	const rows: [string[], string[]][] = []
+	const client = await connect(created.dir, (message, choices, labels) => {
+		rows.push([choices, labels])
+		return message.includes('title') ? 'theirs' : (choices[0] ?? null)
+	})
 	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Ours' }] })
 	await sync(paths, 'sober-graph')
 
@@ -870,6 +872,12 @@ test('a record both of you changed is put to the human, one form, and lands', as
 	expect(merged?.title).toBe('Theirs')
 	// The field only one of them touched came through without a question.
 	expect(merged?.notes).toBe('from Bob')
+	// A row cut short by the host still names its side.
+	expect(rows.length).toBeGreaterThan(0)
+	for (const [choices, labels] of rows) {
+		expect(choices).toEqual(['ours', 'theirs'])
+		expect(labels.every((label, i) => label.startsWith(`${choices[i]} — `))).toBe(true)
+	}
 
 	rmSync(other.root, { recursive: true, force: true })
 })
