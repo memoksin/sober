@@ -10,11 +10,62 @@
 		".github/workflows/ci.yml",
 		"test/integration/fixture.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 5: the measuring is easy; the discipline is not. This node produces a document and changes no behaviour, and a reviewer should reject it if any optimisation appears.\n\n**The four numbers, and how to get each one.**\n\n1. **The split between install, build and suite.** `.github/workflows/ci.yml:104-124` runs the integration job on `[ubuntu-latest, macos-latest, windows-latest]` with a 25-minute timeout: `pnpm install --frozen-lockfile`, then `pnpm integration` (`turbo run build && vitest run --project integration`). One wall-clock number covers all three today. Split `pnpm integration` into its two halves as separate `run:` steps so GitHub times each, and take the install time from the step that already exists. pnpm's store uses hardlinks that behave differently on NTFS, so install may be a large share before a test runs — that is the hypothesis, not the conclusion.\n2. **Per-file durations.** Vitest already measures them; surface them with its reporter on all three operating systems so the same list can be compared side by side. Do not change which tests run.\n3. **Process spawning.** `createTempRepo()` in `test/integration/fixture.ts:19` spawns several synchronous `git` processes per repository, and ADR 0014 requires real git everywhere — never a mock. Count repositories created across a full run (a module-level counter printed at the end is enough) and multiply by a measured single-repo cost. That is an upper bound on spawn cost, obtained without changing anything.\n4. **The Windows cleanup retries.** `fixture.ts:42` is `rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })` — up to a second per fixture, and there are hundreds. Measure whether the retries actually fire: wrap the call, count attempts and total delay, print the counter. A retry budget that never fires costs nothing and the report should say so rather than implying it.\n\n**Where the instrumentation may live.** Only where it changes no test's behaviour and costs nothing measurable — a counter and a log line qualify; a changed fixture lifetime does not. Anything heavier is run once locally and removed, with the numbers recorded in the report. Say in the report which of the two each number came from, because a reader has to know whether they can reproduce it by pushing a branch.\n\n**Get real numbers, not estimates.** Push the branch and read the actual run — `sober run` already opens a draft pull request, so the matrix runs on all three operating systems for free. The baseline to compare against is in the node's own text, measured on run 34283791186 of pull request #8: 2m49s ubuntu, 4m11s macos, 14m16s windows.\n\n**The deliverable.** One short document under `docs/` — `docs/WINDOWS-CI-2026-09.md` or similar. It carries: the three phase timings per operating system; the ten slowest test files per operating system; the repository-creation count and the derived spawn bound; whether the cleanup retries fire and how often. It ends with the options it did **not** take, one line each, so the follow-up node starts from a list rather than from scratch.\n\n**Correcting ADR 0014 is allowed and expected.** Its Consequences line says \"CI gets 2–5 minutes slower per pull request\", and the measured Windows leg is roughly three times that. Update that line to the measured figure and cite the run. That is reporting, not deciding, and it is the one edit outside `docs/` and the workflow that this node may make.\n\n**Out of scope, and a reviewer should reject the work if any of it appears:** sharing a temp repository between tests, mocking git, dropping or narrowing the Windows matrix leg, reordering or splitting the suite, changing the timeout, and touching ADR 0014's decision. The three reasons the Windows leg exists — path separators, line endings, file locking on worktree removal — are not in question here.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/fixture.test.ts",
+				"proves": "the fixture still creates and cleans a real git repository exactly as before — the counters observe it and do not change it"
+			},
+			{
+				"run": "pnpm integration",
+				"proves": "the whole suite is still green with the instrumentation in place, so the numbers were measured on a passing run and not on a modified one"
+			},
+			{
+				"run": "ls docs/ | grep -i 'windows' && grep -qiE '(ubuntu|linux)' docs/WINDOWS-CI-2026-09.md && grep -qi 'macos' docs/WINDOWS-CI-2026-09.md && grep -qi 'windows' docs/WINDOWS-CI-2026-09.md && grep -qE '[0-9]+m ?[0-9]+s|[0-9]+\\.[0-9]+s|[0-9]+s' docs/WINDOWS-CI-2026-09.md",
+				"proves": "the report exists and carries real timings for all three operating systems rather than prose about where the time probably goes"
+			},
+			{
+				"run": "grep -qiE 'did not take|not taken|rejected|considered' docs/WINDOWS-CI-2026-09.md",
+				"proves": "it ends with the options it deliberately left alone, so the follow-up node starts from a list instead of re-deriving one"
+			},
+			{
+				"run": "git grep -qiE '2.5 minutes|two to five' -- docs/adr/0014*.md; test $? -ne 0",
+				"proves": "ADR 0014's estimate was replaced by the measured figure — correcting a number is reporting, and leaving a known-wrong one in place is not"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- packages apps scripts)\"",
+				"proves": "no package, app or script changed: this node measures and reports, and the fix — if there is one — is decided after reading it"
+			},
+			{
+				"run": "git diff --name-only development -- test/ | grep -qv 'fixture' ; test $? -ne 0",
+				"proves": "no test file other than the fixture's counters was touched — no suite was reordered, split, or had a repository shared between its cases"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:37:48.563Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:39:57.707Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:58:05.143Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "did-not-run"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-09T09:20:21.914Z"
 }

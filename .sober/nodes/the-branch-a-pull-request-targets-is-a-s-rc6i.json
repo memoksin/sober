@@ -17,11 +17,50 @@
 		"packages/core/src/pr.ts",
 		".sober/config.jsonc"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Complexity 5 / 10: the schema change is small, but the bootstrap lookup must preserve every CLI override and every review/accept call site while preventing accidental PRs into `main`. Add nullable `dispatch.base` beside the existing dispatch settings in `packages/core/src/config.ts`, defaulting to null for compatibility and documenting it in `DEFAULT_CONFIG_TEXT` as the branch new run branches and draft PRs target. In `packages/cli/src/board.ts`, keep explicit `--base` highest priority; otherwise use the checked-out branch only to bootstrap `readConfigFromBase`, return its configured `dispatch.base` when present, and fall back to the current branch when absent. A broken base-ref config must continue through the CLI’s existing refusal path rather than being silently ignored. Ensure `run`, queue draining, `review`, `audit`, `reject`, `accept`, and `accept --green` continue to call this single `baseOf` path; `packages/core/src/pr.ts` must remain a consumer of the resolved base and need no model of current checkout. Extend the nearest config and CLI/integration tests to prove a run started while checked out on `main` cuts from and opens its draft against configured `development`, `--base` still overrides it, review actions resolve against the configured target, and an omitted key behaves exactly as before. Update `.sober/config.jsonc` only if the generated/default configuration contract requires the repository’s checked-in example to carry `base: development`; do not create a changeset or release behavior.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/config.test.ts test/integration/dispatch.test.ts test/integration/pr.test.ts",
+				"proves": "Config parsing, run branch creation, draft PR targets, review actions, explicit overrides, and missing-key compatibility are covered."
+			},
+			{
+				"run": "git grep -q 'base' -- packages/core/src/config.ts packages/cli/src/board.ts && git grep -q -- '--base' packages/cli/src/index.ts",
+				"proves": "The target has a documented config home while the per-invocation override remains available."
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "All run and review call sites compile through the single resolved-base contract."
+			},
+			{
+				"run": "pnpm vitest run packages/schema/src/exports.test.ts packages/core/src/exports.test.ts",
+				"proves": "No public export ceiling moved."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "Biome and secretlint remain clean."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:15:47.126Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:16:32.405Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:21:43.132Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "failed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T21:08:54.828Z"
 }

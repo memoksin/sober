@@ -14,11 +14,54 @@
 		"packages/cli/src/*.test.ts",
 		"test/integration/cli.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 3, and smaller than the node's text expects: `one-mark-colour-and-icon-per-kind-and-pe-6tsw` landed the CLI's half in the same commit as the dashboard's. Read `packages/cli/src/work.ts:49-77` before writing anything.\n\n**Already true, verified in the tree.** `TAIL` now has every kind the wire carries — `started`, `tool`, `text`, `thinking`, `result`, `check`, `checked`, `raw` and `answer`, the last of which was the gap the accepted decision's cost line named. A `TOOL` record sits beside it with the same eight glyphs as the dashboard's, carrying the comment `Same glyphs as TOOL in apps/dashboard/src/logs/data.ts; unknown names fall back`. `mark(kind, tool)` falls back twice — `['·', dim]` for an unknown kind, the kind's own glyph for an unknown tool — so the terminal renders an unlisted anything rather than crashing or printing nothing. `logs` at line 434 already passes `line.tool` through and prints the host and tier line. None of that is this node's to redo.\n\n**Two things are left.**\n\n**1. The thinking mark needs its reason in the code.** `thinking: ['…', dim]` is there, but nothing says why an ellipsis and not a spinner. `packages/cli/src/out.js` exports `spinner` for foreground work, and the obvious-looking move is to reach for it. One comment on that entry, saying it plainly: a scrolling log is not foreground, a spinner writes over a line that has already scrolled past, and `sober logs` prints a finished run where nothing is thinking any more. Two sentences, in the register of the comment above `TAIL`.\n\n**2. The alignment needs a check, because nothing fails today when the two tables disagree.** That is exactly what the accepted decision's cost line says the team is accepting — \"alignment by comment is alignment by memory\" — and it already slipped once. The decision keeps the two tables separate, and this does not reopen it: the CLI still does not import from the app and the app still does not import the CLI's colour helpers. The check reads both files as **text**, which is the only way to compare them without a dependency either way.\n\nPut it in `test/integration/ratchets.test.ts`, which already pins repository facts of this kind rather than behaviour. Parse the keys of `TAIL` out of `packages/cli/src/work.ts` and the keys of `MARK` out of `apps/dashboard/src/logs/data.ts` with one regexp each, and assert the two key sets are equal. Do the same for `TOOL` in both files. Assert only the **key sets**, never the glyphs: a terminal has ANSI and 80 columns and a browser has CSS tokens and a scroller, and the decision is explicit that they may disagree honestly on how a thing looks — what they must not disagree on is *which things exist*. Say that in the test's comment, or the next person will \"fix\" it by comparing glyphs and the test will start blocking legitimate work.\n\nThe failure message must name the missing keys on each side, not just `false !== true` — a ratchet nobody can act on gets deleted.\n\n**3. The CLI's own test.** Extend whichever test covers `logs` (find it with `rg -n 'logs' test/integration/cli.test.ts`): a run log containing a thinking line and a tool line renders both with their own marks rather than the fallback dot. One case, in the file that already drives the built binary.\n\nNothing else changes: no schema, no core, no dashboard, no wire.",
+		"complexity": 3,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/ratchets.test.ts",
+				"proves": "the CLI's TAIL and the dashboard's MARK cover exactly the same kinds, and their tool tables the same tools — the alignment the accepted decision keeps by hand now fails a build instead of failing silently"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/cli.test.ts -t 'logs'",
+				"proves": "`sober logs` renders a thinking line and a tool line with their own marks rather than the unknown-kind fallback, through the built binary"
+			},
+			{
+				"run": "node -e \"const a=require('node:fs').readFileSync('packages/cli/src/work.ts','utf8');const i=a.indexOf('thinking:');process.exit(/spinner|foreground|scroll/i.test(a.slice(Math.max(0,i-400), i+200)) ? 0 : 1)\"",
+				"proves": "the ellipsis carries its reason in the code — why a mark and not the spinner `out.js` already exports, which is the move the next reader will otherwise make"
+			},
+			{
+				"run": "! git grep -q '@besober/cli' -- apps/dashboard/src && ! git grep -q 'apps/dashboard' -- packages/cli/src",
+				"proves": "the two tables stayed two: the CLI did not import from the app and the app did not import the CLI's colour helpers, which is the module boundary the accepted decision is protecting"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!packages/cli/src/work.ts' ':!test/integration')\"",
+				"proves": "only the CLI's table comment and the two tests changed: no schema, no core, no dashboard, no wire"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:48:54.665Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T09:08:18.948Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T09:27:03.193Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "failed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T12:31:26.720Z"
 }

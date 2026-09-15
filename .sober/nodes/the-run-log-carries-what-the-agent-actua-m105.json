@@ -15,11 +15,58 @@
 		"packages/core/src/hosts.ts",
 		"packages/core/src/hosts.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "A type and its four producers, which do not land separately. Score 6: two files of real change, four adapters that must all move at once, and a shape question — one event to many lines — that touches how `line` is called.\n\n**1. The type — `packages/schema/src/wire.ts:163`.**\n\n```ts\nexport const LogLine = z.strictObject({\n\tkind: z.enum(['started', 'text', 'thinking', 'tool', 'result', 'raw', 'answer']),\n\ttext: z.string(),\n\t/** Which tool, where the line is one. Null on a line that names none, and on every line written before this existed. */\n\ttool: z.string().nullable().default(null),\n})\n```\n\n`thinking` joins the enum; `tool` is nullable with a `.default(null)`, which is what lets a log file written before today parse — and both renderers must therefore handle `tool: null` on a `kind: 'tool'` line **forever**, not just during a transition, exactly as the decision's cost line says.\n\nCheck, do not assume, that the board's schema version does not cover this: `LogLine` is what a screen is sent, rendered off a local log file under `.sober/local/runs/`, not a record on the board branch. `SCHEMA_VERSION` (now 6, raised by `the-brief-carries-how-hard-the-node-is-g2au`) versions board records. Confirm with `rg -n 'SCHEMA_VERSION' packages/schema packages/core` that nothing reads it for wire types, and if that holds do **not** bump it — a version nothing reads is noise. Say which way it went in one comment.\n\nAlso check `packages/schema/src/exports.test.ts` and its snapshot: `LogLine` is already exported, so widening it adds no name, but the snapshot may still need `-u` if the type's shape is captured.\n\n**2. `Adapter.line` returns many lines — `packages/core/src/hosts.ts:123`.** Today `readonly line: (event: Event) => LogLine | null`. One Claude `assistant` event carries the agent's sentence *and* its tool calls, and the current `.map().join(' · ')` at lines 180-186 flattens both onto one line under one kind. Widen the signature to `LogLine | readonly LogLine[] | null` and normalise at the single call site — find it with `rg -n '\\.line\\(' packages/core packages/cli packages/mcp` and wrap with `const lines = result === null ? [] : Array.isArray(result) ? result : [result]`. Widening the return rather than making every adapter return an array keeps the three adapters that genuinely produce one line per event unchanged in shape.\n\n**3. The four adapters, each already holding the name and throwing it away.**\n\n- **claude** (`hosts.ts:178-187`): replace the single `.map()/join` with a `flatMap` over `parts` producing one line each — `part.type === 'text'` → `{ kind: 'text', text, tool: null }`; `part.type === 'tool_use'` → `{ kind: 'tool', text: part.name, tool: part.name }`; `part.type === 'thinking'` → `{ kind: 'thinking', text: <the thinking text, trimmed>, tool: null }`, which is matched by nothing today and is why there is no spinner to build until this changes. Drop empties as the current filter does, and return `null` when nothing survives. The `kind = parts.some(…) ? 'tool' : 'text'` line goes away entirely — it is the bug.\n- **codex** (`hosts.ts:233-236`): `item.type === 'command_execution'` already has the command. The tool's name here is the execution itself, so `tool: 'command'` with the command staying as `text` — do not try to parse a binary name out of a shell string.\n- **opencode** (`hosts.ts:277-280`): `event.part?.tool` is the name. `{ kind: 'tool', text: tool, tool }`.\n- **cursor** (`hosts.ts:334-341`): the local `tool` variable at line 339 is already the resolved name. `{ kind: 'tool', text: path === undefined ? tool : `${tool} ${path}`, tool }` — keep the existing path-appending behaviour in `text`, which is what a watcher reads.\n\nDo not touch the `user`/`answer` branch at 173-175, the `result` branches, or any `argv`/`probe`/`signIn` — this node is the log vocabulary and nothing else.\n\n**4. The two render tables stay two, and that is the decision.** `MARK`/`TONE` in `apps/dashboard/src/logs/data.ts` and `TAIL` in `packages/cli/src/work.ts:50` are kept aligned by hand, by the accepted answer. This node adds `thinking` to both so they do not start out disagreeing, and fixes the slip the decision's cost line already names: `TAIL` has no entry for `answer`, a kind the wire has carried since ADR 0046. Two small table edits, no new dependency in either direction — the CLI does not import from the app, the app does not import the CLI's colour helpers. Nothing renders the `tool` field yet; that is `one-mark-colour-and-icon-per-kind-and-pe-6tsw`, which waits on this node.\n\n**5. Tests.** `packages/core/src/hosts.test.ts` is where the adapters are already tested — extend it, do not start a file. One case per adapter asserting the tool name arrives on the `tool` field, plus the case that is the whole point: one Claude `assistant` event carrying a text part and two `tool_use` parts produces **three** lines, the prose on its own, each tool named; and a `thinking` part produces a `thinking` line instead of vanishing. In `packages/schema/src/wire.test.ts` (or wherever `LogLine` is parsed today), one case that a line with no `tool` key parses with `tool: null` — the old-log path.",
+		"complexity": null,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/hosts.test.ts",
+				"proves": "all four adapters carry the tool's name on the line, one Claude assistant event carrying prose and two tool calls becomes three lines instead of one joined string, and a thinking part reaches a `thinking` line instead of being dropped"
+			},
+			{
+				"run": "pnpm vitest run packages/schema/src/wire.test.ts packages/schema/src/exports.test.ts",
+				"proves": "a log line written before this change still parses, arriving with `tool: null`, and the exported surface is in the snapshot a reviewer reads"
+			},
+			{
+				"run": "git grep -q \"'thinking'\" -- packages/schema/src/wire.ts apps/dashboard/src/logs/data.ts packages/cli/src/work.ts && git grep -q \"answer\" -- packages/cli/src/work.ts",
+				"proves": "the new kind reached the wire and both render tables at once, and the pre-existing gap — `TAIL` having no entry for `answer` — is closed rather than inherited"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/wire.test.ts test/integration/watch.test.ts",
+				"proves": "the log still serves and tails end to end: a screen watching a run reads the widened lines back through the real wire"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!packages/schema' ':!packages/core' ':!apps/dashboard/src/logs' ':!packages/cli/src/work.ts')\"",
+				"proves": "the change is the type, its four producers and the two render tables — no MCP tool, no dashboard panel, no server route was rewritten"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the widened `Adapter.line` return type compiles at its call site and in all four adapters"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:07:21.103Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:07:34.061Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:11:44.915Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T12:31:26.720Z"
 }

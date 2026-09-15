@@ -13,11 +13,54 @@
 		"apps/dashboard/src/*.test.ts*",
 		"apps/dashboard/src/theme.css"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 4: one button and one result sentence, but `SyncResult` has four kinds and each one means something different to the person pressing it — a button that says \"done\" on a conflict is worse than no button.\n\n**The server half already exists.** `packages/server/src/routes.ts:255` is `sync: route(..., sync(paths, await baseOf(paths, branch), { push: push ?? true }))`, and the dashboard's `Wire` (`apps/dashboard/src/wire.ts:32`) has `op<T>(name, body)` for exactly this. Nothing in `core` or the server changes; this node is the dashboard.\n\n**Where the button goes.** The header in `apps/dashboard/src/App.tsx` (~line 314) — the same row as the decisions button and the done toggle. Order left to right: the node count, the decisions button, Sync, then the done toggle keeping its `ml-auto` so it stays hard right. Same class list as its neighbours.\n\n**State: three pieces, not one.** `syncing: boolean` disables the button and is the only thing that stops a second press; `result: SyncResult | null` is what the sentence is rendered from; `failure: string | null` is for the op itself rejecting — the network, the server, a broken config — which is a different fact from a sync that ran and came back `conflicted`. Rendering a thrown error as a sync result is the bug this separation exists to stop.\n\n**The sentence, one per kind**, read off the fields rather than guessed:\n\n- `synced` — say both halves from the record: what came in (`pulled.updated.length`, `pulled.removed.length`) and whether anything went out (`pushed`, `outgoing`). A sync where nothing moved says so plainly; \"synced\" alone leaves the reader wondering whether it did anything.\n- `no-remote` — the board was committed here and there is nowhere to send it. Not an error, and must not be styled as one.\n- `invalid` — the merge landed and left a board that does not hold together, so the push is blocked until it does (§1.2.1). List `findings`; they are the whole content of this case.\n- `conflicted` — the same records changed on both sides and nothing was touched. Name the conflicted record ids from `conflicts`. Say what to do: this is answered field by field, which is `a-sync-conflict-is-answered-on-the-dashb-qjst` and is **not** built here — do not add a resolve UI, and do not let the button silently pick a side.\n\n**After the sync, reload the board.** `App.tsx` already has the read-after-a-change function used by the other operations (the one whose doc comment says the board is read rather than patched, because answering or accepting frees whatever was waiting). Call that, not a hand-written patch — a sync can change every record at once, which is exactly the case a patch gets wrong.\n\n**Tests.** `apps/dashboard/src/wire.test.ts` for the call shape: pressing Sync sends one `op('sync', …)` and not two while it is in flight. `apps/dashboard/src/App.test.tsx` with the wire stubbed, one case per kind: each of the four renders its own sentence, `conflicted` names the record ids, `invalid` lists the findings, and a rejected op renders the failure rather than a success line. The existing tests already stub the wire with `serving(...)` — extend that helper rather than building a second stub.\n\nNothing outside `apps/dashboard` changes: no core, no schema, no server route, no CLI.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run apps/dashboard/src/App.test.tsx apps/dashboard/src/wire.test.ts",
+				"proves": "each of the four SyncResult kinds renders its own sentence — conflicted names the records, invalid lists the findings — a rejected call renders a failure rather than a success line, and a second press while one is in flight sends nothing"
+			},
+			{
+				"run": "git grep -q \"op('sync'\\|op(\\\"sync\\\"\" -- apps/dashboard/src",
+				"proves": "the button goes through the server route that already exists rather than a second sync path in the browser"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!apps/dashboard')\"",
+				"proves": "only the dashboard changed: core, the schema, the server route and the CLI are untouched"
+			},
+			{
+				"run": "! git grep -qi 'resolve' -- apps/dashboard/src/App.tsx || git grep -c 'resolve' -- apps/dashboard/src/App.tsx",
+				"proves": "no conflict-resolution UI was added here — answering a conflict field by field is a separate node, and a button that quietly picks a side is the failure this scope boundary exists to prevent"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the new state and the SyncResult rendering compile against the real type from core"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean, including the accessibility rules on the new button"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:30:09.859Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:30:55.181Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:34:13.079Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "failed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-11T07:22:40.280Z"
 }

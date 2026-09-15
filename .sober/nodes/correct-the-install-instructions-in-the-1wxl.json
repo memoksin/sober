@@ -15,11 +15,54 @@
 		"packages/codex-plugin/README.md",
 		"packages/opencode-plugin/README.md"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Three files, one paragraph each: the `## Install` section of `packages/cursor-plugin/README.md`, `packages/codex-plugin/README.md` and `packages/opencode-plugin/README.md`. Everything below `## What is different from Claude Code` in all three stays byte-for-byte — that prose is what the accepted decision says a package README exists to carry, and it is correct today.\n\nThe root README's `## Install the plugin for your host` now holds all four hosts' steps (landed in `f2c76eb9`, node `ykg6`). So each of these three Install sections becomes two things and nothing more:\n\n1. **One true sentence about the checkout, with its reason** — a fact, not a default. The three reasons are each verifiable in one file, and each README should name that file so the next reader can check it instead of trusting the sentence:\n   - Codex: a checkout is required because `.agents/plugins/marketplace.json` at the repository root declares `{\"source\": \"local\", \"path\": \"./packages/codex-plugin\"}`, and `codex plugin marketplace add` takes a real path on disk. This one is already right in the file; what is missing is the *because*.\n   - Cursor: a checkout is required because the install is a symlink from `~/.cursor/plugins/local/sober` into `packages/cursor-plugin` — there is nothing to fetch, the directory has to exist.\n   - OpenCode: a checkout is required because the install copies `packages/opencode-plugin/.opencode` into the project and merges the `mcp` block of `opencode.json` — OpenCode's installable plugin is a JavaScript module and SOBER ships none, which that README's own opening paragraph already explains.\n2. **The commands, unchanged**, and the `sober` on PATH line, unchanged. Do not retype either from memory: they are correct in the files today and each is the exact command the root README now repeats. A command that drifts between the two pages is worse than one page.\n\nThen one line per file pointing at the root README as the page that carries all four hosts side by side — `See [Install the plugin for your host](../../README.md#install-the-plugin-for-your-host) for the other three.` GitHub generates that anchor from the heading; check it resolves against the heading as it is actually written in `README.md` today rather than as it is written here.\n\nThe phrase to hunt is `From a checkout of this repository` — it opens the Install section in all three and is the sentence the node is about. Codex and OpenCode keep the claim and gain its reason; Cursor keeps it too. None of the three is the wrong one: **Claude Code** is the host that needs no checkout, and it has no README yet — `write-the-missing-readme-for-packages-cl-sshg` writes it. So this node must not create, touch or link `packages/claude-code-plugin/README.md`, and must not edit the root `README.md` either; both belong to other nodes.\n\nKeep each file's existing hand-wrapped prose width and its fence style (plain triple-backtick, no language tag — that is what all three use today). Biome does not format markdown, so a reflowed paragraph is pure diff noise.",
+		"complexity": null,
+		"acceptance": [
+			{
+				"run": "for f in cursor codex opencode; do grep -q 'checkout' packages/$f-plugin/README.md || { echo \"$f lost the checkout sentence\"; exit 1; }; done && echo all three state it",
+				"proves": "each of the three READMEs still tells the reader a checkout is required — the sentence was corrected and given its reason, not deleted"
+			},
+			{
+				"run": "grep -q 'agents/plugins/marketplace.json' packages/codex-plugin/README.md && grep -q '~/.cursor/plugins/local/sober' packages/cursor-plugin/README.md && grep -q 'packages/opencode-plugin/.opencode' packages/opencode-plugin/README.md",
+				"proves": "each README names the file or path that makes its claim checkable, and the working install commands survived the edit unchanged"
+			},
+			{
+				"run": "for f in cursor codex opencode; do grep -q 'npm i -g @besober/cli' packages/$f-plugin/README.md || { echo \"$f lost the PATH prerequisite\"; exit 1; }; done && echo prerequisite intact",
+				"proves": "the one line without which no host works — `sober` on PATH — is still on all three pages"
+			},
+			{
+				"run": "for f in cursor codex opencode; do grep -q '^## What is different from Claude Code' packages/$f-plugin/README.md && grep -q '^## Do not edit the skills here' packages/$f-plugin/README.md || { echo \"$f lost a section\"; exit 1; }; done && echo sections intact",
+				"proves": "only the Install section was rewritten: the per-host difference sections and the generated-skill warning are untouched"
+			},
+			{
+				"run": "test \"$(git diff --name-only development -- . | sort | tr '\\n' ' ')\" = 'packages/codex-plugin/README.md packages/cursor-plugin/README.md packages/opencode-plugin/README.md '",
+				"proves": "exactly these three files changed — the root README and the not-yet-written claude-code-plugin README belong to other nodes and were not touched"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T07:55:25.109Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T07:56:26.785Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T07:59:17.897Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T12:09:02.101Z"
 }

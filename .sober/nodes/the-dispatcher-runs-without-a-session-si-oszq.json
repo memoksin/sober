@@ -18,11 +18,66 @@
 		".sober/config.jsonc",
 		"docs/adr/**"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 6: the dispatching logic already exists and must not be forked — the work is a loop, a lock, and two rules that are easy to state and easy to get wrong.\n\n**What exists and is not rebuilt.** `runQueue` in `packages/core/src/queue.ts:29` takes every node that is ready and approved with `queue: true` (ADR 0017), skips one another person has claimed, skips one heading for the same files as another in the wave, and hands the rest to `dispatchWave`, where concurrency and the stop-at-the-first-failure rule already live. `drain` in `packages/cli/src/queue.ts` already renders its result — what started, what finished, what is held and why. Call both. A second copy of any of that logic is the failure this node is most likely to produce.\n\n**The command.** `sober dispatch` in `packages/cli/src/index.ts` — a new case beside `dashboard`, a new row in the help under **Build**, and the implementation beside `drain` in `packages/cli/src/queue.ts`. Foreground, Ctrl-C stops it: the accepted decision chose the shape `sober dashboard` already has (\"serve the board in a browser — Ctrl-C stops it and its runs\"), so the user has met it before. Print one line on start saying it is draining on `<base>` and that Ctrl-C stops it, then loop: `drain(paths, base)`, wait, repeat. A cycle that starts nothing prints nothing — a dispatcher that logs every idle tick is one nobody leaves running.\n\nThe interval is a config key beside the other dispatch settings in `packages/core/src/config.ts` (schema, `DEFAULT_CONFIG`, and the commented `DEFAULT_CONFIG_TEXT` block — all three, they are one file and one edit). Something like `dispatch.pollSeconds`, defaulting to a value in the tens of seconds, with a comment saying what it costs: a file read per tick, and a node waits at most that long after becoming ready.\n\n**Two rules, both load-bearing.**\n\n1. **Safe to start twice.** The second one finds the first and says so rather than doubling every dispatch. The writer lock from ADR 0025 (`withLock` in `packages/core/src/lock.ts`, windows from `lock.staleSeconds` / `lock.waitSeconds`) is the mechanism — it is also what stops the drainer writing while a human's `accept` writes, which is what the lock exists for. The accepted decision's cost line is explicit that there is no way to ask \"is one running\" from another shell, so the twice-started case has to be caught through the lock rather than a pid file: hold it (or take it each cycle) and let the second process report that another one holds it, naming the holder the way `withLock` already names it. Do **not** add a pidfile — the decision rejected on-disk liveness precisely because it goes stale.\n\n2. **A failure stops the drain entirely.** ADR 0017 already decided this for one drain — a queued chain stops at the first rejection or failure, so four more nodes are never built on a result a human turned down. A loop that carried on next cycle would quietly convert \"stop\" into \"stop until the next tick\", which is not stopping. So when a cycle reports a failed dispatch, print what failed and **exit the loop**, non-zero, with the sentence that says a human has to look. The queue stopping is the loudest signal an unattended process has.\n\n**What it deliberately does not do**, and this belongs in a comment in the code, not only in the brief: it does not dispatch a ready node whose brief carries no `queue: true`. ADR 0017 lists \"Dispatch every ready node automatically\" under its rejected alternatives — it removes the approval, which is the last thing a human sees before an agent starts working — and the charter says nothing runs without a human-approved brief. It is one predicate in `queued()` away and is deliberately not taken. If it is ever wanted, it is an ADR superseding 0017, not a quiet line change.\n\n**Tests** in `packages/cli/src/queue.test.ts` (create it if it is not there) and one integration case in `test/integration/queue.test.ts`, which already drives the queue end to end. Drive the cycle, never sleep through it: factor the loop so the wait is an injectable function or the loop body is a callable `tick`, and call it directly. Three cases: a node approved with queue that becomes ready between two ticks is started by the second; a tick whose dispatch fails ends the loop non-zero and says so; a second dispatcher started while the first holds the lock refuses and names it.\n\nNothing in `packages/mcp`, `packages/server` or `apps/dashboard` changes. Watching the dispatcher is `watching-the-dispatcher-what-it-started-9skj`, which waits on this node.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/cli/src/queue.test.ts",
+				"proves": "the loop starts a node that became ready between ticks, ends non-zero on a failed dispatch instead of carrying on next cycle, and a second dispatcher refuses while the first holds the writer lock"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/queue.test.ts",
+				"proves": "the queue's existing rules still hold through the new command: an unapproved brief is not started, a claimed node is left to its owner, and an overlapping node is never started unattended"
+			},
+			{
+				"run": "git grep -q 'runQueue' -- packages/cli/src/queue.ts && test -z \"$(git diff --name-only development -- packages/core/src/queue.ts)\"",
+				"proves": "the dispatching logic was called, not forked — core's queue is untouched and every ADR 0017 safety rule is inherited rather than reimplemented"
+			},
+			{
+				"run": "git grep -q 'pollSeconds' -- packages/core/src/config.ts && test \"$(git grep -c 'pollSeconds' -- packages/core/src/config.ts)\" != 'packages/core/src/config.ts:1'",
+				"proves": "the interval is a real config key — in the schema, in DEFAULT_CONFIG and in the commented template a person actually reads"
+			},
+			{
+				"run": "! git grep -qi 'pidfile\\|pid file' -- packages/cli/src/queue.ts",
+				"proves": "liveness is the writer lock and not a file on disk — the accepted decision rejected on-disk liveness because it goes stale"
+			},
+			{
+				"run": "git grep -q 'dispatch' -- packages/cli/src/index.ts && pnpm vitest run --project integration test/integration/cli.test.ts -t 'help'",
+				"proves": "the command is wired and appears in `sober --help`, so it is findable without reading the source"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- packages/mcp packages/server apps)\"",
+				"proves": "no other surface changed: watching the dispatcher is a separate node that waits on this one"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the new command and the widened config compile across the monorepo"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:31:57.733Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T09:27:34.637Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T09:50:56.697Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T21:29:25.884Z"
 }

@@ -10,11 +10,50 @@
 		"packages/*/skills/plan/SKILL.md",
 		"test/integration/plugin.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "One paragraph in one file, then the generator. Score 2: prose only, but prose four hosts read, and the generated copies have to land in the same commit.\n\n**Where.** `plugins/skills/plan/SKILL.md`. The numbered list runs 1 (read the board) -> 2 (read the repository) -> 3 (decompose into nodes), and there is nothing between 2 and 3 that returns to the user. Insert a new step **3**, renumbering the current 3-7 to 4-8. Check with `rg -n 'step [0-9]' plugins/ docs/` that no other skill or document cites this file's step numbers before you shift them; the closing line after the last step stands alone and needs no change.\n\n**What the step says**, in this file's own register — imperative, short sentences, bold for the rule and not for emphasis:\n\n- Where two readings of the request would produce different nodes, put that question to the user and wait. Name the two readings; do not ask an open \"what did you mean\".\n- Where the request is already specific, ask nothing. A question invented to have one costs the user a turn and teaches them to skim the next one.\n- Say what this is **not**: it is not one of the four decision categories. A question about state, module boundaries, data flow or error handling is a decision, and it goes on the board through `propose` in what becomes step 5 — it is not asked here. This is the one distinction that will be got wrong, so it needs its own sentence.\n- Ask with this host's own question tool, the way the rest of the plugin asks (ADR 0057), not by writing a question into a node's description.\n\nKeep it to roughly the length of step 2. This file is read by an agent on four hosts and the part that drifts first is the part nobody re-reads; a step longer than the one before it is the part that gets skimmed.\n\n**Then the generator.** `pnpm plugins` (`scripts/build-plugins.mjs`) writes the four copies — `packages/claude-code-plugin/skills/plan/SKILL.md`, `packages/codex-plugin/skills/plan/SKILL.md`, `packages/cursor-plugin/skills/plan/SKILL.md`, `packages/opencode-plugin/.opencode/skills/plan/SKILL.md`. Commit them with the source in one commit; `test/integration/plugin.test.ts` is the drift check and fails while they disagree. Never hand-edit a generated copy.\n\nNothing else changes: no tool, no schema, no core. The node that makes a new node check itself against the board (`a-new-node-is-checked-against-the-nodes-0ny5`) waits on this one and owns that step — do not write it here.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/plugin.test.ts",
+				"proves": "the four generated plan skills match plugins/skills/plan/SKILL.md after pnpm plugins — the new step reaches every host rather than only the source"
+			},
+			{
+				"run": "grep -q '^8\\. ' plugins/skills/plan/SKILL.md && test \"$(grep -c '^[0-9]\\. ' plugins/skills/plan/SKILL.md)\" = 8",
+				"proves": "a step was inserted and the list renumbered through to the end, rather than a paragraph dropped in with two steps sharing a number"
+			},
+			{
+				"run": "grep -qi 'not one of the four' plugins/skills/plan/SKILL.md",
+				"proves": "the new step says explicitly that this is not a decision category — the one distinction an agent will otherwise collapse, turning every ambiguity into a board decision"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!plugins/skills/plan' ':!packages/claude-code-plugin/skills' ':!packages/codex-plugin/skills' ':!packages/cursor-plugin/skills' ':!packages/opencode-plugin/.opencode/skills')\"",
+				"proves": "only the plan skill and its four generated copies changed: no tool, no schema, no core, and no other skill was touched"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:09:25.310Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:14:55.961Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:16:18.584Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-09T09:36:42.245Z"
 }
