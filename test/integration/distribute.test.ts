@@ -190,7 +190,7 @@ test('a session settles its own plan too — the two operations are on every sur
 	)
 
 	const landed = await client.callTool({ name: 'distribute', arguments: { accept: true } })
-	expect(said(landed)).toContain('auth-api-k7f2 → alice')
+	expect(said(landed)).toContain('Assigned: auth-api-k7f2 (The auth API) → alice.')
 	expect(assigneeOf(dir, 'auth-api-k7f2')).toBe('alice')
 
 	// Accepting twice is not a second assignment: the record it was about is gone.
@@ -239,8 +239,9 @@ test('a plan whose every node is taken assigns nothing, and says which', async (
 	})
 
 	const landed = await client.callTool({ name: 'distribute', arguments: { accept: true } })
-	expect(said(landed)).toContain('Nothing was assigned')
-	expect(said(landed)).toContain('auth-api-k7f2')
+	expect(said(landed)).toBe(
+		'Nothing was assigned. Passed over: auth-api-k7f2 (The auth API) — somebody is on them, or they are done.',
+	)
 
 	await client.close()
 })

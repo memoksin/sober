@@ -1,3 +1,4 @@
+import type { Board } from '@besober/core'
 import {
 	acceptDistribution,
 	dropDistribution,
@@ -12,6 +13,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
+import { named, namedAll } from '../render.js'
 
 const MatchInput = z.object({
 	node: z.string(),
@@ -26,16 +28,17 @@ const MatchInput = z.object({
  * carries the reason it was made, because by the time somebody opens this the
  * conversation that produced it is gone.
  */
-const said = (plan: Distribution, titles: ReadonlyMap<string, string>): string =>
+const said = (plan: Distribution, board: Board): string =>
 	[
 		`Proposed by ${plan.by}, ${plan.at}. Nothing is assigned until it is accepted.`,
 		'',
 		...plan.matches.map(
-			(one) => `${one.handle}  ${one.node}  ${titles.get(one.node) ?? ''}\n    ${one.because}`,
+			(one) =>
+				`${one.handle}  ${one.node}  ${board.nodes.get(one.node)?.title ?? ''}\n    ${one.because}`,
 		),
 		plan.skipped.length === 0
 			? ''
-			: `\nPassed over, because somebody is already on them or they are finished: ${plan.skipped.join(', ')}.`,
+			: `\nPassed over, because somebody is already on them or they are finished: ${namedAll(board, plan.skipped)}.`,
 	]
 		.filter((line) => line !== '')
 		.join('\n')
@@ -82,6 +85,8 @@ export const registerDistribution = (server: McpServer, cwd: string): void => {
 							: 'There was no proposal waiting.',
 					)
 
+				const board = await loadBoard(paths)
+
 				if (accept) {
 					const waiting = await readDistribution(paths)
 					if (waiting === null) return text('There is no proposal waiting to be accepted.')
@@ -98,7 +103,7 @@ export const registerDistribution = (server: McpServer, cwd: string): void => {
 						server.server,
 						'accept a distribution',
 						`Assign ${waiting.matches.length} node${waiting.matches.length === 1 ? '' : 's'}: ${waiting.matches
-							.map((one) => `${one.node} → ${one.handle}`)
+							.map((one) => `${named(board, one.node)} → ${one.handle}`)
 							.join(', ')}?`,
 						'Yes, assign them',
 					)
@@ -111,18 +116,15 @@ export const registerDistribution = (server: McpServer, cwd: string): void => {
 						[
 							landed.matches.length === 0
 								? 'Nothing was assigned.'
-								: `Assigned: ${landed.matches.map((one) => `${one.node} → ${one.handle}`).join(', ')}.`,
+								: `Assigned: ${landed.matches.map((one) => `${named(board, one.node)} → ${one.handle}`).join(', ')}.`,
 							landed.skipped.length === 0
 								? ''
-								: `Passed over: ${landed.skipped.join(', ')} — somebody is on them, or they are done.`,
+								: `Passed over: ${namedAll(board, landed.skipped)} — somebody is on them, or they are done.`,
 						]
 							.filter((part) => part !== '')
 							.join(' '),
 					)
 				}
-
-				const board = await loadBoard(paths)
-				const titles = new Map([...board.nodes].map(([id, node]) => [id, node.title]))
 
 				if (matches == null) {
 					const waiting = await readDistribution(paths)
@@ -139,7 +141,7 @@ export const registerDistribution = (server: McpServer, cwd: string): void => {
 										.join('\n')}`,
 						)
 					}
-					return text(said(waiting, titles))
+					return text(said(waiting, board))
 				}
 
 				const plan = await proposeDistribution(
@@ -148,7 +150,7 @@ export const registerDistribution = (server: McpServer, cwd: string): void => {
 					matches.map((one) => ({ ...one })),
 				)
 				return text(
-					`${said(plan, titles)}\n\nShow this to the human. It assigns nobody until they accept it — here, on the command line, or on the dashboard.`,
+					`${said(plan, board)}\n\nShow this to the human. It assigns nobody until they accept it — here, on the command line, or on the dashboard.`,
 				)
 			},
 		),

@@ -3,6 +3,7 @@ import {
 	answerDecision,
 	applySetting,
 	approveBrief,
+	type Board,
 	bind,
 	createBoardBranch,
 	currentBranch,
@@ -32,7 +33,7 @@ import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
 import { drained } from '../queue.js'
-import { renderBoard, renderDecisions, renderUnlinked } from '../render.js'
+import { named, namedAll, renderBoard, renderDecisions, renderUnlinked } from '../render.js'
 
 const CriterionInput = z.object({
 	run: z.string().describe('the command that proves it, exactly as it is typed'),
@@ -343,8 +344,9 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 					decisions: decisions ?? undefined,
 					dependsOn: dependsOn ?? undefined,
 				})
+				const board = await loadBoard(paths)
 				return text(
-					`${node} now binds ${updated.decisions.join(', ') || 'no decision'} and depends on ${updated.dependsOn.join(', ') || 'nothing'}.`,
+					`${named(board, node)} now binds ${updated.decisions.join(', ') || 'no decision'} and depends on ${namedAll(board, updated.dependsOn) || 'nothing'}.`,
 				)
 			},
 		),
@@ -378,7 +380,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				.filter(([id, node]) => node.decisions.includes(decision) && id !== undefined)
 				.map(([id]) => id)
 			return text(
-				`${decision} is answered: ${answered.answer?.option}. It no longer holds ${freed.join(', ') || 'any node'}.${await drained(paths, base)}`,
+				`${decision} is answered: ${answered.answer?.option}. It no longer holds ${namedAll(after, freed) || 'any node'}.${await drained(paths, base)}`,
 			)
 		}),
 	)
@@ -425,7 +427,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				const confirmed = await askYes(
 					server.server,
 					'change an answer',
-					`${record.question}\n\nChanging this to ${option} ${reaches(impact)}`,
+					`${record.question}\n\nChanging this to ${option} ${reaches(board, impact)}`,
 					'Change it anyway',
 				)
 				if (!confirmed) return text('The human did not confirm. Nothing was changed.')
@@ -437,7 +439,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 					anyway: true,
 				})
 				return text(
-					`${decision} is now ${answered.answer?.option}. ${reaches(impact)} Nothing was stopped and nothing was re-run — say so, and show them what is flagged.`,
+					`${decision} is now ${answered.answer?.option}. ${reaches(board, impact)} Nothing was stopped and nothing was re-run — say so, and show them what is flagged.`,
 				)
 			},
 		),
@@ -548,7 +550,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
  * that is building against the answer they are about to change, and a list that
  * hides which ones are running takes that away.
  */
-const reaches = (impact: Impact): string => {
+const reaches = (board: Board, impact: Impact): string => {
 	if (impact.nodes.length === 0) return 'reaches no node — nothing was built against it yet.'
 	const rebrief = impact.nodes.filter((one) => one.effect === 'rebrief')
 	const flag = impact.nodes.filter((one) => one.effect === 'flag')
@@ -556,10 +558,13 @@ const reaches = (impact: Impact): string => {
 		`reaches ${impact.nodes.length === 1 ? '1 node' : `${impact.nodes.length} nodes`}:`,
 		rebrief.length === 0
 			? ''
-			: `${rebrief.map((one) => one.id).join(', ')} lose their briefs and are briefed again.`,
+			: `${namedAll(
+					board,
+					rebrief.map((one) => one.id),
+				)} lose their briefs and are briefed again.`,
 		flag.length === 0
 			? ''
-			: `${flag.map((one) => `${one.id} (${one.status})`).join(', ')} are flagged and left alone.`,
+			: `${flag.map((one) => `${named(board, one.id)} [${one.status}]`).join(', ')} are flagged and left alone.`,
 	]
 		.filter((part) => part !== '')
 		.join(' ')
