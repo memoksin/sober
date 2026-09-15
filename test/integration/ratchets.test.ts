@@ -199,3 +199,16 @@ test('the dashboard has not outgrown core by half again', () => {
 		)
 	}
 })
+
+// The release gate's `--since=origin/main` range only means "this release" if
+// both of these hold (ADR 0059).
+test('the changeset gate runs only on a pull request into main', () => {
+	const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8')
+	expect(ci).toMatch(/base_ref == 'main'[\s\S]*?changeset status --since/)
+	expect(ci).toContain("-- '.changeset/*.md'")
+})
+
+test('changesets still treat main as the base branch', () => {
+	const config = JSON.parse(readFileSync(join(repoRoot, '.changeset/config.json'), 'utf8'))
+	expect(config.baseBranch).toBe('main')
+})
