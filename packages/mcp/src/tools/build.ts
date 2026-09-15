@@ -1,3 +1,4 @@
+import type { Board } from '@besober/core'
 import {
 	answerRun,
 	currentBranch,
@@ -15,6 +16,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
+import { namedAll } from '../render.js'
 
 /**
  * The confirmation §3.4 asks for, in the shape this surface has for one: the
@@ -22,11 +24,11 @@ import { openBoard, text, tool } from '../context.js'
  * rather than wraps, so the list of ids goes in and the reasoning stays in the
  * conversation (M1's gate, defects 8 and 9).
  */
-const anyway = (server: McpServer, nodes: readonly string[]): Promise<boolean> =>
+const anyway = (server: McpServer, board: Board, nodes: readonly string[]): Promise<boolean> =>
 	askYes(
 		server.server,
 		nodes.length === 1 ? `Start ${nodes[0]} anyway?` : `Start ${nodes.length} nodes anyway?`,
-		`${nodes.join(', ')} ${nodes.length === 1 ? 'is' : 'are'} heading for files another active node is heading for. Two nodes on one file is one merge, done twice.`,
+		`${namedAll(board, nodes)} ${nodes.length === 1 ? 'is' : 'are'} heading for files another active node is heading for. Two nodes on one file is one merge, done twice.`,
 		'Yes, start them anyway',
 	)
 
@@ -82,7 +84,7 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 					const met = results
 						.map((result, index) => (result instanceof OverlapError ? nodes[index] : null))
 						.filter((node): node is string => node !== null)
-					if (met.length > 0 && (await anyway(server, met)))
+					if (met.length > 0 && (await anyway(server, board, met)))
 						for (const node of met) {
 							const at = nodes.indexOf(node)
 							results[at] = await dispatch(paths, node, { base: ref, anyway: true }).catch(
@@ -119,7 +121,7 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 
 				const result = await go(false).catch(async (error: unknown) => {
 					if (!(error instanceof OverlapError)) throw error
-					if (!(await anyway(server, [node]))) return null
+					if (!(await anyway(server, board, [node]))) return null
 					return go(true)
 				})
 				if (result === null)

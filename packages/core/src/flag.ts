@@ -80,6 +80,54 @@ export const reopenNode = (paths: Paths, node: string, by: Handle): Promise<Node
 		return updated
 	})
 
+export interface Correction {
+	readonly title?: string
+	readonly description?: string
+	readonly name?: string
+	readonly by: Handle
+}
+
+/**
+ * The node's own words, rewritten in place. `propose` and `createNode` write
+ * them once; re-proposing opens a second node under a new id instead of fixing
+ * the first.
+ */
+export const correctNode = (paths: Paths, node: string, correction: Correction): Promise<Node> =>
+	withLock(paths, 'correct', async () => {
+		const record = await readNode(paths, node)
+		if (record.kind !== 'ok') throw new NotOnBoardError('node', node)
+		const { title, description, name } = correction
+		if (title === undefined && description === undefined && name === undefined)
+			throw new SoberError(
+				'nothing-to-correct',
+				`give ${node} a new title, description or name — there is nothing to correct`,
+			)
+		if (title !== undefined && title.trim() === '')
+			throw new SoberError('no-title', 'a node needs a title — it is how it is read')
+		if (name !== undefined && (name.trim() === '' || name.trim().length > 40))
+			throw new SoberError('bad-name', 'a name is 1 to 40 characters')
+
+		// The id stays as it is, even when the name it was seeded from changes. An
+		// id is written once: it is the branch, the worktree, the run record's key
+		// and every citation in every brief, and reseeding it breaks all of them.
+		const updated: Node = {
+			...record.value,
+			...(title === undefined ? {} : { title: title.trim() }),
+			...(description === undefined ? {} : { description }),
+			...(name === undefined ? {} : { name: name.trim() }),
+			// The human approved the brief alongside words that no longer exist, so
+			// the approval goes. Only the approval: unlike `editDecision`, which
+			// clears the whole brief because its approach answered a question whose
+			// answer is gone, the approach here still stands — the node lands on
+			// `needs-approval`, not `needs-brief`. A queued node (ADR 0056) drops
+			// out of the queue until someone approves it again; that is the cost.
+			brief: record.value.brief === null ? null : { ...record.value.brief, approval: null },
+		}
+		await writeNode(paths, node, updated)
+		await appendEvent(paths, { action: 'node.corrected', node, by: correction.by })
+		return updated
+	})
+
 export interface Opening {
 	readonly title: string
 	/** Chosen by whoever opens it; derived from the title when nobody did. */
