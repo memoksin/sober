@@ -5,9 +5,11 @@ import type {
 	Projection,
 	Review,
 } from '@besober/schema'
+import { decisionState } from '@besober/schema'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
 import { visible } from './canvas/graph.js'
+import { DecisionsScreen } from './decisions/Decisions.js'
 import { Digest } from './digest/Digest.js'
 import { worthShowing } from './digest/data.js'
 import { DistributionScreen } from './distribute/Distribution.js'
@@ -44,6 +46,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	// a plan is waiting after the screen behind it is closed.
 	const [plan, setPlan] = useState<Distribution | null>(null)
 	const [planOpen, setPlanOpen] = useState(false)
+	const [decisionsOpen, setDecisionsOpen] = useState(false)
 	// A plan that will not parse is the bar's problem and never the canvas's
 	// (§8.4): one bad record has never taken the board down, and a read added to
 	// the poll is exactly how that stops being true.
@@ -55,7 +58,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	// The full board is only read while something is open. The canvas needs the
 	// slim projection every couple of seconds (ADR 0008); a drawer that is not
 	// there needs nothing at all.
-	const open = picked !== null || deciding !== null
+	const open = picked !== null || deciding !== null || decisionsOpen
 
 	useEffect(() => {
 		if (token === null) return
@@ -134,6 +137,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			// One layer at a time: a screen opened from a node goes back to that
 			// node rather than clearing the board out from under it.
 			if (planOpen) setPlanOpen(false)
+			else if (decisionsOpen) setDecisionsOpen(false)
 			else if (watching !== null) setWatching(null)
 			else if (reviewing !== null) setReviewing(null)
 			else if (deciding !== null) setDeciding(null)
@@ -141,7 +145,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		}
 		addEventListener('keydown', back)
 		return () => removeEventListener('keydown', back)
-	}, [deciding, planOpen, reviewing, watching])
+	}, [deciding, decisionsOpen, planOpen, reviewing, watching])
 
 	/**
 	 * What the board says now, after something changed it. Read rather than
@@ -307,6 +311,8 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 
 	if (token === null) return <Adrift />
 
+	const openDecisions =
+		board?.decisions.filter((one) => !one.archived && decisionState(one) === 'open').length ?? 0
 	const hidden = (projection?.nodes.length ?? 0) - (shown?.nodes.length ?? 0)
 
 	return (
@@ -316,6 +322,14 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				<span className="text-[var(--ink-faint)] text-xs tabular-nums">
 					{shown === null ? 'reading the board…' : `${shown.nodes.length} nodes`}
 				</span>
+
+				<button
+					type="button"
+					onClick={() => setDecisionsOpen(true)}
+					className="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-[var(--ink-dim)] text-xs hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+				>
+					{openDecisions > 0 ? `${openDecisions} open decisions` : 'decisions'}
+				</button>
 
 				<button
 					type="button"
@@ -407,6 +421,10 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 
 				{watching !== null && surface !== null && (
 					<LogScreen node={watching} surface={surface} onClose={() => setWatching(null)} />
+				)}
+
+				{decisionsOpen && board !== null && (
+					<DecisionsScreen board={board} onClose={() => setDecisionsOpen(false)} />
 				)}
 
 				{planOpen && plan !== null && (

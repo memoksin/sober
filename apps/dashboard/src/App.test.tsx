@@ -120,3 +120,18 @@ test('dropping sends the other one, and neither is sent by opening the screen', 
 	await waitFor(() => expect(sent).toContain('drop_distribution'))
 	expect(sent).not.toContain('accept_distribution')
 })
+
+test('the decision list mounts only when opened, and Escape closes it alone', async () => {
+	serving({ projection, distribution: null, digest: null, board })
+
+	render(<App token="t" />)
+	await waitFor(() => expect(screen.getByTestId('canvas')).toBeTruthy())
+	expect(screen.queryByText('What this project has decided')).toBeNull()
+
+	fireEvent.click(screen.getByRole('button', { name: 'decisions' }))
+	await waitFor(() => expect(screen.getByText('What this project has decided')).toBeTruthy())
+
+	fireEvent.keyDown(window, { key: 'Escape' })
+	await waitFor(() => expect(screen.queryByText('What this project has decided')).toBeNull())
+	expect(screen.getByTestId('canvas')).toBeTruthy()
+})
