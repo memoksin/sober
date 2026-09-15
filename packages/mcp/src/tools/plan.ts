@@ -481,7 +481,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		{
 			title: 'Record the human’s approval of one brief',
 			description:
-				'Record that the human approved one node’s brief. Before calling, show them the approach and the criteria, ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes. Never on a yes they did not give, never on one carried over from earlier in the conversation, never a batch (ADR 0057).',
+				'Record that the human approved one node’s brief. Before calling, show them the approach and the criteria, ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes. The question must say whether a yes also starts the node when it becomes ready, which is the queue argument when given, otherwise the board’s dispatch.queueByDefault. Never on a yes they did not give, never on one carried over from earlier in the conversation, never a batch (ADR 0057).',
 			inputSchema: {
 				node: z.string(),
 				confirmed: z.literal(true).describe('the human said yes to this brief, just now'),
