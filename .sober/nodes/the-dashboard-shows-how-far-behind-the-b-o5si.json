@@ -15,10 +15,51 @@
 		"apps/dashboard/src/App.tsx",
 		"apps/dashboard/src/*.test.ts*"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 4: one read route and one label, but it runs a network fetch on dashboard load, so the offline and no-remote paths are the ones that decide whether this is an improvement or a hang.\n\n**The core read exists.** `boardDistance(paths, branch, { pull, timeoutMs })` landed in `c0057bf6` (`packages/core/src/sync.ts`): `{ kind: 'ok', ahead, behind, remote, pulled }`, `{ kind: 'no-remote' }` or `{ kind: 'offline' }`, five-second fetch timeout, fast-forward taken only when `behind > 0 && ahead === 0` and nothing under `.sober/` is uncommitted, and it never throws for an unreachable remote. The session hook already calls it the same way (`packages/cli/src/hook.ts`, merged `63998f4`) — read that branch first and say the same things in the same words, or the terminal and the screen will disagree about the same board.\n\n**1. The route — `packages/server/src/routes.ts`.** A **read**, not an op: it goes beside the other `/read/` handlers, not in `OPS`. Follow whichever helper the existing reads use (`board`, `projection`) rather than copying an op's shape. It takes an optional `branch` and resolves the default the way the `sync` route does (`baseOf(paths, branch)` is the run base; the *board* branch comes from the config — `sync` at line 255 uses `baseOf`, so check which one is right here and use the board branch, since that is what `boardDistance` measures). Return the `BoardDistance` union as-is; do not flatten it into a number, because `offline` and `behind: 0` are different facts and a single number cannot say which.\n\n**The fast-forward on load.** The accepted decision says pull on its own when it is a fast-forward, otherwise remind. So the route passes `pull: true`. That makes it a read with a side effect, which is unusual enough to need a sentence in a comment: a clean fast-forward cannot conflict, it is what the decision chose, and the alternative — a dashboard that shows \"3 behind\" and makes the user press a button that could not have failed — is the thing being removed.\n\nTest it in the server's own route test file (find it with `fd -e test.ts . packages/server`), against a bare remote built the way `test/integration/sync.test.ts` builds its pair: behind, ahead, no remote, and a fast-forward actually taken.\n\n**2. The label — `apps/dashboard/src/App.tsx`.** The Sync button landed in the header (node `upby`). Put the distance immediately beside it, in the same `text-[var(--ink-faint)] text-xs` register the node count uses — a label, not a badge, not a colour. One phrase per kind:\n\n- `ok`, `behind > 0` → `N behind`\n- `ok`, `ahead > 0`, `behind === 0` → `M unsent`\n- `ok`, both non-zero → both, `N behind · M unsent`\n- `ok` with a fast-forward taken → say it happened: `pulled N` — the board changed under the user without them pressing anything, which is exactly the cost the accepted decision names, so it must be visible rather than silent\n- `ok`, level → **nothing**. No empty badge, no \"up to date\" chip.\n- `no-remote` → nothing. There is nowhere to be behind.\n- `offline` → `offline`.\n\nRead it once on load and again after the Sync button's own op resolves, since a sync changes the answer. Do not put it on the poll: the poll is every couple of seconds (ADR 0008) and this one does a network fetch.\n\n**Do not use colour to say it.** ADR 0039 gives colour exactly one job in this product — whose move is it — across the status families. \"3 behind\" is not a status, and spending a status token on it makes the log and the header speak two colour languages.\n\n**Tests** in `App.test.tsx` with the wire stubbed, one per kind, asserting the phrase and asserting that a level board renders no label at all; plus one that a failed read leaves the header intact rather than taking the dashboard down — a board that cannot reach its remote must still be usable.\n\nNothing in `core` changes. `apps/dashboard/src/wire.ts` gains only whatever the new read needs to be callable.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run apps/dashboard/src/App.test.tsx",
+				"proves": "each distance renders its own phrase, a board level with its remote renders no label at all, a taken fast-forward says so, and a read that fails leaves the header usable instead of taking the dashboard down"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/wire.test.ts",
+				"proves": "the new route answers behind, ahead, no-remote and offline against a real bare remote, and takes the clean fast-forward the accepted decision chose"
+			},
+			{
+				"run": "git grep -q 'boardDistance' -- packages/server/src/routes.ts && test -z \"$(git diff --name-only development -- packages/core)\"",
+				"proves": "the server calls the core read that already exists rather than reimplementing a fetch, and core was not touched"
+			},
+			{
+				"run": "! git grep -nE 'status-|--danger|--warn' -- apps/dashboard/src/App.tsx | grep -i 'behind\\|unsent\\|offline'",
+				"proves": "the distance is said in words on the neutral ink ramp, not in a status colour — ADR 0039 gives colour one job and being behind is not a status"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!apps/dashboard' ':!packages/server' ':!test/integration')\"",
+				"proves": "only the dashboard, the server route and their tests changed: no core, no schema, no CLI, no MCP tool"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the route and the label compile against the real BoardDistance union rather than a flattened number"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:34:58.826Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:35:18.907Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-11T07:22:40.280Z"
