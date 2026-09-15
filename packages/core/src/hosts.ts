@@ -120,7 +120,7 @@ export interface Adapter {
 	/** Whether a watching human can reply to this host mid-run (ADR 0046). */
 	readonly attendable: boolean
 	/** One raw event, rendered — or null when the event is not this host's shape. */
-	readonly line: (event: Event) => LogLine | null
+	readonly line: (event: Event) => LogLine | readonly LogLine[] | null
 }
 
 export class UnknownHostError extends SoberError {
@@ -154,7 +154,7 @@ const claude: Adapter = {
 	attendable: true,
 	line: (event) => {
 		if (event.type === 'system' && event.subtype === 'init')
-			return { kind: 'started', text: 'session started' }
+			return { kind: 'started', text: 'session started', tool: null }
 
 		// What the human said, echoed back by the host under
 		// `--replay-user-messages` (ADR 0046). It is in the log so the transcript
@@ -172,24 +172,27 @@ const claude: Adapter = {
 			const said = (event.message?.content ?? [])
 				.map((part) => (part.type === 'text' ? part.text?.trim() : null))
 				.filter((text): text is string => typeof text === 'string' && text.length > 0)
-			return said.length > 0 ? { kind: 'answer', text: said.join(' · ') } : null
+			return said.length > 0 ? { kind: 'answer', text: said.join(' · '), tool: null } : null
 		}
 
 		if (event.type === 'assistant') {
-			const parts = event.message?.content ?? []
-			const rendered = parts
-				.map((part) =>
-					part.type === 'text' ? part.text?.trim() : part.type === 'tool_use' ? part.name : null,
-				)
-				.filter((text): text is string => typeof text === 'string' && text.length > 0)
-			const kind = parts.some((part) => part.type === 'tool_use') ? 'tool' : 'text'
-			return rendered.length > 0 ? { kind, text: rendered.join(' · ') } : null
+			const lines = (event.message?.content ?? []).flatMap((part): LogLine[] => {
+				if (part.type === 'tool_use' && part.name !== undefined && part.name.length > 0)
+					return [{ kind: 'tool', text: part.name, tool: part.name }]
+				const kind = part.type === 'text' ? 'text' : part.type === 'thinking' ? 'thinking' : null
+				const text = (part.type === 'thinking' ? part.thinking : part.text)?.trim()
+				return kind !== null && text !== undefined && text.length > 0
+					? [{ kind, text, tool: null }]
+					: []
+			})
+			return lines.length > 0 ? lines : null
 		}
 
 		if (event.type === 'result')
 			return {
 				kind: 'result',
 				text: event.is_error === true ? `failed: ${event.subtype ?? 'error'}` : 'finished',
+				tool: null,
 			}
 
 		return null
@@ -221,24 +224,29 @@ const codex: Adapter = {
 	argv: (prompt) => ['exec', '--json', '--dangerously-bypass-approvals-and-sandbox', brief(prompt)],
 	attendable: false,
 	line: (event) => {
-		if (event.type === 'thread.started') return { kind: 'started', text: 'session started' }
-		if (event.type === 'turn.completed') return { kind: 'result', text: 'finished' }
+		if (event.type === 'thread.started')
+			return { kind: 'started', text: 'session started', tool: null }
+		if (event.type === 'turn.completed') return { kind: 'result', text: 'finished', tool: null }
 
 		if (event.type === 'item.completed') {
 			const item = event.item
 			if (item?.type === 'agent_message') {
 				const text = item.text?.trim()
-				return text !== undefined && text.length > 0 ? { kind: 'text', text } : null
+				return text !== undefined && text.length > 0 ? { kind: 'text', text, tool: null } : null
 			}
 			if (item?.type === 'command_execution') {
 				const command = item.command?.trim()
-				return command !== undefined && command.length > 0 ? { kind: 'tool', text: command } : null
+				return command !== undefined && command.length > 0
+					? { kind: 'tool', text: command, tool: 'command' }
+					: null
 			}
 			// Codex reports its own complaints as items rather than on stderr, and
 			// they are the sentences that explain why a run behaved oddly.
 			if (item?.type === 'error') {
 				const message = item.message?.trim()
-				return message !== undefined && message.length > 0 ? { kind: 'raw', text: message } : null
+				return message !== undefined && message.length > 0
+					? { kind: 'raw', text: message, tool: null }
+					: null
 			}
 		}
 
@@ -272,11 +280,11 @@ const opencode: Adapter = {
 	line: (event) => {
 		if (event.type === 'text') {
 			const text = event.part?.text?.trim()
-			return text !== undefined && text.length > 0 ? { kind: 'text', text } : null
+			return text !== undefined && text.length > 0 ? { kind: 'text', text, tool: null } : null
 		}
 		if (event.type === 'tool_use') {
 			const tool = event.part?.tool?.trim()
-			return tool !== undefined && tool.length > 0 ? { kind: 'tool', text: tool } : null
+			return tool !== undefined && tool.length > 0 ? { kind: 'tool', text: tool, tool } : null
 		}
 		return null
 	},
@@ -338,7 +346,7 @@ const cursor: Adapter = {
 		// they touch; anything else arrives under `function`, with its own name.
 		const tool = name === 'function' ? (call?.name ?? 'tool') : name.replace(/ToolCall$/, '')
 		const path = call?.args?.path
-		return { kind: 'tool', text: path === undefined ? tool : `${tool} ${path}` }
+		return { kind: 'tool', text: path === undefined ? tool : `${tool} ${path}`, tool }
 	},
 }
 
@@ -379,12 +387,12 @@ export const adapterFor = (host: string): Adapter => {
  * that recognises the shape owns the line — which is what lets a run started
  * under one host still render after `dispatch.host` changes.
  */
-export const renderLine = (event: Event): LogLine | null => {
+export const renderLine = (event: Event): readonly LogLine[] => {
 	for (const adapter of ADAPTERS) {
-		const line = adapter.line(event)
-		if (line !== null) return line
+		const result = adapter.line(event)
+		if (result !== null) return 'kind' in result ? [result] : result
 	}
-	return null
+	return []
 }
 
 /** The union of what the four hosts write, read defensively at every level. */
@@ -398,6 +406,7 @@ export interface Event {
 		readonly content?: readonly {
 			readonly type?: string
 			readonly text?: string
+			readonly thinking?: string
 			readonly name?: string
 		}[]
 	}

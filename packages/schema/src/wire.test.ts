@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { Impact, ProjectedNode, Projection, WireError } from './wire.js'
+import { Impact, LogLine, ProjectedNode, Projection, WireError } from './wire.js'
 
 const projected = {
 	id: 'auth-api-k7f2',
@@ -83,4 +83,12 @@ test('an impact that reaches nothing is an empty list, not an absent one', () =>
 test('the effect is one of the two the save has — a third would be a case nobody wrote', () => {
 	const entry = { id: 'auth-api-k7f2', title: 'The auth API', status: 'done', effect: 'reopen' }
 	expect(Impact.safeParse({ decision: 'auth-model-k7f2', nodes: [entry] }).success).toBe(false)
+})
+
+test('a log line written before lines named their tool still parses', () => {
+	expect(LogLine.parse({ kind: 'tool', text: 'Read' })).toEqual({
+		kind: 'tool',
+		text: 'Read',
+		tool: null,
+	})
 })

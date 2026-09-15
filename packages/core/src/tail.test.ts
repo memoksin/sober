@@ -118,7 +118,7 @@ test('an event type the tail does not know is dropped, not shown', () => {
 			{ type: 'system', subtype: 'init' },
 		),
 	)
-	expect(rendered).toEqual([{ kind: 'started', text: 'session started' }])
+	expect(rendered).toEqual([{ kind: 'started', text: 'session started', tool: null }])
 })
 
 test('an assistant turn renders its text, and a tool call renders the tool', () => {
@@ -129,20 +129,24 @@ test('an assistant turn renders its text, and a tool call renders the tool', () 
 		),
 	)
 	expect(rendered).toEqual([
-		{ kind: 'text', text: 'wrote the file' },
-		{ kind: 'tool', text: 'Edit' },
+		{ kind: 'text', text: 'wrote the file', tool: null },
+		{ kind: 'tool', text: 'Edit', tool: 'Edit' },
 	])
 })
 
 test('a failing result says so, where the last line is what a reader looks at', () => {
 	const rendered = tail(log({ type: 'result', subtype: 'error_during_execution', is_error: true }))
-	expect(rendered.at(-1)).toEqual({ kind: 'result', text: 'failed: error_during_execution' })
+	expect(rendered.at(-1)).toEqual({
+		kind: 'result',
+		text: 'failed: error_during_execution',
+		tool: null,
+	})
 })
 
 test('a line that is not JSON is the host’s own stderr, and it is never hidden', () => {
 	// The one thing a failing run always has, and the last thing to drop.
 	expect(tail('claude: command not found\n')).toEqual([
-		{ kind: 'raw', text: 'claude: command not found' },
+		{ kind: 'raw', text: 'claude: command not found', tool: null },
 	])
 })
 
@@ -172,10 +176,10 @@ test('a Codex run renders its start, its message, its command and its end', () =
 		),
 	)
 	expect(rendered).toEqual([
-		{ kind: 'started', text: 'session started' },
-		{ kind: 'text', text: 'ok' },
-		{ kind: 'tool', text: '/bin/zsh -lc ls' },
-		{ kind: 'result', text: 'finished' },
+		{ kind: 'started', text: 'session started', tool: null },
+		{ kind: 'text', text: 'ok', tool: null },
+		{ kind: 'tool', text: '/bin/zsh -lc ls', tool: 'command' },
+		{ kind: 'result', text: 'finished', tool: null },
 	])
 })
 
@@ -189,7 +193,7 @@ test('a warning Codex prints about itself is shown, not swallowed', () => {
 			item: { id: 'item_1', type: 'error', message: 'Exceeded skills context budget.' },
 		}),
 	)
-	expect(rendered).toEqual([{ kind: 'raw', text: 'Exceeded skills context budget.' }])
+	expect(rendered).toEqual([{ kind: 'raw', text: 'Exceeded skills context budget.', tool: null }])
 })
 
 test('an OpenCode run renders what it said and which tool it used', () => {
@@ -202,8 +206,8 @@ test('an OpenCode run renders what it said and which tool it used', () => {
 		),
 	)
 	expect(rendered).toEqual([
-		{ kind: 'text', text: "I'll run ls to list the files." },
-		{ kind: 'tool', text: 'bash' },
+		{ kind: 'text', text: "I'll run ls to list the files.", tool: null },
+		{ kind: 'tool', text: 'bash', tool: 'bash' },
 	])
 })
 
@@ -242,10 +246,10 @@ test('a Cursor run renders its start, its tools, what it said and its end', () =
 		),
 	)
 	expect(rendered).toEqual([
-		{ kind: 'started', text: 'session started' },
-		{ kind: 'tool', text: 'read README.md' },
-		{ kind: 'text', text: 'Done!' },
-		{ kind: 'result', text: 'finished' },
+		{ kind: 'started', text: 'session started', tool: null },
+		{ kind: 'tool', text: 'read README.md', tool: 'read' },
+		{ kind: 'text', text: 'Done!', tool: null },
+		{ kind: 'result', text: 'finished', tool: null },
 	])
 })
 
@@ -254,9 +258,9 @@ test('one host’s events are never read as another’s', () => {
 	// reads after `dispatch.host` changes — and Claude Code's `type: "user"` is
 	// not OpenCode's `type: "text"`.
 	expect(tail(log({ type: 'text', part: { type: 'text', text: 'from opencode' } }))).toEqual([
-		{ kind: 'text', text: 'from opencode' },
+		{ kind: 'text', text: 'from opencode', tool: null },
 	])
 	expect(
 		tail(log({ type: 'assistant', message: { content: [{ type: 'text', text: 'from claude' }] } })),
-	).toEqual([{ kind: 'text', text: 'from claude' }])
+	).toEqual([{ kind: 'text', text: 'from claude', tool: null }])
 })

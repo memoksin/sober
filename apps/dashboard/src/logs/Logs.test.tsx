@@ -39,9 +39,9 @@ test('a person reads what the agent said, without opening a terminal', async () 
 			surface={surfaceOf([
 				window({
 					lines: [
-						{ kind: 'started', text: 'session started' },
-						{ kind: 'tool', text: 'Write' },
-						{ kind: 'text', text: 'wrote the auth middleware' },
+						{ kind: 'started', text: 'session started', tool: null },
+						{ kind: 'tool', text: 'Write', tool: null },
+						{ kind: 'text', text: 'wrote the auth middleware', tool: null },
 					],
 				}),
 			])}
@@ -59,8 +59,8 @@ test('windows arriving one after another append rather than replace', async () =
 		<LogScreen
 			node="auth-api-k7f2"
 			surface={surfaceOf([
-				window({ lines: [{ kind: 'text', text: 'first' }], offset: 10, live: true }),
-				window({ lines: [{ kind: 'text', text: 'second' }], offset: 20, live: false }),
+				window({ lines: [{ kind: 'text', text: 'first', tool: null }], offset: 10, live: true }),
+				window({ lines: [{ kind: 'text', text: 'second', tool: null }], offset: 20, live: false }),
 			])}
 			onClose={() => {}}
 		/>,
