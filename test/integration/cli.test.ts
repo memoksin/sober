@@ -312,6 +312,38 @@ test('rejecting returns the node to the queue and carries the note into the next
 	)
 })
 
+test('a run cuts from the configured dispatch.base, not the checked-out branch, and --base still wins', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	seed(created.dir)
+	useFakeHost(created.dir)
+	const config = join(created.dir, '.sober/config.jsonc')
+	writeFileSync(
+		config,
+		readFileSync(config, 'utf8').replace('"base": null', '"base": "development"'),
+	)
+	created.git('commit', '-am', 'chore: target development')
+	created.git('checkout', '-b', 'development')
+	writeFileSync(join(created.dir, 'only-on-development.txt'), 'dev\n')
+	created.git('add', '-A')
+	created.git('commit', '-m', 'chore: development moves ahead')
+	created.git('checkout', 'main')
+
+	sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')
+	const briefFile = join(dirname(created.dir), 'brief.json')
+	writeFileSync(briefFile, BRIEF)
+	sober(created.dir, 'brief', 'auth-api-k7f2', '--write', briefFile)
+	sober(created.dir, 'approve', 'auth-api-k7f2')
+
+	process.env.FAKE_HOST_COMMIT = 'src/auth/token.ts'
+	expect(sober(created.dir, 'run', 'auth-api-k7f2')).toContain('finished')
+	created.git('merge-base', '--is-ancestor', 'development', 'sober/auth-api-k7f2')
+	expect(sober(created.dir, 'review', 'auth-api-k7f2')).toContain('The endpoints answer.')
+	expect(sober(created.dir, 'review', 'auth-api-k7f2', '--base', 'main')).toContain(
+		'only-on-development.txt',
+	)
+})
+
 /**
  * The hook's whole contract with a host is one JSON object in and one out, so
  * that is what these assert — on a real board, through the built binary. What

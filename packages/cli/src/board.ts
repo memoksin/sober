@@ -82,9 +82,18 @@ export const settingsOf = async (paths: Paths) => {
 	return config.value
 }
 
-/** The ref a node is cut from and measured against, unless the user names another. */
-export const baseOf = async (paths: Paths, given?: string): Promise<string> =>
-	given ?? (await currentBranch(paths.root))
+/**
+ * The ref a node is cut from and measured against, unless the user names
+ * another. `dispatch.base` is itself read off a base, so the checked-out
+ * branch bootstraps that one read and is the answer when the key is unset.
+ */
+export const baseOf = async (paths: Paths, given?: string): Promise<string> => {
+	if (given !== undefined) return given
+	const current = await currentBranch(paths.root)
+	const config = await readConfig(paths, current)
+	if (config.kind !== 'ok') return fail(`${config.file} cannot be read: ${config.reason}`)
+	return config.value.dispatch.base ?? current
+}
 
 export const init = async (options: { title?: string; intent?: string }): Promise<void> => {
 	const root = process.cwd()
