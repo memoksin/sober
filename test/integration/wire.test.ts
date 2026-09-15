@@ -558,3 +558,71 @@ test('init on a fresh clone takes the team’s board instead of writing a second
 		execFileSync('git', ['rev-parse', 'sober-graph'], { cwd: repo.remote, encoding: 'utf8' }),
 	)
 })
+
+/** A commit on `branch` in `cwd` with the same tree, so only the count moves. */
+const advance = (cwd: string, branch: string): string => {
+	const next = execFileSync(
+		'git',
+		['commit-tree', `${branch}^{tree}`, '-p', branch, '-m', 'chore: elsewhere'],
+		{ cwd, encoding: 'utf8' },
+	).trim()
+	execFileSync('git', ['update-ref', `refs/heads/${branch}`, next], { cwd })
+	return next
+}
+
+const published = async (): Promise<TempRepo> => {
+	const made = board()
+	made.git('add', '-A')
+	made.git('commit', '-m', 'chore: sober')
+	made.git('push', '-u', 'origin', 'main')
+	sober(made.dir, 'sync')
+	server = await serve({ paths: paths(made.dir) })
+	return made
+}
+
+test('the distance read counts what is unsent, and a level board is level', async () => {
+	repo = await published()
+	expect(await (await get('distance')).json()).toMatchObject({ kind: 'ok', ahead: 0, behind: 0 })
+
+	advance(repo.dir, 'sober-graph')
+	expect(await (await get('distance')).json()).toMatchObject({
+		kind: 'ok',
+		ahead: 1,
+		behind: 0,
+		pulled: null,
+	})
+})
+
+test('the distance read takes a clean fast-forward and says it did', async () => {
+	repo = await published()
+	const theirs = advance(repo.remote, 'sober-graph')
+
+	const read = (await (await get('distance')).json()) as { pulled: unknown }
+
+	expect(read).toMatchObject({ kind: 'ok', ahead: 0, behind: 1 })
+	expect(read.pulled).not.toBeNull()
+	expect(repo.git('rev-parse', 'sober-graph').trim()).toBe(theirs)
+})
+
+test('a diverged board is counted both ways and nothing is moved', async () => {
+	repo = await published()
+	advance(repo.remote, 'sober-graph')
+	const ours = advance(repo.dir, 'sober-graph')
+
+	expect(await (await get('distance')).json()).toMatchObject({
+		kind: 'ok',
+		ahead: 1,
+		behind: 1,
+		pulled: null,
+	})
+	expect(repo.git('rev-parse', 'sober-graph').trim()).toBe(ours)
+})
+
+test('no remote and an unreachable one are answers, not failures', async () => {
+	repo = await published()
+	repo.git('remote', 'set-url', 'origin', join(repo.remote, '..', 'gone.git'))
+	expect(await (await get('distance')).json()).toEqual({ kind: 'offline' })
+
+	repo.git('remote', 'remove', 'origin')
+	expect(await (await get('distance')).json()).toEqual({ kind: 'no-remote' })
+})

@@ -9,6 +9,7 @@ import {
 	archiveNode,
 	assignNode,
 	bind,
+	boardDistance,
 	claimChain,
 	claimNode,
 	createNode,
@@ -368,6 +369,21 @@ export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
  * from.
  */
 export const READS: Readonly<Record<string, Route>> = {
+	// How far the board branch is from its remote. A read with a side effect:
+	// it takes a clean fast-forward, which cannot conflict and is what the
+	// accepted decision chose over a "3 behind" the user must press away.
+	// The union goes out as-is — `offline` and `behind: 0` are different facts.
+	distance: route(
+		z.strictObject({ branch: z.string().min(1).optional() }),
+		async (paths, { branch }) => {
+			if (branch !== undefined) return boardDistance(paths, branch, { pull: true })
+			const config = await readConfig(paths)
+			if (config.kind !== 'ok')
+				throw new SoberError('no-board', `${config.file} cannot be read: ${config.reason}`)
+			return boardDistance(paths, config.value.board.branch, { pull: true })
+		},
+	),
+
 	// The plan waiting on the board, or null. A read rather than part of the
 	// projection: the canvas asks every two seconds and a plan changes once a
 	// week (ADR 0051).
