@@ -14,7 +14,45 @@
 		"apps/dashboard/src/logs/data.test.ts",
 		"packages/schema/src/*.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Score 3: two lookup tables and their tests. No component, no rendering — `apps/dashboard/src/logs/data.ts` says so in its own doc comment, and that boundary is the reason this is checkable at all.\n\n**Where.** `apps/dashboard/src/logs/data.ts` holds `MARK` and `TONE`, both `Readonly<Record<LogLine['kind'], string>>`. The kind list has grown twice since that comment was written: `thinking` landed with `m105` (`f6cd123`) and `check` / `checked` with `pcsz` — read the enum in `packages/schema/src/wire.ts` rather than the list in this brief, and cover exactly what is there. Both records are keyed by the union, so a missing kind is a compile error; that is the mechanism, do not loosen the type to `Record<string, …>` to make room for tools.\n\n**The tools are a second table, not more kinds.** `LogLine` now carries `tool: string | null` beside `kind`. Add one exported record — `TOOL` — mapping a tool name to a glyph, with an explicit fallback for a name nobody listed. Cover at minimum Read, Edit, Write, Bash, Grep, Glob, Task, WebFetch. The fallback is the point, not an afterthought: every host names its tools differently (the codex adapter reports `command`, cursor reports `read`/`write`, opencode reports whatever the model called it), so an unknown name must render a generic mark and never blank. Match case-insensitively and trim — `Bash` and `bash` are one tool — and say in a comment that the table is a display convenience, so a host adding a tool is a missing glyph and never a missing line.\n\n**The colour constraint, which is the hard part.** ADR 0039 gives colour exactly one job in this product — whose move is it — across eight statuses in three families, and every M3 screen inherits it. Eight hues keyed to tool names would make the log the one surface where colour answers a different question, and a reader would have to hold two colour languages at once.\n\nSo: **separate the tools by glyph only.** `TOOL` maps to marks, never to colours — it has no `TONE` counterpart and must not grow one. For the new kinds, spend only the neutral ink ramp (`--ink`, `--ink-dim`, `--ink-faint`), which carries no status meaning: `thinking` is the faintest, `check` dim (something is under way), `checked` ordinary ink (it answered). The one status token already spent in `TONE` is `--danger` for `raw`, the host's own stderr, and that stays because that line genuinely means what the token means. Do not add a second status token. If the result needs to break ADR 0039, that is a new ADR and a conversation — not a quiet exception in a lookup table.\n\n**The CLI's `TAIL` in `packages/cli/src/work.ts` is the other half and stays a separate table**, by the accepted decision: the CLI does not import from an app and the app does not import the CLI's colour helpers. Give it the same coverage in the same commit — a glyph per new kind, and the tool marks where a terminal line names one — because alignment here is by hand and by memory, and the cost line of that decision is exactly this drifting. One comment in each file pointing at the other is what makes the next person check both.\n\n**Tests** in `apps/dashboard/src/logs/data.test.ts` (create it beside `data.ts` if it is not there): every member of `LogLine['kind']` has a mark and a tone — iterate the enum's values from the schema rather than a hand-written list, so a kind added later fails here instead of rendering as a fallback dot; every listed tool has a distinct glyph; an unknown tool name gets the fallback and not `undefined`; lookup is case-insensitive. And one assertion that no tool maps to a colour at all, which is the ADR 0039 constraint made mechanical.\n\nNothing renders anything here. `the-run-panel-a-box-for-what-the-agent-s-5svv` and `sober-logs-shows-the-same-run-in-the-sam-2lgp` both wait on this node and own the screens.",
+		"complexity": 3,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run apps/dashboard/src/logs/data.test.ts",
+				"proves": "every kind the wire carries has a mark and a tone — iterated from the schema, so a kind added later fails here rather than rendering as a fallback dot — every listed tool has a distinct glyph, and an unknown tool name gets the fallback instead of undefined"
+			},
+			{
+				"run": "node -e \"const s=require('node:fs').readFileSync('apps/dashboard/src/logs/data.ts','utf8');const i=s.indexOf('TOOL');const b=s.slice(i, s.indexOf('}', i));process.exit(/var\\(--|#[0-9a-f]{3}/i.test(b) ? 1 : 0)\"",
+				"proves": "the tool table maps to glyphs and to no colour at all — ADR 0039 gives colour one job, and a per-tool hue would make the log the one screen where it answers a different question"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "MARK and TONE are still keyed by the LogLine kind union, so a missing entry is a compile error rather than a silent blank — the type was not loosened to make room for tools"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/theme.test.ts",
+				"proves": "no new status token was spent: the theme's colour vocabulary is unchanged and the log still speaks the one colour language ADR 0039 defines"
+			},
+			{
+				"run": "git grep -q 'thinking' -- packages/cli/src/work.ts && git grep -q 'check' -- packages/cli/src/work.ts",
+				"proves": "the CLI's own table gained the same kinds in the same commit — the two tables are aligned by hand and drifting is the cost the accepted decision named"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!apps/dashboard/src/logs' ':!packages/cli/src/work.ts')\"",
+				"proves": "this is the vocabulary only: no component, no screen, no schema and no core changed"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:35:54.834Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,
