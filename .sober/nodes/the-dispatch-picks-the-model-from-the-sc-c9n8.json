@@ -18,7 +18,37 @@
 		"apps/dashboard/src/logs/**",
 		"test/integration/dispatch.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Complexity 7 / 10: this threads one dispatch-time choice through persisted run data and three user-facing surfaces, with compatibility-sensitive schema work and integration coverage. In `packages/core/src/dispatch.ts`, after reading base-ref settings and before `checkHost`, load the node brief, call the existing `tierFor(config.dispatch.thresholds, brief.complexity)`, and resolve the command line with `hostForTier`; an unscored brief uses `dispatch.host` with no tier, while a configured tier uses its line and an empty tier uses the recorded fallback. Use that single resolved line consistently for `checkHost`, `adapterFor`, attended-mode errors, `startAgent`, and `startRun`, so unknown commands remain refused before worktree creation and the refusal names the selected tier. Extend `packages/schema/src/run.ts` and `packages/core/src/run.ts` with backward-compatible/defaulted facts sufficient to render the selected tier and whether `dispatch.host` was the fallback while retaining `host` as the exact command line that ran; local run records are not board migrations. Update run-event construction only as required by the schema. In `packages/cli/src/work.ts` and the existing dashboard log/run-panel components under `apps/dashboard/src/logs/`, render the same host line, tier, and fallback wording from the run record rather than re-reading current config. Add focused core/schema tests and integration cases in `test/integration/dispatch.test.ts` for high/mid/low thresholds, configured tier selection, missing-tier fallback, null-complexity default behavior, unknown selected hosts, and base-ref config authority. Keep adapters and model-flag parsing unchanged: each tier value is already a complete host command line under ADR 0058.",
+		"complexity": 7,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/config.test.ts packages/schema/src/run.test.ts packages/core/src/run.test.ts test/integration/dispatch.test.ts",
+				"proves": "Threshold mapping, run-record compatibility, selected tier commands, fallback behavior, refusal paths, and base-ref authority are covered end to end."
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "Every run producer and CLI/dashboard consumer agrees on the extended persisted run shape."
+			},
+			{
+				"run": "git grep -q 'tierFor' -- packages/core/src/dispatch.ts && git grep -q 'hostForTier' -- packages/core/src/dispatch.ts && git grep -q 'fallback' -- packages/schema/src/run.ts packages/core/src/run.ts packages/cli/src/work.ts apps/dashboard/src/logs",
+				"proves": "Dispatch uses the shared config resolution and the fallback fact reaches both terminal and dashboard surfaces."
+			},
+			{
+				"run": "pnpm vitest run packages/schema/src/exports.test.ts packages/core/src/exports.test.ts",
+				"proves": "The public export ceilings remain unchanged."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "Biome and secretlint remain clean across the touched implementation and tests."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:07:15.942Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,

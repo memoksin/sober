@@ -10,6 +10,7 @@
 	],
 	"brief": {
 		"approach": "Keep the completed translation commit unchanged unless the corrected checks expose a real content defect. Rewrite only `docs/PLAYBOOK.md` and `docs/REVIEW-2026-08-29.md` in English, preserving paths, filenames, section numbering, tables, ADR references, `file:line` citations, dated measurements, and the original document structure. Preserve the five **→ ADR** markers, render all three **[KARAR]** markers as **[DECISION]**, and use the terse verdict-first register of `docs/REVIEW-2026-08-28.md` with `Hüküm:` rendered as `Ruling:`. Do not touch Turkish transliteration fixtures, the author's name, `docs/M1-GATE.md`'s quoted `ı`, or the immutable Turkish-derived node slug cited by `docs/adr/0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md`. Complexity is 3 / 10: the change is long but constrained to faithful translation of two documents and is checked mechanically for scope and preserved references.",
+		"complexity": null,
 		"acceptance": [
 			{
 				"run": "! git grep -lwI -e 'için' -e 'değil' -e 'olarak' -e 'ile' -e 'bir' -e 'ama' -e 'daha' -e 'kadar' -e 'yok' -e 'hüküm' -- ':!docs/adr/0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md'",
