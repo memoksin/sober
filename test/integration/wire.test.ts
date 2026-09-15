@@ -565,11 +565,28 @@ test('init on a fresh clone takes the team’s board instead of writing a second
 })
 
 /** A commit on `branch` in `cwd` with the same tree, so only the count moves. */
+let moved = 0
 const advance = (cwd: string, branch: string): string => {
+	// The message counts, because everything else about two of these commits is
+	// identical — same tree, same parent, same identity, same second — and git
+	// would hand back one sha for both, which is a board that never diverged.
+	moved += 1
 	const next = execFileSync(
 		'git',
-		['commit-tree', `${branch}^{tree}`, '-p', branch, '-m', 'chore: elsewhere'],
-		{ cwd, encoding: 'utf8' },
+		['commit-tree', `${branch}^{tree}`, '-p', branch, '-m', `chore: elsewhere ${moved}`],
+		// The bare remote has no identity of its own, and CI's runner has no
+		// global one, so the commit carries the fixture's.
+		{
+			cwd,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				GIT_AUTHOR_NAME: 'SOBER Test',
+				GIT_AUTHOR_EMAIL: 'test@besober.dev',
+				GIT_COMMITTER_NAME: 'SOBER Test',
+				GIT_COMMITTER_EMAIL: 'test@besober.dev',
+			},
+		},
 	).trim()
 	execFileSync('git', ['update-ref', `refs/heads/${branch}`, next], { cwd })
 	return next

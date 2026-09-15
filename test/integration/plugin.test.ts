@@ -163,6 +163,8 @@ test('every skill that leads to a question carries the paste rule word for word'
 	const rule =
 		'Before you ask, paste the block the tool returned into this conversation, whole — never a pointer to the board, the dashboard or the CLI.'
 	for (const skill of ['decide', 'brief', 'next', 'plan', 'loop']) {
-		expect(readFileSync(join(root, `plugins/skills/${skill}/SKILL.md`), 'utf8'), skill).toContain(rule)
+		expect(readFileSync(join(root, `plugins/skills/${skill}/SKILL.md`), 'utf8'), skill).toContain(
+			rule,
+		)
 	}
 })
