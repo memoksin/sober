@@ -150,7 +150,13 @@ test('the raw log is kept, and the tail renders it without the host’s own nois
 	expect(raw).toContain('hook_started')
 
 	const rendered = tail(raw)
-	expect(rendered.map((line) => line.kind)).toEqual(['started', 'thinking', 'tool', 'text', 'result'])
+	expect(rendered.map((line) => line.kind)).toEqual([
+		'started',
+		'thinking',
+		'tool',
+		'text',
+		'result',
+	])
 	expect(rendered.at(-1)?.text).toBe('finished')
 	expect(rendered.some((line) => line.text.includes('noise-a-tail-must-drop'))).toBe(false)
 })
