@@ -1,5 +1,6 @@
 import type { Impact } from '@besober/schema'
 import { useState } from 'react'
+import { Inline, Markdown } from '../markdown.js'
 import { Overlay } from '../Overlay.js'
 import { pending } from '../pending.js'
 import type { BoardRead } from './data.js'
@@ -94,7 +95,7 @@ export const DecisionScreen = ({
 							{decision.archived && <span className="text-[var(--danger)]">· archived</span>}
 						</p>
 						<h2 className="text-[length:var(--text-lg)] text-[var(--ink)] leading-tight">
-							{decision.question}
+							<Inline text={decision.question} />
 						</h2>
 					</header>
 
@@ -140,14 +141,14 @@ export const DecisionScreen = ({
 													)}
 												</span>
 												<span className="mt-1 block text-[length:var(--text-sm)] text-[var(--ink-dim)] leading-[var(--leading-prose)]">
-													{option.reason}
+													<Inline text={option.reason} />
 												</span>
 												{/*
 													  The field that makes this a decision record and
 													  not a poll: what you are agreeing to live with.
 													*/}
 												<span className="mt-1.5 block text-[length:var(--text-sm)] text-[var(--ink-faint)] leading-[var(--leading-prose)]">
-													Costs later: {option.costLater}
+													Costs later: <Inline text={option.costLater} />
 												</span>
 											</span>
 										</label>
@@ -182,9 +183,9 @@ export const DecisionScreen = ({
 										decision.answer.option}
 								</p>
 								{decision.answer.rationale !== '' && (
-									<p className="mt-1 text-[length:var(--text-sm)] text-[var(--ink-dim)] leading-[var(--leading-prose)]">
-										{decision.answer.rationale}
-									</p>
+									<div className="mt-1">
+										<Markdown text={decision.answer.rationale} />
+									</div>
 								)}
 								<p className="mt-1.5 text-[length:var(--text-xs)] text-[var(--ink-faint)]">
 									{decision.answer.by}

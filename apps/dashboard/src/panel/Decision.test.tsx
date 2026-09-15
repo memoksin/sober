@@ -110,3 +110,24 @@ test('an unanswered decision still answers in one step — there is no fan-out t
 	expect(screen.queryByText(/See what this changes/)).toBeNull()
 	expect(screen.getByText(/Answer/)).toBeTruthy()
 })
+
+test('backticks an agent wrote in an option reason render as code', () => {
+	const read = board(true)
+	const decision = read.decisions[0]
+	if (decision === undefined) throw new Error('fixture has a decision')
+	screenFor({
+		board: {
+			...read,
+			decisions: [
+				{
+					...decision,
+					options: [
+						{ id: 'cookie', label: 'Cookie', reason: 'No `Set-Cookie`', costLater: 'Size' },
+					],
+				},
+			],
+		},
+	})
+
+	expect(screen.getByText('Set-Cookie').tagName).toBe('CODE')
+})

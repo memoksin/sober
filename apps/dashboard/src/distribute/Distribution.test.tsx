@@ -63,3 +63,14 @@ test('a plan that proposed nothing offers no way to assign it', () => {
 	expect(screen.queryByRole('button', { name: /assign/i })).toBeNull()
 	expect(screen.getByRole('button', { name: /drop/i })).toBeTruthy()
 })
+
+test('backticks in the reason render as code, not as backticks', () => {
+	screenWith({
+		plan: {
+			...plan,
+			matches: [{ node: 'auth-api-k7f2', handle: 'alice', because: 'she wrote `schema.ts`' }],
+		},
+	})
+
+	expect(screen.getByText('schema.ts').tagName).toBe('CODE')
+})
