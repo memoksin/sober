@@ -31,6 +31,8 @@ const run = (node: string): Run => ({
 	verify: null,
 	acceptance: [],
 	attended: false,
+	tier: null,
+	fallback: false,
 })
 
 beforeEach(async () => {

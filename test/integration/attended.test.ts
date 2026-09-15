@@ -206,6 +206,8 @@ test('a headless run in flight cannot be talked to, because nothing is listening
 		verify: null,
 		acceptance: [],
 		attended: false,
+		tier: null,
+		fallback: false,
 	})
 
 	await expect(answerRun(paths, node, 'hello?')).rejects.toThrow(/nothing is listening/i)

@@ -1,8 +1,8 @@
-import type { LogLine } from '@besober/schema'
+import type { LogLine, LogWindow } from '@besober/schema'
 import { useEffect, useRef, useState } from 'react'
 import { Overlay } from '../Overlay.js'
 import type { Wire } from '../wire.js'
-import { atBottom, MARK, TONE } from './data.js'
+import { atBottom, MARK, ranWith, TONE } from './data.js'
 
 /**
  * The run on the screen (ADR 0046). A dispatch is the longest and most
@@ -36,6 +36,7 @@ export const LogScreen = ({
 	const [live, setLive] = useState<boolean | null>(null)
 	const [failure, setFailure] = useState<string | null>(null)
 	const [ended, setEnded] = useState(false)
+	const [ran, setRan] = useState<LogWindow['ran']>(undefined)
 
 	const scroller = useRef<HTMLDivElement>(null)
 	// Whether to keep following the bottom. A person who has scrolled up is
@@ -52,12 +53,13 @@ export const LogScreen = ({
 
 		let offset: string | undefined
 		surface
-			.watch<{ lines: LogLine[]; offset: number; live: boolean }>(
+			.watch<LogWindow>(
 				'logs',
 				{ node },
 				(window) => {
 					offset = String(window.offset)
 					setLive(window.live)
+					setRan(window.ran)
 					if (window.lines.length > 0) setLines((shown) => [...shown, ...window.lines])
 				},
 				leaving.signal,
@@ -116,6 +118,9 @@ export const LogScreen = ({
 					<p className="mt-0.5 text-[var(--ink-faint)] text-xs">
 						What the agent said, as it said it.
 					</p>
+					{ran !== undefined && (
+						<p className="mt-0.5 text-[var(--ink-faint)] text-xs">{ranWith(ran)}</p>
+					)}
 				</div>
 				<Status live={live} ended={ended} failure={failure} />
 			</header>

@@ -186,6 +186,14 @@ export const LogWindow = z.strictObject({
 	lines: z.array(LogLine),
 	offset: z.number().int().nonnegative(),
 	live: z.boolean(),
+	/** What ran, from the run record; absent when the record cannot be read. */
+	ran: z
+		.strictObject({
+			host: z.string(),
+			tier: z.enum(['high', 'mid', 'low']).nullable(),
+			fallback: z.boolean(),
+		})
+		.optional(),
 })
 
 export type LogWindow = z.infer<typeof LogWindow>

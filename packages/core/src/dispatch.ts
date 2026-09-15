@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import type { RunExit } from '@besober/schema'
 import { runAudit, unjudged } from './audit.js'
 import { renderBrief } from './brief.js'
-import { type Config, readConfig, readConfigFromBase } from './config.js'
+import { type Config, hostForTier, readConfig, readConfigFromBase, tierFor } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { type AgentInput, checkHost, HostError, startAgent } from './host.js'
@@ -22,7 +22,7 @@ import {
 } from './local.js'
 import type { Paths } from './paths.js'
 import { type Published, publish } from './pr.js'
-import { readNodes } from './records.js'
+import { readNode, readNodes } from './records.js'
 import { finishRun, startRun } from './run.js'
 import { OverlapError, overlaps } from './team.js'
 import { addWorktree } from './worktree.js'
@@ -99,18 +99,33 @@ export const dispatch = async (
 
 	const config = await settings(paths, options.base)
 
+	// The tier comes from the node's score and the line from the base's config
+	// (ADR 0019, ADR 0058): a run must not be able to raise its own model.
+	const record = await readNode(paths, node)
+	if (record.kind !== 'ok') throw new NotOnBoardError('node', node)
+	const tier = tierFor(config.dispatch.thresholds, record.value.brief?.complexity ?? null)
+	const chosen =
+		tier === null
+			? { host: config.dispatch.host, fallback: false }
+			: hostForTier(config.dispatch, tier)
+	const line = chosen.host
+	const named =
+		tier === null
+			? ''
+			: ` (the ${tier} tier${chosen.fallback ? ', falling back to `dispatch.host`' : ''})`
+
 	// Before anything starts, and in this order: a login that expired should be
 	// one sentence, not a failure three minutes into a worktree (`PR-05-04`).
-	const host = await checkHost(config.dispatch.host)
-	if (!host.ok) throw new HostError(`${node} was not started: ${host.reason}`)
+	const host = await checkHost(line)
+	if (!host.ok) throw new HostError(`${node} was not started${named}: ${host.reason}`)
 
 	// Attended mode needs a host that reads stdin while it runs (ADR 0046), and
 	// two of the three do not. Refusing is the honest answer: running it
 	// headless anyway would put somebody in front of a session that cannot hear
 	// them, which is worse than not offering it (§2.9).
-	if (options.attended === true && !adapterFor(config.dispatch.host).attendable)
+	if (options.attended === true && !adapterFor(line).attendable)
 		throw new HostError(
-			`${node} was not started: ${config.dispatch.host} takes one message and exits, so nobody can answer it while it runs. Start it without watching, or set \`dispatch.host\` to a host that can be attended.`,
+			`${node} was not started: ${line}${named} takes one message and exits, so nobody can answer it while it runs. Start it without watching, or set \`dispatch.host\` to a host that can be attended.`,
 		)
 
 	const prompt = options.prompt ?? (await promptFor(paths, node))
@@ -120,7 +135,7 @@ export const dispatch = async (
 		await prepare(node, worktree.path, config.dispatch.setup)
 
 	const attended = options.attended === true
-	const { id } = await startRun(paths, node, config.dispatch.host, { attended })
+	const { id } = await startRun(paths, node, line, { attended, tier, fallback: chosen.fallback })
 	// The pid file holds the **agent's** pid and nothing else, written by
 	// `onStart` below. It used to be seeded with this process's, so a `sober
 	// stop` landing before the child started killed the process that owns the
@@ -145,7 +160,7 @@ export const dispatch = async (
 
 	try {
 		const exit = await startAgent({
-			host: config.dispatch.host,
+			host: line,
 			cwd: worktree.path,
 			prompt,
 			attended,

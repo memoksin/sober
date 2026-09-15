@@ -385,3 +385,78 @@ test('a run that did not finish verifies nothing — there is nothing to verify'
 	expect(result.exit).toBe('failed')
 	expect((await readRuns(paths)).records.get(result.run)?.verify).toBeNull()
 })
+
+/** Scores the node, so dispatch has a tier to pick. */
+const score = async (paths: Paths, complexity: number | null): Promise<void> => {
+	await writeBrief(paths, 'auth-api-k7f2', {
+		approach: 'Add the endpoints.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	const node = (await readNodes(paths)).records.get('auth-api-k7f2')
+	if (node?.brief == null) throw new Error('no brief')
+	await writeNode(paths, 'auth-api-k7f2', { ...node, brief: { ...node.brief, complexity } })
+}
+
+const TIERS = {
+	high: `${FAKE_HOST} --model big`,
+	mid: `${FAKE_HOST} --model medium`,
+	low: `${FAKE_HOST} --model small`,
+}
+
+const ran = async (paths: Paths) => [...(await readRuns(paths)).records.values()][0]
+
+test.each([
+	[9, 'high'],
+	[8, 'high'],
+	[5, 'mid'],
+	[4, 'mid'],
+	[3, 'low'],
+] as const)('complexity %i runs the %s tier’s command line', async (complexity, tier) => {
+	const paths = await board({ tiers: TIERS })
+	await score(paths, complexity)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+
+	expect(await ran(paths)).toMatchObject({ host: TIERS[tier], tier, fallback: false })
+})
+
+test('a tier that names no host runs dispatch.host, and the record says so', async () => {
+	const paths = await board({ tiers: { ...TIERS, low: null } })
+	await score(paths, 2)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+
+	expect(await ran(paths)).toMatchObject({ host: FAKE_HOST, tier: 'low', fallback: true })
+})
+
+test('an unscored node runs dispatch.host with no tier', async () => {
+	const paths = await board({ tiers: TIERS })
+	await score(paths, null)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+
+	expect(await ran(paths)).toMatchObject({ host: FAKE_HOST, tier: null, fallback: false })
+})
+
+test('an unknown tier host is refused before a worktree, naming the tier', async () => {
+	const paths = await board({ tiers: { ...TIERS, high: '/nonexistent/bin/claude --model big' } })
+	await score(paths, 9)
+
+	await expect(dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })).rejects.toThrow(
+		/high tier/,
+	)
+	expect(existsSync(join(paths.local, 'worktrees', 'auth-api-k7f2'))).toBe(false)
+})
+
+test('tiers are read from the base, never from the working copy', async () => {
+	const paths = await board()
+	await score(paths, 9)
+	writeFileSync(
+		paths.config,
+		setSetting(readFileSync(paths.config, 'utf8'), ['dispatch', 'tiers', 'high'], TIERS.high),
+	)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+
+	expect(await ran(paths)).toMatchObject({ host: FAKE_HOST, tier: 'high', fallback: true })
+})

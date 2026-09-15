@@ -423,6 +423,14 @@ export const logs = async (node: string): Promise<void> => {
 	if (last === undefined) return fail(`${node} has not run yet`)
 
 	const text = await readRunOutput(paths, last[0])
+	const { host, tier, fallback } = last[1]
+	const scored =
+		tier === null
+			? 'unscored'
+			: fallback
+				? `${tier} tier named no host, fallback to dispatch.host`
+				: `${tier} tier`
+	say(`  ran ${cyan(host)} (${scored})`)
 	say(
 		tail(text)
 			.map((line) => `  ${mark(line.kind)} ${line.text}`)

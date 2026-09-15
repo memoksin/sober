@@ -17,7 +17,7 @@ const run = {
 test('parses a run still in flight', () => {
 	// `attended` defaults rather than being required, so a run record written
 	// before it existed still parses (ADR 0046).
-	expect(Run.parse(run)).toEqual({ ...run, attended: false })
+	expect(Run.parse(run)).toEqual({ ...run, attended: false, tier: null, fallback: false })
 })
 
 test('a run record from before watching existed reads as unattended', () => {
@@ -46,4 +46,12 @@ test('exit names one of the three ways a run ends', () => {
 
 test('the agent output is not in the record', () => {
 	expect(Run.safeParse({ ...run, log: 'npm warn …' }).success).toBe(false)
+})
+
+test('a run record from before tiers existed reads as unscored, with no fallback', () => {
+	expect(Run.parse(run)).toMatchObject({ tier: null, fallback: false })
+	expect(Run.parse({ ...run, tier: 'high', fallback: true })).toMatchObject({
+		tier: 'high',
+		fallback: true,
+	})
 })
