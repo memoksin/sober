@@ -1337,3 +1337,52 @@ test('giving a run back never takes a teammate’s node off them', async () => {
 		[billing, 'bob'],
 	])
 })
+
+/** A clone of a remote whose board is already out, before this clone has taken it. */
+const freshClone = async () => {
+	const { repo: created, paths } = await board()
+	await sync(paths, 'sober-graph')
+	created.git('push', '-u', 'origin', 'main')
+	const dir = join(created.remote, '..', 'fresh')
+	execFileSync('git', ['clone', '--quiet', created.remote, dir])
+	execFileSync('git', ['config', 'user.name', 'Bob'], { cwd: dir })
+	execFileSync('git', ['config', 'user.email', 'bob@example.com'], { cwd: dir })
+	execFileSync('git', ['config', 'commit.gpgsign', 'false'], { cwd: dir })
+	return { created, dir }
+}
+
+const roots = (remote: string): number =>
+	execFileSync('git', ['rev-list', '--max-parents=0', 'sober-graph'], {
+		cwd: remote,
+		encoding: 'utf8',
+	})
+		.trim()
+		.split('\n').length
+
+test('on a fresh clone, board and sync refuse naming the branch, and no second root goes out', async () => {
+	const { created, dir } = await freshClone()
+	const client = await connect(dir)
+
+	expect(await call(client, 'board')).toContain('board is on sober-graph and is not in this clone')
+	expect(await call(client, 'sync')).toContain('board is on sober-graph and is not in this clone')
+	expect(roots(created.remote)).toBe(1)
+})
+
+test('init on a fresh clone takes the team’s board instead of making a second', async () => {
+	const { created, dir } = await freshClone()
+	const client = await connect(dir)
+
+	const said = await call(client, 'init')
+	expect(said).toContain('taken from sober-graph')
+	expect(said).toMatch(/\d+ records/)
+	const remoteHead = execFileSync('git', ['rev-parse', 'sober-graph'], {
+		cwd: created.remote,
+		encoding: 'utf8',
+	})
+	const localHead = execFileSync('git', ['rev-parse', 'sober-graph'], {
+		cwd: dir,
+		encoding: 'utf8',
+	})
+	expect(localHead).toBe(remoteHead)
+	expect(await call(client, 'init')).toContain('already a board here')
+})

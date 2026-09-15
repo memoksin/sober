@@ -1,4 +1,5 @@
 import {
+	adoptBoard,
 	answerDecision,
 	applySetting,
 	approveBrief,
@@ -16,7 +17,9 @@ import {
 	newId,
 	queueByDefault,
 	readConfig,
+	readProject,
 	renderBrief,
+	paths as resolvePaths,
 	whoami,
 	writeBrief,
 	writeDecision,
@@ -91,9 +94,21 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		},
 		tool(async ({ title, intent }: { title?: string | null; intent?: string | null }) => {
 			const root = cwd
-			if (findRoot(root) !== null) return text('There is already a board here — nothing changed.')
 			if (!(await isRepo(root)))
 				return text('This is not a git repository. SOBER plans work that git tracks.')
+			if (findRoot(root) !== null) {
+				const existing = resolvePaths(root)
+				if ((await readProject(existing)).kind !== 'missing')
+					return text('There is already a board here — nothing changed.')
+				// A fresh clone: the team's board is on its branch, so take it rather than make a second.
+				const config = await readConfig(existing)
+				if (config.kind === 'ok') {
+					const branch = config.value.board.branch
+					const adopted = await adoptBoard(existing, branch)
+					if (adopted !== null)
+						return text(`The team’s board is here — ${adopted} records, taken from ${branch}.`)
+				}
+			}
 
 			const { paths } = await initBoard(root, {
 				title: title ?? root.split('/').pop() ?? 'project',

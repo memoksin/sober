@@ -1,10 +1,20 @@
-import { findRoot, needsMigration, type Paths, paths as resolve, SoberError } from '@besober/core'
+import {
+	boardTravels,
+	findRoot,
+	needsMigration,
+	type Paths,
+	readProject,
+	paths as resolve,
+	SoberError,
+} from '@besober/core'
 
 export class NoBoardError extends SoberError {
-	constructor() {
+	constructor(branch: string | null = null) {
 		super(
 			'no-board',
-			'there is no board in this repository yet — the `init` tool makes one, at the root',
+			branch === null
+				? 'there is no board in this repository yet — the `init` tool makes one, at the root'
+				: `this repository's board is on ${branch} and is not in this clone yet — the \`init\` tool takes it, and does not make a second one`,
 		)
 	}
 }
@@ -27,6 +37,9 @@ export const openBoard = async (cwd: string): Promise<Paths> => {
 			'schema',
 			'this board was written by an older SOBER. Run `sober status` in a terminal — it brings the board forward and says what it rewrote.',
 		)
+	// A fresh clone tracks .sober/config.jsonc, so findRoot succeeds with no project record.
+	if ((await readProject(paths)).kind === 'missing')
+		throw new NoBoardError(await boardTravels(root))
 	return paths
 }
 
