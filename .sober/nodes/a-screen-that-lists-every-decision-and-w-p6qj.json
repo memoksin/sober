@@ -37,11 +37,18 @@
 				"proves": "biome and secretlint are clean, including the accessibility rules the Overlay comment says the backdrop button exists to satisfy"
 			}
 		],
-		"approval": null
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T07:54:29.587Z",
+			"queue": false
+		}
 	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T07:54:38.023Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-09T09:36:42.245Z"
