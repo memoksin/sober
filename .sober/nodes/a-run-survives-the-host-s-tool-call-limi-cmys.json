@@ -1,0 +1,22 @@
+{
+	"title": "A run survives the host's tool-call limit — Codex's five minutes included",
+	"description": "Reported: in Codex, work stops with a message that a five-minute limit was reached. SOBER's own limits are 30 minutes (`dispatch.timeoutMinutes` in `packages/core/src/config.ts`, `WHILE_THEY_THINK` in `packages/mcp/src/ask.ts`), so the limit is the host's: the MCP `run` tool in `packages/mcp/src/tools/build.ts` blocks until the run ends and relies on progress notifications to keep the call alive, which only works where the client sends a progressToken and resets its timer on progress. Start by reproducing it in Codex and recording which call hits the limit and the exact text. Then change `run` the way the bound decision says, so a run longer than five minutes ends as finished (or failed for its own reason) and the session learns the outcome. Tests next to the tool (`packages/mcp/src/**/*.test.ts`) must cover a run that outlasts a short simulated host limit.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"how-does-a-run-s-result-reach-a-session-ldqd"
+	],
+	"files": [
+		"packages/mcp/src/tools/build.ts",
+		"packages/mcp/src/**/*.test.ts",
+		"packages/core/src/dispatch.ts",
+		"packages/codex-plugin/.mcp.json"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-14T11:39:12.254Z"
+}
