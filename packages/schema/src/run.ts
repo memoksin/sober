@@ -44,6 +44,13 @@ export const Run = z.strictObject({
 	 * existed is still a run record and this file is read, not migrated (§5.5).
 	 */
 	attended: z.boolean().default(false),
+	/**
+	 * The tier the node's complexity scored to, or null for an unscored node
+	 * (ADR 0058). `host` stays the exact line that ran; `fallback` says that line
+	 * was `dispatch.host` because the tier named none. Defaulted like `attended`.
+	 */
+	tier: z.enum(['high', 'mid', 'low']).nullable().default(null),
+	fallback: z.boolean().default(false),
 })
 
 export type Run = z.infer<typeof Run>

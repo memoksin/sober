@@ -69,17 +69,21 @@ export const followRun = async (
 	// if it is there — a torn record is not a reason to hide what the agent
 	// said — but nothing is going to append to it.
 	const live = record.kind === 'ok' && record.value.exit === null
+	const ran =
+		record.kind === 'ok'
+			? { host: record.value.host, tier: record.value.tier, fallback: record.value.fallback }
+			: undefined
 
 	const handle = await open(runLog(paths, id), 'r').catch(() => null)
 	// A run with no log yet reads as empty, never as an error (`readRunOutput`
 	// makes the same promise, and a screen opened a second before the host
 	// writes its first line is the ordinary case rather than a failure).
-	if (handle === null) return { lines: [], offset: from ?? 0, live }
+	if (handle === null) return { lines: [], offset: from ?? 0, live, ran }
 
 	try {
 		const { size } = await handle.stat()
 		const start = from ?? Math.max(0, size - FIRST_BYTES)
-		if (start >= size) return { lines: [], offset: start, live }
+		if (start >= size) return { lines: [], offset: start, live, ran }
 
 		const buffer = Buffer.alloc(size - start)
 		const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
@@ -89,7 +93,7 @@ export const followRun = async (
 		// next time, from its own first byte, rather than skipped or split.
 		const read = buffer.subarray(0, bytesRead)
 		const end = read.lastIndexOf(0x0a) + 1
-		if (end === 0) return { lines: [], offset: start, live }
+		if (end === 0) return { lines: [], offset: start, live, ran }
 
 		const lines = tail(read.subarray(0, end).toString('utf8'))
 		return {

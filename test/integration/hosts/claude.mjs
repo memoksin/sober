@@ -14,7 +14,9 @@
  * hand at M1's gate (BUILD-PLAN §3), which is the only place a real session
  * proves anything a fake cannot.
  */
-const args = process.argv.slice(2)
+// A tier's line carries its own model flag (ADR 0058); the fake ignores it.
+const raw = process.argv.slice(2)
+const args = raw[0] === '--model' ? raw.slice(2) : raw
 const say = (event) => process.stdout.write(`${JSON.stringify(event)}\n`)
 
 if (args[0] === 'auth') {

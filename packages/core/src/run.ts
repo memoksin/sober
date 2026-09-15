@@ -22,7 +22,11 @@ export const startRun = (
 	paths: Paths,
 	node: string,
 	host: string,
-	{ attended = false }: { readonly attended?: boolean } = {},
+	{
+		attended = false,
+		tier = null,
+		fallback = false,
+	}: { readonly attended?: boolean; readonly tier?: Run['tier']; readonly fallback?: boolean } = {},
 ): Promise<StartedRun> =>
 	withLock(paths, 'run', async () => {
 		const record = await readNode(paths, node)
@@ -52,6 +56,8 @@ export const startRun = (
 			// host was launched with, so a second process reading this record is
 			// reading a fact about the process rather than a guess (ADR 0046).
 			attended,
+			tier,
+			fallback,
 		}
 		await writeRun(paths, id, run)
 		await appendEvent(paths, { action: 'run.started', node, run: id, host })
