@@ -211,7 +211,9 @@ export const brief = async (node: string, write?: string): Promise<void> => {
 		// An agent in a host with no MCP server writes a brief through here
 		// (`PR-00-08`): the approach and the acceptance list, as JSON.
 		const text = await source(write)
-		const parsed = Brief.omit({ approval: true }).safeParse(JSON.parse(text))
+		const parsed = Brief.omit({ approval: true })
+			.extend({ complexity: Brief.shape.complexity.optional() })
+			.safeParse(JSON.parse(text))
 		if (!parsed.success)
 			return fail(`that is not a brief: ${parsed.error.issues[0]?.message ?? 'unreadable'}`)
 		try {

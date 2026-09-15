@@ -150,13 +150,16 @@ export const approveBrief = (
 export const writeBrief = (
 	paths: Paths,
 	id: string,
-	brief: Omit<Brief, 'approval'>,
+	brief: Omit<Brief, 'approval' | 'complexity'> & { complexity?: number | null },
 ): Promise<Node> =>
 	withLock(paths, 'brief', async () => {
 		const record = await readNode(paths, id)
 		if (record.kind !== 'ok') throw new NotOnBoardError('node', id)
 
-		const node: Node = { ...record.value, brief: { ...brief, approval: null } }
+		const node: Node = {
+			...record.value,
+			brief: { ...brief, complexity: brief.complexity ?? null, approval: null },
+		}
 		await writeNode(paths, id, node)
 		await appendEvent(paths, { action: 'brief.written', node: id })
 		return node

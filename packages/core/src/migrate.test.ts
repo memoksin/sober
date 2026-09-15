@@ -79,6 +79,35 @@ test('archived records are migrated too — one restored must still parse', asyn
 	expect(archived).toMatchObject({ assignee: null, claim: null, dismissal: null })
 })
 
+test('a v5 brief arrives unscored and still parses', async () => {
+	const brief = {
+		approach: 'Do it.',
+		acceptance: [{ run: 'pnpm test', proves: 'it passes' }],
+		approval: null,
+	}
+	await writeV1(5)
+	await writeFile(
+		join(board.nodes, 'auth-api-k7f2.json'),
+		`${JSON.stringify({ ...v1Node, assignee: null, claim: null, dismissal: null, brief })}\n`,
+	)
+
+	await migrateBoard(board)
+
+	const { records, broken } = await readNodes(board)
+	expect(broken).toEqual([])
+	expect(records.get('auth-api-k7f2')?.brief).toEqual({ ...brief, complexity: null })
+})
+
+test('a v5 node with no brief is left untouched', async () => {
+	const node = { ...v1Node, assignee: null, claim: null, dismissal: null }
+	await writeV1(5)
+	await writeFile(join(board.nodes, 'auth-api-k7f2.json'), `${JSON.stringify(node)}\n`)
+
+	await migrateBoard(board)
+
+	expect(JSON.parse(await readFile(join(board.nodes, 'auth-api-k7f2.json'), 'utf8'))).toEqual(node)
+})
+
 test('a board already at this version is left alone', async () => {
 	await writeV1(SCHEMA_VERSION)
 

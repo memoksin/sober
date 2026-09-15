@@ -39,6 +39,7 @@ const board = (): Board => ({
 				files: ['src/auth/**', 'src/middleware/session.ts'],
 				brief: {
 					approach: 'Write the endpoints first, then the middleware that reads what they set.',
+					complexity: null,
 					acceptance: [
 						{
 							run: 'pnpm test src/auth',

@@ -71,6 +71,7 @@ test('the approach renders as what was written, not as its source', () => {
 		node({
 			status: 'needs-approval',
 			brief: {
+				complexity: null,
 				approach: '## How\n\n- read `board.ts`\n- write the route',
 				acceptance: [{ run: 'pnpm test', proves: 'the `board` still loads' }],
 				approval: null,

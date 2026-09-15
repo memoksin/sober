@@ -65,6 +65,17 @@ const MIGRATIONS: readonly Migration[] = [
 			return { ...record, focus: written }
 		},
 	},
+	{
+		to: 6,
+		// The brief gained a complexity score. Nobody scored a brief written
+		// before it, and a guessed number would pick a model nobody chose, so it
+		// arrives unscored and dispatch runs it on `dispatch.host`.
+		node: (record) => {
+			const brief = record.brief as Record_ | null | undefined
+			if (brief === null || brief === undefined) return record
+			return { ...record, brief: { complexity: null, ...brief } }
+		},
+	},
 ]
 
 export type Migrated =

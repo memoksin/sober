@@ -8,9 +8,20 @@ const criterion = {
 
 const brief = {
 	approach: 'Derive status in one pass over the node and its decisions.',
+	complexity: 4,
 	acceptance: [criterion],
 	approval: null,
 }
+
+test('a brief written before the score existed has none', () => {
+	expect(Brief.parse({ ...brief, complexity: null }).complexity).toBeNull()
+})
+
+test('a score outside 1–10, or not a whole number, is refused', () => {
+	for (const complexity of [0, 11, 7.5]) {
+		expect(Brief.safeParse({ ...brief, complexity }).success).toBe(false)
+	}
+})
 
 test('parses a brief with an unapproved acceptance list', () => {
 	expect(Brief.parse(brief)).toEqual(brief)

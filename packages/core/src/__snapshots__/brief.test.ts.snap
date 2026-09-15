@@ -3,6 +3,8 @@
 exports[`the brief renders the whole skeleton from the records, in the design order 1`] = `
 "# Session endpoints
 
+Complexity: not scored
+
 ## How to approach this
 
 Write the endpoints first, then the middleware that reads what they set.

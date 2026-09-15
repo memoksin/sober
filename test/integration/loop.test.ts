@@ -95,6 +95,7 @@ test('a node is briefed, run, accepted, and the node waiting on it becomes ready
 			files: ['src/auth/**'],
 			brief: {
 				approach: 'Endpoints first, then the middleware.',
+				complexity: null,
 				acceptance: [{ run: 'node --test', proves: 'Login answers.' }],
 				approval: { by: 'memoksin', at: AT, queue: false },
 			},

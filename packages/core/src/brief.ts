@@ -17,6 +17,9 @@ export const renderBrief = (board: Board, id: string): string | null => {
 
 	const parts = [
 		`# ${node.title}`,
+		node.brief?.complexity == null
+			? 'Complexity: not scored'
+			: `Complexity: ${node.brief.complexity} / 10`,
 		section('How to approach this', node.brief?.approach ?? '_No approach written yet._'),
 		section('What must be true when this is done', acceptance(board, id)),
 		section('The project', project(board)),

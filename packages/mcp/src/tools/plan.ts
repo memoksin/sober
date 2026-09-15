@@ -447,6 +447,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			inputSchema: {
 				node: z.string(),
 				approach: z.string(),
+				complexity: z.int().min(1).max(10),
 				acceptance: z.array(CriterionInput).min(1),
 			},
 		},
@@ -454,15 +455,18 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			async ({
 				node,
 				approach,
+				complexity,
 				acceptance,
 			}: {
 				node: string
 				approach: string
+				complexity: number
 				acceptance: z.infer<typeof CriterionInput>[]
 			}) => {
 				const paths = await openBoard(cwd)
 				await writeBrief(paths, node, {
 					approach,
+					complexity,
 					acceptance: acceptance.map((criterion) => ({ ...criterion })),
 				})
 				return text(

@@ -36,6 +36,9 @@ export type Approval = z.infer<typeof Approval>
  */
 export const Brief = z.strictObject({
 	approach: z.string().min(1),
+	// How hard the node is for one agent in one run. `null` is a brief written
+	// before the score existed, which dispatch runs on `dispatch.host`.
+	complexity: z.int().min(1).max(10).nullable(),
 	acceptance: z.array(Criterion).min(1),
 	approval: Approval.nullable(),
 })
