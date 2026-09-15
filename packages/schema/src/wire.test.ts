@@ -92,3 +92,10 @@ test('a log line written before lines named their tool still parses', () => {
 		tool: null,
 	})
 })
+
+test('a check line and a checked line both parse off the wire', () => {
+	for (const kind of ['check', 'checked'])
+		expect(
+			LogLine.safeParse({ kind, text: 'acceptance 1 of 1: `pnpm test`', tool: null }).success,
+		).toBe(true)
+})

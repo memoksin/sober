@@ -108,13 +108,22 @@ export const runAudit = async (
 	const verify =
 		options.verify === undefined ? await verifyCommand(paths, options.base) : options.verify
 
-	const judgedVerify = await judge(cwd, verify)
-	if (verify !== null) await log(paths, id, `dispatch.verify: ${verify}`, judgedVerify)
+	// This re-runs the suite the agent already ran, on purpose: work under review
+	// does not judge itself (ADR 0019). Making it cheaper is a human's decision.
+	const judgedVerify =
+		verify === null
+			? await judge(cwd, verify)
+			: await checked(paths, id, `dispatch.verify: \`${verify}\``, () => judge(cwd, verify))
 
+	const criteria = await criteriaOf(paths, node)
 	const acceptance: (CommandResult | null)[] = []
-	for (const criterion of await criteriaOf(paths, node)) {
-		const judged = await judge(cwd, criterion.run)
-		await log(paths, id, `acceptance: ${criterion.proves}\n$ ${criterion.run}`, judged)
+	for (const [index, criterion] of criteria.entries()) {
+		const judged = await checked(
+			paths,
+			id,
+			`acceptance ${index + 1} of ${criteria.length}: \`${criterion.run}\``,
+			() => judge(cwd, criterion.run),
+		)
 		acceptance.push(judged.result)
 	}
 	return { verify: judgedVerify.result, acceptance }
@@ -185,11 +194,38 @@ const verifyCommand = async (paths: Paths, base: string): Promise<string | null>
 	return config.value.dispatch.verify
 }
 
-const log = (paths: Paths, id: string, header: string, judged: Judged): Promise<void> =>
-	appendRunOutput(
+/**
+ * A `check` line before the command and a `checked` line after it, so a log
+ * read mid-audit names what is being waited on. `tail` reads the `--- check:`
+ * and `--- checked:` prefixes back into those kinds.
+ */
+const checked = async (
+	paths: Paths,
+	id: string,
+	what: string,
+	run: () => Promise<Judged>,
+): Promise<Judged> => {
+	await log(paths, id, 'check', what)
+	const started = Date.now()
+	const judged = await run()
+	await log(paths, id, 'checked', what, { judged, seconds: (Date.now() - started) / 1000 })
+	return judged
+}
+
+const log = (
+	paths: Paths,
+	id: string,
+	kind: 'check' | 'checked',
+	what: string,
+	done?: { readonly judged: Judged; readonly seconds: number },
+): Promise<void> => {
+	if (done === undefined) return appendRunOutput(paths, id, `\n--- ${kind}: ${what}\n`)
+	const { output, result } = done.judged
+	const outcome = result === null ? 'did not run' : `exit ${result.exit}`
+	const body = output === '' || output.endsWith('\n') ? output : `${output}\n`
+	return appendRunOutput(
 		paths,
 		id,
-		`\n--- ${header}\n${judged.output}${
-			judged.result === null ? '(did not run)\n' : `(exit ${judged.result.exit})\n`
-		}`,
+		`${body}--- ${kind}: ${what} (${outcome}, ${done.seconds.toFixed(1)}s)\n`,
 	)
+}
