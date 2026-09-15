@@ -7,7 +7,8 @@ import type { LogLine, LogWindow } from '@besober/schema'
  *
  * The marks are the CLI's, deliberately. `sober logs` and this screen show the
  * same run, and two vocabularies for one thing is how a person ends up unsure
- * whether they are looking at the same output.
+ * whether they are looking at the same output. The CLI's copy is `TAIL` in
+ * `packages/cli/src/work.ts`, aligned by hand: change one, check the other.
  */
 export const MARK: Readonly<Record<LogLine['kind'], string>> = {
 	started: '▸',
@@ -29,13 +30,30 @@ export const TONE: Readonly<Record<LogLine['kind'], string>> = {
 	thinking: 'var(--ink-faint)',
 	tool: 'var(--status-ready)',
 	result: 'var(--ink)',
-	check: 'var(--ink-faint)',
+	check: 'var(--ink-dim)',
 	checked: 'var(--ink)',
 	// The host's own stderr. It is the one thing a failing run always has, so
 	// it is the one thing that must not read like ordinary output.
 	raw: 'var(--danger)',
 	answer: 'var(--status-in-review)',
 }
+
+// A display convenience, not an allowlist: a host naming a tool nobody listed is
+// a missing glyph, never a missing line. Glyphs only — ADR 0039 gives colour one job.
+export const TOOL: Readonly<Record<string, string>> = {
+	read: '◧',
+	edit: '✎',
+	write: '✍',
+	bash: '$',
+	grep: '⌕',
+	glob: '✱',
+	task: '⧉',
+	webfetch: '⇣',
+}
+
+export const TOOL_FALLBACK = '⚒'
+
+export const toolMark = (tool: string): string => TOOL[tool.trim().toLowerCase()] ?? TOOL_FALLBACK
 
 /**
  * Whether a scrolling box is at its bottom, within a line's slack.
