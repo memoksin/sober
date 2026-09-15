@@ -42,7 +42,11 @@
 				"proves": "biome and secretlint are clean"
 			}
 		],
-		"approval": null
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T07:55:25.109Z",
+			"queue": false
+		}
 	},
 	"outcome": null,
 	"assignee": null,
