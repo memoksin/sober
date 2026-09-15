@@ -364,6 +364,26 @@ test('a host with no elicitation approves on a relayed yes', async () => {
 	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
 })
 
+test('a host that declares elicitation is never asked again to approve', async () => {
+	const { repo: created, paths } = await board()
+	let asked = 0
+	const client = await connect(created.dir, () => {
+		asked += 1
+		return 'no'
+	})
+	await call(client, 'propose', { nodes: [{ key: 'a', title: 'Alone' }] })
+	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
+	await call(client, 'write_brief', {
+		node,
+		approach: 'Write it.',
+		acceptance: [{ run: 'npm test', proves: 'It answers.' }],
+	})
+
+	await call(client, 'approve', { node, confirmed: true })
+	expect(asked).toBe(0)
+	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
+})
+
 test('a brief is written, approved by the human, and nothing runs before that', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
@@ -609,15 +629,30 @@ test('an unanswered decision has its options rewritten in place, and an answered
 	await call(client, 'open_decision', {
 		decision,
 		options: [
-			{ id: 'post', label: 'A form post', reason: 'Works with no script', costLater: 'Full reloads' },
+			{
+				id: 'post',
+				label: 'A form post',
+				reason: 'Works with no script',
+				costLater: 'Full reloads',
+			},
 			{ id: 'fetch', label: 'fetch()', reason: 'No reload', costLater: 'You own the error states' },
 		],
 	})
 	await call(client, 'open_decision', {
 		decision,
 		options: [
-			{ id: 'action', label: 'A server action', reason: 'One file', costLater: 'Framework lock-in' },
-			{ id: 'rpc', label: 'A typed RPC', reason: 'Types end to end', costLater: 'A client to keep' },
+			{
+				id: 'action',
+				label: 'A server action',
+				reason: 'One file',
+				costLater: 'Framework lock-in',
+			},
+			{
+				id: 'rpc',
+				label: 'A typed RPC',
+				reason: 'Types end to end',
+				costLater: 'A client to keep',
+			},
 		],
 	})
 	const listed = await call(client, 'decisions')
