@@ -24,6 +24,7 @@ export const Config = z.strictObject({
 		verify: z.string().nullable(),
 		timeoutMinutes: z.int().positive(),
 		concurrency: z.int().positive(),
+		base: z.string().min(1).nullable(),
 		draftPr: z.boolean(),
 		accept: z.enum(['merge', 'pull-request']),
 		queueByDefault: z.boolean(),
@@ -61,6 +62,7 @@ export const DEFAULT_CONFIG: Config = {
 		verify: null,
 		timeoutMinutes: 30,
 		concurrency: 3,
+		base: null,
 		draftPr: true,
 		accept: 'merge',
 		queueByDefault: false,
@@ -108,6 +110,11 @@ export const DEFAULT_CONFIG_TEXT = `{
 
 		// How many runs may burn at once. Ready nodes beyond it queue.
 		"concurrency": ${DEFAULT_CONFIG.dispatch.concurrency},
+
+		// The branch runs are cut from and draft pull requests target, e.g.
+		// "development". null means whatever branch is checked out. \`--base\`
+		// still overrides it for one invocation.
+		"base": null,
 
 		// When a run finishes, push its branch and open the node's pull
 		// request as a draft, so CI runs before a human looks. A draft asks
@@ -201,7 +208,8 @@ export type ReadConfig =
 	| ({ readonly kind: 'broken' } & BrokenRecord)
 
 /** A missing config.jsonc is the defaults; a broken one is reported, never guessed at. */
-export const readConfig = async (paths: Paths): Promise<ReadConfig> => {
+export const readConfig = async (paths: Paths, ref?: string): Promise<ReadConfig> => {
+	if (ref !== undefined) return readConfigFromBase(paths, ref)
 	let text: string
 	try {
 		text = await readFile(paths.config, 'utf8')

@@ -130,6 +130,16 @@ test('the config init writes parses back to the defaults', async () => {
 	expect(await readConfig(p)).toEqual({ kind: 'ok', value: DEFAULT_CONFIG })
 })
 
+test('dispatch.base parses, and a file without it targets nothing', () => {
+	expect(parseConfig('c', '{ "dispatch": { "base": "development" } }')).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { base: 'development' } },
+	})
+	expect(parseConfig('c', '{ "dispatch": {} }')).toMatchObject({
+		value: { dispatch: { base: null } },
+	})
+})
+
 test('a setting missing from the file is the default, and an unknown one is reported', async () => {
 	expect(parseConfig('c', '{ "dispatch": { "concurrency": 1 } }')).toEqual({
 		kind: 'ok',
