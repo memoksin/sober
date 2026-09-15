@@ -1,7 +1,17 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { performance } from 'node:perf_hooks'
+
+// Observation only (docs/WINDOWS-CI-2026-09.md): with SOBER_FIXTURE_STATS set,
+// one stderr line per repository created and per cleanup, with its duration.
+// A cleanup slower than one retryDelay means rmSync's retries fired.
+const RETRY_DELAY = 100
+const stat = (event: string, since: number) => {
+	if (process.env.SOBER_FIXTURE_STATS)
+		writeSync(2, `sober-fixture ${event} ${Math.round(performance.now() - since)}ms\n`)
+}
 
 export type TempRepo = {
 	/** Working repository with `origin` pointing at `remote`. */
@@ -17,6 +27,7 @@ export type TempRepo = {
  * touches git plumbing runs against this, never against a mock (ADR 0014).
  */
 export function createTempRepo(): TempRepo {
+	const started = performance.now()
 	const root = mkdtempSync(join(tmpdir(), 'sober-it-'))
 	const dir = join(root, 'work')
 	const remote = join(root, 'remote.git')
@@ -30,6 +41,7 @@ export function createTempRepo(): TempRepo {
 	run(dir, ['config', 'user.email', 'test@besober.dev'])
 	run(dir, ['config', 'commit.gpgsign', 'false'])
 	run(dir, ['remote', 'add', 'origin', remote])
+	stat('create', started)
 
 	return {
 		dir,
@@ -39,6 +51,13 @@ export function createTempRepo(): TempRepo {
 		// process still holds open makes the whole tree undeletable. `force`
 		// covers a directory that is already gone; it does nothing for one that
 		// is busy, and every fixture here has git processes that just exited.
-		cleanup: () => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
+		cleanup: () => {
+			const began = performance.now()
+			try {
+				rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: RETRY_DELAY })
+			} finally {
+				stat('cleanup', began)
+			}
+		},
 	}
 }
