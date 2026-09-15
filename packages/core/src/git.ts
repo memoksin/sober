@@ -49,7 +49,9 @@ const exec = async (
 			cwd,
 			encoding: 'utf8',
 			maxBuffer: 32 * 1024 * 1024,
-			env: { ...process.env, ...env },
+			// sync.ts and digest.ts match git's English stderr; a pinned locale makes that a contract.
+			// Callers may still override it through env.
+			env: { ...process.env, LC_ALL: 'C', ...env },
 		})
 		return stdout
 	} catch (error) {
