@@ -437,6 +437,72 @@ test('a session is told at the start whether the guard is live', () => {
 	expect(context).toContain('auth-api-k7f2')
 })
 
+/** A second clone of the same remote, with the board joined. */
+const clone = (remote: string): string => {
+	const dir = join(dirname(remote), 'bob')
+	execFileSync('git', ['clone', '--quiet', remote, dir])
+	for (const [key, value] of [
+		['user.name', 'Bob'],
+		['user.email', 'bob@example.com'],
+		['commit.gpgsign', 'false'],
+	] as const)
+		execFileSync('git', ['config', key, value], { cwd: dir })
+	sober(dir, 'init')
+	return dir
+}
+
+const pushed = (): TempRepo => {
+	const created = project()
+	sober(created.dir, 'init')
+	created.git('add', '-A')
+	created.git('commit', '-m', 'chore: sober')
+	created.git('push', '-u', 'origin', 'main')
+	sober(created.dir, 'sync')
+	return created
+}
+
+const sessionContext = (dir: string): string =>
+	String(verdict(hook(dir, 'session', { hook_event_name: 'SessionStart' })).additionalContext)
+
+test('a session hook pulls a board the remote is ahead on, and says so', () => {
+	const a = pushed()
+	const b = clone(a.remote)
+	seed(a.dir)
+	sober(a.dir, 'sync')
+
+	expect(sessionContext(b)).toMatch(/pulled \d+ changes from origin/)
+	expect(existsSync(join(b, '.sober/nodes/auth-api-k7f2.json'))).toBe(true)
+})
+
+test('a session hook only reminds when local board work is unsent', () => {
+	const a = pushed()
+	const b = clone(a.remote)
+	seed(b)
+	sober(b, 'sync', '--no-push')
+	writeFileSync(
+		join(a.dir, '.sober/nodes/other-node-aaaa.json'),
+		`${JSON.stringify({ title: 'Other', description: '', notes: '', dependsOn: [], decisions: [], files: [], brief: null, outcome: null, assignee: null, claim: null, accepted: null, dismissal: null, createdAt: '2026-09-05T00:00:00.000Z' }, null, '\t')}\n`,
+	)
+	sober(a.dir, 'sync')
+
+	const context = sessionContext(b)
+	expect(context).toMatch(/is 1 behind origin — sync/)
+	expect(existsSync(join(b, '.sober/nodes/other-node-aaaa.json'))).toBe(false)
+})
+
+test('a session hook with no remote adds no line and exits zero', () => {
+	const created = project()
+	sober(created.dir, 'init')
+	created.git('remote', 'remove', 'origin')
+	const context = sessionContext(created.dir)
+	expect(context).not.toContain('sync')
+	expect(context).not.toContain('pulled')
+})
+
+test('a session hook outside a board says nothing at all', () => {
+	expect(hook(project().dir, 'session', { hook_event_name: 'SessionStart' })).toEqual({})
+})
+
 test('a node heading for a claimed node’s files is refused, and the second command is the confirmation', () => {
 	const created = project()
 	sober(created.dir, 'init')

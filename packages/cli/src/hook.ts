@@ -1,5 +1,6 @@
-import { findRoot, loadBoard, paths as resolve, statusOf } from '@besober/core'
+import { boardDistance, findRoot, loadBoard, paths as resolve, statusOf } from '@besober/core'
 import { decisionState } from '@besober/schema'
+import { settingsOf } from './board.js'
 
 /**
  * Hook enforcement (ADR 0009, ADR 0047): the plugin's guard against the one
@@ -66,7 +67,7 @@ const decide = async (event: string | undefined, payload: Payload): Promise<Verd
 
 	const warning = board.broken.length === 0 ? {} : { systemMessage: didNotRun(broken(board)) }
 
-	if (event === 'session') return { ...warning, ...live(held) }
+	if (event === 'session') return { ...warning, ...live(held, await behind(root)) }
 	if (event === 'spawn') return { ...warning, ...denial(held, aimedAt(payload)) }
 	return warning
 }
@@ -146,7 +147,7 @@ const denial = (held: readonly Held[], text: string): Verdict => {
  * (`DESIGN.md` §2.9). So the one that is installed says so once, at the start,
  * where a session can be believed rather than assumed.
  */
-const live = (held: readonly Held[]): Verdict => ({
+const live = (held: readonly Held[], distance: string | null): Verdict => ({
 	hookSpecificOutput: {
 		hookEventName: 'SessionStart',
 		additionalContext: [
@@ -158,6 +159,29 @@ const live = (held: readonly Held[]): Verdict => ({
 							(node) => `${node.id} (waiting on ${node.decisions.map((one) => one.id).join(', ')})`,
 						)
 						.join('; ')}.`,
+			...(distance === null ? [] : [distance]),
 		].join('\n'),
 	},
 })
+
+/**
+ * One line on how far the board is from the remote, taking a clean
+ * fast-forward first. Offline, no remote, or any failure says nothing: a
+ * session start must never fail or get louder because the network did.
+ */
+const behind = async (root: string): Promise<string | null> => {
+	try {
+		const paths = resolve(root)
+		const branch = (await settingsOf(paths)).board.branch
+		const distance = await boardDistance(paths, branch, { pull: true })
+		if (distance.kind !== 'ok') return null
+		if (distance.pulled !== null)
+			return `pulled ${distance.pulled.updated.length} changes from ${distance.remote}`
+		if (distance.behind > 0)
+			return `${branch} is ${distance.behind} behind ${distance.remote} — sync`
+		if (distance.ahead > 0) return `${distance.ahead} unsent — sync`
+		return null
+	} catch {
+		return null
+	}
+}
