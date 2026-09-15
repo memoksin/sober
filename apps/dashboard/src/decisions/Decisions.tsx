@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Inline } from '../markdown.js'
 import { Overlay } from '../Overlay.js'
 import type { BoardRead } from '../panel/data.js'
 import { decisionRows } from './data.js'
@@ -40,12 +41,15 @@ export const DecisionsScreen = ({
 									className="flex flex-col gap-0.5 text-left"
 								>
 									<span className="flex items-baseline gap-2">
-										<span className="font-medium text-[var(--ink)] text-xs">{row.question}</span>
+										<span className="font-medium text-[var(--ink)] text-xs">
+											<Inline text={row.question} />
+										</span>
 										<span className="ml-auto font-mono text-[10px] text-[var(--ink-faint)]">
 											{row.state}
 										</span>
 									</span>
 									{row.chosen !== null && row.answer !== null ? (
+										// Inline, not Markdown: this sits inside a button, where block output does not belong.
 										<>
 											<span className="flex items-baseline gap-2 text-[var(--ink)] text-xs">
 												{row.chosen.label}
@@ -56,7 +60,7 @@ export const DecisionsScreen = ({
 												)}
 											</span>
 											<span className="text-[var(--ink-dim)] text-xs leading-[var(--leading-prose)]">
-												{row.answer.rationale}
+												<Inline text={row.answer.rationale} />
 											</span>
 										</>
 									) : (
@@ -70,14 +74,17 @@ export const DecisionsScreen = ({
 								{expanded === row.id && (
 									<div className="flex flex-col gap-2 border-[var(--line)] border-l pl-3 text-xs">
 										{row.chosen !== null && (
-											<p className="text-[var(--ink-dim)]">Cost later: {row.chosen.costLater}</p>
+											<p className="text-[var(--ink-dim)]">
+												Cost later: <Inline text={row.chosen.costLater} />
+											</p>
 										)}
 										{row.notPicked.length > 0 && (
 											<ul className="flex flex-col gap-1">
 												{row.notPicked.map((option) => (
 													<li key={option.id} className="text-[var(--ink-dim)]">
 														<span className="text-[var(--ink)]">{option.label}</span> —{' '}
-														{option.reason} Cost later: {option.costLater}
+														<Inline text={option.reason} /> Cost later:{' '}
+														<Inline text={option.costLater} />
 													</li>
 												))}
 											</ul>

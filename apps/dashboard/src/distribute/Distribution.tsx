@@ -1,4 +1,5 @@
 import type { Distribution, ProjectedNode } from '@besober/schema'
+import { Inline } from '../markdown.js'
 import { Overlay } from '../Overlay.js'
 import { passedOver, rows } from './data.js'
 
@@ -57,7 +58,8 @@ export const DistributionScreen = ({
 									</span>
 								</span>
 								<span className="text-[var(--ink-dim)] text-xs leading-[var(--leading-prose)]">
-									{row.because}
+									{/* Inline, not Markdown: the reason is a run of text in a span. */}
+									<Inline text={row.because} />
 								</span>
 							</li>
 						))}

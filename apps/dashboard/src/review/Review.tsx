@@ -1,5 +1,6 @@
 import type { Review } from '@besober/schema'
 import { useState } from 'react'
+import { Inline } from '../markdown.js'
 import { Overlay } from '../Overlay.js'
 import { pending } from '../pending.js'
 import { ciLine, criterionLine, type Tone, verdict } from './data.js'
@@ -141,7 +142,9 @@ export const ReviewScreen = ({
 										{finding.file}
 										{finding.line !== null && `:${finding.line}`}
 									</code>
-									<span className="ml-2 text-[var(--ink-dim)]">{finding.message}</span>
+									<span className="ml-2 text-[var(--ink-dim)]">
+										<Inline text={finding.message} />
+									</span>
 									<span className="ml-2 text-[var(--ink-faint)]">{finding.signal}</span>
 								</li>
 							))}
@@ -197,6 +200,7 @@ export const ReviewScreen = ({
 							value={note}
 							onChange={(event) => setNote(event.target.value)}
 							rows={3}
+							// Typed here, never printed back on this screen, so no Markdown to render.
 							// The note is not a comment: it is carried into the next run,
 							// which is what makes turning work down cheaper than fixing it
 							// by hand.

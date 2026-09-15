@@ -1,9 +1,9 @@
 import { useState } from 'react'
+import { Inline, Markdown } from '../markdown.js'
 import { pending } from '../pending.js'
 import type { Action, BoardRead } from './data.js'
 import { actions, held, nextMove } from './data.js'
 import { Flag } from './Flag.js'
-import { Inline, Markdown } from './markdown.js'
 
 /**
  * One node, in full. The canvas answers "what is here and what touches what";

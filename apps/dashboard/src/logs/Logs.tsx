@@ -19,6 +19,7 @@ import { atBottom, MARK, TONE } from './data.js'
  * running node on it costs nothing extra until somebody opens this, and stops
  * costing it the moment they close it.
  */
+// No renderer here: this is a monospace transcript, and a backtick is a character the agent typed.
 export const LogScreen = ({
 	node,
 	surface,
