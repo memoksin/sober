@@ -1,6 +1,6 @@
 import { acceptDistribution, dropDistribution, loadBoard, readDistribution } from '@besober/core'
 import { openBoard } from './board.js'
-import { bold, columns, cyan, dim, green, refuse, say, yellow } from './out.js'
+import { bold, columns, cyan, dim, green, refuse, say, when, yellow } from './out.js'
 
 /**
  * The plan a session proposed, read and settled from a terminal (ADR 0051).
@@ -41,7 +41,7 @@ export const distribute = async (how: 'show' | 'accept' | 'drop'): Promise<void>
 	if (waiting === null) return nothing()
 
 	const board = await loadBoard(paths).catch(refuse)
-	say(dim(`proposed by ${waiting.by}, ${waiting.at}`))
+	say(dim(`proposed by ${waiting.by}, ${when(waiting.at)}`))
 	// The reason under the row it belongs to, rather than a second list keyed by
 	// id. It is the only part of the session's reasoning that left the session,
 	// and a reader should not have to join two tables to find it.
