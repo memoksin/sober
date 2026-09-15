@@ -1,0 +1,18 @@
+{
+	"title": "approve asks once: drop the leftover askYes elicitation",
+	"description": "ADR 0057 (docs/adr/0057-*) says `decide`, `approve` and `accept` take the relayed pick and no longer elicit. `decide` and `accept` were migrated in a2f1d6c, but the `approve` tool in packages/mcp/src/tools/plan.ts (~line 505) still calls `askYes` after the host's question tool already got a yes — so the human confirms every brief twice. Fix: remove the askYes call and its `if (!yes)` branch; keep the `confirmed: z.literal(true)` input, the no-brief guard, `queueByDefault` resolution, and the queued/non-queued return texts. Drop the `askYes` import from plan.ts only if `edit_decision` (~line 394) no longer uses it — it does today, and edit_decision is out of scope. Update the stale comment in packages/mcp/src/ask.ts if it still lists approve. Also check the `approve` tool description still tells the agent to name the queue outcome in its own question (the old button text 'Yes — approve, and start it when it is ready' carried that; move that hint into the description so the host's question says whether it will auto-start). Check: `pnpm -F @besober/mcp exec tsc --noEmit` (or the repo's typecheck script) passes, and `rg -n askYes packages/mcp/src/tools/plan.ts` shows only the edit_decision call.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/mcp/src/tools/plan.ts",
+		"packages/mcp/src/ask.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-11T13:16:27.673Z"
+}

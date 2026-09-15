@@ -23,6 +23,12 @@
 	],
 	"suggested": "ff-auto",
 	"derived": null,
-	"answer": null,
+	"answer": {
+		"option": "ff-auto",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T18:17:19.156Z",
+		"derived": null
+	},
 	"createdAt": "2026-09-11T07:22:40.280Z"
 }

@@ -1,0 +1,27 @@
+{
+	"title": "`sober status`, `sober logs` and the run panel say which host and model ran the node",
+	"description": "With three hosts on one board, a run that says only `running` is unreadable. The run record already carries `host` (packages/schema/src/run.ts) and after `resolve-host` it is the resolved one; this node puts it on every surface that shows a run:\n- `sober status` and `sober status <node>`: the tier and the host beside a running or finished node (packages/core/src/status.ts, packages/cli/src).\n- `sober logs <node>`: a header line before the tail — tier, host, model, started at.\n- the dashboard run panel and logs view (apps/dashboard/src/logs, apps/dashboard/src/panel): the same line at the top.\n\nWhat can be shown as a separate model name depends on the `tier-host-shape` decision: a command line is shown whole; a pair is shown as two words. If the `unnamed-tier` decision is the fallback, the line says `(default host)` so a typo in a tier key is visible.\n\nTests with the code: one status test, one logs test, one dashboard data test.",
+	"notes": "",
+	"dependsOn": [
+		"the-dispatch-resolves-the-tier-s-host-pr-w01q"
+	],
+	"decisions": [
+		"where-do-a-tier-s-host-and-model-live-in-nn4v",
+		"a-node-is-scored-to-a-tier-that-names-no-w8ka"
+	],
+	"files": [
+		"packages/core/src/status.ts",
+		"packages/cli/src/**",
+		"apps/dashboard/src/logs/**",
+		"apps/dashboard/src/panel/**",
+		"packages/core/src/status.test.ts",
+		"apps/dashboard/src/**/*.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-12T17:41:57.651Z"
+}

@@ -7,8 +7,8 @@
 		"a-model-per-tier-per-host-in-the-config-idyd"
 	],
 	"decisions": [
-		"how-is-a-host-told-which-model-to-use-do-4wh2",
-		"a-brief-written-before-the-score-existed-2cv5"
+		"where-do-a-tier-s-host-and-model-live-in-nn4v",
+		"a-node-is-scored-to-a-tier-that-names-no-w8ka"
 	],
 	"files": [
 		"packages/core/src/dispatch.ts",

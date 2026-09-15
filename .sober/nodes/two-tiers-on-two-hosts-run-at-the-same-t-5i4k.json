@@ -1,0 +1,22 @@
+{
+	"title": "Two tiers on two hosts run at the same time",
+	"description": "The point of the feature: low on OpenCode, mid on Codex, high on Claude Code, all burning under one `dispatch.concurrency`. Nothing in core should assume one host per board any more.\n\nOne integration test proves it: two ready nodes scored to two tiers, `dispatch.tiers` pointing at two of the fake hosts in test/integration/hosts, `sober run a b`. Both start, both run records name their own host, each log renders through its own adapter (`renderLine` in hosts.ts already picks by event shape), and `--watch` on the Codex-tier node is refused by tier while the Claude-tier node is attended. The same pair started by the unattended queue (packages/core/src/queue.ts, ADR 0056) resolves the host per node, not once for the batch.\n\nFix whatever the test finds that assumes a single host — the batch probe, the per-run host string, anything keyed by `config.dispatch.host`. No new surface; this node is the test and the fixes it forces.",
+	"notes": "",
+	"dependsOn": [
+		"the-dispatch-resolves-the-tier-s-host-pr-w01q"
+	],
+	"decisions": [],
+	"files": [
+		"test/integration/**",
+		"packages/core/src/queue.ts",
+		"packages/core/src/run.ts",
+		"packages/core/src/dispatch.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-12T17:41:57.651Z"
+}

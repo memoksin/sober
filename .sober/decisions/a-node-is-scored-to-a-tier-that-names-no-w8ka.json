@@ -1,0 +1,34 @@
+{
+	"category": "error-handling",
+	"question": "A node is scored to a tier that names no host in the config. What runs it?",
+	"options": [
+		{
+			"id": "fall-back",
+			"label": "`dispatch.host` runs it, exactly as before this feature",
+			"reason": "A project with only `dispatch.host` set keeps working untouched, and one tier can be moved to another host without filling the other two. It is what `parseConfig` already does for every other missing key.",
+			"costLater": "A typo in a tier key sends the work to the default host at the default model, and nobody notices unless the run record says the fallback was used — so the record has to say it, and `sober status` has to show it."
+		},
+		{
+			"id": "refuse",
+			"label": "Not started — the refusal names the node, the tier and the key to set",
+			"reason": "ADR 0048's rule: refused, not defaulted. The user reads one sentence before any worktree exists instead of a wrong invoice three minutes later.",
+			"costLater": "Every project that adopts tiers has to fill all three before any scored node starts, and `dispatch.host` goes dead the moment `dispatch.tiers` exists — two settings that mean the same thing, one of them ignored."
+		},
+		{
+			"id": "all-or-nothing",
+			"label": "The schema requires all three tiers once `dispatch.tiers` is present; a partial table is a broken config",
+			"reason": "The error arrives at config read, before any node is scored — the same place a wrong `timeoutMinutes` is caught today.",
+			"costLater": "A config being edited by hand breaks `sober status` until the third line is written, and `sober init` has to emit the whole table or none of it."
+		}
+	],
+	"suggested": "fall-back",
+	"derived": "packages/core/src/config.ts (`parseConfig`: \"a missing key means the default\") against packages/core/src/hosts.ts (`adapterFor`: \"an unknown host is refused rather than defaulted\")",
+	"answer": {
+		"option": "fall-back",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T18:16:07.782Z",
+		"derived": "packages/core/src/config.ts (`parseConfig`: \"a missing key means the default\") against packages/core/src/hosts.ts (`adapterFor`: \"an unknown host is refused rather than defaulted\")"
+	},
+	"createdAt": "2026-09-12T17:41:57.651Z"
+}

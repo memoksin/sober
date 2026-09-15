@@ -38,8 +38,17 @@
 	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T20:59:28.358Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T21:34:11.364Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "did-not-run"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T21:20:35.857Z"
 }

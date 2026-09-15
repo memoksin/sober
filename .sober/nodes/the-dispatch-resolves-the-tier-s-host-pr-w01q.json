@@ -1,0 +1,27 @@
+{
+	"title": "The dispatch resolves the tier's host, probes it, and refuses by tier",
+	"description": "Today `dispatch` (packages/core/src/dispatch.ts:103-112) probes `config.dispatch.host` once, checks it is attendable, and passes the same string to `startRun` and `startAgent`. After this node the host is the one the node's tier resolves to from `dispatch.tiers` (read through `readConfigFromBase`, ADR 0019 — a run must not choose its own host), and `dispatch.host` is only what an unnamed tier gets, as the `unnamed-tier` decision says.\n\nConcretely:\n- one function in core takes the config and the node's tier and returns the host command line to launch (and the model, where the `tier-host-shape` decision makes it a separate field); every reader in dispatch.ts goes through it.\n- `checkHost` runs against that host. A tier whose host is unknown (`UnknownHostError`), not installed, or not logged in throws a `HostError` that names the node, the tier, the host and the config key to fix — e.g. `high → opencode: not logged in; run \\`opencode auth login\\` or change dispatch.tiers.high`.\n- the attended check at dispatch.ts:110 names the tier: `--watch` on a node whose tier runs Codex is refused with the tier in the sentence.\n- `startRun` records the resolved host (and model) in the run record, so `Run.host` in packages/schema/src/run.ts is what actually ran.\n\nTests live with the code: dispatch tests against the fake hosts in test/integration/hosts (claude, codex, opencode) — one for a tier that resolves, one for the fallback, one for each refusal.",
+	"notes": "",
+	"dependsOn": [
+		"the-dispatch-picks-the-model-from-the-sc-c9n8"
+	],
+	"decisions": [
+		"where-do-a-tier-s-host-and-model-live-in-nn4v",
+		"a-node-is-scored-to-a-tier-that-names-no-w8ka"
+	],
+	"files": [
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/host.ts",
+		"packages/core/src/hosts.ts",
+		"packages/core/src/config.ts",
+		"packages/core/src/*.test.ts",
+		"test/integration/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-12T17:41:57.651Z"
+}
