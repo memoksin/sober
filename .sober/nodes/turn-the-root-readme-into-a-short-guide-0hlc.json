@@ -1,5 +1,6 @@
 {
 	"title": "Turn the root README into a short guide",
+	"name": "Turn the root README into a short guide",
 	"description": "README.md today is a feature description: it explains what SOBER is, lists the loop, and links to packages/*-plugin for host detail. Reshape it into a guide someone follows top to bottom on their first day: (1) what SOBER is — keep the existing opening and \"Three jobs at once\", trimmed; (2) Install — `npm i -g @besober/cli`, Node 22, then `sober init` in a git repo; (3) Install the plugin for your host — a section per host, see the decision on where that prose lives; (4) First board — the actual command sequence a new user types: `sober init`, `/sober:plan <intent>`, `/sober:decide`, `/sober:next`, `sober dashboard`; (5) The loop table and the one hard block, kept as they are; (6) When not to use it; (7) Docs and Development, kept. Keep the Hosts capability table (plugin / decisions in session / attended run) — it is the only place the per-host differences are comparable side by side, and the guide should point at it from the install section.",
 	"notes": "",
 	"dependsOn": [],

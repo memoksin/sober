@@ -1,5 +1,6 @@
 {
 	"title": "The two Turkish documents are rewritten in English",
+	"name": "The two Turkish documents are rewritten",
 	"description": "`docs/PLAYBOOK.md` (185 lines) and `docs/REVIEW-2026-08-29.md` (217 lines) are written in Turkish; every other file in `docs/`, including `REVIEW-2026-08-28.md`, is English. Rewrite both in English, keeping every heading, table, ADR reference, file path and line citation exactly where it is — these are dated records of what was judged on those days, so the job is translation and never revision.\n\nTwo things stay Turkish and the node should not touch them: the Turkish strings in `packages/core/src/id.ts` and `packages/core/src/id.test.ts` are fixtures for the transliteration table and are the whole point of that test (`Ayrıştırma` → `ayristirma`), and the author's name in `LICENSE`, `.claude-plugin/marketplace.json` and the three `plugin.json` files is a name.\n\nAcceptance is a command: a search for Turkish-specific letters and a short Turkish word list over tracked files returns only those two exclusions.",
 	"notes": "",
 	"dependsOn": [],

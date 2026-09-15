@@ -1,5 +1,6 @@
 {
 	"title": "A session that opens says the board is behind — or pulls it",
+	"name": "A session that opens says the board is",
 	"description": "`sober hook session` (packages/cli/src/hook.ts, the `event === 'session'` branch) calls the core read from the previous node and adds one line to the session's systemMessage: '<branch> is N behind origin — sync' or 'M unsent — sync'. Under ff-auto it first takes the fast-forward and says 'pulled N changes from origin'. Offline or no remote: say nothing, never fail the session. A repository with no board stays silent as today. Cover it in the hook's tests next to the existing session/spawn cases.",
 	"notes": "",
 	"dependsOn": [
