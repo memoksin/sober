@@ -48,6 +48,28 @@ jobs:
           && github.actor != 'renovate[bot]'
           && !startsWith(github.head_ref, 'changeset-release/')
         run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
+      # `changeset status` also passes on a changeset already sitting on `main`,
+      # so it cannot tell a bump named for this release from a leftover (ADR 0059).
+      - name: the release names its bump
+        if: >-
+          github.event_name == 'pull_request'
+          && github.base_ref == 'main'
+          && github.actor != 'renovate[bot]'
+          && !startsWith(github.head_ref, 'changeset-release/')
+        run: |
+          added=$(git diff --name-only --diff-filter=A origin/main...HEAD -- '.changeset/*.md')
+          if [ -z "$added" ]; then
+            echo "::error::No changeset was added in this pull request."
+            exit 1
+          fi
+          if ! grep -lq '"@besober/cli": \(patch\|minor\|major\)' $added; then
+            echo "::error::The added changeset does not bump @besober/cli, the only published package (ADR 0007), so it is not a release."
+            exit 1
+          fi
+      - name: how to name the bump
+        if: failure() && github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: |
+          echo "::error::This pull request targets main, which is a release. Name the bump with 'pnpm exec changeset', choose patch, minor or major for @besober/cli, and commit the file it writes."
 
   typecheck:
     runs-on: ubuntu-latest

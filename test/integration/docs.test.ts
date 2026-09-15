@@ -76,3 +76,8 @@ test('every host plugin README names the published CLI as a prerequisite', () =>
 		)
 	}
 })
+
+test('the release ADR names all three bumps', () => {
+	const adr = text('docs/adr/0059-a-merge-into-main-is-a-release.md')
+	for (const bump of ['patch', 'minor', 'major']) expect(adr).toContain(bump)
+})
