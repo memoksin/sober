@@ -53,7 +53,13 @@
 		"by": "Mehmet Yiğit Keskin",
 		"at": "2026-09-15T08:12:24.836Z"
 	},
-	"accepted": null,
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:14:36.333Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T12:09:02.101Z"
 }
