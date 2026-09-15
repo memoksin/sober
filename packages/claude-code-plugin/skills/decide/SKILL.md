@@ -26,7 +26,7 @@ For each, in turn:
 
 2. If the decision carries a `derived`, say so and name it: "this repository already answers this — read from `docs/adr/0012-…`". That is context, not pressure. The user is free to pick something else, and if they do, the record simply says a person chose it.
 
-3. **Show the options here, in full** — the label, why someone picks it, and what it costs later — before you call anything. This is the only place the user reads them: the prompt that follows carries the labels alone, because a narrow terminal cuts a long line instead of wrapping it. A user who has not read cannot make the choice theirs (§2.5).
+3. **Show the options here, in full** — every option with its label, its `reason` and its `costLater`, not a summary of them — before you call anything. Before you ask, paste the block the tool returned into this conversation, whole — never a pointer to the board, the dashboard or the CLI. This is the only place the user reads them: the prompt that follows carries the labels alone, because a narrow terminal cuts a long line instead of wrapping it. A user who has not read cannot make the choice theirs (§2.5).
 
 4. **Ask with this host's own question tool** — the question, and the option labels only, the suggested one first. Only labels: a narrow terminal cuts a long line instead of wrapping it (ADR 0024). Then call `decide` with the decision id and the option id whose label they picked. If they pick "Other", or answer with text that matches no option, do not map it to the nearest one: say so and ask again. Never pass an option they did not pick (ADR 0057).
 

@@ -26,7 +26,7 @@ export const createServer = (cwd: string = process.cwd()): McpServer => {
 		{ name: 'sober', version: VERSION },
 		{
 			instructions:
-				'SOBER plans work as a graph and dispatches agents into it. Read the board first. A node is held until every decision it binds is answered, and nothing runs without a human-approved brief. You may propose, open decisions, write briefs and review; picking an option, approving a brief and accepting work are the human’s, and the tools ask them directly.',
+				'SOBER plans work as a graph and dispatches agents into it. Read the board first. A node is held until every decision it binds is answered, and nothing runs without a human-approved brief. You may propose, open decisions, write briefs and review; picking an option, approving a brief and accepting work are the human’s, and the tools ask them directly — before you ask, paste the block the tool returned into this conversation, never a pointer to the board, the dashboard or the CLI.',
 		},
 	)
 

@@ -24,7 +24,7 @@ Then, for that one node:
    - **The complexity** — score the node 1–10 for how hard it is for one agent in one run in this repository: files touched, how much has to be understood first, how easy it is to check. Say in one sentence of the approach why that number.
    - **The acceptance list** — each entry a command that can actually be run in this repository, and what passing it proves. A criterion nobody can run is not a criterion, and "it works" is not what passing proves.
 
-3. **Show it and approve it.** Put the approach and the criteria in front of the user, then ask a yes or a no with this host's own question tool. Call `approve` with `confirmed: true` only on an explicit yes; on a no, do nothing. You cannot approve on their behalf, and nothing runs without it. If they want it changed, rewrite with `write_brief` — a rewritten approach clears the approval it had, because the approved thing was the old approach.
+3. **Show it and approve it.** Put the whole approach and every acceptance criterion in front of the user. Before you ask, paste the block the tool returned into this conversation, whole — never a pointer to the board, the dashboard or the CLI. Then ask a yes or a no with this host's own question tool. Call `approve` with `confirmed: true` only on an explicit yes; on a no, do nothing. You cannot approve on their behalf, and nothing runs without it. If they want it changed, rewrite with `write_brief` — a rewritten approach clears the approval it had, because the approved thing was the old approach.
 
 Then say the node is `ready` and stop. Running it is `{{next}}`, and it is a separate decision: a run cuts a worktree and spends real money.
 

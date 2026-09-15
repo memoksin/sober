@@ -46,7 +46,7 @@ export const registerReview = (server: McpServer, cwd: string): void => {
 		{
 			title: 'Record the human’s acceptance of the work',
 			description:
-				'Merge a node’s work into the base once the human accepted it: the node is done and the worktree goes away. Before calling, tell them what the review found, ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes. Never on a yes they did not give, never on one carried over from earlier in the conversation, one node per call (ADR 0057).',
+				'Merge a node’s work into the base once the human accepted it: the node is done and the worktree goes away. Before calling, paste the review block `review` returned — every finding — into this conversation, never a pointer to the board, then ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes. Never on a yes they did not give, never on one carried over from earlier in the conversation, one node per call (ADR 0057).',
 			inputSchema: {
 				node: z.string(),
 				base: z.string().nullish(),

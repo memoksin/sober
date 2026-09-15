@@ -157,3 +157,12 @@ test('every host’s decision skill asks with the host’s own question, and rel
 		expect(decide, host).not.toContain('`decide` is what opens it')
 	}
 })
+
+test('every skill that leads to a question carries the paste rule word for word', () => {
+	// Seven copies of one rule stay in step only if rewording one fails here.
+	const rule =
+		'Before you ask, paste the block the tool returned into this conversation, whole — never a pointer to the board, the dashboard or the CLI.'
+	for (const skill of ['decide', 'brief', 'next', 'plan', 'loop']) {
+		expect(readFileSync(join(root, `plugins/skills/${skill}/SKILL.md`), 'utf8'), skill).toContain(rule)
+	}
+})
