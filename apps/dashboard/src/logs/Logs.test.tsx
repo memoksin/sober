@@ -231,3 +231,73 @@ test('an empty answer is not sent', async () => {
 
 	expect(op).not.toHaveBeenCalled()
 })
+
+test('prose renders in a box and a tool call does not', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({
+					lines: [
+						{ kind: 'text', text: 'a paragraph', tool: null },
+						{ kind: 'tool', text: 'Read', tool: null },
+					],
+				}),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	expect((await screen.findByText('a paragraph')).className).toContain('border')
+	expect(screen.getByText('Read').className).not.toContain('border')
+})
+
+const markOf = (text: string): string | undefined =>
+	screen.getByText(text).closest('li')?.querySelector('[aria-hidden]')?.className
+
+test('a thinking line pulses only while it is the last line of a live run', async () => {
+	const thinking = { kind: 'thinking', text: 'pondering', tool: null } as const
+	const { unmount } = render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([window({ lines: [thinking], live: true })], { hold: true })}
+			onClose={() => {}}
+		/>,
+	)
+	await screen.findByText('pondering')
+	expect(markOf('pondering')).toContain('animate-pulse')
+	unmount()
+
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf(
+				[window({ lines: [thinking, { kind: 'text', text: 'said', tool: null }], live: true })],
+				{ hold: true },
+			)}
+			onClose={() => {}}
+		/>,
+	)
+	await screen.findByText('said')
+	expect(markOf('pondering')).not.toContain('animate-pulse')
+})
+
+test('a tool line shows its glyph, and an unlisted tool falls back', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({
+					lines: [
+						{ kind: 'tool', text: 'ls', tool: 'Bash' },
+						{ kind: 'tool', text: 'zap', tool: 'Frobnicate' },
+					],
+				}),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	expect((await screen.findByText('ls')).textContent).toBe('$ls')
+	expect(screen.getByText('zap').textContent).toBe('⚒zap')
+})
