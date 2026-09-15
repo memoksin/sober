@@ -17,8 +17,7 @@ export const tail = (log: string): readonly LogLine[] =>
 	log
 		.split('\n')
 		.filter((line) => line.trim().length > 0)
-		.map(tailLine)
-		.filter((line): line is LogLine => line !== null)
+		.flatMap(tailLine)
 
 /**
  * How much of a log a screen is sent when it opens one. A dispatch can run for
@@ -114,13 +113,13 @@ export const followRun = async (
  * started under one host therefore still renders after `dispatch.host` changes,
  * and the log needs to carry no host of its own.
  */
-const tailLine = (line: string): LogLine | null => {
+const tailLine = (line: string): readonly LogLine[] => {
 	try {
 		return renderLine(JSON.parse(line) as Event)
 	} catch {
 		// Not JSON at all: the host's own stderr, which is the one thing a
 		// failing run always has and the last thing to hide from the person
 		// reading it.
-		return { kind: 'raw', text: line.trim() }
+		return [{ kind: 'raw', text: line.trim(), tool: null }]
 	}
 }

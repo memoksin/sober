@@ -110,13 +110,15 @@ test('a Cursor tool call renders, and the four events it shares with Claude Code
 	// nesting. `renderLine` gives a line to the first adapter that recognises
 	// it, so those four are already rendered correctly by an adapter with
 	// another host's name on it, and only `tool_call` is Cursor's own.
-	expect(renderLine({ type: 'system', subtype: 'init' })).toMatchObject({ kind: 'started' })
+	expect(renderLine({ type: 'system', subtype: 'init' })).toMatchObject([{ kind: 'started' }])
 	expect(
 		renderLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'reading' }] } }),
-	).toMatchObject({ kind: 'text', text: 'reading' })
-	expect(renderLine({ type: 'result', subtype: 'success', is_error: false })).toMatchObject({
-		kind: 'result',
-	})
+	).toMatchObject([{ kind: 'text', text: 'reading' }])
+	expect(renderLine({ type: 'result', subtype: 'success', is_error: false })).toMatchObject([
+		{
+			kind: 'result',
+		},
+	])
 
 	expect(
 		renderLine({
@@ -124,7 +126,7 @@ test('a Cursor tool call renders, and the four events it shares with Claude Code
 			subtype: 'started',
 			tool_call: { readToolCall: { args: { path: 'README.md' } } },
 		}),
-	).toMatchObject({ kind: 'tool', text: 'read README.md' })
+	).toMatchObject([{ kind: 'tool', text: 'read README.md' }])
 })
 
 test('a Cursor tool call is one line, at the start, not two around the work', () => {
@@ -137,7 +139,7 @@ test('a Cursor tool call is one line, at the start, not two around the work', ()
 			subtype: 'completed',
 			tool_call: { writeToolCall: { args: { path: 'out.txt' } } },
 		}),
-	).toBeNull()
+	).toEqual([])
 })
 
 test('a host echoing its own prompt back is not a human answering', () => {
@@ -151,7 +153,7 @@ test('a host echoing its own prompt back is not a human answering', () => {
 	// it. A host echoing its own prompt stamps the session it belongs to.
 	expect(
 		renderLine({ type: 'user', message: { content: [{ type: 'text', text: 'ship it' }] } }),
-	).toMatchObject({ kind: 'answer', text: 'ship it' })
+	).toMatchObject([{ kind: 'answer', text: 'ship it' }])
 
 	expect(
 		renderLine({
@@ -159,7 +161,7 @@ test('a host echoing its own prompt back is not a human answering', () => {
 			session_id: 'c6b62c6f-7ead-4fd6-9922-e952131177ff',
 			message: { content: [{ type: 'text', text: 'the whole brief' }] },
 		}),
-	).toBeNull()
+	).toEqual([])
 })
 
 test('a Cursor tool with no path of its own still says which tool it was', () => {
@@ -172,8 +174,45 @@ test('a Cursor tool with no path of its own still says which tool it was', () =>
 			subtype: 'started',
 			tool_call: { function: { name: 'shell' } },
 		}),
-	).toMatchObject({ kind: 'tool', text: 'shell' })
+	).toMatchObject([{ kind: 'tool', text: 'shell' }])
 
 	// A shape with no tool in it at all is not a line, and not a crash either.
-	expect(renderLine({ type: 'tool_call', subtype: 'started', tool_call: {} })).toBeNull()
+	expect(renderLine({ type: 'tool_call', subtype: 'started', tool_call: {} })).toEqual([])
+})
+
+test('one Claude assistant event is a line per part, each tool named, thinking kept', () => {
+	expect(
+		renderLine({
+			type: 'assistant',
+			message: {
+				content: [
+					{ type: 'thinking', thinking: ' weighing it ' },
+					{ type: 'text', text: 'Reading the brief.' },
+					{ type: 'tool_use', name: 'Read' },
+					{ type: 'tool_use', name: 'Bash' },
+				],
+			},
+		}),
+	).toEqual([
+		{ kind: 'thinking', text: 'weighing it', tool: null },
+		{ kind: 'text', text: 'Reading the brief.', tool: null },
+		{ kind: 'tool', text: 'Read', tool: 'Read' },
+		{ kind: 'tool', text: 'Bash', tool: 'Bash' },
+	])
+})
+
+test('every host carries the tool name on the line', () => {
+	expect(
+		renderLine({ type: 'item.completed', item: { type: 'command_execution', command: 'ls -la' } }),
+	).toEqual([{ kind: 'tool', text: 'ls -la', tool: 'command' }])
+	expect(renderLine({ type: 'tool_use', part: { tool: 'edit' } })).toEqual([
+		{ kind: 'tool', text: 'edit', tool: 'edit' },
+	])
+	expect(
+		renderLine({
+			type: 'tool_call',
+			subtype: 'started',
+			tool_call: { readToolCall: { args: { path: 'README.md' } } },
+		}),
+	).toEqual([{ kind: 'tool', text: 'read README.md', tool: 'read' }])
 })

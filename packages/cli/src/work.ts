@@ -49,8 +49,10 @@ const TAIL: Record<string, readonly [string, (text: string) => string] | undefin
 	started: ['◌', dim],
 	tool: ['▸', blue],
 	text: ['│', dim],
+	thinking: ['…', dim],
 	result: ['✓', green],
 	raw: ['!', red],
+	answer: ['›', magenta],
 }
 
 const mark = (kind: string): string => {

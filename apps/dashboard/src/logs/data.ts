@@ -12,6 +12,7 @@ import type { LogLine } from '@besober/schema'
 export const MARK: Readonly<Record<LogLine['kind'], string>> = {
 	started: '▸',
 	text: '·',
+	thinking: '…',
 	tool: '⚒',
 	result: '■',
 	raw: '!',
@@ -23,6 +24,7 @@ export const MARK: Readonly<Record<LogLine['kind'], string>> = {
 export const TONE: Readonly<Record<LogLine['kind'], string>> = {
 	started: 'var(--ink-faint)',
 	text: 'var(--ink-faint)',
+	thinking: 'var(--ink-faint)',
 	tool: 'var(--status-ready)',
 	result: 'var(--ink)',
 	// The host's own stderr. It is the one thing a failing run always has, so
