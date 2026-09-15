@@ -105,6 +105,8 @@ export {
 } from './status.js'
 export {
 	adoptBoard,
+	type BoardDistance,
+	boardDistance,
 	boardTravels,
 	type OpenConflict,
 	openConflicts,

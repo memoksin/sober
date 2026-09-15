@@ -635,3 +635,74 @@ const exists = (file: string): Promise<boolean> =>
 		() => true,
 		() => false,
 	)
+
+export type BoardDistance =
+	| {
+			readonly kind: 'ok'
+			readonly ahead: number
+			readonly behind: number
+			readonly remote: string
+			readonly pulled: SyncChange | null
+	  }
+	| { readonly kind: 'no-remote' }
+	| { readonly kind: 'offline' }
+
+// Runs when a session opens: a fetch that has not answered in five seconds is a
+// machine without a network, and a person waiting longer for a count is worse.
+const DISTANCE_TIMEOUT_MS = 5000
+
+/**
+ * How far the board branch is from the remote's, answered offline too. With
+ * `pull`, a clean fast-forward is taken — nothing else is ever moved.
+ */
+export const boardDistance = async (
+	paths: Paths,
+	branch: string,
+	options: { readonly pull?: boolean; readonly timeoutMs?: number } = {},
+): Promise<BoardDistance> => {
+	const measure = () =>
+		distance(paths, branch, options.pull === true, options.timeoutMs ?? DISTANCE_TIMEOUT_MS)
+	return options.pull === true ? withLock(paths, 'distance', measure) : measure()
+}
+
+const distance = async (
+	paths: Paths,
+	branch: string,
+	pull: boolean,
+	timeoutMs: number,
+): Promise<BoardDistance> => {
+	const { root } = paths
+	const remote = await remoteName(root)
+	if (remote === null) return { kind: 'no-remote' }
+	const ref = `refs/remotes/${remote}/${branch}`
+	const local = await refExists(root, branch)
+	try {
+		await gitWithEnv(root, {}, ['fetch', '--quiet', remote, `+refs/heads/${branch}:${ref}`], {
+			timeoutMs,
+		})
+	} catch (error) {
+		if (!/couldn't find remote ref/i.test(String(error))) return { kind: 'offline' }
+		if (!local) return { kind: 'no-remote' }
+		const ahead = Number.parseInt(await git(root, 'rev-list', '--count', branch), 10)
+		return { kind: 'ok', ahead, behind: 0, remote, pulled: null }
+	}
+	const ours = local ? await git(root, 'rev-parse', branch) : null
+	const theirs = await git(root, 'rev-parse', ref)
+	const [ahead, behind] =
+		ours === null
+			? [0, Number.parseInt(await git(root, 'rev-list', '--count', ref), 10)]
+			: (await git(root, 'rev-list', '--left-right', '--count', `${branch}...${ref}`))
+					.split('\t')
+					.map((n) => {
+						if (!/^\d+$/.test(n)) throw new SoberError('git', `unexpected rev-list count: ${n}`)
+						return Number(n)
+					})
+	if (ahead === undefined || behind === undefined)
+		throw new SoberError('git', 'rev-list returned no counts')
+	const clean =
+		(await git(root, 'status', '--porcelain', '--untracked-files=no', '--', SOBER_DIR)) === ''
+	if (!pull || behind === 0 || ahead !== 0 || !clean)
+		return { kind: 'ok', ahead, behind, remote, pulled: null }
+	await git(root, 'update-ref', `refs/heads/${branch}`, theirs)
+	return { kind: 'ok', ahead, behind, remote, pulled: await materialize(paths, ours, theirs) }
+}

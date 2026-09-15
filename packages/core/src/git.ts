@@ -29,7 +29,8 @@ export const gitWithEnv = async (
 	cwd: string,
 	env: Readonly<Record<string, string>>,
 	args: readonly string[],
-): Promise<string> => (await exec(cwd, env, args)).trimEnd()
+	options: { readonly timeoutMs?: number } = {},
+): Promise<string> => (await exec(cwd, env, args, options.timeoutMs)).trimEnd()
 
 /**
  * The same call, untrimmed. A blob's bytes are its bytes: records end in a
@@ -43,12 +44,14 @@ const exec = async (
 	cwd: string,
 	env: Readonly<Record<string, string>>,
 	args: readonly string[],
+	timeout?: number,
 ): Promise<string> => {
 	try {
 		const { stdout } = await run('git', [...args], {
 			cwd,
 			encoding: 'utf8',
 			maxBuffer: 32 * 1024 * 1024,
+			timeout,
 			// sync.ts and digest.ts match git's English stderr; a pinned locale makes that a contract.
 			// Callers may still override it through env.
 			env: { ...process.env, LC_ALL: 'C', ...env },
