@@ -2,7 +2,7 @@ import type { LogLine, LogWindow } from '@besober/schema'
 import { useEffect, useRef, useState } from 'react'
 import { Overlay } from '../Overlay.js'
 import type { Wire } from '../wire.js'
-import { atBottom, MARK, ranWith, TONE } from './data.js'
+import { atBottom, MARK, ranWith, TONE, toolMark } from './data.js'
 
 /**
  * The run on the screen (ADR 0046). A dispatch is the longest and most
@@ -152,10 +152,34 @@ export const LogScreen = ({
 						// no id of its own, so its position is what it is.
 						// biome-ignore lint/suspicious/noArrayIndexKey: an append-only log has no other key
 						<li key={index} className="flex gap-3">
-							<span aria-hidden className="select-none" style={{ color: TONE[line.kind] }}>
-								{MARK[line.kind]}
+							<span
+								aria-hidden
+								className={`select-none ${line.kind === 'thinking' ? 'mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--status-running)]' : ''} ${
+									// Running belongs to the last line of a live run, not to the line:
+									// the next line re-renders this one at rest.
+									line.kind === 'thinking' && live === true && index === lines.length - 1
+										? 'animate-pulse'
+										: ''
+								}`}
+								style={line.kind === 'thinking' ? undefined : { color: TONE[line.kind] }}
+							>
+								{line.kind === 'thinking' ? null : MARK[line.kind]}
 							</span>
-							<span className="whitespace-pre-wrap break-words text-[var(--ink)]">{line.text}</span>
+							{line.kind === 'text' || line.kind === 'answer' ? (
+								<div className="max-w-[68ch] whitespace-pre-wrap break-words rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 font-sans text-[var(--ink)] text-sm">
+									{line.text}
+								</div>
+							) : (
+								<span className="whitespace-pre-wrap break-words text-[var(--ink-dim)]">
+									{/* The glyph is the TOOL table's, fallback included, via toolMark. */}
+									{line.kind === 'tool' && line.tool !== null && (
+										<span aria-hidden className="mr-2 select-none">
+											{toolMark(line.tool)}
+										</span>
+									)}
+									{line.text}
+								</span>
+							)}
 						</li>
 					))}
 				</ol>
