@@ -50,6 +50,9 @@ const TAIL: Record<string, readonly [string, (text: string) => string] | undefin
 	started: ['◌', dim],
 	tool: ['▸', blue],
 	text: ['│', dim],
+	// A mark, not the spinner out.js exports: a spinner is for foreground work and
+	// redraws a line a scrolling log has already moved past. `sober logs` also prints
+	// a finished run, where nothing is thinking any more.
 	thinking: ['…', dim],
 	result: ['✓', green],
 	// The audit's own lines: 'check' is a command started, 'checked' the same command done.
