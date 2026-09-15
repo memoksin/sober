@@ -1,0 +1,21 @@
+{
+	"title": "A run whose parent died is closed, not stuck running forever",
+	"description": "Seen 2026-09-15: `run` on core-runs-git-in-english-so-its-error-te-tljx started the agent (run d92w, pid 55417), then the host app was restarted and the `sober mcp` process that owned the run died with it. The agent died too, but nobody called `finishRun`: the record in .sober/local/runs/<id>.json keeps `exit: null` and `endedAt: null`, so `statusOf` says the node is running. `run` then refuses ('is running, so it cannot start') and `stop` says 'had already ended' — `stopRun` in packages/core/src/dispatch.ts:272 sees `process.kill` throw ESRCH, clears the pid file and returns false without writing the run's end. Nothing in the tools or the CLI can move the node again; the only way out is editing the record by hand, which is exactly what the skills forbid.\n\nThe pid file in packages/core/src/local.ts is already documented as 'a stale one is treated as no run at all', but the run record never learns that. Fix in core, in one place, so every surface inherits it: a run whose `exit` is null and whose pid is gone (no pid file, or `process.kill(pid, 0)` throws) is orphaned. Decide where that check lives — the cheapest is in `stopRun`: when the kill throws, call `finishRun` with `{ exit: 'failed', error: 'the process that owned this run is gone' }` plus `unjudged(...)` for the acceptance, so `stop` on an orphan closes it and `run` can start again. Consider also having `statusOf`/`loadBoard` treat such a run as failed on read, so the board never shows 'running' for a dead process — but keep the write in one place. `stop` in packages/mcp/src/tools/build.ts and the CLI's stop then say 'was already gone and is now recorded as failed' rather than 'had already ended'. One test in packages/core/src/dispatch.test.ts (or beside the existing run tests): write a run record with `exit: null` and a pid file naming a pid that does not exist, call `stopRun`, assert the record now has `exit: 'failed'`, an error naming the dead process, and that `statusOf` no longer says running. Worktree and branch stay untouched, as with any failure.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/dispatch.test.ts",
+		"packages/core/src/local.ts",
+		"packages/mcp/src/tools/build.ts",
+		"packages/cli/src/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-15T07:27:44.894Z"
+}
