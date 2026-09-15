@@ -1,4 +1,4 @@
-import type { BoardDistance, SyncResult } from '@besober/core'
+import type { BoardDistance, Resolution, SyncResult } from '@besober/core'
 import type {
 	Digest as DigestRead,
 	Distribution,
@@ -21,6 +21,7 @@ import type { Action, BoardRead, FlagAction } from './panel/data.js'
 import { flagOp } from './panel/data.js'
 import { Panel } from './panel/Panel.js'
 import { ReviewScreen } from './review/Review.js'
+import { ConflictScreen } from './sync/Conflicts.js'
 import { wire } from './wire.js'
 
 /**
@@ -60,6 +61,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [syncing, setSyncing] = useState(false)
 	const [synced, setSynced] = useState<SyncResult | null>(null)
 	const [syncFailure, setSyncFailure] = useState<string | null>(null)
+	const [conflictsOpen, setConflictsOpen] = useState(false)
 	// Read on load and after a sync, never on the poll: it fetches the remote.
 	const [distance, setDistance] = useState<BoardDistance | null>(null)
 
@@ -191,7 +193,9 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		setSynced(null)
 		setSyncFailure(null)
 		try {
-			setSynced(await wire(token).op<SyncResult>('sync', {}))
+			const result = await wire(token).op<SyncResult>('sync', {})
+			setSynced(result)
+			setConflictsOpen(result.kind === 'conflicted')
 			// A sync can change every record at once, so the board is read again.
 			await refresh()
 		} catch (error) {
@@ -493,6 +497,20 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 
 				{decisionsOpen && board !== null && (
 					<DecisionsScreen board={board} onClose={() => setDecisionsOpen(false)} />
+				)}
+
+				{conflictsOpen && synced?.kind === 'conflicted' && token !== null && (
+					<ConflictScreen
+						conflicts={synced.conflicts}
+						resolve={(record, choices) =>
+							wire(token).op<Resolution>('resolve', { record, choices })
+						}
+						onDone={() => {
+							setConflictsOpen(false)
+							void sync()
+						}}
+						onClose={() => setConflictsOpen(false)}
+					/>
 				)}
 
 				{planOpen && plan !== null && (

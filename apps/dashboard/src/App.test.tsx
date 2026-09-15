@@ -282,3 +282,37 @@ test('a distance that cannot be read leaves the header usable', async () => {
 	expect(screen.getByRole('button', { name: 'sync' })).toBeTruthy()
 	expect(screen.getByTestId('canvas')).toBeTruthy()
 })
+
+test('a conflicted sync opens the screen, and answering the last record syncs once more', async () => {
+	let syncs = 0
+	const sent = await pressSync(reads, {
+		sync: () =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify(
+						syncs++ === 0
+							? {
+									...syncResult,
+									kind: 'conflicted',
+									conflicts: [{ kind: 'archived', path: 'n/a.json', id: 'a', by: 'theirs' }],
+								}
+							: { ...syncResult, pushed: true, outgoing: true },
+					),
+					{ status: 200 },
+				),
+			),
+		resolve: () =>
+			Promise.resolve(
+				new Response(JSON.stringify({ kind: 'done', left: [], findings: [] }), { status: 200 }),
+			),
+	})
+	const keep = await screen.findByRole('radio', { name: /keep/ })
+	expect(screen.getByText(/a changed on both sides\. Each one/)).toBeTruthy()
+	fireEvent.click(keep)
+	fireEvent.click(screen.getByRole('button', { name: 'answer and sync' }))
+	await waitFor(() =>
+		expect(screen.getByText('Synced: nothing came in, your changes went out.')).toBeTruthy(),
+	)
+	expect(sent).toEqual(['sync', 'resolve', 'sync'])
+	expect(screen.queryByRole('dialog')).toBeNull()
+})
