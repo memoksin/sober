@@ -9,7 +9,36 @@
 		"apps/dashboard/src/App.tsx",
 		"apps/dashboard/src/App.test.tsx"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "A fifth stopping screen, built exactly like the fourth. `apps/dashboard/src/distribute/Distribution.tsx` is the model to copy — an `Overlay` with a header, a body of rows, and its data shaping in a sibling `data.ts` with its own test. Nothing new is invented here; the pattern is four screens old.\n\n**The gate, and why the poll cost is zero.** `App.tsx:58` is `const open = picked !== null || deciding !== null`, and the poll at line 70 reads the full board only while `open`. The list needs that same full board, so the change is one term: `const open = picked !== null || deciding !== null || decisionsOpen`. The full read happens while the list is on screen and stops the moment it closes, which is the rule the line already encodes — the drawer was never the point, \"something is open\" was. A dashboard sitting on the canvas with nothing open costs exactly what it costs today.\n\n**New files** under `apps/dashboard/src/decisions/`:\n\n- `data.ts` — the shaping, no JSX, so it is testable without a DOM. One exported function taking `BoardRead` (`apps/dashboard/src/panel/data.ts:12`) and returning the rows: for each decision that is **not** `archived` (the board read already marks it, `data.ts:22`), its id, `question`, `category`, the state from `decisionState(decision)` in `@besober/schema` — `unopened` / `open` / `answered`, do not re-derive it here — and for an answered one the picked `Option` looked up from `decision.options` by `answer.option` (an id, never an index — ADR 0020), `answer.rationale`, `answer.by`, and `answer.derived`. Also the options that were **not** picked, straight off `decision.options`, and the ids and titles of the nodes bound to it, from `nodes.filter(n => n.decisions.includes(id))`. Sort answered-last is wrong for this screen: sort **open first**, then unopened, then answered, because the list's job is \"what has this project decided\" *and* \"what is still holding things\". Within a group, `createdAt` ascending.\n- `Decisions.tsx` — `<Overlay label=\"Every decision\" width={720} onClose={...}>` with the same header shape as `Distribution.tsx:32-41`: an `h2`, then one dim line of subtitle. A row per decision, collapsed by default showing the question, a state mark, and — when answered — the chosen option's `label` with `answer.rationale` under it. Expanding a row (one `useState<string | null>` for the expanded id, a `<button>` on the row header, not a div) reveals `costLater` for the chosen option, the options not picked with their `reason` and `costLater`, and the bound nodes. An answered-off-the-code decision gets the word `derived` beside the choice with `answer.derived` as its title text — ADR 0055 says a reader is entitled to know which of the two they are looking at, so it is shown, never inferred from its absence.\n- `data.test.ts` — the shaping only: an archived decision is absent; an unopened one (`options: null`) renders as unopened and not as open; the chosen option is found by id when the options are out of order; `derived` survives onto the row; a decision no node binds still appears with an empty node list.\n\n**Wiring in `App.tsx`**, following the `planOpen` precedent exactly, which is the closest sibling because it is also a board-global screen rather than one opened from a node:\n\n- `const [decisionsOpen, setDecisionsOpen] = useState(false)` beside `planOpen` at line 46.\n- The Escape chain at line 133: the one-layer-at-a-time order is a stack, so `decisionsOpen` goes in at the same level as `planOpen` — `if (planOpen) ... else if (decisionsOpen) setDecisionsOpen(false) else if (watching ...)`. Add `decisionsOpen` to that effect's dependency array; forgetting it is how the handler closes over a stale `false`.\n- Render it where `DistributionScreen` is rendered, guarded by `decisionsOpen && board !== null`.\n- The opener: one `<button>` in the header at line 314, placed **before** the done toggle so the toggle keeps its `ml-auto` and stays hard right. Same class list as the toggle minus `ml-auto`. Its label is the count of decisions still open, or `decisions` when none are — a number a person can act on beats a noun.\n\n`apps/dashboard/src/App.test.tsx` gets one case in the style of the ones already there: the screen is not mounted until the button is pressed, and Escape closes it without clearing the node behind it.\n\n**Out of scope, deliberately.** No answering from this screen — `deciding` is the existing path and one way to answer a decision is the point. No change to `panel/`, `canvas/`, `review/`, or the server: the `board` read already carries everything, which is why this node touches no package outside `apps/dashboard`.",
+		"acceptance": [
+			{
+				"run": "pnpm vitest run apps/dashboard/src/decisions/data.test.ts",
+				"proves": "the shaping is right where a screenshot would not show it: archived decisions are absent, an unopened decision is not reported as open, the chosen option is found by id rather than position, and `derived` reaches the row"
+			},
+			{
+				"run": "pnpm vitest run apps/dashboard/src/App.test.tsx",
+				"proves": "the screen mounts only when opened, Escape closes it one layer at a time without clearing the node behind it, and the existing overlays still behave"
+			},
+			{
+				"run": "git grep -q 'decisionsOpen' -- apps/dashboard/src/App.tsx && git grep -q 'decisionState' -- apps/dashboard/src/decisions/data.ts",
+				"proves": "the poll gate and the Escape chain were widened rather than bypassed, and the three states come from the schema's own helper instead of being re-derived in the browser"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!apps/dashboard')\"",
+				"proves": "no package outside apps/dashboard changed: the board read already carried this data, so core, schema, the server and the MCP tools stay untouched"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the new components and the widened App state compile against the real BoardRead and schema types"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean, including the accessibility rules the Overlay comment says the backdrop button exists to satisfy"
+			}
+		],
+		"approval": null
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,
