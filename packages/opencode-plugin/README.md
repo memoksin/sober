@@ -7,7 +7,12 @@ declaration and prose. Both are configuration here.
 
 ## Install
 
-Per project, from a checkout of this repository:
+A checkout of this repository is required: the install copies
+`packages/opencode-plugin/.opencode` into the project and merges the `mcp` block
+of `opencode.json`. OpenCode's installable plugin is a JavaScript module, and
+SOBER ships none, as the opening paragraph says.
+
+Per project:
 
 ```
 cp -r packages/opencode-plugin/.opencode <your project>/.opencode
@@ -19,6 +24,9 @@ Globally, the same two into `~/.config/opencode/`.
 
 `sober` itself has to be on the PATH — `npm i -g @besober/cli` — because that is
 the command `opencode.json` names.
+
+See [Install the plugin for your host](../../README.md#install-the-plugin-for-your-host)
+for the other three.
 
 ## What is different from Claude Code
 

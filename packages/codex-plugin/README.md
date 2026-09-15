@@ -5,18 +5,21 @@ The same board, the same tools and the same loop as the Claude Code plugin —
 
 ## Install
 
-From a checkout of this repository:
+A checkout of this repository is required: `.agents/plugins/marketplace.json`
+at the repository root declares `{"source": "local", "path":
+"./packages/codex-plugin"}`, and `codex plugin marketplace add` takes a real
+path on disk.
 
 ```
 codex plugin marketplace add /path/to/sober
 codex plugin add sober@sober
 ```
 
-The marketplace manifest is `.agents/plugins/marketplace.json` at the repository
-root; it points here.
-
 `sober` itself has to be on the PATH — `npm i -g @besober/cli` — because that is
 the command `.mcp.json` names.
+
+See [Install the plugin for your host](../../README.md#install-the-plugin-for-your-host)
+for the other three.
 
 ## What is different from Claude Code
 
