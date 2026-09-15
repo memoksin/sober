@@ -1,3 +1,4 @@
+import type { SyncResult } from '@besober/core'
 import type {
 	Digest as DigestRead,
 	Distribution,
@@ -54,6 +55,11 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	// §7.2's list, as a view over the canvas rather than a sixth screen. The
 	// nodes are already drawn; what was missing is which of them are flagged.
 	const [onlyFlagged, setOnlyFlagged] = useState(false)
+	// A sync that ran and came back conflicted is a result; the op rejecting is
+	// a failure. Kept apart so a thrown error is never read as a sync outcome.
+	const [syncing, setSyncing] = useState(false)
+	const [synced, setSynced] = useState<SyncResult | null>(null)
+	const [syncFailure, setSyncFailure] = useState<string | null>(null)
 
 	// The full board is only read while something is open. The canvas needs the
 	// slim projection every couple of seconds (ADR 0008); a drawer that is not
@@ -162,6 +168,22 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		setBoard(full)
 		setProjection(next)
 	}, [token])
+
+	const sync = useCallback(async (): Promise<void> => {
+		if (token === null || syncing) return
+		setSyncing(true)
+		setSynced(null)
+		setSyncFailure(null)
+		try {
+			setSynced(await wire(token).op<SyncResult>('sync', {}))
+			// A sync can change every record at once, so the board is read again.
+			await refresh()
+		} catch (error) {
+			setSyncFailure(error instanceof Error ? error.message : String(error))
+		} finally {
+			setSyncing(false)
+		}
+	}, [token, syncing, refresh])
 
 	const answer = useCallback(
 		async (option: string, rationale: string): Promise<void> => {
@@ -333,6 +355,15 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 
 				<button
 					type="button"
+					onClick={() => void sync()}
+					disabled={syncing}
+					className="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-[var(--ink-dim)] text-xs hover:bg-[var(--surface)] hover:text-[var(--ink)] disabled:opacity-50"
+				>
+					{syncing ? 'syncing…' : 'sync'}
+				</button>
+
+				<button
+					type="button"
 					onClick={() => setWithDone((on) => !on)}
 					aria-pressed={withDone}
 					className="ml-auto flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-[var(--ink-dim)] text-xs hover:bg-[var(--surface)] hover:text-[var(--ink)]"
@@ -355,6 +386,21 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 					onOnlyFlagged={() => setOnlyFlagged(true)}
 					onClose={() => setDigest(null)}
 				/>
+			)}
+
+			{syncFailure !== null && (
+				<p
+					role="alert"
+					className="shrink-0 border-[var(--line)] border-b bg-[var(--raised)] px-4 py-1.5 text-[var(--ink)] text-xs"
+				>
+					The sync did not run: {syncFailure}
+				</p>
+			)}
+
+			{synced !== null && (
+				<p className="shrink-0 border-[var(--line)] border-b bg-[var(--raised)] px-4 py-1.5 text-[var(--ink-dim)] text-xs">
+					{syncSentence(synced)}
+				</p>
 			)}
 
 			{planFailure !== null && (
@@ -471,3 +517,26 @@ const Adrift = (): React.JSX.Element => (
 		</p>
 	</div>
 )
+
+const plural = (count: number, one: string): string => `${count} ${one}${count === 1 ? '' : 's'}`
+
+/** One sentence per kind, read off the record's fields. */
+export const syncSentence = (result: SyncResult): string => {
+	switch (result.kind) {
+		case 'synced': {
+			const { updated, removed } = result.pulled
+			const came =
+				updated.length + removed.length === 0
+					? 'nothing came in'
+					: `${plural(updated.length, 'record')} came in updated and ${plural(removed.length, 'record')} removed`
+			const went = result.pushed && result.outgoing ? 'your changes went out' : 'nothing went out'
+			return `Synced: ${came}, ${went}.`
+		}
+		case 'no-remote':
+			return 'The board was committed here. There is no remote to send it to.'
+		case 'invalid':
+			return `The merge left a board that does not hold together, so nothing was pushed: ${result.findings.join('; ')}.`
+		case 'conflicted':
+			return `Nothing was touched: ${result.conflicts.map((one) => one.id).join(', ')} changed on both sides. Each one has to be answered field by field.`
+	}
+}

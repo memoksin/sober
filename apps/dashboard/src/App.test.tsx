@@ -44,13 +44,17 @@ const plan = {
  * not comes back as a refusal, which is how a failing plan read is arranged
  * without touching any other one.
  */
-const serving = (reads: Record<string, unknown>) => {
+const serving = (
+	reads: Record<string, unknown>,
+	ops: Record<string, () => Promise<Response>> = {},
+) => {
 	const sent: string[] = []
 	vi.stubGlobal('fetch', (url: string, init?: { method?: string }) => {
 		const address = String(url)
 		if (init?.method === 'POST') {
-			sent.push(address.replace('/op/', ''))
-			return Promise.resolve(new Response('{}', { status: 200 }))
+			const name = address.replace('/op/', '')
+			sent.push(name)
+			return ops[name]?.() ?? Promise.resolve(new Response('{}', { status: 200 }))
 		}
 		const name = address.replace('/read/', '').split('?')[0] ?? ''
 		return name in reads
@@ -134,4 +138,118 @@ test('the decision list mounts only when opened, and Escape closes it alone', as
 	fireEvent.keyDown(window, { key: 'Escape' })
 	await waitFor(() => expect(screen.queryByText('What this project has decided')).toBeNull())
 	expect(screen.getByTestId('canvas')).toBeTruthy()
+})
+
+const syncResult = {
+	kind: 'synced',
+	committed: false,
+	pulled: { updated: [], removed: [] },
+	pushed: false,
+	conflicts: [],
+	findings: [],
+	outgoing: false,
+}
+
+const answering = (result: unknown) => ({
+	sync: () => Promise.resolve(new Response(JSON.stringify(result), { status: 200 })),
+})
+
+const pressSync = async (
+	reads: Record<string, unknown>,
+	ops: Record<string, () => Promise<Response>>,
+) => {
+	const sent = serving(reads, ops)
+	render(<App token="t" />)
+	await waitFor(() => expect(screen.getByTestId('canvas')).toBeTruthy())
+	fireEvent.click(screen.getByRole('button', { name: 'sync' }))
+	return sent
+}
+
+const reads = { projection, distribution: null, digest: null, board }
+
+test('a synced board says what came in and what went out, and the board is read again', async () => {
+	const sent = await pressSync(
+		reads,
+		answering({
+			...syncResult,
+			pulled: { updated: ['a', 'b'], removed: ['c'] },
+			pushed: true,
+			outgoing: true,
+		}),
+	)
+	await waitFor(() =>
+		expect(
+			screen.getByText(
+				'Synced: 2 records came in updated and 1 record removed, your changes went out.',
+			),
+		).toBeTruthy(),
+	)
+	expect(sent).toEqual(['sync'])
+})
+
+test('a sync where nothing moved says so', async () => {
+	await pressSync(reads, answering(syncResult))
+	await waitFor(() =>
+		expect(screen.getByText('Synced: nothing came in, nothing went out.')).toBeTruthy(),
+	)
+})
+
+test('no remote is said plainly, not as an error', async () => {
+	await pressSync(reads, answering({ ...syncResult, kind: 'no-remote', committed: true }))
+	await waitFor(() => expect(screen.getByText(/There is no remote to send it to/)).toBeTruthy())
+	expect(screen.queryByRole('alert')).toBeNull()
+})
+
+test('an invalid merge lists its findings', async () => {
+	await pressSync(
+		reads,
+		answering({
+			...syncResult,
+			kind: 'invalid',
+			findings: ['x depends on a missing node', 'a cycle'],
+		}),
+	)
+	await waitFor(() => expect(screen.getByText(/x depends on a missing node; a cycle/)).toBeTruthy())
+})
+
+test('a conflict names the records both sides changed', async () => {
+	await pressSync(
+		reads,
+		answering({
+			...syncResult,
+			kind: 'conflicted',
+			conflicts: [
+				{ kind: 'fields', path: 'nodes/a.json', id: 'auth-api-k7f2', fields: [] },
+				{ kind: 'fields', path: 'nodes/b.json', id: 'ui-9x1q', fields: [] },
+			],
+		}),
+	)
+	await waitFor(() =>
+		expect(screen.getByText(/auth-api-k7f2, ui-9x1q changed on both sides/)).toBeTruthy(),
+	)
+	expect(screen.queryByText(/Synced/)).toBeNull()
+})
+
+test('a rejected sync renders the failure, not a success line', async () => {
+	await pressSync(reads, {
+		sync: () =>
+			Promise.resolve(new Response('{"error":"the remote refused the push"}', { status: 500 })),
+	})
+	await waitFor(() =>
+		expect(screen.getByRole('alert').textContent).toContain('the remote refused the push'),
+	)
+	expect(screen.queryByText(/Synced/)).toBeNull()
+})
+
+test('a second press while a sync is in flight sends nothing', async () => {
+	let finish: (response: Response) => void = () => {}
+	const sent = await pressSync(reads, {
+		sync: () => new Promise<Response>((done) => (finish = done)),
+	})
+	const button = await screen.findByRole('button', { name: 'syncing…' })
+	fireEvent.click(button)
+	expect(sent).toEqual(['sync'])
+	finish(new Response(JSON.stringify(syncResult), { status: 200 }))
+	await waitFor(() => expect(screen.getByRole('button', { name: 'sync' })).toBeTruthy())
+	expect(sent).toEqual(['sync'])
 })

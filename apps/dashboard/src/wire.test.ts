@@ -217,3 +217,17 @@ test('a refused watch fails with what the server said, like every other route', 
 		),
 	).rejects.toThrow(/has not run yet/)
 })
+
+test('an operation is one POST to its own route with a JSON body', async () => {
+	const sent: [string, RequestInit][] = []
+	const spy = (async (url: string, init: RequestInit) => {
+		sent.push([url, init])
+		return new Response('{"kind":"no-remote"}')
+	}) as unknown as typeof fetch
+
+	expect(await wire('4f3a', spy).op('sync', {})).toEqual({ kind: 'no-remote' })
+	expect(sent).toHaveLength(1)
+	expect(sent[0]?.[0]).toBe('/op/sync')
+	expect(sent[0]?.[1]?.method).toBe('POST')
+	expect(sent[0]?.[1]?.body).toBe('{}')
+})
