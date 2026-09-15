@@ -1,5 +1,6 @@
 {
 	"title": "Codex asks with request_user_input, by name, and says so when it cannot",
+	"name": "Codex asks with request_user_input, by",
 	"description": "Reported: working in Codex (ChatGPT), the agent never uses the built-in question tool — decisions, approvals and merges are asked in prose or not at all. Cause on our side: `plugins/hosts/codex.json` slot `ask` says only \"this host's own question tool\" and never names it, while `claude.json` names AskUserQuestion. Name Codex's tool (`request_user_input`) in the `ask` slot, and in the same sentence say what to do when the tool is not offered in the current mode: ask in the conversation exactly as `plugins/hosts/opencode.json` does (options in full, wait for a reply that names one). First check against the installed `codex` version which modes expose `request_user_input` and write the finding into the slot, not a guess. Regenerate with `pnpm plugins` so `packages/codex-plugin/skills/**` follows, and extend `test/integration/plugin.test.ts` so the Codex decide and loop skills must name the tool. Out of scope: `approve` still elicits via askYes — that is node approve-asks-once-drop-the-leftover-asky-9818.",
 	"notes": "",
 	"dependsOn": [],

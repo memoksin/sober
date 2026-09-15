@@ -1,5 +1,6 @@
 {
 	"title": "The dashboard shows how far behind the board is, next to the button",
+	"name": "The dashboard shows how far behind the",
 	"description": "Add a server route that returns the core gap read (packages/server/src/routes.ts, with a routes.test.ts case) and show it by the Sync button: 'N behind', 'M unsent', 'offline'. Under ff-auto the dashboard also takes the fast-forward on load and says it did. Test in App.test.tsx.",
 	"notes": "",
 	"dependsOn": [

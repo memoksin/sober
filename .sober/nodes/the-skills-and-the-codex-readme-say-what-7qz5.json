@@ -1,5 +1,6 @@
 {
 	"title": "The skills and the Codex README say what the agent does while a run goes on",
+	"name": "The skills and the Codex README say what",
 	"description": "Once `run` has its new shape, `plugins/skills/next/SKILL.md` and `plugins/skills/loop/SKILL.md` must tell the agent how to get from starting a run to reviewing it on every host — wait on the call, or follow it with `logs`/`board` until it ends — without re-running a node that is still going. Add one line to `packages/codex-plugin/README.md` under 'What is different from Claude Code' about the host's tool-call limit and how SOBER handles it. Regenerate with `pnpm plugins`; `test/integration/plugin.test.ts` must pass.",
 	"notes": "",
 	"dependsOn": [
