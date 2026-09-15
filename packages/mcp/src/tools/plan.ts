@@ -55,6 +55,11 @@ const NodeInput = z.object({
 		.string()
 		.describe('a name for this node inside this call, so other entries can point at it'),
 	title: z.string(),
+	name: z
+		.string()
+		.min(1)
+		.max(40)
+		.describe('a short name a person tells this node from its siblings by, like `log-wire`'),
 	description: z.string().default(''),
 	files: z.array(z.string()).default([]).describe('globs this node is expected to touch'),
 	dependsOn: z.array(z.string()).default([]).describe('node ids, or keys from this same call'),
@@ -181,7 +186,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				// them here is what lets one call write a graph with its edges in it.
 				const ids = new Map<string, string>()
 				for (const decision of decisions) ids.set(decision.key, newId(decision.question))
-				for (const node of nodes) ids.set(node.key, newId(node.title))
+				for (const node of nodes) ids.set(node.key, newId(node.name))
 				const idOf = (reference: string): string => ids.get(reference) ?? reference
 
 				const written = new Map<string, Node>(board.nodes)
@@ -189,6 +194,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 					idOf(node.key),
 					{
 						title: node.title,
+						name: node.name,
 						description: node.description,
 						notes: '',
 						dependsOn: node.dependsOn.map(idOf),

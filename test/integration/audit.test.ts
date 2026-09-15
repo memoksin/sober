@@ -39,6 +39,7 @@ const missing = `${process.execPath} -e "process.stderr.write('nosuchtool: comma
 
 const aNode = (title: string) => ({
 	title,
+	name: title,
 	description: 'Sign in and sign out.',
 	notes: '',
 	dependsOn: [],

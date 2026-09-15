@@ -31,6 +31,7 @@ const AT = '2026-09-04T00:00:00.000Z'
 
 const node = (over: Record<string, unknown>) => ({
 	title: 'A node',
+	name: 'A node',
 	description: '',
 	notes: '',
 	dependsOn: [],

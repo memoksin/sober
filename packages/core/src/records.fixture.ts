@@ -7,6 +7,7 @@ const AT = '2026-09-04T00:00:00.000Z'
 export const aNode = (overrides: Partial<Node> = {}): Node => ({
 	title: 'A node',
 	description: '',
+	name: 'Session endpoints',
 	notes: '',
 	dependsOn: [],
 	decisions: [],

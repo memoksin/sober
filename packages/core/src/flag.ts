@@ -1,7 +1,7 @@
 import type { Handle, Node } from '@besober/schema'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
-import { newId } from './id.js'
+import { newId, shortName } from './id.js'
 import { appendEvent } from './local.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
@@ -82,6 +82,8 @@ export const reopenNode = (paths: Paths, node: string, by: Handle): Promise<Node
 
 export interface Opening {
 	readonly title: string
+	/** Chosen by whoever opens it; derived from the title when nobody did. */
+	readonly name?: string
 	readonly by: Handle
 	readonly description?: string
 	readonly dependsOn?: readonly string[]
@@ -115,9 +117,14 @@ export const createNode = (
 		for (const decision of opening.decisions ?? [])
 			if (!board.decisions.has(decision)) throw new NotOnBoardError('decision', decision)
 
-		const id = newId(title)
+		const name = opening.name?.trim() || shortName(title)
+		// Seeded from the name, not the title. Ids already on disk keep the old
+		// seed and must: an id is written once, and rewriting one breaks every
+		// branch, worktree, run record and citation that names it.
+		const id = newId(name)
 		const node: Node = {
 			title,
+			name,
 			description: opening.description ?? '',
 			notes: '',
 			dependsOn: [...(opening.dependsOn ?? [])],

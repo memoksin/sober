@@ -36,6 +36,7 @@ const board = async (options: { declared?: string[]; rc?: string; extra?: string
 	}
 	await writeNode(paths, NODE, {
 		title: 'The auth API',
+		name: 'The auth API',
 		description: '',
 		notes: '',
 		dependsOn: [],

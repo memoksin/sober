@@ -180,6 +180,7 @@ test('the board a panel reads says what each node is waiting for', async () => {
 	})
 	await writeNode(there, 'auth-api-k7f2', {
 		title: 'Session endpoints',
+		name: 'Session endpoints',
 		description: '',
 		notes: '',
 		dependsOn: [],
@@ -195,6 +196,7 @@ test('the board a panel reads says what each node is waiting for', async () => {
 	})
 	await writeNode(there, 'billing-api-m3q8', {
 		title: 'Billing',
+		name: 'Billing',
 		description: '',
 		notes: '',
 		dependsOn: ['auth-api-k7f2'],
@@ -249,6 +251,7 @@ test('the impact preview is read, and the save is the same call with the flag', 
 	})
 	await writeNode(there, 'auth-api-k7f2', {
 		title: 'Session endpoints',
+		name: 'Session endpoints',
 		description: '',
 		notes: '',
 		dependsOn: [],
@@ -332,6 +335,7 @@ test('the digest is served, and its two halves arrive separately', async () => {
 	})
 	await writeNode(there, 'auth-api-k7f2', {
 		title: 'Session endpoints',
+		name: 'Session endpoints',
 		description: '',
 		notes: '',
 		dependsOn: [],
@@ -417,6 +421,7 @@ const flaggedBoard = async (
 	})
 	await writeNode(there, 'auth-api-k7f2', {
 		title: 'Session endpoints',
+		name: 'Session endpoints',
 		description: '',
 		notes: '',
 		dependsOn: [],

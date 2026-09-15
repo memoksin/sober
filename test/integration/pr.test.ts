@@ -43,6 +43,7 @@ afterEach(() => {
 
 const node = (title: string, files: string[] = []) => ({
 	title,
+	name: title,
 	description: '',
 	notes: '',
 	dependsOn: [],

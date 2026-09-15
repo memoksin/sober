@@ -45,3 +45,19 @@ export const newId = (seed: string): string => {
 	const suffix = [...randomBytes(SUFFIX)].map((byte) => ALPHABET[byte % ALPHABET.length]).join('')
 	return `${slug}-${suffix}`
 }
+
+const NAME = 40
+
+/**
+ * A title cut to the name's bound without severing a word. A single word
+ * longer than the bound is kept whole and cut, since there is no boundary to use.
+ */
+export const shortName = (title: string): string => {
+	const words = title.trim().split(/\s+/)
+	let name = words[0] ?? ''
+	for (const word of words.slice(1)) {
+		if (name.length + 1 + word.length > NAME) break
+		name = `${name} ${word}`
+	}
+	return name.slice(0, NAME) || 'item'
+}

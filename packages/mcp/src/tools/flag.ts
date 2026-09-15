@@ -54,6 +54,11 @@ export const registerFlags = (server: McpServer, cwd: string): void => {
 				'One node, with a title and its edges — not a plan. It arrives with no brief, so nothing about it can run until one is written and a human approves it. Use `propose` when the work is a set of nodes with the decisions they introduce.',
 			inputSchema: {
 				title: z.string().min(1),
+				name: z
+					.string()
+					.min(1)
+					.max(40)
+					.describe('a short name a person tells this node from its siblings by, like `log-wire`'),
 				description: z.string().nullish(),
 				files: z.array(z.string()).nullish(),
 				dependsOn: z.array(z.string()).nullish(),
@@ -63,6 +68,7 @@ export const registerFlags = (server: McpServer, cwd: string): void => {
 		tool(
 			async (input: {
 				title: string
+				name: string
 				description?: string | null
 				files?: string[] | null
 				dependsOn?: string[] | null
@@ -71,6 +77,7 @@ export const registerFlags = (server: McpServer, cwd: string): void => {
 				const paths = await openBoard(cwd)
 				const { id } = await createNode(paths, {
 					title: input.title,
+					name: input.name,
 					by: await whoami(paths.root),
 					description: input.description ?? undefined,
 					files: input.files ?? undefined,

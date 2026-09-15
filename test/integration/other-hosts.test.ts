@@ -34,6 +34,7 @@ const OTHER_HOSTS = ['codex', 'opencode', 'cursor'] as const
 
 const aNode = (title: string) => ({
 	title,
+	name: title,
 	description: 'Sign in and sign out.',
 	notes: '',
 	dependsOn: [],

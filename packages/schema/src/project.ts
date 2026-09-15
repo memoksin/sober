@@ -18,4 +18,4 @@ export type Project = z.infer<typeof Project>
  * made a contributor's focus a list, so that a distribution can be matched
  * against it entry by entry (ADR 0051).
  */
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7

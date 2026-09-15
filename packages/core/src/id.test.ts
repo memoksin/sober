@@ -1,6 +1,6 @@
 import { ID_PATTERN } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { newId } from './id.js'
+import { newId, shortName } from './id.js'
 
 test('a title nobody wrote in ASCII still reads as itself', () => {
 	// Found in the M1 gate: a Turkish board produced `ge-ersiz`, `mod-l` and
@@ -28,4 +28,11 @@ test('every id it makes is one the schema accepts', () => {
 test('a title with nothing to slug still gets a name', () => {
 	expect(newId('日本語')).toMatch(/^item-[a-z0-9]{4}$/)
 	expect(newId('')).toMatch(/^item-[a-z0-9]{4}$/)
+})
+
+test('a short name is cut on a word boundary, and a single long word is cut whole', () => {
+	expect(shortName('The run panel: a box for what the agent is doing')).toBe(
+		'The run panel: a box for what the agent',
+	)
+	expect(shortName('x'.repeat(50))).toBe('x'.repeat(40))
 })

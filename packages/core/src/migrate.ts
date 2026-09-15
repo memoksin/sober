@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Contributors, Node, Project, SCHEMA_VERSION } from '@besober/schema'
 import { SoberError } from './errors.js'
+import { shortName } from './id.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
 import { fileId } from './paths.js'
@@ -75,6 +76,13 @@ const MIGRATIONS: readonly Migration[] = [
 			if (brief === null || brief === undefined) return record
 			return { ...record, brief: { complexity: null, ...brief } }
 		},
+	},
+	{
+		to: 7,
+		// The node gained a short name. Nobody chose one for a node written
+		// before it, so it is cut from the title on a word boundary — the same
+		// rule a node opened from a terminal gets.
+		node: (record) => ({ name: shortName(String(record.title ?? '')), ...record }),
 	},
 ]
 

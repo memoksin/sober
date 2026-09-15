@@ -47,6 +47,7 @@ const refused = (cwd: string, ...args: string[]): string => {
 /** A node exactly as M1 wrote it: no assignee, no claim. */
 const v1Node = (title: string, files: string[]) => ({
 	title,
+	name: title,
 	description: '',
 	notes: '',
 	dependsOn: [],
