@@ -183,9 +183,12 @@ test('the loop closes: decide, brief, approve, run, review, accept', () => {
 	// A decision offers its options with the reason and what each costs later.
 	expect(sober(created.dir, 'decisions')).toContain('No server state')
 	expect(failed(created.dir, 'decide', 'session-store-k7f2', 'postgres')).toContain('cookie, redis')
-	expect(sober(created.dir, 'decide', 'session-store-k7f2', 'cookie')).toContain(
-		'no longer waiting on it',
-	)
+	expect(
+		sober(created.dir, 'decide', 'session-store-k7f2', 'cookie', '--why', 'Nothing to run'),
+	).toContain('no longer waiting on it')
+	// Answered: gone from the bare list, and `--all` says what was chosen over what.
+	expect(sober(created.dir, 'decisions')).not.toContain('session-store-k7f2')
+	expect(sober(created.dir, 'decisions', '--all')).toMatch(/A cookie[\s\S]*Nothing to run[\s\S]*Redis/)
 	// Answering is once. Changing an answer is a different command, because it
 	// withdraws every brief built on the answer it replaces (§2.8).
 	expect(failed(created.dir, 'decide', 'session-store-k7f2', 'redis')).toContain(

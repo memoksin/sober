@@ -20,7 +20,7 @@ import {
 	whoami,
 	writeBrief,
 } from '@besober/core'
-import { Brief } from '@besober/schema'
+import { Brief, decisionState } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
 import { source } from './input.js'
 import {
@@ -58,15 +58,41 @@ const mark = (kind: string): string => {
 	return colour(glyph)
 }
 
-export const decisions = async (): Promise<void> => {
+const ORDER = { open: 0, unopened: 1, answered: 2 } as const
+
+// `all` is off by default: the bare command is how a person finds their next
+// move, and a month of settled decisions in front of that is a worse default.
+export const decisions = async (all = false): Promise<void> => {
 	const paths = await openBoard()
 	const board = await readBoard(paths)
+	// Same order as the dashboard's decision list, so the two surfaces agree.
+	const listed = all
+		? [...board.decisions]
+				.filter(([id]) => !board.archivedDecisions.has(id))
+				.toSorted(
+					([, a], [, b]) =>
+						ORDER[decisionState(a)] - ORDER[decisionState(b)] ||
+						a.createdAt.localeCompare(b.createdAt),
+				)
+		: openDecisions(board)
 
-	for (const [id, decision] of openDecisions(board)) {
+	for (const [id, decision] of listed) {
 		say(`${magenta(bold(id))}  ${dim(decision.category)}`)
 		say(`  ${decision.question}`)
 		if (decision.options === null) {
 			say(dim('  options have not been produced yet — open it in a session'))
+		} else if (decision.answer !== null) {
+			const { answer } = decision
+			const chosen = decision.options.find((option) => option.id === answer.option)
+			say(`  ${cyan(bold(answer.option))}  ${chosen?.label ?? ''}`)
+			if (answer.rationale !== '') say(`      ${dim(answer.rationale)}`)
+			if (answer.derived !== null) say(`      ${dim('derived')} ${answer.derived}`)
+			for (const option of decision.options.filter((option) => option.id !== answer.option)) {
+				say(`  ${dim(option.id)}  ${option.label}`)
+				say(`      ${green('because')} ${dim(option.reason)}`)
+				say(`      ${yellow('later')}   ${dim(option.costLater)}`)
+			}
+			say(dim(`  answered by ${answer.by} at ${answer.at}`))
 		} else {
 			for (const option of decision.options) {
 				say(`  ${cyan(bold(option.id))}  ${option.label}`)

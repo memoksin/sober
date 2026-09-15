@@ -39,6 +39,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		'Decide',
 		[
 			['decisions', 'every decision still waiting on you'],
+			['decisions --all', 'every decision, answered ones included'],
 			['decide <id> <option>', 'answer one, and unblock what it holds'],
 			['edit <id> <option>', 'change an answer — it shows what that reaches first'],
 			['edit <id> <option> --anyway', 'apply it'],
@@ -163,6 +164,7 @@ const options = {
 	'depends-on': { type: 'string' },
 	queue: { type: 'boolean' },
 	anyway: { type: 'boolean' },
+	all: { type: 'boolean' },
 	watch: { type: 'boolean' },
 	done: { type: 'boolean' },
 	'no-push': { type: 'boolean' },
@@ -212,7 +214,7 @@ const main = async (): Promise<void> => {
 		case 'status':
 			return status(rest[0])
 		case 'decisions':
-			return decisions()
+			return decisions(values.all === true)
 		case 'decide': {
 			const id = need('decision')
 			const option = rest[1] ?? fail(`which option? \`sober decisions\` lists them`)
