@@ -1,185 +1,185 @@
 # SOBER v1 — Monorepo playbook
 
-Kesin hüküm: monorepo nasıl üretilir, yönetilir, sürdürülür. Tek kişi, part-time, junior, yanında AI ajanlar. `BUILD-PLAN.md`'yi tekrar etmez; onu uygular ve dört yerde düzeltir. Düzeltmeler **→ ADR** ile işaretli: `BUILD-PLAN.md` bağlayıcı olduğu için orada değişiklik senin ADR'inle olur, bu dosyayla olmaz.
+Final ruling: how the monorepo is built, managed, and maintained. One person, part-time, junior, with AI agents alongside. It does not repeat `BUILD-PLAN.md`; it applies it and corrects it in four places. Corrections are marked **→ ADR**: `BUILD-PLAN.md` is binding, so a change there happens through your ADR, not through this file.
 
-Dayanak: v0'ın ölçülmüş tarihi (`REVIEW-2026-08-29.md §2.1`), 201 commit / 11 takvim günü / zirve günde 45 commit.
-
----
-
-## 1. v0 nasıl patladı — tempo açısından
-
-v0'ın sorunu yavaşlık değildi. 11 günde 201 commit, 9 aktif günde ortalama 22 commit/gün. Bu insan temposu değil, ajan temposu. Review kapasitesi ajanların üretimine yetişmedi; kod okunmadan indi; kurallar prose'da kaldı; son gün üç ajan aynı dosyayı düzenledi.
-
-Hüküm: **v1'de hız sınırı ajan değil, senin okuyabildiğin diff miktarıdır.** Günde okuyup anlayabildiğinden fazla kod üretilmez. Bu tek cümle bu dosyanın geri kalanını belirler.
+Basis: v0's measured history (`REVIEW-2026-08-29.md §2.1`), 201 commits / 11 calendar days / 45 commits on the peak day.
 
 ---
 
-## 2. Üretim: sıra
+## 1. How v0 blew up — the pace view
 
-### 2.1 Sıralı mı, paralel mi
+v0's problem was not slowness. 201 commits in 11 days, an average of 22 commits/day over 9 active days. That is not a human pace, it is an agent pace. Review capacity could not keep up with what the agents produced; code landed unread; rules stayed in prose; on the last day three agents edited the same file.
 
-**Phase 0–5 sıralı. Phase içi en fazla 2 paralel ajan, üç koşul sağlanırsa** (`BUILD-PLAN.md §5`): arayüz merge edilmiş bir dosyada var, dosya kümeleri kesişmiyor ve barrel içermiyor, iki diff'i bugün okuyabiliyorsun.
+Ruling: **in v1 the speed limit is not the agent, it is the amount of diff you can read.** No more code is produced in a day than you can read and understand. This one sentence sets the rest of this file.
 
-Paket bazında:
+---
 
-| Phase | Paket | Mod | Paralel olabilecek tek şey |
+## 2. Building: order
+
+### 2.1 Sequential or parallel
+
+**Phases 0–5 are sequential. Within a phase, at most 2 parallel agents, if three conditions hold** (`BUILD-PLAN.md §5`): the interface exists in a merged file, the file sets do not overlap and contain no barrel, and you can read both diffs today.
+
+Per package:
+
+| Phase | Package | Mode | The only thing that can run in parallel |
 | --- | --- | --- | --- |
-| 0 | skeleton, CI, fixture | solo | CI YAML ↔ Biome/turbo config (farklı dosyalar) |
-| 1 | `schema` | solo | hiçbir şey — kayıt şekli tek elden |
-| 2 | `core` | solo | `status.ts` testleri ↔ `git/worktree.ts` (modül oluştuktan sonra) |
-| 3 | `cli`, `mcp`, plugin, adapter | solo | bağımsız CLI alt komutları ↔ bağımsız MCP tool'ları |
-| 4 | sync, contributors, PR | solo | hiçbir şey — merge kodu tek elden |
-| 5 | `server`, `dashboard` | solo | bağımsız dashboard bileşenleri (layout senden) |
-| 6 | diğer host adapter'ları | paralel | her adapter kendi dizininde |
+| 0 | skeleton, CI, fixture | solo | CI YAML ↔ Biome/turbo config (different files) |
+| 1 | `schema` | solo | nothing — the record shape comes from one hand |
+| 2 | `core` | solo | `status.ts` tests ↔ `git/worktree.ts` (after the module exists) |
+| 3 | `cli`, `mcp`, plugin, adapter | solo | independent CLI subcommands ↔ independent MCP tools |
+| 4 | sync, contributors, PR | solo | nothing — merge code comes from one hand |
+| 5 | `server`, `dashboard` | solo | independent dashboard components (layout from you) |
+| 6 | other host adapters | parallel | each adapter in its own directory |
 
-"Solo" = tek ajan veya sen. "Paralel" = 2 ajan, tavan 2. Tavan phase 6'ya kadar kalkmaz; kalkma koşulu `BUILD-PLAN.md:151` ("son dört ajan diff'ini satır satır okudum").
+"Solo" = one agent or you. "Parallel" = 2 agents, ceiling 2. The ceiling does not lift before phase 6; the lift condition is `BUILD-PLAN.md:151` ("I read the last four agent diffs line by line").
 
-### 2.2 Her fazın kapısı
+### 2.2 The gate of each phase
 
-Kapı geçilmeden sonraki faz başlamaz. Kapı bir cümle değil, çalıştırılabilir bir şeydir.
+The next phase does not start until the gate is passed. A gate is not a sentence, it is something you can run.
 
-| Phase | Kapı |
+| Phase | Gate |
 | --- | --- |
-| 0 | 6 check boş repoda yeşil **ve** biri kasten kırmızı görüldü |
-| 1 | `schema` M1 alanlarıyla dolu, snapshot testi var, `core` henüz yok |
-| 2 | Integration harness gerçek repoda yeşil: worktree aç/kapat, status türet, brief render, archive |
-| 3 | `BUILD-PLAN.md §3`'teki 9 adım gerçek bir repoda elle yürütüldü — M1 |
-| 4 | İki klon, bir board, alan-seviyesi çakışma çözüldü, bozuk graph push edilemedi — M2 |
-| 5 | 9 adım terminal açmadan — M3 |
+| 0 | 6 checks green on an empty repo **and** one seen red on purpose |
+| 1 | `schema` filled with M1 fields, snapshot test exists, `core` does not exist yet |
+| 2 | Integration harness green on a real repo: open/close worktree, derive status, render brief, archive |
+| 3 | The 9 steps in `BUILD-PLAN.md §3` walked by hand on a real repo — M1 |
+| 4 | Two clones, one board, a field-level conflict resolved, a broken graph could not be pushed — M2 |
+| 5 | The 9 steps without opening a terminal — M3 |
 
 ---
 
-## 3. Üretim: hız
+## 3. Building: speed
 
-### 3.1 Takvim — düzeltilmiş → ADR
+### 3.1 Calendar — corrected → ADR
 
-`BUILD-PLAN.md §4` "focused day" ile ölçüyor ve M1'i 21–29 gün diyor. İki düzeltme:
+`BUILD-PLAN.md §4` measures in "focused days" and puts M1 at 21–29 days. Two corrections:
 
-1. **Phase 0 ve 2 junior için uzar.** Bundling/CI hataları "okuma bloğu" değil "debug spirali" olur; ilk gerçek merge çakışmasını elle çözmek bir tam gün alır.
-2. **Phase 5 kısalır.** Dashboard 42.696 satır değildi, 8.892 satırdı (`REVIEW-2026-08-29.md §2.1`). 14–20 gün tahmini yanlış rakama dayanıyor.
+1. **Phases 0 and 2 run longer for a junior.** Bundling/CI errors become a "debug spiral", not a "reading block"; resolving the first real merge conflict by hand takes a full day.
+2. **Phase 5 runs shorter.** The dashboard was not 42,696 lines, it was 8,892 lines (`REVIEW-2026-08-29.md §2.1`). The 14–20 day estimate rests on the wrong number.
 
-| Phase  | BUILD-PLAN | Bu dosya  | Neden                                  |
+| Phase  | BUILD-PLAN | This file | Why                                    |
 | ------ | ---------- | --------- | -------------------------------------- |
-| 0      | 3–4        | **5–7**   | packaging + fixture + ilk CI kırmızısı |
+| 0      | 3–4        | **5–7**   | packaging + fixture + first CI red     |
 | 1      | 2–3        | 2–3       | —                                      |
-| 2      | 8–11       | **11–15** | git plumbing; ilk conflict günü        |
+| 2      | 8–11       | **11–15** | git plumbing; first conflict day       |
 | 3      | 8–11       | 8–11      | —                                      |
 | **M1** | 21–29      | **26–36** |                                        |
 | 4      | 8–12       | 8–12      | —                                      |
-| 5      | 14–20      | **10–14** | doğru rakam, ekran kes                 |
-| **v1** | 43–61      | **44–62** | toplam aynı, dağılım farklı            |
+| 5      | 14–20      | **10–14** | right number, cut screens              |
+| **v1** | 43–61      | **44–62** | same total, different spread           |
 
-Haftada 4 focused day ile M1 **7–9 hafta**, v1 **11–16 hafta**.
+At 4 focused days a week, M1 is **7–9 weeks**, v1 **11–16 weeks**.
 
-### 3.2 Günlük tavan
+### 3.2 Daily ceiling
 
-- Günde en fazla **2 ajan çalışması**: 2 acceptance listesi yazılır, 2 check sonucu okunur (ADR 0022). Üçüncüsü yarına kalır.
-- Bir PR **400 satırı** geçemez (test hariç). Geçiyorsa node yanlış bölünmüş; böl.
-- Günün son 30 dakikası kod yazmaz: yarının node'unu ve acceptance listesini yazar.
+- At most **2 agent runs** a day: 2 acceptance lists written, 2 check results read (ADR 0022). A third waits for tomorrow.
+- A PR may not exceed **400 lines** (tests excluded). If it does, the node is split wrong; split it.
+- The last 30 minutes of the day write no code: they write tomorrow's node and its acceptance list.
 
-### 3.3 Takıldım → yükselt kuralı
+### 3.3 Stuck → escalate rule
 
-`BUILD-PLAN.md`'de yok. Ekleniyor:
+Not in `BUILD-PLAN.md`. Added:
 
-**Aynı hata üzerinde 2 saat (sen + ajan toplam) ilerleme yoksa dur.** Sorunu üç cümlede yaz: ne bekledin, ne oldu, ne denedin. Sonra sırayla:
+**If there is no progress on the same error for 2 hours (you + agent combined), stop.** Write the problem in three sentences: what you expected, what happened, what you tried. Then, in order:
 
-1. Aynı problemi çözen açık kaynak bir repo bul (`gh search code`), yaklaşımı oku.
-2. Mimari bir soruysa ADR taslağı aç, kodu bırak.
-3. Araç sorunuysa (esbuild, pnpm, git) resmi dokümanı baştan oku, hafızadan değil.
+1. Find an open-source repo that solves the same problem (`gh search code`), read its approach.
+2. If it is an architecture question, open an ADR draft and leave the code.
+3. If it is a tool problem (esbuild, pnpm, git), read the official docs from the start, not from memory.
 
-Bu kural git plumbing (phase 2, 4) ve packaging (phase 0) için **1 saat**.
+For git plumbing (phases 2, 4) and packaging (phase 0) this rule is **1 hour**.
 
 ---
 
-## 4. Devretme haritası
+## 4. Delegation map
 
-İlke `BUILD-PLAN.md §6`'dan: spesifikasyon senin, yazım ajanın. Ajan, kendi değerlendiremeyeceğin bir şey üretiyorsa devretme.
+The principle is from `BUILD-PLAN.md §6`: the specification is yours, the writing is the agent's. If an agent produces something you cannot judge yourself, do not delegate it.
 
-Dört kip: **Ver** (diff'i review edersin, yaklaşımı değil) · **Eşle** (ajan yazar, sen her adımı okur ve yönlendirirsin) · **Sen** (ajan sadece soru cevaplar) · **Önce oku** (saat).
+Four modes: **Give** (you review the diff, not the approach) · **Pair** (the agent writes, you read and steer every step) · **You** (the agent only answers questions) · **Read first** (hours).
 
-| Phase | Ver | Eşle | Sen | Önce oku |
+| Phase | Give | Pair | You | Read first |
 | --- | --- | --- | --- | --- |
-| 0 | `biome.json`, `turbo.json`, `.dependency-cruiser.cjs`, CI YAML, Changesets, commitlint, Renovate config | **esbuild bundle script + publint + smoke test** (BUILD-PLAN "Ver" diyor → ADR; ADR 0007'nin caveat'leri yüzünden eşle) · coverage ratchet script'i · integration fixture | branch protection, CODEOWNERS, `tsconfig.base.json` | npm packaging 3 s · `git help worktree` 2 s |
-| 1 | Zod şemaları (kayıt şekli senden) · snapshot testi | — | kayıt şeklini kâğıda yaz | status modeli kâğıtta 2 s |
-| 2 | status türetme, brief render, archive, run log, testler (acceptance listesi senden) | **`git/worktree.ts`, `git/merge.ts`, dosya kilidi, atomik yazma** (BUILD-PLAN "solo" diyor → ADR; ilk kez eşle) | storage layout, hata sınıfları, `core/index.ts` | `merge=binary`, `:1:/:2:/:3:` 4 s — **bir çakışmayı elle çöz, bitmeden phase 2'ye girme** |
-| 3 | CLI arg parse, help, çıktı formatı · MCP tool'ları (ilk 2'den sonra) · plugin dosyaları · secretlint entegrasyonu | **ilk 2 MCP tool + elicitation** · adapter (`claude -p` invocation) | tool listesi ve her tool'un sözleşmesi · `sober stop` mekanizması | MCP elicitation 3 s · Claude Code headless doc, implementasyon günü, 2 s |
-| 4 | contributors.json, claim, same-files uyarısı, draft PR açma | **field-level 3-way merge · post-merge validation** | çakışma sorusunun şekli | `git help merge`, `git help attributes` tekrar 2 s |
-| 5 | wire contract'tan HTTP handler'lar · bileşenler (layout senden) · digest | graph library spike'ından sonra canvas | wire contract'ı `schema`'ya yazmak · hangi ekranın kesileceği | Cytoscape vs sigma spike 1 gün |
+| 0 | `biome.json`, `turbo.json`, `.dependency-cruiser.cjs`, CI YAML, Changesets, commitlint, Renovate config | **esbuild bundle script + publint + smoke test** (BUILD-PLAN says "Give" → ADR; pair because of ADR 0007's caveats) · coverage ratchet script · integration fixture | branch protection, CODEOWNERS, `tsconfig.base.json` | npm packaging 3 h · `git help worktree` 2 h |
+| 1 | Zod schemas (record shape from you) · snapshot test | — | write the record shape on paper | status model on paper 2 h |
+| 2 | status derivation, brief render, archive, run log, tests (acceptance list from you) | **`git/worktree.ts`, `git/merge.ts`, file lock, atomic write** (BUILD-PLAN says "solo" → ADR; pair the first time) | storage layout, error classes, `core/index.ts` | `merge=binary`, `:1:/:2:/:3:` 4 h — **resolve a conflict by hand; do not enter phase 2 until it is done** |
+| 3 | CLI arg parse, help, output format · MCP tools (after the first 2) · plugin files · secretlint integration | **first 2 MCP tools + elicitation** · adapter (`claude -p` invocation) | the tool list and each tool's contract · the `sober stop` mechanism | MCP elicitation 3 h · Claude Code headless doc, on implementation day, 2 h |
+| 4 | contributors.json, claim, same-files warning, opening the draft PR | **field-level 3-way merge · post-merge validation** | the shape of the conflict question | `git help merge`, `git help attributes` again 2 h |
+| 5 | HTTP handlers from the wire contract · components (layout from you) · digest | canvas, after the graph library spike | writing the wire contract into `schema` · which screen gets cut | Cytoscape vs sigma spike 1 day |
 
-**Asla devretme** (`BUILD-PLAN.md §6`): ADR kabulü, `SCOPE.md`/`CHARTER.md`/`BUILD-PLAN.md` değişikliği, kayıt şekli, "done" tanımı. Ek: **barrel dosyalar ve `docs/`** ajan PR'ına girmez — CODEOWNERS bunu zorunlu review'a bağlar.
+**Never delegate** (`BUILD-PLAN.md §6`): ADR acceptance, changes to `SCOPE.md`/`CHARTER.md`/`BUILD-PLAN.md`, the record shape, the definition of "done". Addition: **barrel files and `docs/`** never enter an agent PR — CODEOWNERS ties this to required review.
 
 ---
 
-## 5. Yönetim: repo mekaniği
+## 5. Managing: repo mechanics
 
-`STRUCTURE.md` araçları sayıyor. Eksik olan mekanikler, phase 0'da:
+`STRUCTURE.md` lists the tools. The missing mechanics, in phase 0:
 
-| Mekanik | Ne | Neden |
+| Mechanic | What | Why |
 | --- | --- | --- |
-| `workspace:*` | tüm iç bağımlılıklar | caret aralık yok, "hangi cli hangi core'a karşı test edildi" sorusu olmaz |
-| `pnpm-workspace.yaml` `catalog:` | tüm dış bağımlılık sürümleri tek yerde | `vitest`/`zod`/`typescript` sürüm sürüklenmesi olmaz |
-| `syncpack` | CI'da catalog denetimi | haftalık temizliğe ekle |
-| tsconfig `composite: true` + `tsc -b` | typecheck kapısı | project references bunsuz çalışmaz |
-| `turbo.json` `dependsOn: ["^build"]` | build sırası | schema → core → cli |
-| `turbo run --affected` | PR'da sadece etkilenen paket | CI süresi paket sayısıyla büyümesin |
-| Turbo cache (GH Actions cache) | tekrar eden build/test | 3 OS × 6 check — cache'siz 20 dk |
-| `pnpm dedupe --check` | CI | lockfile şişmesi |
-| CODEOWNERS | `packages/*/index.ts`, `docs/`, `.github/` | barrel ve doküman kuralı otomatik |
-| Renovate, gruplu, haftalık | tek PR | 10 ayrı PR junior'ı boğar |
-| `vitest.config.ts` + `test.projects` | `vitest.workspace.ts` yerine | Vitest 4'te kaldırıldı |
-| `tsconfig.base.json` | `module: NodeNext`, `verbatimModuleSyntax`, `isolatedModules`, `strict`, `noUncheckedIndexedAccess` | ESM-only, açıkça |
+| `workspace:*` | all internal dependencies | no caret ranges, no "which cli was tested against which core" question |
+| `pnpm-workspace.yaml` `catalog:` | all external dependency versions in one place | no `vitest`/`zod`/`typescript` version drift |
+| `syncpack` | catalog audit in CI | add to the weekly cleanup |
+| tsconfig `composite: true` + `tsc -b` | typecheck gate | project references do not work without it |
+| `turbo.json` `dependsOn: ["^build"]` | build order | schema → core → cli |
+| `turbo run --affected` | only affected packages on a PR | CI time does not grow with package count |
+| Turbo cache (GH Actions cache) | repeated build/test | 3 OS × 6 checks — 20 min without cache |
+| `pnpm dedupe --check` | CI | lockfile bloat |
+| CODEOWNERS | `packages/*/index.ts`, `docs/`, `.github/` | barrel and docs rule automatic |
+| Renovate, grouped, weekly | one PR | 10 separate PRs drown a junior |
+| `vitest.config.ts` + `test.projects` | instead of `vitest.workspace.ts` | removed in Vitest 4 |
+| `tsconfig.base.json` | `module: NodeNext`, `verbatimModuleSyntax`, `isolatedModules`, `strict`, `noUncheckedIndexedAccess` | ESM-only, explicitly |
 
 ---
 
-## 6. Sürdürme
+## 6. Maintaining
 
-`BUILD-PLAN.md §7`'nin beş ratchet'i kalır. Üç ekleme:
+The five ratchets of `BUILD-PLAN.md §7` stay. Three additions:
 
-**6.1 Ritim**
+**6.1 Rhythm**
 
-| Ne zaman | Ne | Süre |
+| When | What | Time |
 | --- | --- | --- |
-| Her gün | yarının node'u + acceptance listesi | 30 dk |
-| Her hafta | `knip`, `depcheck`, `syncpack`, Renovate PR'ı | 30 dk |
-| Her hafta | bir aydan eski her `ponytail:`/`TODO` okunur, ya kapanır ya ADR olur | 15 dk |
-| Her faz kapısı | changeset'ler toplanır, sürüm kesilir, CHANGELOG okunur | 1 saat |
-| M1, M2, M3 | `npm publish` — M1'de `0.x`, M3'te `1.0.0` | — |
+| Every day | tomorrow's node + acceptance list | 30 min |
+| Every week | `knip`, `depcheck`, `syncpack`, the Renovate PR | 30 min |
+| Every week | every `ponytail:`/`TODO` older than a month is read, and either closed or turned into an ADR | 15 min |
+| Every phase gate | changesets collected, version cut, CHANGELOG read | 1 hour |
+| M1, M2, M3 | `npm publish` — `0.x` at M1, `1.0.0` at M3 | — |
 
-**6.2 Sayısal tavanlar** — ratchet değil, alarm
+**6.2 Numeric ceilings** — alarms, not ratchets
 
-- `core` export sayısı > 60 → CI warning, ADR ister.
-- `apps/dashboard` satır sayısı > 1.5 × `packages/core` → dur, ekran kes. v0'ın gerçek oranı 0.67'ydi; 1.5 ekranın core'u geçmeye başladığı yer.
-- Bir faz, tahmininin 1.5 katını geçti → faz kapısını yeniden yaz, devam etme.
+- `core` export count > 60 → CI warning, requires an ADR.
+- `apps/dashboard` line count > 1.5 × `packages/core` → stop, cut screens. v0's real ratio was 0.67; 1.5 is where screens start to outgrow core.
+- A phase went past 1.5 times its estimate → rewrite the phase gate, do not continue.
 
-**6.3 Sürüm kesme**
+**6.3 Cutting versions**
 
-Changesets ile. `cli` tek yayınlanan paket, `fixed` grup gerekmez. Sürüm kesme sadece faz kapılarında; ara kesim yok. Her kesim `--provenance` ile.
+With Changesets. `cli` is the only published package, no `fixed` group needed. Versions are cut only at phase gates; no cuts in between. Every cut uses `--provenance`.
 
 ---
 
-## 7. Phase 0 — ilk 5 gün, gün gün
+## 7. Phase 0 — the first 5 days, day by day
 
-`STRUCTURE.md`'nin 11 adımı, güne bölünmüş. Kendi başına: **REVIEW-2026-08-29 §5 "Must" listesi bitmeden bu başlamaz.**
+The 11 steps of `STRUCTURE.md`, split into days. On its own terms: **this does not start until the REVIEW-2026-08-29 §5 "Must" list is done.**
 
-| Gün | İş | Kip |
+| Day | Work | Mode |
 | --- | --- | --- |
-| 1 | `create-turbo`, layout, `packageManager`/`engines` pin, `tsconfig.base.json`, `catalog:`, Biome, commitlint, Changesets, CODEOWNERS | Ver + Sen |
-| 2 | dependency-cruiser 4 kural, `turbo.json`, `vitest.config.ts` projects, coverage ratchet script'i | Ver + Eşle |
-| 3 | esbuild bundle script, publint, pack-install smoke, `secretlint`, `.gitattributes` | **Eşle** — önce 3 saat packaging oku |
-| 4 | integration fixture: temp repo + bare remote + commit/push testi; CI YAML, 3 OS | Eşle + Ver |
-| 5 | branch protection, Renovate, ratchet'i kasten kır (tip hatası PR'ı → kırmızı), düzelt | Sen |
+| 1 | `create-turbo`, layout, `packageManager`/`engines` pin, `tsconfig.base.json`, `catalog:`, Biome, commitlint, Changesets, CODEOWNERS | Give + You |
+| 2 | dependency-cruiser 4 rules, `turbo.json`, `vitest.config.ts` projects, coverage ratchet script | Give + Pair |
+| 3 | esbuild bundle script, publint, pack-install smoke, `secretlint`, `.gitattributes` | **Pair** — read packaging for 3 hours first |
+| 4 | integration fixture: temp repo + bare remote + commit/push test; CI YAML, 3 OS | Pair + Give |
+| 5 | branch protection, Renovate, break the ratchet on purpose (type-error PR → red), fix it | You |
 
-Gün 5 akşamı: 6 check yeşil, biri kırmızı görülmüş. Phase 1 başlar.
+Evening of day 5: 6 checks green, one seen red. Phase 1 starts.
 
 ---
 
-## 8. Bu dosyanın BUILD-PLAN ile çeliştiği yerler → ADR
+## 8. Where this file contradicts BUILD-PLAN → ADR
 
-1. §3.1 tempo tablosu (phase 0/2 uzar, 5 kısalır).
-2. §3.3 takıldım → yükselt kuralı (yeni).
-3. §4 esbuild/publint "Ver" → "Eşle"; phase 2 git kodu "solo" → "Eşle".
-4. §6.2 sayısal tavanlar (yeni ratchet değil, alarm).
+1. §3.1 pace table (phases 0/2 run longer, 5 runs shorter).
+2. §3.3 stuck → escalate rule (new).
+3. §4 esbuild/publint "Give" → "Pair"; phase 2 git code "solo" → "Pair".
+4. §6.2 numeric ceilings (not a new ratchet, an alarm).
 
-Dördü tek ADR oldu: **ADR 0023**, kabul edildi 2026-08-29. `BUILD-PLAN.md` §4, §5, §6, §7 buna göre düzeltildi. Bu dosya artık BUILD-PLAN ile çelişmez.
+All four became one ADR: **ADR 0023**, accepted 2026-08-29. `BUILD-PLAN.md` §4, §5, §6, §7 were corrected to match. This file no longer contradicts BUILD-PLAN.
 
-Review birimi de değişti: diff değil, check sonuçları (ADR 0022). §3.2'deki "günde 2 diff" → "günde 2 acceptance listesi yazıp 2 check sonucu okumak".
+The unit of review changed too: check results, not diffs (ADR 0022). "2 diffs a day" in §3.2 → "write 2 acceptance lists and read 2 check results a day".
