@@ -5,7 +5,9 @@ The same board, the same tools and the same loop as the Claude Code plugin —
 
 ## Install
 
-From a checkout of this repository:
+A checkout of this repository is required: the install is a symlink from
+`~/.cursor/plugins/local/sober` into `packages/cursor-plugin`, so there is
+nothing to fetch and the directory has to exist on disk.
 
 ```
 ln -s /path/to/sober/packages/cursor-plugin ~/.cursor/plugins/local/sober
@@ -17,6 +19,9 @@ turned them off.
 
 `sober` itself has to be on the PATH — `npm i -g @besober/cli` — because that is
 the command `mcp.json` names.
+
+See [Install the plugin for your host](../../README.md#install-the-plugin-for-your-host)
+for the other three.
 
 ## What is different from Claude Code
 
