@@ -1,4 +1,11 @@
-import { type Paths, runQueue, SoberError } from '@besober/core'
+import {
+	acquire,
+	type Config,
+	LockBusyError,
+	type Paths,
+	runQueue,
+	SoberError,
+} from '@besober/core'
 import { columns, cyan, dim, green, red, say, spinner, yellow } from './out.js'
 
 /**
@@ -10,7 +17,11 @@ import { columns, cyan, dim, green, red, say, spinner, yellow } from './out.js'
  * the user did not point at a node, so it says what it is starting before it
  * starts, and what happened after.
  */
-export const drain = async (paths: Paths, base: string): Promise<void> => {
+export const drain = async (
+	paths: Paths,
+	base: string,
+	options: { readonly quietWhenIdle?: boolean } = {},
+): Promise<{ readonly failed: boolean }> => {
 	const spin = spinner('the queue')
 	const queued = await runQueue(paths, base, {
 		onStart: (nodes) => {
@@ -22,13 +33,18 @@ export const drain = async (paths: Paths, base: string): Promise<void> => {
 			say(dim(`  ${nodes.join(', ')}`))
 		},
 	}).finally(() => spin.stop())
+	if (options.quietWhenIdle === true && queued.started.length === 0) return { failed: false }
+
+	let failed = false
 
 	for (const [index, result] of queued.dispatched.entries()) {
 		const node = queued.started[index] ?? ''
 		if (result instanceof SoberError) {
 			say(`${red('×')} ${node}: ${result.message}`)
+			failed = true
 			continue
 		}
+		if (result.exit !== 'finished') failed = true
 		say(
 			result.exit === 'finished'
 				? `${green('✓')} ${node} finished — review it with \`sober review ${node}\``
@@ -42,7 +58,7 @@ export const drain = async (paths: Paths, base: string): Promise<void> => {
 			),
 		)
 
-	if (queued.held.length === 0) return
+	if (queued.held.length === 0) return { failed }
 	say()
 	say(
 		`${yellow('·')} ${queued.held.length} queued node${queued.held.length === 1 ? '' : 's'} waiting for you`,
@@ -51,4 +67,75 @@ export const drain = async (paths: Paths, base: string): Promise<void> => {
 	say(
 		dim('  Start one yourself with `sober run <node>`, which says if anything else is in the way.'),
 	)
+	return { failed }
+}
+
+/**
+ * The long-lived half of the queue: `drain` on a cycle instead of on an event,
+ * so a node made ready by a run finishing at 02:00, a teammate's accept or a
+ * decision answered in another clone still starts. It calls `drain`, and so
+ * `runQueue`, so every ADR 0017 rule is inherited rather than repeated.
+ *
+ * It does not start a ready node whose brief was approved without `queue:
+ * true`. ADR 0017 rejected "dispatch every ready node automatically": it removes
+ * the approval, the last thing a human sees before an agent starts working. That
+ * is one predicate away in core's `queued()` and deliberately not taken — wanting
+ * it is an ADR superseding 0017, not a quiet line change.
+ *
+ * Liveness is the process. Twice-started is caught through the ADR 0025 lock
+ * machinery on its own file beside the writer lock — not the writer lock itself,
+ * which every dispatch inside the drain takes and would deadlock on — so a
+ * crashed dispatcher goes stale by heartbeat, never a file left behind.
+ */
+export const dispatcher = async (
+	paths: Paths,
+	base: string,
+	options: {
+		readonly config: Config
+		/** Injected so a test drives the cycle instead of sleeping through it. */
+		readonly wait?: (ms: number) => Promise<void>
+		readonly tick?: (paths: Paths, base: string) => Promise<{ readonly failed: boolean }>
+	},
+): Promise<number> => {
+	const wait = options.wait ?? ((ms) => new Promise<void>((done) => setTimeout(done, ms)))
+	const tick = options.tick ?? ((p, b) => drain(p, b, { quietWhenIdle: true }))
+	const held = await acquire({ ...paths, lock: `${paths.lock}-dispatch` }, 'dispatch', {
+		staleSeconds: options.config.lock.staleSeconds,
+		waitSeconds: 1,
+	}).catch((error: unknown) => {
+		if (error instanceof LockBusyError) return error
+		throw error
+	})
+	if (held instanceof LockBusyError) {
+		say(
+			`${red('×')} a dispatcher is already draining this board: ${held.action} on ${held.host} — not starting a second`,
+		)
+		return 1
+	}
+
+	const stop = (): void => {
+		void held.release().then(() => process.exit(130))
+	}
+	process.once('SIGINT', stop)
+	process.once('SIGTERM', stop)
+	say(`${green('✓')} draining the queue on ${cyan(base)} ${dim('— Ctrl-C stops it')}`)
+	try {
+		for (;;) {
+			const { failed } = await tick(paths, base)
+			// ADR 0017: a queued chain stops at the first failure. Carrying on next
+			// tick would turn "stop" into "stop until the next tick".
+			if (failed) {
+				say()
+				say(
+					`${red('×')} the dispatcher stopped — a queued node failed, and a human has to look before anything more is built`,
+				)
+				return 1
+			}
+			await wait(options.config.dispatch.pollSeconds * 1000)
+		}
+	} finally {
+		process.off('SIGINT', stop)
+		process.off('SIGTERM', stop)
+		await held.release()
+	}
 }

@@ -28,6 +28,7 @@ export const Config = z.strictObject({
 		draftPr: z.boolean(),
 		accept: z.enum(['merge', 'pull-request']),
 		queueByDefault: z.boolean(),
+		pollSeconds: z.int().positive().default(30),
 		tiers: z.strictObject({
 			high: z.string().min(1).nullable().default(null),
 			mid: z.string().min(1).nullable().default(null),
@@ -66,6 +67,7 @@ export const DEFAULT_CONFIG: Config = {
 		draftPr: true,
 		accept: 'merge',
 		queueByDefault: false,
+		pollSeconds: 30,
 		tiers: { high: null, mid: null, low: null },
 		thresholds: { mid: 4, high: 8 },
 	},
@@ -135,6 +137,11 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// node either way — this moves the starting position, not the trade
 		// (ADR 0056).
 		"queueByDefault": ${DEFAULT_CONFIG.dispatch.queueByDefault},
+
+		// How often \`sober dispatch\` reads the board for queued nodes that
+		// became ready. Each tick costs one board read; a node waits at most
+		// this long after it is ready before it starts.
+		"pollSeconds": ${DEFAULT_CONFIG.dispatch.pollSeconds},
 
 		// A tier is how hard a node's brief scores it. Each names the command
 		// that runs it, the same shape as "host" — for example
