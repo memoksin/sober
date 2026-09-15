@@ -421,6 +421,24 @@ test('a host that declares elicitation is never asked again to approve', async (
 	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
 })
 
+test('write_brief returns the rendered brief with every criterion', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const node = [...(await loadBoard(paths)).nodes.keys()][0] as string
+	const reply = await call(client, 'write_brief', {
+		node,
+		complexity: 2,
+		approach: 'Do the thing.',
+		acceptance: [
+			{ run: 'npm test', proves: 'The endpoints answer.' },
+			{ run: 'npm run lint', proves: 'The code is clean.' },
+		],
+	})
+	for (const part of ['npm test', 'The endpoints answer.', 'npm run lint', 'The code is clean.'])
+		expect(reply).toContain(part)
+})
+
 test('a brief is written, approved by the human, and nothing runs before that', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)

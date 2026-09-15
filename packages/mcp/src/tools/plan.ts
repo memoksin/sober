@@ -493,7 +493,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 					acceptance: acceptance.map((criterion) => ({ ...criterion })),
 				})
 				return text(
-					`${node} has a brief. Show it to the human and ask for approval with the \`approve\` tool.`,
+					`${renderBrief(await loadBoard(paths), node) ?? ''}\n\n${node} has a brief. Show it to the human and ask for approval with the \`approve\` tool.\nPaste this above the question before you ask.`,
 				)
 			},
 		),

@@ -8,6 +8,9 @@ import { decisionState } from '@besober/schema'
  * the same `core` functions — the contract that keeps three surfaces from
  * drifting into three products (`PR-09-08`, §4).
  */
+/** Ends every block a human reads before being asked; tests import it rather than repeat it. */
+export const PASTE = 'Paste this above the question before you ask.'
+
 export const renderBoard = (board: Board): string => {
 	const lines: string[] = []
 	if (board.project !== null) {
@@ -103,7 +106,7 @@ export const renderDecisions = (board: Board): string => {
 		}
 		lines.push('')
 	}
-	return lines.length === 0 ? 'Nothing is waiting on you.' : lines.join('\n')
+	return lines.length === 0 ? 'Nothing is waiting on you.' : [...lines, PASTE].join('\n')
 }
 
 /**
@@ -188,6 +191,7 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 		)
 	if (review.accepted !== null)
 		lines.push('', 'This node is already done. There is nothing here to accept or reject.')
+	lines.push('', PASTE)
 	return lines.join('\n')
 }
 
