@@ -5,8 +5,8 @@ import { renderBrief } from './brief.js'
 import { type Config, hostForTier, readConfig, readConfigFromBase, tierFor } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
-import { type AgentInput, checkHost, HostError, startAgent } from './host.js'
-import { adapterFor } from './hosts.js'
+import { type AgentInput, checkHost, HostError, type HostReady, startAgent } from './host.js'
+import { adapterFor, UnknownHostError } from './hosts.js'
 import {
 	appendEvent,
 	appendRunOutput,
@@ -113,19 +113,33 @@ export const dispatch = async (
 		tier === null
 			? ''
 			: ` (the ${tier} tier${chosen.fallback ? ', falling back to `dispatch.host`' : ''})`
+	// The key a person edits to fix a refusal: the tier's own line when it named
+	// one, `dispatch.host` when that is what ran.
+	const key = tier === null || chosen.fallback ? 'dispatch.host' : `dispatch.tiers.${tier}`
+	const refused = (reason: string, fix: string) =>
+		new HostError(`${node} was not started${named}: ${reason} — ${fix} \`${key}\``)
 
 	// Before anything starts, and in this order: a login that expired should be
 	// one sentence, not a failure three minutes into a worktree (`PR-05-04`).
-	const host = await checkHost(line)
-	if (!host.ok) throw new HostError(`${node} was not started${named}: ${host.reason}`)
+	let host: HostReady
+	try {
+		host = await checkHost(line)
+	} catch (error) {
+		// A typo in a tier names no host at all, and does not fall back.
+		if (error instanceof UnknownHostError)
+			throw refused(`SOBER has no adapter for \`${line}\``, 'change')
+		throw error
+	}
+	if (!host.ok) throw refused(host.reason ?? 'the host is not ready', 'or change')
 
 	// Attended mode needs a host that reads stdin while it runs (ADR 0046), and
 	// two of the three do not. Refusing is the honest answer: running it
 	// headless anyway would put somebody in front of a session that cannot hear
 	// them, which is worse than not offering it (§2.9).
 	if (options.attended === true && !adapterFor(line).attendable)
-		throw new HostError(
-			`${node} was not started: ${line}${named} takes one message and exits, so nobody can answer it while it runs. Start it without watching, or set \`dispatch.host\` to a host that can be attended.`,
+		throw refused(
+			`${line} takes one message and exits, so nobody can answer it while it runs. Start it without watching`,
+			'or change',
 		)
 
 	const prompt = options.prompt ?? (await promptFor(paths, node))
