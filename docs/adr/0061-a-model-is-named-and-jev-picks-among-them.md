@@ -32,7 +32,9 @@ Four things follow, each chosen on purpose:
 **A provider is a command line.** OpenRouter, OpenAI and Anthropic are reached
 the way ADR 0058 already reaches them — through the host CLI the user logged
 into, with the model flag on the line and the adapter's own arguments after
-it. SOBER gains no API client and no tool loop.
+it. SOBER gains no API client and no tool loop. ADR 0062 adds one host that
+is SOBER's own — `openrouter` — reached by `sober agent`, which is still a
+command line.
 
 **The list is preference order, and it wins over the tiers.** Where ranges
 overlap, the first covering entry runs when nobody asked Jev. `tiers` and

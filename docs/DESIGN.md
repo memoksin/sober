@@ -576,11 +576,11 @@ This is the ordinary pull request flow — review comments, more commits, one pu
 
 ### 5.1 The host runs the agent, not SOBER
 
-SOBER shells out to the user's own host CLI, headless — `claude -p`, `codex exec`, `opencode run`, `agent -p` (D28). It never asks for an API key. Which host and model run a node is a setting per tier (ADR 0058), but the tool the user already installed and logged into still does the work.
+SOBER shells out to the user's own host CLI, headless — `claude -p`, `codex exec`, `opencode run`, `agent -p` (D28). The four host CLIs never ask for an API key; the `openrouter` host is the one exception, taking one from `.sober/.env` (ADR 0062). Which host and model run a node is a setting per tier (ADR 0058), but the tool the user already installed and logged into still does the work.
 
 A dispatch has a second mode, **attended**, chosen per run and never the default (ADR 0046). It opens the session's input, adds `--input-format stream-json`, and tells the agent a human is reading — so a person watching on the dashboard, or holding `sober run --watch` in a terminal, can answer it. Everything else is identical: same worktree, same judging, same records. A headless run is still told that nobody can answer it, which is the M2 gate's finding 1 and the reason the two modes are separate rather than one mode with a flag on the prompt.
 
-Calling a model API directly was the alternative, and it makes SOBER an agent framework — owning the tool loop, file access, and sandboxing. That is a different product.
+Calling a model API directly was the alternative, and it makes SOBER an agent framework — owning the tool loop, file access, and sandboxing. That is a different product — except for the `openrouter` host, which is exactly that, scoped narrowly (ADR 0062).
 
 This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. There are four of them (ADR 0048, ADR 0052), and what differs between them is a table in `hosts.ts` rather than a shape in the code:
 
