@@ -48,6 +48,16 @@ test('a host that is not installed is named, and not confused with a logged-out 
 	})
 })
 
+test('the probe never carries the model flag the run line names', async () => {
+	// `opencode --model x providers list` rejects the flag and prints its help,
+	// which used to read as a host that could not report its status.
+	const host = node(
+		'if (process.argv.includes("--model")) { process.exit(1) } console.log(JSON.stringify({ loggedIn: true }))',
+	)
+	expect(await checkHost(`${host} --model some/model`)).toEqual({ ok: true, reason: null })
+	expect(await checkHost(`${host} -m some/model`)).toEqual({ ok: true, reason: null })
+})
+
 test('a host that is logged out says which command signs in', async () => {
 	const host = node('console.log(JSON.stringify({ loggedIn: false }))')
 	const { ok, reason } = await checkHost(host)

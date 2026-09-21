@@ -36,6 +36,13 @@ export interface HostReady {
 	readonly reason: string | null
 }
 
+const withoutModel = (args: readonly string[]): string[] =>
+	args.filter((arg, i) => {
+		if (/^(--model|-m)=/.test(arg)) return false
+		if (arg === '--model' || arg === '-m') return false
+		return !(args[i - 1] === '--model' || args[i - 1] === '-m')
+	})
+
 /**
  * Checked before anything starts, never three minutes in (`PR-05-04`). Two
  * failures, and they need different sentences: a host that is not installed and
@@ -46,7 +53,11 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 	const [command, args] = hostCommand(host)
 	let stdout: string
 	try {
-		;({ stdout } = await run(command, [...args, ...adapter.probe], { encoding: 'utf8' }))
+		// The model flag is the run's, not the probe's: `opencode providers list`
+		// rejects `--model` and prints its help, which read as "not logged in".
+		;({ stdout } = await run(command, [...withoutModel(args), ...adapter.probe], {
+			encoding: 'utf8',
+		}))
 	} catch (error) {
 		const code = (error as { code?: string }).code
 		if (code === 'ENOENT')
