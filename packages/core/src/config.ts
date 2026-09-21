@@ -209,7 +209,7 @@ export const DEFAULT_CONFIG_TEXT = `{
 		//   JEV_API_KEY   required
 		//   JEV_BASE_URL  default https://api.typesafe.ai/v1
 		//   JEV_MODEL     default typesafe-ai/jev
-		// For OpenRouter, set https://openrouter.ai/api/v1 and typesafe/jev-latest.
+		// For OpenRouter, set https://openrouter.ai/api/v1 and typesafe/jev-1.13.
 		// A Jev that cannot be reached stops the dispatch and says so — it
 		// never falls back quietly, because a mode you think is on and is
 		// not is worse than a failure.

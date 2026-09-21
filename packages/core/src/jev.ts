@@ -15,7 +15,7 @@ import { SoberError } from './errors.js'
  *   JEV_BASE_URL   default https://api.typesafe.ai/v1
  *   JEV_MODEL      default typesafe-ai/jev
  *
- * OpenRouter: JEV_BASE_URL=https://openrouter.ai/api/v1 JEV_MODEL=typesafe/jev-latest
+ * OpenRouter: JEV_BASE_URL=https://openrouter.ai/api/v1 JEV_MODEL=typesafe/jev-1.13
  */
 export class JevError extends SoberError {
 	constructor(message: string) {
@@ -58,7 +58,8 @@ const SKILL_PREFIX = 'skill:'
 
 type JevQuestion =
 	| { readonly type: 'score'; readonly instructions: string; readonly criteria: readonly string[] }
-	| { readonly type: 'boolean'; readonly instructions: string }
+	// The wire name for a yes/no question; the AI SDK calls it `boolean`.
+	| { readonly type: 'noul'; readonly instructions: string }
 	| {
 			readonly type: 'choice'
 			readonly instructions: string
@@ -75,7 +76,7 @@ export const jevQuestions = (skills: readonly string[]): Record<string, JevQuest
 		skills.map((name) => [
 			`${SKILL_PREFIX}${name}`,
 			{
-				type: 'boolean' as const,
+				type: 'noul' as const,
 				instructions: `Does the agent working this node need the \`${name}\` skill?`,
 			},
 		]),
@@ -98,13 +99,14 @@ export const jevDecision = (body: unknown, skills: readonly string[]): JevDecisi
 		throw new JevError('Jev returned no `answers`')
 	const table = answers as Record<string, unknown>
 
-	// The API reports a score as its 0-based rung; the brief's scale starts at 1.
+	// The score is the expected 0-based rung — a probability-weighted average,
+	// so 6.5 is an answer — and the brief's scale is integers from 1.
 	const score = answerFor(table, 'complexity').score
-	if (typeof score !== 'number' || !Number.isInteger(score) || score < 0 || score >= LEVELS.length)
+	if (typeof score !== 'number' || score < 0 || score > LEVELS.length - 1)
 		throw new JevError(`Jev returned an out-of-range complexity: ${String(score)}`)
 
 	const chosen = skills.filter((name) => {
-		const probability = answerFor(table, `${SKILL_PREFIX}${name}`).probability
+		const probability = answerFor(table, `${SKILL_PREFIX}${name}`).noul
 		if (typeof probability !== 'number')
 			throw new JevError(`Jev returned no probability for the \`${name}\` skill`)
 		// 0.5 is Jev saying it does not know, and an undecided skill is not one
@@ -112,7 +114,7 @@ export const jevDecision = (body: unknown, skills: readonly string[]): JevDecisi
 		return probability > 0.5
 	})
 
-	return { complexity: score + 1, skills: chosen, model: null }
+	return { complexity: Math.round(score) + 1, skills: chosen, model: null }
 }
 
 /**

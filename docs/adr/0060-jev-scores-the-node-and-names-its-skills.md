@@ -26,7 +26,7 @@ costs a fraction of the run it is sizing.
 
 A new `dispatch.jevMode`, **off by default**. On, every dispatch shows Jev the
 node's rendered brief and asks it one score question — how hard is this, on ten
-named rungs — and one boolean question per name in `dispatch.jevSkills`.
+named rungs — and one yes/no question (`noul` on the wire) per name in `dispatch.jevSkills`.
 
 Three consequences of that shape, each deliberate:
 

@@ -467,7 +467,7 @@ const jevAnswers = (score: number, skills: Record<string, number> = {}) => ({
 		...Object.fromEntries(
 			Object.entries(skills).map(([name, probability]) => [
 				`skill:${name}`,
-				{ type: 'boolean', probability },
+				{ type: 'noul', noul: probability },
 			]),
 		),
 	},

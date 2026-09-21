@@ -22,7 +22,7 @@ const answers = (score: number, skills: Record<string, number> = {}) => ({
 		...Object.fromEntries(
 			Object.entries(skills).map(([name, probability]) => [
 				`skill:${name}`,
-				{ type: 'boolean', probability },
+				{ type: 'noul', noul: probability },
 			]),
 		),
 	},
@@ -42,12 +42,14 @@ test('each skill is its own boolean question, named by its prefix', () => {
 		'skill:ponytail',
 		'skill:engineering:testing-strategy',
 	])
-	expect(questions['skill:ponytail']).toMatchObject({ type: 'boolean' })
+	expect(questions['skill:ponytail']).toMatchObject({ type: 'noul' })
 })
 
-test('the rung maps onto the brief 1-10 scale', () => {
+test('the rung maps onto the brief 1-10 scale, an expected value rounded', () => {
 	expect(jevDecision(answers(0), []).complexity).toBe(1)
 	expect(jevDecision(answers(9), []).complexity).toBe(10)
+	expect(jevDecision(answers(6.5), []).complexity).toBe(8)
+	expect(jevDecision(answers(4.28), []).complexity).toBe(5)
 })
 
 test('a rung off the scale is a failure, not a clamp', () => {
@@ -114,7 +116,7 @@ test('an answer that is not an object is a failure, not a read through it', () =
 test('a body with no answers, and a skill answer with no probability, both fail', () => {
 	expect(() => jevDecision({ usage: {} }, [])).toThrow(/no `answers`/)
 	expect(() =>
-		jevDecision({ answers: { complexity: { score: 1 }, 'skill:a': { type: 'boolean' } } }, ['a']),
+		jevDecision({ answers: { complexity: { score: 1 }, 'skill:a': { type: 'noul' } } }, ['a']),
 	).toThrow(/probability/)
 })
 
