@@ -1,4 +1,12 @@
-import { createNode, dismissFlag, loadBoard, reopenNode, unlinked, whoami } from '@besober/core'
+import {
+	correctNode,
+	createNode,
+	dismissFlag,
+	loadBoard,
+	reopenNode,
+	unlinked,
+	whoami,
+} from '@besober/core'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { openBoard, text, tool } from '../context.js'
@@ -44,6 +52,49 @@ export const registerFlags = (server: McpServer, cwd: string): void => {
 			await reopenNode(paths, node, await whoami(paths.root))
 			return text(`${node} is back in the loop. Start it with the \`run\` tool when you are ready.`)
 		}),
+	)
+
+	server.registerTool(
+		'correct_node',
+		{
+			title: 'Rewrite a node’s title, description or name in place',
+			description:
+				'Fixes the node’s own words and keeps its id, edges and history. An edit withdraws an approval already on its brief — the human approved words that no longer exist — so the brief needs approving again; the approach stays.',
+			inputSchema: {
+				node: z.string(),
+				title: z.string().min(1).nullish(),
+				description: z.string().nullish(),
+				name: z.string().min(1).max(40).nullish(),
+			},
+		},
+		tool(
+			async (input: {
+				node: string
+				title?: string | null
+				description?: string | null
+				name?: string | null
+			}) => {
+				const paths = await openBoard(cwd)
+				const before = (await loadBoard(paths)).nodes.get(input.node)
+				await correctNode(paths, input.node, {
+					title: input.title ?? undefined,
+					description: input.description ?? undefined,
+					name: input.name ?? undefined,
+					by: await whoami(paths.root),
+				})
+				const changed = (['title', 'description', 'name'] as const).filter(
+					(field) => input[field] !== undefined && input[field] !== null,
+				)
+				return text(
+					[
+						`${input.node}: ${changed.join(', ')} corrected.`,
+						...(before?.brief?.approval
+							? ['Its brief was approved against the old words, so it needs approving again.']
+							: []),
+					].join(' '),
+				)
+			},
+		),
 	)
 
 	server.registerTool(

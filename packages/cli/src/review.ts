@@ -12,7 +12,20 @@ import {
 } from '@besober/core'
 import type { Review } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
-import { blue, bold, columns, cyan, dim, fail, green, red, refuse, say, yellow } from './out.js'
+import {
+	blue,
+	bold,
+	columns,
+	cyan,
+	dim,
+	fail,
+	green,
+	red,
+	refuse,
+	say,
+	when,
+	yellow,
+} from './out.js'
 import { drain } from './queue.js'
 
 /**
@@ -106,7 +119,7 @@ export const review = async (node: string, base?: string, showDiff = false): Pro
 		found.accepted === null
 			? dim(`  sober accept ${node}   ·   sober reject ${node} -m "what was wrong"`)
 			: dim(
-					`  accepted by ${found.accepted.by} on ${found.accepted.at.slice(0, 10)}, with the scan reading "${found.accepted.scan}"`,
+					`  accepted by ${found.accepted.by} on ${when(found.accepted.at)}, with the scan reading "${found.accepted.scan}"`,
 				),
 	)
 }

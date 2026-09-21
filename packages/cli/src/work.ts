@@ -35,6 +35,7 @@ import {
 	refuse,
 	say,
 	spinner,
+	when,
 	yellow,
 } from './out.js'
 import { drain } from './queue.js'
@@ -113,7 +114,7 @@ export const decisions = async (all = false): Promise<void> => {
 				say(`      ${green('because')} ${dim(option.reason)}`)
 				say(`      ${yellow('later')}   ${dim(option.costLater)}`)
 			}
-			say(dim(`  answered by ${answer.by} at ${answer.at}`))
+			say(dim(`  answered by ${answer.by}, ${when(answer.at)}`))
 		} else {
 			for (const option of decision.options) {
 				say(`  ${cyan(bold(option.id))}  ${option.label}`)

@@ -38,6 +38,14 @@ export const refuse = (error: unknown): never =>
 		? fail(error.message)
 		: fail(String((error as Error).message ?? error))
 
+const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+
+/** Records keep ISO time for machines; a person reads it in their own locale and time zone. */
+export const when = (iso: string): string => {
+	const date = new Date(iso)
+	return Number.isNaN(date.getTime()) ? iso : DATE.format(date)
+}
+
 export const columns = (rows: readonly (readonly string[])[]): string[] => {
 	const widths = rows.reduce<number[]>((widest, row) => {
 		row.forEach((cell, index) => {

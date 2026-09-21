@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util'
 import { findRoot, loadEnv, paths as resolvePaths } from '@besober/core'
 import { init, openBoard } from './board.js'
 import { distribute } from './distribute.js'
-import { dismiss, open, reopen } from './flag.js'
+import { correct, dismiss, open, reopen } from './flag.js'
 import { hook } from './hook.js'
 import { widen } from './name.js'
 import { bold, columns, dim, fail, refuse, say } from './out.js'
@@ -109,6 +109,10 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['dismiss <node> -m "…"', 'the answer changed and this node is fine anyway'],
 			['reopen <node>', 'un-finish it, so it can run again'],
 			['open --title "…"', 'a new node carrying the fix'],
+			[
+				'correct <node> --title|--description|--name "…"',
+				'fix a node’s words in place — its brief needs approving again',
+			],
 		],
 	],
 	['Tidy', [['archive <node>', 'take it off the board, keep its record']]],
@@ -159,10 +163,12 @@ const NAMES_A_RECORD = new Set([
 	'archive',
 	'dismiss',
 	'reopen',
+	'correct',
 ])
 
 const options = {
 	title: { type: 'string' },
+	description: { type: 'string' },
 	intent: { type: 'string' },
 	base: { type: 'string' },
 	message: { type: 'string', short: 'm' },
@@ -302,6 +308,12 @@ const main = async (): Promise<void> => {
 			const title = values.title ?? fail('what is it? sober open --title "…"')
 			return open(title, { decisions: values.decisions, dependsOn: values['depends-on'] })
 		}
+		case 'correct':
+			return correct(need('node'), {
+				title: values.title,
+				description: values.description,
+				name: values.name,
+			})
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'models': {

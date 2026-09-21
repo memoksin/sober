@@ -60,7 +60,15 @@ export { loadEnv } from './env.js'
 // request that needs it. `packages/server` needs it to answer a 409 rather than
 // a 500 when a route names a node that is not there.
 export { NotOnBoardError, SoberError } from './errors.js'
-export { createNode, type Dismissing, dismissFlag, type Opening, reopenNode } from './flag.js'
+export {
+	type Correction,
+	correctNode,
+	createNode,
+	type Dismissing,
+	dismissFlag,
+	type Opening,
+	reopenNode,
+} from './flag.js'
 export { currentBranch, isRepo, showFromRef, whoami } from './git.js'
 export { type Board, findCycle, loadBoard } from './graph.js'
 export { checkHost, HostError } from './host.js'

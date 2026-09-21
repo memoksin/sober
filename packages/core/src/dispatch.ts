@@ -12,8 +12,8 @@ import {
 } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
-import { type AgentInput, checkHost, HostError, startAgent } from './host.js'
-import { adapterFor } from './hosts.js'
+import { type AgentInput, checkHost, HostError, type HostReady, startAgent } from './host.js'
+import { adapterFor, UnknownHostError } from './hosts.js'
 import { askJev } from './jev.js'
 import {
 	appendEvent,
@@ -129,19 +129,32 @@ export const dispatch = async (
 				? ` (no model covers score ${complexity}, falling back to \`dispatch.host\`)`
 				: ''
 			: ` (the ${chosen.chose} ${chosen.kind}${chosen.fallback ? ', falling back to `dispatch.host`' : ''})`
+	// The key a person edits to fix a refusal: the tier's own line or the
+	// model's entry when one named the host, `dispatch.host` when that is what ran.
+	const refused = (reason: string, fix: string) =>
+		new HostError(`${node} was not started${named}: ${reason} — ${fix} \`${chosen.key}\``)
 
 	// Before anything starts, and in this order: a login that expired should be
 	// one sentence, not a failure three minutes into a worktree (`PR-05-04`).
-	const host = await checkHost(line)
-	if (!host.ok) throw new HostError(`${node} was not started${named}: ${host.reason}`)
+	let host: HostReady
+	try {
+		host = await checkHost(line)
+	} catch (error) {
+		// A typo in a tier names no host at all, and does not fall back.
+		if (error instanceof UnknownHostError)
+			throw refused(`SOBER has no adapter for \`${line}\``, 'change')
+		throw error
+	}
+	if (!host.ok) throw refused(host.reason ?? 'the host is not ready', 'or change')
 
 	// Attended mode needs a host that reads stdin while it runs (ADR 0046), and
 	// two of the three do not. Refusing is the honest answer: running it
 	// headless anyway would put somebody in front of a session that cannot hear
 	// them, which is worse than not offering it (§2.9).
 	if (options.attended === true && !adapterFor(line).attendable)
-		throw new HostError(
-			`${node} was not started: ${line}${named} takes one message and exits, so nobody can answer it while it runs. Start it without watching, or set \`dispatch.host\` to a host that can be attended.`,
+		throw refused(
+			`${line} takes one message and exits, so nobody can answer it while it runs. Start it without watching`,
+			'or change',
 		)
 
 	const prompt = options.prompt ?? (await promptFor(paths, node, jev?.skills ?? []))
@@ -443,16 +456,33 @@ const chooseLine = (
 	dispatch: Config['dispatch'],
 	complexity: number | null,
 	picked: string | null,
-): { host: string; chose: string | null; kind: 'model' | 'tier'; fallback: boolean } => {
+): {
+	host: string
+	chose: string | null
+	kind: 'model' | 'tier'
+	fallback: boolean
+	/** The config key a person edits when this line is refused. */
+	key: string
+} => {
 	if (dispatch.models.length > 0) {
 		const entry = dispatch.models.find((m) => m.name === picked)
-		return entry === undefined
-			? { ...modelForScore(dispatch, complexity), kind: 'model' }
-			: { host: entry.run, chose: entry.name, kind: 'model', fallback: false }
+		const line =
+			entry === undefined
+				? modelForScore(dispatch, complexity)
+				: { host: entry.run, chose: entry.name, fallback: false }
+		const key = line.chose === null ? 'dispatch.host' : `dispatch.models (${line.chose})`
+		return { ...line, kind: 'model', key }
 	}
 	const tier = tierFor(dispatch.thresholds, complexity)
-	if (tier === null) return { host: dispatch.host, chose: null, kind: 'tier', fallback: false }
-	return { ...hostForTier(dispatch, tier), chose: tier, kind: 'tier' }
+	if (tier === null)
+		return { host: dispatch.host, chose: null, kind: 'tier', fallback: false, key: 'dispatch.host' }
+	const line = hostForTier(dispatch, tier)
+	return {
+		...line,
+		chose: tier,
+		kind: 'tier',
+		key: line.fallback ? 'dispatch.host' : `dispatch.tiers.${tier}`,
+	}
 }
 
 /** What Jev is shown: the brief alone, without the closing instructions. */

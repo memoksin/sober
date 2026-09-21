@@ -169,6 +169,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'brief',
 			'claim',
 			'contributors',
+			'correct_node',
 			'decide',
 			'decisions',
 			'dismiss',
@@ -288,6 +289,7 @@ test('a relayed pick is recorded, and the node it held is freed', async () => {
 	expect(after.decisions.get(decision ?? '')?.answer?.option).toBe('redis')
 	const auth = [...after.nodes].find(([, node]) => node.title === 'The auth API')
 	expect(statusOf(after, auth?.[0] ?? '')).toBe('needs-brief')
+	expect(answered).toContain(`It no longer holds ${auth?.[0]} (The auth API).`)
 })
 
 test('a relayed option the decision does not offer is refused, and nothing is written', async () => {
@@ -339,8 +341,9 @@ test('changing an answer asks once, and names every node the change reaches', as
 	// One question, and the node it reaches is named in it — a person cannot
 	// confirm a fan-out they were not shown.
 	expect(asked).toHaveLength(1)
-	expect(asked[0]).toContain(node ?? '')
+	expect(asked[0]).toContain(`${node} (The auth API) lose their briefs and are briefed again.`)
 	expect(changed).toContain('redis')
+	expect(changed).toContain(`${node} (The auth API) lose their briefs and are briefed again.`)
 	// §2.8's first row: the brief is withdrawn and nothing was started or stopped.
 	expect((await loadBoard(paths)).nodes.get(node ?? '')?.brief).toBeNull()
 })
@@ -410,7 +413,7 @@ test('a host with no elicitation records a relayed pick and names the node it fr
 
 	const answered = await call(client, 'decide', { decision, option: 'cookie' })
 	expect((await loadBoard(paths)).decisions.get(decision)?.answer?.option).toBe('cookie')
-	expect(answered).toContain(auth)
+	expect(answered).toContain(`It no longer holds ${auth} (The auth API).`)
 })
 
 test('a host with no elicitation approves on a relayed yes', async () => {
@@ -659,7 +662,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(27)
+		expect((await client.listTools()).tools.length).toBe(28)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -667,7 +670,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 })
 
 test('the board reads back what the session wrote, with what each node waits for', async () => {
-	const { repo: created } = await board()
+	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
 
 	expect(await call(client, 'board')).toContain('No nodes yet')
@@ -677,7 +680,12 @@ test('the board reads back what the session wrote, with what each node waits for
 	const shown = await call(client, 'board')
 	expect(shown).toContain('[held]')
 	expect(shown).toContain('[blocked]')
-	expect(shown).toMatch(/waiting on \S+/)
+	const loaded = await loadBoard(paths)
+	const [decision] = [...loaded.decisions.keys()]
+	const auth = [...loaded.nodes].find(([, node]) => node.title === 'The auth API')?.[0]
+	// A decision has no name, so it stays bare; a node carries its name beside the id.
+	expect(shown).toContain(`The auth API — waiting on ${decision}\n`)
+	expect(shown).toContain(`The billing screen — waiting on ${auth} (The auth API)`)
 
 	// Every option carries why and what it costs later, on every surface.
 	const open = await call(client, 'decisions')
@@ -861,10 +869,13 @@ test('a wrong edge can be corrected, which is what makes a proposal safe to acce
 	const billing = [...before.nodes].find(
 		([, node]) => node.title === 'The billing screen',
 	)?.[0] as string
+	const auth = [...before.nodes].find(([, node]) => node.title === 'The auth API')?.[0] as string
 
 	// The decision was bound to the auth node only; it holds the billing screen too.
 	expect(before.nodes.get(billing)?.decisions).toEqual([])
-	await call(client, 'bind', { node: billing, decisions: [decision] })
+	expect(await call(client, 'bind', { node: billing, decisions: [decision] })).toBe(
+		`${billing} (The billing screen) now binds ${decision} and depends on ${auth} (The auth API).`,
+	)
 
 	const after = await loadBoard(paths)
 	expect(after.nodes.get(billing)?.decisions).toEqual([decision])
@@ -1130,7 +1141,9 @@ test('a run that meets another node’s files asks the human, and starts when th
 
 	// The human is asked, and this one says yes — the confirmation is not a block.
 	expect(await call(client, 'run', { nodes: [auth], base: 'main' })).toContain('finished')
-	expect(asked).toContain('heading for')
+	expect(asked).toContain(
+		`${auth} (The auth API) is heading for files another active node is heading for.`,
+	)
 })
 
 test('a run the human declines is not started, and nothing was cut', async () => {
@@ -1308,6 +1321,24 @@ test('a session reopens a finished node, and reopening does not run it', async (
 	expect(await call(client, 'reopen', { node })).toContain('back in the loop')
 	// Its brief is still approved, so it lands on `ready` — and nothing started.
 	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
+})
+
+test('a session corrects a node’s words, and its approved brief waits for approval again', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	const node = await flagged(client, paths)
+	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
+
+	const said = await call(client, 'correct_node', { node, title: 'The sign-in API' })
+	expect(said).toContain('title corrected')
+	expect(said).toContain('approving again')
+
+	const loaded = await loadBoard(paths)
+	expect(loaded.nodes.get(node)?.title).toBe('The sign-in API')
+	expect(loaded.nodes.get(node)?.brief?.approach).toBe('Write the endpoints.')
+	expect(statusOf(loaded, node)).toBe('needs-approval')
+
+	expect(await call(client, 'correct_node', { node })).toContain('nothing to correct')
 })
 
 test('a session opens one node for the fix, and it is not a plan', async () => {
