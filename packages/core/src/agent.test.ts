@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { LogLine } from '@besober/schema'
@@ -231,4 +231,225 @@ test('a bash tool call whose signal is aborted while it runs returns stopped', a
 
 	const exit = await promise
 	expect(exit).toEqual({ kind: 'stopped' })
+})
+
+/** One scripted run: each entry is what the model asks next, in order. */
+const scripted = (
+	turns: readonly ({ tool: string; args: Record<string, unknown> } | { raw: Response })[],
+): { fetchFn: typeof fetch; toolResults: string[] } => {
+	const toolResults: string[] = []
+	let turn = 0
+	const fetchFn = (async (_url: string, init?: RequestInit) => {
+		const body = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[] }
+		const last = body.messages.at(-1)
+		if (last?.role === 'tool') toolResults.push(last.content)
+		const next = turns[turn++]
+		if (next === undefined) return textResponse('done')
+		if ('raw' in next) return next.raw
+		return toolCallResponse(next.tool, next.args)
+	}) as typeof fetch
+	return { fetchFn, toolResults }
+}
+
+test('every tool answers, and a bad call is a tool result rather than a crash', async () => {
+	const cwd = setup()
+	writeFileSync(join(cwd, 'AGENTS.md'), 'Agents rule.')
+	const { fetchFn, toolResults } = scripted([
+		{ tool: 'bash', args: { command: 'echo hi; echo err >&2' } },
+		{ tool: 'read_file', args: { path: 'target.txt' } },
+		{ tool: 'read_file', args: { path: 'missing.txt' } },
+		{ tool: 'write_file', args: { path: 'deep/new.txt', content: 'made' } },
+		{ tool: 'edit_file', args: { path: 'target.txt', old: 'absent', new: 'x' } },
+		{ tool: 'edit_file', args: { path: 'missing.txt', old: 'a', new: 'b' } },
+		{ tool: 'nope', args: {} },
+		{
+			raw: jsonResponse({
+				choices: [
+					{
+						message: {
+							role: 'assistant',
+							tool_calls: [
+								{ id: 'c', type: 'function', function: { name: 'bash', arguments: '{not json' } },
+							],
+						},
+					},
+				],
+			}),
+		},
+	])
+	const calls: string[] = []
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: (line) => calls.push(`${line.kind} ${line.text}`),
+		fetch: fetchFn,
+	})
+
+	expect(exit).toEqual({ kind: 'finished' })
+	expect(toolResults[0]).toContain('hi\nerr\n\nexit code: 0')
+	expect(toolResults[1]).toBe('hello world')
+	expect(toolResults[2]).toMatch(/ENOENT/)
+	expect(readFileSync(join(cwd, 'deep/new.txt'), 'utf8')).toBe('made')
+	expect(toolResults[3]).toBe('written')
+	expect(toolResults[4]).toContain('does not appear')
+	expect(toolResults[5]).toMatch(/ENOENT/)
+	expect(toolResults[6]).toBe('unknown tool: nope')
+	expect(toolResults[7]).toContain('invalid arguments')
+	expect(calls[0]).toBe('tool bash echo hi; echo err >&2')
+	expect(calls.at(-3)).toBe('tool bash {not json')
+})
+
+test('a network error is retried like a 5xx, and a malformed body fails', async () => {
+	const cwd = setup()
+	let attempt = 0
+	const fetchFn = (async () => {
+		attempt++
+		if (attempt === 1) throw new Error('ECONNRESET')
+		return jsonResponse({ choices: [] })
+	}) as typeof fetch
+	const lines: LogLine[] = []
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: (line) => lines.push(line),
+		fetch: fetchFn,
+		backoffMs: [0, 0],
+	})
+	expect(lines[0]?.text).toContain('waiting on network error')
+	expect(exit).toEqual({ kind: 'failed', reason: expect.stringContaining('malformed') })
+})
+
+test('a network error that never clears fails naming the endpoint', async () => {
+	const cwd = setup()
+	const fetchFn = (async () => {
+		throw new Error('ECONNRESET')
+	}) as typeof fetch
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+		backoffMs: [0, 0],
+	})
+	expect(exit).toEqual({ kind: 'failed', reason: expect.stringContaining('could not be reached') })
+})
+
+test('a model that never stops calling tools hits the turn cap', async () => {
+	const cwd = setup()
+	const fetchFn = (async () =>
+		toolCallResponse('read_file', { path: 'target.txt' })) as typeof fetch
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+	})
+	expect(exit).toEqual({ kind: 'failed', reason: expect.stringContaining('200-turn cap') })
+})
+
+test('write_file and edit_file refuse a path outside cwd, and a write into a file-as-directory fails', async () => {
+	const cwd = setup()
+	const { fetchFn, toolResults } = scripted([
+		{ tool: 'write_file', args: { path: '../escape.txt', content: 'x' } },
+		{ tool: 'edit_file', args: { path: '/etc/hosts', old: 'a', new: 'b' } },
+		{ tool: 'write_file', args: { path: 'target.txt/child.txt', content: 'x' } },
+	])
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+	})
+	expect(exit).toEqual({ kind: 'finished' })
+	expect(toolResults[0]).toContain('outside the working directory')
+	expect(toolResults[1]).toContain('outside the working directory')
+	expect(toolResults[2]).toMatch(/ENOTDIR|EEXIST/)
+})
+
+test('an instructions file that cannot be read is a failed run, not a silent omission', async () => {
+	const cwd = setup()
+	rmSync(join(cwd, 'CLAUDE.md'))
+	mkdirSync(join(cwd, 'CLAUDE.md'))
+	await expect(
+		runAgent({
+			model: 'm',
+			apiKey: 'k',
+			cwd,
+			prompt: 'p',
+			onLine: () => {},
+			fetch: (async () => textResponse('unused')) as typeof fetch,
+		}),
+	).rejects.toThrow(/EISDIR/)
+})
+
+test('a stop during the backoff wait ends the run as stopped', async () => {
+	const cwd = setup()
+	const controller = new AbortController()
+	const fetchFn = (async () => {
+		setTimeout(() => controller.abort(), 5)
+		return jsonResponse({ error: 'busy' }, 503)
+	}) as typeof fetch
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+		signal: controller.signal,
+		backoffMs: [10_000],
+	})
+	expect(exit).toEqual({ kind: 'stopped' })
+})
+
+test('a stop that lands between two tool calls is honoured before the second one', async () => {
+	const cwd = setup()
+	const controller = new AbortController()
+	const fetchFn = (async () =>
+		jsonResponse({
+			choices: [
+				{
+					message: {
+						role: 'assistant',
+						content: null,
+						tool_calls: [
+							{
+								id: 'a',
+								type: 'function',
+								function: { name: 'bash', arguments: '{"command":"true"}' },
+							},
+							{
+								id: 'b',
+								type: 'function',
+								function: { name: 'bash', arguments: '{"command":"true"}' },
+							},
+						],
+					},
+				},
+			],
+		})) as typeof fetch
+	let seen = 0
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: (line) => {
+			if (line.kind === 'tool' && ++seen === 1) controller.abort()
+		},
+		fetch: fetchFn,
+		signal: controller.signal,
+	})
+	expect(exit).toEqual({ kind: 'stopped' })
+	expect(seen).toBe(1)
 })

@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, test } from 'vitest'
-import { claudeModels, codexModels, openRouterModels } from './models.js'
+import { claudeModels, codexModels, installed, openRouterModels } from './models.js'
 
 let home: string | undefined
 afterEach(() => {
@@ -93,4 +93,21 @@ test('OpenRouter models are text-out only, named without the vendor, and free wh
 test('an OpenRouter refusal is an error with its status', async () => {
 	const fetchFn = (async () => new Response('', { status: 503 })) as unknown as typeof fetch
 	await expect(openRouterModels(fetchFn)).rejects.toThrow(/503/)
+})
+
+test('a cache that cannot be read for any other reason is an error, not an empty list', async () => {
+	home = mkdtempSync(join(tmpdir(), 'sober-codex-'))
+	// A directory where the file should be: EISDIR, which is not "not opened yet".
+	mkdirSync(join(home, '.codex', 'models_cache.json'), { recursive: true })
+	await expect(codexModels(home)).rejects.toThrow(/EISDIR/)
+})
+
+test('installed looks for an executable on the given PATH', () => {
+	home = mkdtempSync(join(tmpdir(), 'sober-path-'))
+	writeFileSync(join(home, 'present'), '#!/bin/sh\n')
+	chmodSync(join(home, 'present'), 0o755)
+	writeFileSync(join(home, 'plain'), '')
+	expect(installed('present', home)).toBe(true)
+	expect(installed('plain', home)).toBe(false)
+	expect(installed('absent', home)).toBe(false)
 })

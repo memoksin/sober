@@ -53,3 +53,26 @@ test('an endpoint without /auth/key is probed at /models instead', async () => {
 	expect(await agent({ check: true, baseUrl: 'http://localhost:1234/v1/', fetch: fetchFn })).toBe(0)
 	expect(fetchFn).toHaveBeenLastCalledWith('http://localhost:1234/v1/models', expect.anything())
 })
+
+const chat = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 })
+
+test('a run writes each line as a sober event and exits 0 on finished, 1 on failed', async () => {
+	process.env.OPENROUTER_API_KEY = 'sk-test'
+	const finished = vi.fn(async () =>
+		chat({ choices: [{ message: { role: 'assistant', content: 'done' } }] }),
+	) as unknown as typeof fetch
+	expect(await agent({ check: false, model: 'm', prompt: 'p', fetch: finished })).toBe(0)
+	const lines = out
+		.join('')
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line) as { type: string; kind: string })
+	expect(lines.map((line) => `${line.type} ${line.kind}`)).toEqual(['sober text', 'sober result'])
+
+	const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+	const refused = vi.fn(
+		async () => new Response('nope', { status: 400 }),
+	) as unknown as typeof fetch
+	expect(await agent({ check: false, model: 'm', prompt: 'p', fetch: refused })).toBe(1)
+	expect(String(err.mock.calls[0]?.[0])).toContain('400')
+})
