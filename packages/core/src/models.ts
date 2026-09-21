@@ -11,14 +11,14 @@ import type { Model } from './config.js'
  *
  * - Claude Code has no list command; the family is short and written here.
  * - Codex caches the list its login can see in `~/.codex/models_cache.json`.
- * - OpenRouter publishes its catalogue at `/api/v1/models`, and opencode is
- *   the host that reaches it.
+ * - OpenRouter publishes its catalogue at `/api/v1/models`; SOBER's own loop
+ *   is the host that reaches it (ADR 0062).
  *
  * Each candidate is a config entry short of its range: the range is a budget
  * decision, and this only says what exists.
  */
 export interface Candidate extends Omit<Model, 'complexity'> {
-	readonly host: 'claude' | 'codex' | 'opencode'
+	readonly host: 'claude' | 'codex' | 'openrouter'
 	readonly free: boolean
 }
 
@@ -93,9 +93,9 @@ export const openRouterModels = async (fetchFn: typeof fetch = fetch): Promise<C
 		})
 		.map((m) => ({
 			name: m.id.replace(/^.*\//, '').replace(/:free$/, ''),
-			run: `opencode --model openrouter/${m.id}`,
+			run: `openrouter --model ${m.id}`,
 			about: (m.description ?? '').split(/(?<=\.)\s/)[0] ?? '',
-			host: 'opencode',
+			host: 'openrouter',
 			free: m.pricing?.prompt === '0' && m.pricing?.completion === '0',
 		}))
 }

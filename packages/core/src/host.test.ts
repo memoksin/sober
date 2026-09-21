@@ -58,6 +58,26 @@ test('the probe never carries the model flag the run line names', async () => {
 	expect(await checkHost(`${host} -m some/model`)).toEqual({ ok: true, reason: null })
 })
 
+test('the openrouter probe spawns `sober`, never a program called openrouter', async () => {
+	// ADR 0062: the run line names the host, the adapter names the binary. A
+	// `sober` on the PATH here is this fake, and it sees the probe with the
+	// model flag stripped, like every other host.
+	const dir = join(scripts, 'openrouter-path')
+	mkdirSync(dir)
+	writeFileSync(
+		join(dir, 'sober'),
+		`#!/bin/sh\ncase "$*" in *--model*) exit 1;; "agent --check") echo ok;; *) echo "no key";; esac\n`,
+		{ mode: 0o755 },
+	)
+	const path = process.env.PATH
+	process.env.PATH = `${dir}:${path ?? ''}`
+	try {
+		expect(await checkHost('openrouter --model some/model')).toEqual({ ok: true, reason: null })
+	} finally {
+		process.env.PATH = path
+	}
+})
+
 test('a host that is logged out says which command signs in', async () => {
 	const host = node('console.log(JSON.stringify({ loggedIn: false }))')
 	const { ok, reason } = await checkHost(host)

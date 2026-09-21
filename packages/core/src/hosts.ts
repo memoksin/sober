@@ -1,4 +1,4 @@
-import type { LogLine } from '@besober/schema'
+import { LogLine } from '@besober/schema'
 import { SoberError } from './errors.js'
 
 /**
@@ -109,6 +109,12 @@ export interface Adapter {
 	 * puts on the PATH. Only Cursor needs one, and the reason is in its adapter.
 	 */
 	readonly alias?: string
+	/**
+	 * The program to spawn, where it is not the host's own name. `openrouter`
+	 * is SOBER's own loop, so the run line names the host and this names the
+	 * binary that runs it.
+	 */
+	readonly command?: string
 	/** Args that ask the host whether it can run at all, before a worktree exists. */
 	readonly probe: readonly string[]
 	/** How the user signs in, in the words they have to type (§8.7). */
@@ -357,7 +363,32 @@ const cursor: Adapter = {
  */
 const brief = (prompt: string): string => `${NO_HUMAN}\n\n---\n\n${prompt}`
 
-export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode, cursor]
+/**
+ * OpenRouter, through SOBER's own tool loop (ADR 0062). There is no CLI: the
+ * run line's own args come first, so the spawn is `sober --model <id>
+ * [--base-url <u>] agent <brief>` and the probe is `sober agent --check`,
+ * which reads `OPENROUTER_API_KEY` off the environment the dispatcher loaded
+ * and asks the endpoint whether the key is accepted.
+ */
+const openrouter: Adapter = {
+	id: 'openrouter',
+	command: 'sober',
+	probe: ['agent', '--check'],
+	signIn: () => 'set OPENROUTER_API_KEY in .sober/.env',
+	loggedIn: (stdout) =>
+		/^ok\b/m.test(stdout) ? true : /no key|401|unauthori[sz]ed/i.test(stdout) ? false : null,
+	argv: (prompt) => ['agent', brief(prompt)],
+	attendable: false,
+	line: (event) => {
+		if (event.type !== 'sober') return null
+		// The loop writes `LogLine`s already; the parse is what keeps a stray
+		// line from crashing the reader rather than being dropped.
+		const kind = LogLine.shape.kind.safeParse(event.kind)
+		return kind.success ? { kind: kind.data, text: event.text ?? '', tool: event.tool ?? null } : null
+	},
+}
+
+export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode, cursor, openrouter]
 
 /**
  * `dispatch.host` is a command line rather than a program name, so the adapter
@@ -395,7 +426,7 @@ export const renderLine = (event: Event): readonly LogLine[] => {
 	return []
 }
 
-/** The union of what the four hosts write, read defensively at every level. */
+/** The union of what the five hosts write, read defensively at every level. */
 export interface Event {
 	readonly type?: string
 	readonly subtype?: string
@@ -424,6 +455,10 @@ export interface Event {
 			{ readonly name?: string; readonly args?: { readonly path?: string } } | undefined
 		>
 	>
+	/** SOBER's own loop: a `LogLine`, stamped `type: 'sober'`. */
+	readonly kind?: string
+	readonly text?: string
+	readonly tool?: string | null
 	/** OpenCode: one part of a step. */
 	readonly part?: {
 		readonly type?: string

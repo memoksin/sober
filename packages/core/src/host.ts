@@ -55,7 +55,7 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 	try {
 		// The model flag is the run's, not the probe's: `opencode providers list`
 		// rejects `--model` and prints its help, which read as "not logged in".
-		;({ stdout } = await run(command, [...withoutModel(args), ...adapter.probe], {
+		;({ stdout } = await run(adapter.command ?? command, [...withoutModel(args), ...adapter.probe], {
 			encoding: 'utf8',
 		}))
 	} catch (error) {
@@ -120,7 +120,7 @@ export const startAgent = (options: AgentOptions): Promise<AgentExit> =>
 		const [command, args] = hostCommand(options.host)
 		const adapter = adapterFor(options.host)
 		const attended = options.attended === true && adapter.attendable
-		const child = spawn(command, [...args, ...adapter.argv(options.prompt, attended)], {
+		const child = spawn(adapter.command ?? command, [...args, ...adapter.argv(options.prompt, attended)], {
 			cwd: options.cwd,
 			// Never a shell: a brief carrying a backtick is text, not a second command.
 			shell: false,

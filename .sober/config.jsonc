@@ -46,8 +46,10 @@
 
 		// Three tiers by complexity, each a few command lines like "host".
 		// High is Opus and GPT-5.6 Sol, mid is Sonnet and GPT-5.6 Terra, low is
-		// the strongest of OpenRouter's free models through opencode. "about"
-		// is what Jev reads when it chooses within a tier (ADR 0061).
+		// the strongest of OpenRouter's free models. "about" is what Jev reads
+		// when it chooses within a tier (ADR 0061). `openrouter --model <id>`
+		// runs SOBER's own loop and needs OPENROUTER_API_KEY in .sober/.env
+		// (ADR 0062).
 		"models": [
 			{
 				"name": "opus",
@@ -75,25 +77,25 @@
 			},
 			{
 				"name": "nemotron-ultra",
-				"run": "opencode --model openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+				"run": "openrouter --model nvidia/nemotron-3-ultra-550b-a55b:free",
 				"complexity": [1, 3],
 				"about": "Free. NVIDIA's frontier reasoning model, 550B MoE, 1M context."
 			},
 			{
 				"name": "laguna-s",
-				"run": "opencode --model openrouter/poolside/laguna-s-2.1:free",
+				"run": "openrouter --model poolside/laguna-s-2.1:free",
 				"complexity": [1, 3],
 				"about": "Free. Poolside's 118B coding agent model, 262k context."
 			},
 			{
 				"name": "north-mini-code",
-				"run": "opencode --model openrouter/cohere/north-mini-code:free",
+				"run": "openrouter --model cohere/north-mini-code:free",
 				"complexity": [1, 3],
 				"about": "Free. Cohere's agentic coding model, 256k context."
 			},
 			{
 				"name": "qwen",
-				"run": "opencode --model openrouter/qwen/qwen3.8-27b:free",
+				"run": "openrouter --model qwen/qwen3.8-27b:free",
 				"complexity": [1, 3],
 				"about": "Free. Qwen3.8 27B dense, good at coding, 262k context."
 			}
