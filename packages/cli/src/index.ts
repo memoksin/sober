@@ -121,6 +121,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		'In a session',
 		[
 			['mcp', 'serve SOBER’s tools to a host — the plugin starts this'],
+			['agent <prompt> | --check', 'the openrouter host’s own loop — a run spawns this'],
 			['hook <event>', 'the plugin’s guard: held work cannot be spawned on'],
 		],
 	],
@@ -195,6 +196,9 @@ const options = {
 	port: { type: 'string' },
 	complexity: { type: 'string' },
 	about: { type: 'string' },
+	check: { type: 'boolean' },
+	model: { type: 'string' },
+	'base-url': { type: 'string' },
 	version: { type: 'boolean', short: 'v' },
 	help: { type: 'boolean', short: 'h' },
 } as const
@@ -351,6 +355,18 @@ const main = async (): Promise<void> => {
 		// as a pass.
 		case 'hook':
 			return hook(rest[0])
+		// The `openrouter` adapter spawns this, never a person (ADR 0062). It
+		// writes one JSON event per line, which is what the run log reads.
+		case 'agent': {
+			const { agent } = await import('./agent.js')
+			const code = await agent({
+				check: values.check === true,
+				prompt: rest[0],
+				model: values.model,
+				baseUrl: values['base-url'],
+			})
+			return process.exit(code)
+		}
 		case 'mcp': {
 			// The MCP server ships as a subcommand, not a second package: one
 			// install, one version, one changelog (ADR 0007). It speaks over

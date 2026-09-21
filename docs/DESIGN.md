@@ -582,17 +582,19 @@ A dispatch has a second mode, **attended**, chosen per run and never the default
 
 Calling a model API directly was the alternative, and it makes SOBER an agent framework — owning the tool loop, file access, and sandboxing. That is a different product — except for the `openrouter` host, which is exactly that, scoped narrowly (ADR 0062).
 
-This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. There are four of them (ADR 0048, ADR 0052), and what differs between them is a table in `hosts.ts` rather than a shape in the code:
+This is the **adapter** (§2.9). It is thin by contract: build an invocation, stream its output, and report how it exited. Anything an adapter needs to know about SOBER's state it gets from `core`. There are five of them (ADR 0048, ADR 0052, ADR 0062), and what differs between them is a table in `hosts.ts` rather than a shape in the code:
 
-| | Claude Code | Codex | OpenCode | Cursor |
-| --- | --- | --- | --- | --- |
-| ready | `auth status --json` | `login status` | `providers list` | `status` |
-| run | `-p <brief> …` | `exec --json …` | `run --format json …` | `-p --output-format stream-json …` |
-| permissions | `--permission-mode bypassPermissions` | `--dangerously-bypass-approvals-and-sandbox` | `--auto` | `--force --trust` |
-| system prompt | `--append-system-prompt` | none — in front of the brief | none — in front of the brief | none — in front of the brief |
-| attendable | yes | no | no | no |
+| | Claude Code | Codex | OpenCode | Cursor | OpenRouter |
+| --- | --- | --- | --- | --- | --- |
+| ready | `auth status --json` | `login status` | `providers list` | `status` | `agent --check` |
+| run | `-p <brief> …` | `exec --json …` | `run --format json …` | `-p --output-format stream-json …` | `agent <brief>` |
+| permissions | `--permission-mode bypassPermissions` | `--dangerously-bypass-approvals-and-sandbox` | `--auto` | `--force --trust` | none — the loop has no approval step |
+| system prompt | `--append-system-prompt` | none — in front of the brief | none — in front of the brief | none — in front of the brief | none — in front of the brief |
+| attendable | yes | no | no | no | no |
 
-Three consequences of that table are worth stating on their own. A host SOBER has no adapter for is **refused before the worktree**, naming the four it has: defaulting to the invocation above would send `--permission-mode` to a CLI with no such flag, and the failure would arrive three minutes later as an exit code nobody can read. An **attended** run is refused on the three hosts that take one message and exit, rather than quietly downgraded to a headless run with somebody watching it. And a host is found by a name that is **its own**: Cursor installs its CLI as `agent`, which is refused, because accepting the most generic word on a PATH would make any wrapper script called `agent` a Cursor invocation by accident. `cursor` and `cursor-agent` both reach it.
+OpenRouter's row is the one whose process is not the host's own name: the adapter spawns `sober`, so the run is `sober --model <id> agent <brief>` and the probe is `sober agent --check`, which reads `OPENROUTER_API_KEY` off the environment the dispatcher loaded and asks the endpoint whether it accepts the key.
+
+Three consequences of that table are worth stating on their own. A host SOBER has no adapter for is **refused before the worktree**, naming the five it has: defaulting to the invocation above would send `--permission-mode` to a CLI with no such flag, and the failure would arrive three minutes later as an exit code nobody can read. An **attended** run is refused on the four hosts that take one message and exit, rather than quietly downgraded to a headless run with somebody watching it. And a host is found by a name that is **its own**: Cursor installs its CLI as `agent`, which is refused, because accepting the most generic word on a PATH would make any wrapper script called `agent` a Cursor invocation by accident. `cursor` and `cursor-agent` both reach it.
 
 A run log carries no host of its own. Each adapter recognises its own event shapes and returns nothing for the others, so a run started under one host still reads after `dispatch.host` changes. Cursor is where that rule met its first collision and held: its stream is Claude Code's, event for event, except for tool calls — so four of its five shapes are rendered by an adapter with another host's name on it, and only the fifth is its own. The one place the collision is not benign is `type: "user"`: Claude Code emits it only when replaying what a human said (ADR 0046), and Cursor emits it on every run carrying the brief SOBER itself sent. An answer line holding `NO_HUMAN` is a sentence nobody said, so the transcript's human half is keyed on what SOBER wrote rather than on the event's name.
 

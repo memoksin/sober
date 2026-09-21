@@ -28,7 +28,7 @@ test('a host SOBER has no adapter for is refused by name, with the ones it has',
 	// `--permission-mode` to a CLI that has no such flag, and the failure would
 	// arrive three minutes later as an unreadable exit code.
 	expect(() => adapterFor('aider')).toThrow(UnknownHostError)
-	expect(() => adapterFor('aider')).toThrow(/claude, codex, opencode, cursor/)
+	expect(() => adapterFor('aider')).toThrow(/claude, codex, opencode, cursor, openrouter/)
 })
 
 test('every adapter tells a headless run that nobody can answer it', () => {
@@ -36,7 +36,7 @@ test('every adapter tells a headless run that nobody can answer it', () => {
 	// operator's own rules file, and a rule there stopped two of five
 	// dispatches dead. Claude Code has a flag for it; the other two do not, so
 	// the same sentence goes in front of the brief.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
 		const argv = adapterFor(host).argv('build the node', false)
 		expect(argv.join('\n'), host).toContain(NO_HUMAN)
 	}
@@ -45,7 +45,7 @@ test('every adapter tells a headless run that nobody can answer it', () => {
 test('the brief is an argument, never a shell string, in every adapter', () => {
 	// A brief carrying a backtick is text. `startAgent` never uses a shell, and
 	// the adapters must not hand one a single joined string either.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
 		const argv = adapterFor(host).argv('rm -rf `pwd`', false)
 		expect(
 			argv.some((arg) => arg.includes('rm -rf `pwd`')),
@@ -99,7 +99,7 @@ test('a logged-in host reads as ready, and a logged-out one as not', () => {
 test('a status no adapter can read is a refusal, never a silent pass', () => {
 	// §2.8's rule, applied to the login check: not knowing is not the same as
 	// being fine, and a run started on a logged-out host dies three minutes in.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
 		expect(adapterFor(host).loggedIn('<html>504 Gateway Timeout</html>'), host).toBeNull()
 	}
 })
@@ -215,4 +215,30 @@ test('every host carries the tool name on the line', () => {
 			tool_call: { readToolCall: { args: { path: 'README.md' } } },
 		}),
 	).toEqual([{ kind: 'tool', text: 'read README.md', tool: 'read' }])
+})
+
+test('openrouter is found from its run line and spawns `sober`, not a CLI called openrouter', () => {
+	// ADR 0062: the host is SOBER's own loop, so the row names the binary that
+	// runs it. The run line's args go first, then the subcommand and the brief.
+	const adapter = adapterFor('openrouter --model qwen/qwen3.8-27b:free')
+	expect(adapter.id).toBe('openrouter')
+	expect(adapter.command).toBe('sober')
+	expect(adapter.probe).toEqual(['agent', '--check'])
+	expect(adapter.attendable).toBe(false)
+	const argv = adapter.argv('build the node', false)
+	expect(argv[0]).toBe('agent')
+	expect(argv).toHaveLength(2)
+	expect(adapter.loggedIn('ok\n')).toBe(true)
+	expect(adapter.loggedIn('no key: set OPENROUTER_API_KEY in .sober/.env\n')).toBe(false)
+	expect(adapter.loggedIn('401: the key was refused\n')).toBe(false)
+	expect(adapter.signIn('openrouter')).toContain('OPENROUTER_API_KEY')
+})
+
+test('the loop’s own JSON events render, and a kind it does not know is dropped', () => {
+	expect(renderLine({ type: 'sober', kind: 'tool', text: 'bash ls', tool: 'bash' })).toEqual([
+		{ kind: 'tool', text: 'bash ls', tool: 'bash' },
+	])
+	expect(renderLine({ type: 'sober', kind: 'nope' })).toEqual([])
+	// Not the loop's shape: the other adapters still own theirs.
+	expect(renderLine({ type: 'system', subtype: 'init' })).toMatchObject([{ kind: 'started' }])
 })

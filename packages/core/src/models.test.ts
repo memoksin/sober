@@ -75,16 +75,16 @@ test('OpenRouter models are text-out only, named without the vendor, and free wh
 	expect(found).toEqual([
 		{
 			name: 'claude-opus-5',
-			run: 'opencode --model openrouter/anthropic/claude-opus-5',
+			run: 'openrouter --model anthropic/claude-opus-5',
 			about: 'Opus.',
-			host: 'opencode',
+			host: 'openrouter',
 			free: false,
 		},
 		{
 			name: 'qwen3.8-27b',
-			run: 'opencode --model openrouter/qwen/qwen3.8-27b:free',
+			run: 'openrouter --model qwen/qwen3.8-27b:free',
 			about: 'Qwen.',
-			host: 'opencode',
+			host: 'openrouter',
 			free: true,
 		},
 	])

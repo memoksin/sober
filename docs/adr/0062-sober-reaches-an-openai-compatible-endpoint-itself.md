@@ -72,9 +72,12 @@ second base URL actually ships.
 - The `sober` binary must be on the PATH the MCP server sees for `sober
   agent` to spawn — the same requirement `sober mcp` already has, now also on
   the run path.
-- `hosts.ts` gains one row; `checkHost` for `openrouter` is "is
-  `OPENROUTER_API_KEY` set", not a CLI probe — there is no login state to
-  fail on the way OpenCode's does.
+- `hosts.ts` gains one row whose process is `sober agent`; `checkHost` for
+  `openrouter` is `sober agent --check`: is `OPENROUTER_API_KEY` set, and
+  does the endpoint accept it — `GET /auth/key` on OpenRouter, `GET /models`
+  with the bearer on an endpoint that has no `/auth/key` (OpenRouter's own
+  `/models` is public and accepts any key). A refused key fails before a
+  worktree is cut, the way a logged-out CLI does.
 
 ## Alternatives rejected
 

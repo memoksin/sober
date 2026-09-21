@@ -10,8 +10,8 @@ import { openBoard, settingsOf } from './board.js'
 import { bold, columns, cyan, dim, fail, say } from './out.js'
 
 /**
- * What the installed hosts can reach, ready to become `dispatch.models`
- * entries. OpenRouter's catalogue is a few hundred lines, so only its free
+ * What the installed hosts can reach, plus OpenRouter's catalogue, ready to
+ * become `dispatch.models` entries. OpenRouter's catalogue is a few hundred lines, so only its free
  * models print unless asked; the range is left to the person, because it is a
  * budget decision (ADR 0061).
  */
@@ -19,23 +19,23 @@ export const models = async ({ all }: { readonly all: boolean }): Promise<void> 
 	const found: Candidate[] = []
 	if (installed('claude')) found.push(...claudeModels())
 	if (installed('codex')) found.push(...(await codexModels()))
-	if (installed('opencode')) {
-		const router = await openRouterModels().catch((error: Error) =>
-			fail(`OpenRouter could not be read: ${error.message}`),
-		)
-		found.push(...router.filter((m) => all || m.free))
-	}
-	if (found.length === 0) return fail('none of claude, codex or opencode is on the PATH')
+	// OpenRouter's catalogue is public and its host is SOBER itself, so it
+	// needs nothing installed (ADR 0062).
+	const router = await openRouterModels().catch((error: Error) =>
+		fail(`OpenRouter could not be read: ${error.message}`),
+	)
+	found.push(...router.filter((m) => all || m.free))
+	if (found.length === 0) return fail('none of claude, codex or openrouter listed a model')
 
-	for (const host of ['claude', 'codex', 'opencode'] as const) {
+	for (const host of ['claude', 'codex', 'openrouter'] as const) {
 		const mine = found.filter((m) => m.host === host)
 		if (mine.length === 0) continue
 		say(
 			bold(
-				host === 'opencode'
+				host === 'openrouter'
 					? all
-						? 'opencode · OpenRouter'
-						: 'opencode · OpenRouter, free'
+						? 'openrouter · OpenRouter'
+						: 'openrouter · OpenRouter, free'
 					: host,
 			),
 		)
@@ -46,7 +46,7 @@ export const models = async ({ all }: { readonly all: boolean }): Promise<void> 
 		say()
 	}
 	say(dim('add one:  sober models add <name> "<run>" --complexity 1-3 [--about "…"]'))
-	if (!all && installed('opencode')) say(dim('every OpenRouter model:  sober models --all'))
+	if (!all) say(dim('every OpenRouter model:  sober models --all'))
 }
 
 /** One entry appended to `dispatch.models`, comments and all around it kept. */
