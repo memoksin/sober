@@ -22,7 +22,7 @@ import {
 	writeRun,
 	writeRunPid,
 } from '@besober/core'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
 
 /**
@@ -55,6 +55,8 @@ let repo: TempRepo | undefined
 afterEach(() => {
 	repo?.cleanup()
 	repo = undefined
+	vi.unstubAllGlobals()
+	delete process.env.JEV_API_KEY
 	delete process.env.FAKE_HOST_FAIL
 	delete process.env.FAKE_HOST_HANG
 	delete process.env.FAKE_HOST_LOGGED_OUT
@@ -453,6 +455,52 @@ test('an unknown tier host is refused before a worktree, naming the tier', async
 		/high tier/,
 	)
 	expect(existsSync(join(paths.local, 'worktrees', 'auth-api-k7f2'))).toBe(false)
+})
+
+/**
+ * Jev is the one thing in dispatch that reaches the network, so it is faked the
+ * same way the host is (ADR 0014): everything between SOBER and it is real.
+ */
+const jevAnswers = (score: number, skills: Record<string, number> = {}) => ({
+	answers: {
+		complexity: { type: 'score', score },
+		...Object.fromEntries(
+			Object.entries(skills).map(([name, probability]) => [
+				`skill:${name}`,
+				{ type: 'boolean', probability },
+			]),
+		),
+	},
+})
+
+test('with jevMode on, Jev picks the tier and its skills reach the agent', async () => {
+	const paths = await board({ tiers: TIERS, jevMode: true, jevSkills: ['ponytail', 'unwanted'] })
+	// The brief scores it low; Jev says high, and Jev is what runs.
+	await score(paths, 2)
+	const written = join(paths.root, 'seen-by-the-agent.txt')
+	process.env.FAKE_HOST_WRITE = written
+	process.env.JEV_API_KEY = 'sk-test'
+	vi.stubGlobal(
+		'fetch',
+		async () => new Response(JSON.stringify(jevAnswers(8, { ponytail: 0.9, unwanted: 0.2 }))),
+	)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(await ran(paths)).toMatchObject({ host: TIERS.high, tier: 'high', fallback: false })
+	const prompt = readFileSync(written, 'utf8')
+	expect(prompt).toContain('Use the `ponytail` skill.')
+	expect(prompt).not.toContain('unwanted')
+})
+
+test('a Jev that cannot answer stops the dispatch before the worktree', async () => {
+	const paths = await board({ tiers: TIERS, jevMode: true })
+	await score(paths, 2)
+	delete process.env.JEV_API_KEY
+
+	await expect(dispatch(paths, 'auth-api-k7f2', { base: 'main' })).rejects.toThrow(/JEV_API_KEY/)
+
+	expect((await readRuns(paths)).records.size).toBe(0)
 })
 
 test('tiers are read from the base, never from the working copy', async () => {

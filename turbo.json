@@ -12,6 +12,9 @@
 		"FAKE_HOST_HANG",
 		"FAKE_HOST_LOGGED_OUT",
 		"FAKE_HOST_WRITE",
+		"JEV_API_KEY",
+		"JEV_BASE_URL",
+		"JEV_MODEL",
 		"SOBER_GH"
 	],
 	"tasks": {

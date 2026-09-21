@@ -190,6 +190,23 @@ test('thresholds out of order or out of range are broken, naming the path', () =
 	})
 })
 
+test('jev mode is off and skill-less unless the config says otherwise', () => {
+	expect(parseConfig('c', '{}')).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { jevMode: false, jevSkills: [] } },
+	})
+	expect(
+		parseConfig('c', '{ "dispatch": { "jevMode": true, "jevSkills": ["ponytail"] } }'),
+	).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { jevMode: true, jevSkills: ['ponytail'] } },
+	})
+})
+
+test('the snake_case spelling of jevMode is broken, not silently ignored', () => {
+	expect(parseConfig('c', '{ "dispatch": { "jev_mode": true } }')).toMatchObject({ kind: 'broken' })
+})
+
 test('tierFor splits complexity at the thresholds', () => {
 	const t = DEFAULT_CONFIG.dispatch.thresholds
 	expect([tierFor(t, 8), tierFor(t, 4), tierFor(t, 3), tierFor(t, null)]).toEqual([

@@ -7,6 +7,7 @@ import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { type AgentInput, checkHost, HostError, startAgent } from './host.js'
 import { adapterFor } from './hosts.js'
+import { askJev } from './jev.js'
 import {
 	appendEvent,
 	appendRunOutput,
@@ -103,7 +104,16 @@ export const dispatch = async (
 	// (ADR 0019, ADR 0058): a run must not be able to raise its own model.
 	const record = await readNode(paths, node)
 	if (record.kind !== 'ok') throw new NotOnBoardError('node', node)
-	const tier = tierFor(config.dispatch.thresholds, record.value.brief?.complexity ?? null)
+	// With jevMode on, the brief's own score is not consulted at all: the whole
+	// point is that nobody has to guess a number (ADR 0059). A Jev that cannot
+	// answer stops the dispatch here, before the worktree and before the spend.
+	const jev = config.dispatch.jevMode
+		? await askJev(await stateFor(paths, node), config.dispatch.jevSkills)
+		: null
+	const tier = tierFor(
+		config.dispatch.thresholds,
+		jev?.complexity ?? record.value.brief?.complexity ?? null,
+	)
 	const chosen =
 		tier === null
 			? { host: config.dispatch.host, fallback: false }
@@ -128,7 +138,7 @@ export const dispatch = async (
 			`${node} was not started: ${line}${named} takes one message and exits, so nobody can answer it while it runs. Start it without watching, or set \`dispatch.host\` to a host that can be attended.`,
 		)
 
-	const prompt = options.prompt ?? (await promptFor(paths, node))
+	const prompt = options.prompt ?? (await promptFor(paths, node, jev?.skills ?? []))
 
 	const worktree = await addWorktree(paths, node, options.base)
 	if (worktree.created && config.dispatch.setup !== null)
@@ -413,20 +423,42 @@ Do not push, do not merge, and do not switch branches. Landing the work is a
 human's decision, made after the review.
 `
 
-const promptFor = async (paths: Paths, node: string): Promise<string> => {
+/** What Jev is shown: the brief alone, without the closing instructions. */
+const stateFor = async (paths: Paths, node: string): Promise<string> => {
+	const brief = renderBrief(await loadBoard(paths), node)
+	if (brief === null) throw new NotOnBoardError('node', node)
+	return brief
+}
+
+/** Named, never described: the agent looks the skill up by the name its host knows. */
+const skillsBlock = (skills: readonly string[]): string =>
+	skills.length === 0
+		? ''
+		: `
+# Skills
+
+${skills.map((name) => `Use the \`${name}\` skill.`).join('\n')}
+`
+
+const promptFor = async (
+	paths: Paths,
+	node: string,
+	skills: readonly string[],
+): Promise<string> => {
 	const board = await loadBoard(paths)
 	const brief = renderBrief(board, node)
 	if (brief === null) throw new NotOnBoardError('node', node)
 
+	const body = `${brief}${skillsBlock(skills)}${HOW_IT_ENDS}`
 	const feedback = board.feedback.get(node)
-	if (feedback === undefined) return `${brief}${HOW_IT_ENDS}`
+	if (feedback === undefined) return body
 	return `# The last attempt was turned down
 
 ${feedback.text}
 
 What follows is the brief, unchanged.
 
-${brief}${HOW_IT_ENDS}`
+${body}`
 }
 
 const settings = async (paths: Paths, base: string): Promise<Config> => {

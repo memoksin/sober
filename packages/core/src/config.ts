@@ -40,6 +40,8 @@ export const Config = z.strictObject({
 				high: z.int().min(1).max(10),
 			})
 			.refine((t) => t.high > t.mid, { message: 'high must be above mid' }),
+		jevMode: z.boolean().default(false),
+		jevSkills: z.array(z.string().min(1)).default([]),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -70,6 +72,8 @@ export const DEFAULT_CONFIG: Config = {
 		pollSeconds: 30,
 		tiers: { high: null, mid: null, low: null },
 		thresholds: { mid: 4, high: 8 },
+		jevMode: false,
+		jevSkills: [],
 	},
 	board: {
 		branch: 'sober-graph',
@@ -93,8 +97,9 @@ export const DEFAULT_CONFIG_TEXT = `{
 
 	"dispatch": {
 		// The host CLI SOBER launches headless. It is the tool you already
-		// installed and logged into: SOBER never asks for an API key. This
-		// is what runs a node whose tier names nothing (ADR 0058).
+		// installed and logged into: unless "jevMode" below is on, SOBER
+		// never asks for an API key. This is what runs a node whose tier
+		// names nothing (ADR 0058).
 		"host": "${DEFAULT_CONFIG.dispatch.host}",
 
 		// Shell command run in a fresh worktree before the agent starts.
@@ -159,7 +164,29 @@ export const DEFAULT_CONFIG_TEXT = `{
 		"thresholds": {
 			"mid": ${DEFAULT_CONFIG.dispatch.thresholds.mid},
 			"high": ${DEFAULT_CONFIG.dispatch.thresholds.high}
-		}
+		},
+
+		// Off by default, and the one setting that costs money of its own
+		// (ADR 0059). On, every dispatch asks Jev — TypeSafe's System One
+		// model — how hard the node is and which of "jevSkills" it needs,
+		// and the brief's own complexity is ignored. Jev's score still runs
+		// through "thresholds" above, so the tiers stay yours to tune.
+		// Three env vars, and any router that speaks the System One format:
+		//   JEV_API_KEY   required
+		//   JEV_BASE_URL  default https://api.typesafe.ai/v1
+		//   JEV_MODEL     default typesafe-ai/jev
+		// For OpenRouter, set https://openrouter.ai/api/v1 and typesafe/jev-latest.
+		// A Jev that cannot be reached stops the dispatch and says so — it
+		// never falls back quietly, because a mode you think is on and is
+		// not is worse than a failure.
+		"jevMode": ${DEFAULT_CONFIG.dispatch.jevMode},
+
+		// The skills Jev may pick from, by the name the host knows them by —
+		// for example ["ponytail", "engineering:testing-strategy"]. The ones
+		// it picks are named in the agent's prompt. Empty means the skill
+		// question is never asked. SOBER cannot discover what you have
+		// installed, so this list is yours to keep.
+		"jevSkills": []
 	},
 
 	"board": {
