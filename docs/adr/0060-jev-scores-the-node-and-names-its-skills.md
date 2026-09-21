@@ -45,7 +45,10 @@ block ahead of the closing instructions, and the agent looks each one up in its
 own host. A stored binding would be a schema step and a migration for something
 re-decided on every dispatch anyway.
 
-Transport is three env vars and one `fetch` — no SDK:
+Transport is three env vars and one `fetch` — no SDK. They are read from the
+shell, or from `.sober/.env`, which `.sober/*` already gitignores and which
+every `sober` command loads first, so the host that spawns `sober mcp` sees
+them without a restarted shell; a variable the shell set is never overwritten.
 
 | env | required | default |
 |---|---|---|

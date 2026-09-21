@@ -203,7 +203,9 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// model — how hard the node is and which of "jevSkills" it needs,
 		// and the brief's own complexity is ignored. Jev's score still runs
 		// through "thresholds" above, so the tiers stay yours to tune.
-		// Three env vars, and any router that speaks the System One format:
+		// Three env vars — in your shell, or in .sober/.env, which is
+		// gitignored and read by every sober command — and any router that
+		// speaks the System One format:
 		//   JEV_API_KEY   required
 		//   JEV_BASE_URL  default https://api.typesafe.ai/v1
 		//   JEV_MODEL     default typesafe-ai/jev

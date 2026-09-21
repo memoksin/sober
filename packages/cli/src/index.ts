@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
+import { findRoot, loadEnv, paths as resolvePaths } from '@besober/core'
 import { init, openBoard } from './board.js'
 import { distribute } from './distribute.js'
 import { dismiss, open, reopen } from './flag.js'
@@ -196,6 +197,11 @@ const main = async (): Promise<void> => {
 	})
 	const [command, ...positional] = positionals
 	let rest = positional
+
+	// Before any command, so `sober mcp` spawned by a host sees the same keys
+	// the terminal does. Outside a board there is nothing to load.
+	const root = findRoot(process.cwd())
+	if (root !== null) loadEnv(resolvePaths(root))
 
 	if (values.version === true) return say(version)
 	// `sober` with no arguments and `sober --help` print the same thing

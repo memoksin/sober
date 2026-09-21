@@ -54,6 +54,7 @@ export {
 	readDistribution,
 } from './distribute.js'
 export { bind, unbound } from './edges.js'
+export { loadEnv } from './env.js'
 // `NotOnBoardError` came off this barrel in ADR 0033's deletion pass and comes
 // back here, which is the shape that ADR predicted: a name returns in the pull
 // request that needs it. `packages/server` needs it to answer a 409 rather than

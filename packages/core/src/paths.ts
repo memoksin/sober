@@ -8,6 +8,8 @@ export interface Paths {
 	readonly root: string
 	readonly sober: string
 	readonly config: string
+	/** Per-person secrets the board's settings name — `JEV_API_KEY` and its two companions. */
+	readonly env: string
 	readonly project: string
 	readonly contributors: string
 	readonly distribution: string
@@ -33,6 +35,9 @@ export const paths = (root: string): Paths => {
 		root,
 		sober,
 		config: join(sober, 'config.jsonc'),
+		// Gitignored with the rest of `.sober/*`: a key is one person's, and
+		// the settings that name it are the board's (ADR 0060).
+		env: join(sober, '.env'),
 		project: join(sober, 'project.json'),
 		contributors: join(sober, 'contributors.json'),
 		// The plan waiting on the board, when there is one (ADR 0051). Beside

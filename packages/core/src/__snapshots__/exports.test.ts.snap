@@ -65,6 +65,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "lastRun",
   "listWorktrees",
   "loadBoard",
+  "loadEnv",
   "mergeNode",
   "migrateBoard",
   "modelForScore",
