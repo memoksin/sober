@@ -1,0 +1,21 @@
+{
+	"title": "What the agent said is a line in the log like any other, not a box",
+	"name": "text-lines",
+	"description": "In apps/dashboard/src/logs/Logs.tsx a `text` or `answer` line renders inside its own bordered, surfaced, padded box (`rounded border bg-[var(--surface)] px-3 py-2 font-sans`), while every other kind is a bare span in mono. The box came in with node the-run-panel-a-box-for-what-the-agent-s-5svv; beside the tool rows it now reads as a second vocabulary in the same list. Take the box away: a text/answer line sits in the same `<li>` flex row, with its mark (`·` for text, `›` for answer, in TONE colours) in the same mark column, and its body as a span — ink colour, sans font, `whitespace-pre-wrap`, max-width 68ch kept so long prose still wraps. Markdown rendering in the body stays as it is (node agent-written-text-renders-as-markdown-w-zvh8). Keep the thinking spinner exactly as is. Update apps/dashboard/src/logs/Logs.test.tsx: a text line has no border/surface classes and shares the row structure of a tool line; the answer mark still points the other way.",
+	"notes": "",
+	"dependsOn": [
+		"tool-colour-tgpi"
+	],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/logs/Logs.tsx",
+		"apps/dashboard/src/logs/Logs.test.tsx"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-21T13:22:24.585Z"
+}

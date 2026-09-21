@@ -1,0 +1,27 @@
+{
+	"title": "A host whose limit is spent is not on Jev's list, and the dispatch says why",
+	"name": "host-avail",
+	"description": "`checkHost` in packages/core/src/host.ts answers installed and logged in; it does not answer “can this host take a request right now”, so an account at 100% of its usage window is offered to Jev like any other. Per the `limit-detect` decision, add availability to the host adapter: for `probe`/`probe-and-fall`, a `probe` step that runs one minimal prompt through the host (`claude -p`, `codex exec`, `opencode run`, with the cheapest model the list names for that host) and classifies the exit — ready, limit spent (per-host patterns from captured real output, kept in one table per adapter with the text they were captured from in the test), not logged in, unknown — cached in `.sober/local/hosts.json` under a `dispatch.probeSeconds` TTL (config.ts, default 900). `dispatch()` runs it over the hosts the candidate list names before `askJev` and removes every entry of a host that is not ready; the dispatch log carries one line per removed host with the reason. If nothing is left, refuse before the worktree with all the reasons in one sentence. For `fall` alone, this node ships only the classification (`limitSpent(host, output)`) the fallback node needs, no probe. Tests: host.test.ts per host and per class from captured text; dispatch.test.ts for the filter, the cache TTL and the empty-list refusal.",
+	"notes": "",
+	"dependsOn": [
+		"live-list-dtr8"
+	],
+	"decisions": [
+		"how-does-sober-learn-that-a-host-s-usage-naze"
+	],
+	"files": [
+		"packages/core/src/host.ts",
+		"packages/core/src/host.test.ts",
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/dispatch.test.ts",
+		"packages/core/src/config.ts",
+		"packages/core/src/paths.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-21T13:30:00.197Z"
+}

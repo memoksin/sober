@@ -1,0 +1,25 @@
+{
+	"title": "A tool line carries its own glyph in its own colour, on the dashboard and in `sober logs`",
+	"name": "tool-colour",
+	"description": "Today a `tool` line in apps/dashboard/src/logs/Logs.tsx shows two marks: the generic `⚒` in the mark column painted `var(--status-ready)` green (TONE.tool in apps/dashboard/src/logs/data.ts), then the per-tool glyph from `TOOL` (◧ ✎ ✍ $ ⌕ ✱ ⧉ ⇣) inside the text, in dim ink. The green means nothing — it is a status colour on a line that has no status — and the two marks fight. Change it so the mark column holds the tool's glyph, painted in a colour that is that tool's own. Add one token per listed tool to apps/dashboard/src/theme.css (dark, light and the forced-theme block, following the `--status-*` layout) plus one fallback token for an unlisted tool; pick hues that stay distinct from the five status colours and from `--danger`, so a tool line is never mistaken for a status. Move the glyph into the mark column and drop the second copy in the text. `packages/cli/src/work.ts` `TAIL`/`TOOL` are the CLI's hand-aligned copy of these tables: give the CLI the same glyph placement and, where the terminal has colour, the nearest ANSI colour per tool, so `sober logs` and the screen keep showing one run in one vocabulary. This contradicts ADR 0039 §2 (\"colour is reserved for status\"): write a short new ADR that amends §2 with a second named exception — the tool palette in the run log, which is not on the canvas and not in the chrome — and reference it from the token block. Tests with the code: apps/dashboard/src/logs/Logs.test.tsx asserts a tool line renders the tool's glyph once, in the mark column, with that tool's token as its colour; a data test that every `TOOL` key has a token; a CLI test that a tool line uses the same glyph.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/logs/Logs.tsx",
+		"apps/dashboard/src/logs/Logs.test.tsx",
+		"apps/dashboard/src/logs/data.ts",
+		"apps/dashboard/src/logs/data.test.ts",
+		"apps/dashboard/src/theme.css",
+		"packages/cli/src/work.ts",
+		"packages/cli/src/*.test.ts",
+		"docs/adr/*.md"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-21T13:22:24.585Z"
+}

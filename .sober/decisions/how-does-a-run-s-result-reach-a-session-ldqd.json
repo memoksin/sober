@@ -23,6 +23,12 @@
 	],
 	"suggested": "block-raise",
 	"derived": "packages/mcp/src/tools/build.ts:45 — `run` \"blocks until the run ends\", kept alive by progress notifications",
-	"answer": null,
+	"answer": {
+		"option": "block-raise",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T13:36:09.755Z",
+		"derived": "packages/mcp/src/tools/build.ts:45 — `run` \"blocks until the run ends\", kept alive by progress notifications"
+	},
 	"createdAt": "2026-09-14T11:39:12.254Z"
 }

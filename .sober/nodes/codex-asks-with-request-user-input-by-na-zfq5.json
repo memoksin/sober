@@ -11,11 +11,50 @@
 		"packages/codex-plugin/README.md",
 		"test/integration/plugin.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Three files change by hand; the rest is generated.\n\n1. `plugins/hosts/codex.json`, slot `ask`. Name the tool: \"Ask with `request_user_input`, this host's own question tool — the one question, the option labels only\". In the same sentence say when it is not there: Codex offers `request_user_input` per turn (its own instructions say to use it only when it is listed in the turn's tools; it is there in the interactive Default and Plan modes, never under `codex exec`). When it is not listed, ask in the conversation exactly as `plugins/hosts/opencode.json` does — the options in full, the reason for each, what each costs later — and wait for a reply that names one option. Keep the rest of the slot word for word with `claude.json` (pass `decide` exactly the pick; a yes and a no for a brief or a merge; `confirmed: true` only on an explicit yes; never answer on their behalf). One more clause, from the version check: Codex's own prompt tells the model never to use `request_user_input` for a permission request, so a brief or merge yes may fall to the conversation even in Default mode — that is fine, the rule is the same: a yes in the chat is a yes, silence is not.\n\n2. `packages/codex-plugin/README.md`, under \"What is different from Claude Code\": one short paragraph, \"Asking is per turn\" — `request_user_input` is offered by mode, not always; when it is missing the skills ask in the chat. Verified against codex-cli 0.154.0.\n\n3. `test/integration/plugin.test.ts`: extend the existing \"every host's decision skill asks with the host's own question\" test (line ~150) or add one beside it: for host `codex`, `decide`, `next`, `brief` and `loop` skills must contain `request_user_input` and the fallback phrase \"when it is not listed\" (or whatever the slot says — pick one exact phrase and assert it). Claude's must contain `AskUserQuestion` and not `request_user_input`; OpenCode's must contain neither.\n\n4. `pnpm plugins` regenerates `packages/codex-plugin/skills/**`. Commit the generated files with the source.\n\nOut of scope: `approve` still eliciting via askYes (node approve-asks-once-drop-the-leftover-asky-9818). Do not touch `plugins/skills/*/SKILL.md` — the slot is enough.",
+		"complexity": 3,
+		"acceptance": [
+			{
+				"run": "rg -n 'request_user_input' plugins/hosts/codex.json packages/codex-plugin/skills/decide/SKILL.md packages/codex-plugin/skills/next/SKILL.md packages/codex-plugin/skills/brief/SKILL.md packages/codex-plugin/skills/loop/SKILL.md",
+				"proves": "The slot names the tool and every generated Codex skill that asks carries the name"
+			},
+			{
+				"run": "rg -c 'request_user_input' packages/claude-code-plugin/skills packages/opencode-plugin/.opencode/skills packages/cursor-plugin/skills; test $? -eq 1",
+				"proves": "No other host's skills picked up Codex's tool name"
+			},
+			{
+				"run": "pnpm plugins && git diff --exit-code packages/",
+				"proves": "The generated skills are in step with the source; nothing was hand-edited"
+			},
+			{
+				"run": "pnpm vitest run test/integration/plugin.test.ts",
+				"proves": "The new Codex assertion passes and every existing skill test still holds"
+			},
+			{
+				"run": "pnpm check",
+				"proves": "Lint, types and the rest of the repo's gate are green"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-21T13:00:45.151Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T13:15:23.510Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T13:25:41.142Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "did-not-run"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-14T11:39:12.254Z"
 }

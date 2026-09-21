@@ -1,0 +1,28 @@
+{
+	"title": "Jev is given a model list checked against what exists today, not the config as typed",
+	"name": "live-list",
+	"description": "Today `dispatch()` in packages/core/src/dispatch.ts hands `askJev` `config.dispatch.models` untouched, so Jev picks among entries that may be retired and never among free OpenRouter models listed since the config was written. Build the list Jev sees at dispatch time, in a new `candidatesFor(config, sources)` in packages/core/src/models.ts, per the `list-source` decision: for `pruned`, drop opencode entries absent from `openRouterModels()` and codex entries absent from `codexModels()`, log each drop through the dispatch log line (`packages/core/src/log.ts` or wherever `run.started` is written); for `discover`, also append every free text-out OpenRouter model not already named, with the range from a new `dispatch.discover` setting in packages/core/src/config.ts (default `{}` — nothing discovered unless asked), and write an ADR amending 0061 for whichever was chosen. The catalogue fetch is best-effort with a cache in `.sober/local/catalogue.json` (TTL a config knob, default one hour): unreachable, it logs and uses the config list as-is — an OpenRouter outage never stops a dispatch. Inject `fetch`/home as the existing functions do so tests need no network. Tests: models.test.ts covers prune, discover, cache hit, cache miss, fetch failure; dispatch.test.ts shows Jev receives the built list and the log names the drops.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"what-list-of-models-does-jev-choose-from-8vel"
+	],
+	"files": [
+		"packages/core/src/models.ts",
+		"packages/core/src/models.test.ts",
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/dispatch.test.ts",
+		"packages/core/src/config.ts",
+		"packages/core/src/config.test.ts",
+		"packages/core/src/paths.ts",
+		"docs/adr/*.md",
+		".sober/config.jsonc"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-21T13:30:00.197Z"
+}

@@ -1,0 +1,45 @@
+{
+	"title": "The panel's Brief section is collapsed by default and opens on a click",
+	"name": "brief-toggle",
+	"description": "In apps/dashboard/src/panel/Panel.tsx the Brief `<Section>` (approach, acceptance list, approval line) renders open whenever `node.brief !== null`, and on a node with a long approach it pushes the dependency list and the decisions off the screen. Make it a disclosure: closed by default, one click on the heading opens it. Use a native `<details>`/`<summary>` around the existing content — no state library, no new component — with the summary styled like the other Section headings so the panel stays one rhythm. The approval line (`not approved yet` / `approved by …`) stays visible in the closed state next to the heading, so a person still sees at a glance whether the node can run without opening the brief. Every other Section keeps its current behaviour. Extend apps/dashboard/src/panel/Panel.test.tsx: the brief's approach text is not in the document (or the details is closed) on first render, and is after a click on the summary; the approval line is visible in both states.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/panel/Panel.tsx",
+		"apps/dashboard/src/panel/Panel.test.tsx"
+	],
+	"brief": {
+		"approach": "One component, one test file.\n\n1. `apps/dashboard/src/panel/Panel.tsx`, the `node.brief !== null` block (~line 99): replace `<Section title=\"Brief\">` with a native `<details>` — no `useState`, no new component. The `<summary>` holds the same heading styling `Section` uses (`font-medium text-[length:var(--text-xs)] text-[var(--ink-faint)] uppercase tracking-wider`, plus `cursor-pointer select-none`) and, on the same line, the approval text that today sits at the bottom (`not approved yet` / `approved by … , queued`) in `normal-case` faint ink — so a closed brief still says whether the node can run. Inside the details: the `<Markdown>` approach and the acceptance `<ul>` exactly as they are; delete the trailing approval `<p>` since it moved up. No `open` attribute, so it renders closed on every node; the browser keeps it open across re-renders while the same panel is mounted. Every other `Section` is untouched.\n\n2. `apps/dashboard/src/panel/Panel.test.tsx`: extend the existing \"the approach renders as what was written\" test or add one beside it — jsdom keeps `<details>` children in the DOM whether open or not, so assert on the element: `container.querySelector('details')` exists and has no `open` attribute on first render; the summary's text contains `not approved yet`; after `fireEvent.click` on the summary, the `details` has `open`. Keep the existing markdown assertions (heading `How`, `li` count, no `## How`) passing — they read the DOM, not visibility.\n\nNothing else: no theme tokens, no `panel/data.ts` change, no localStorage.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "rg -n '<details|<summary' apps/dashboard/src/panel/Panel.tsx",
+				"proves": "The brief is a native disclosure, not a state-driven component"
+			},
+			{
+				"run": "rg -c 'not approved yet' apps/dashboard/src/panel/Panel.tsx | rg -q '^1$'",
+				"proves": "The approval line was moved into the summary, not duplicated"
+			},
+			{
+				"run": "pnpm vitest run apps/dashboard/src/panel/Panel.test.tsx",
+				"proves": "Closed on first render, open after a click on the summary, approval text visible while closed, markdown assertions still hold"
+			},
+			{
+				"run": "pnpm lint && pnpm typecheck",
+				"proves": "The repo's gate is green"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-21T14:13:25.587Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-21T13:22:24.585Z"
+}
