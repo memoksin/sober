@@ -55,9 +55,13 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 	try {
 		// The model flag is the run's, not the probe's: `opencode providers list`
 		// rejects `--model` and prints its help, which read as "not logged in".
-		;({ stdout } = await run(adapter.command ?? command, [...withoutModel(args), ...adapter.probe], {
-			encoding: 'utf8',
-		}))
+		;({ stdout } = await run(
+			adapter.command ?? command,
+			[...withoutModel(args), ...adapter.probe],
+			{
+				encoding: 'utf8',
+			},
+		))
 	} catch (error) {
 		const code = (error as { code?: string }).code
 		if (code === 'ENOENT')
@@ -120,17 +124,21 @@ export const startAgent = (options: AgentOptions): Promise<AgentExit> =>
 		const [command, args] = hostCommand(options.host)
 		const adapter = adapterFor(options.host)
 		const attended = options.attended === true && adapter.attendable
-		const child = spawn(adapter.command ?? command, [...args, ...adapter.argv(options.prompt, attended)], {
-			cwd: options.cwd,
-			// Never a shell: a brief carrying a backtick is text, not a second command.
-			shell: false,
-			// stdin is closed for a headless run, and the reason is measurable: a
-			// `claude -p` with an open stdin waits three seconds for input that
-			// never comes, and `codex exec` says so out loud — "Reading additional
-			// input from stdin...". An attended run is the case where something
-			// does come.
-			stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-		})
+		const child = spawn(
+			adapter.command ?? command,
+			[...args, ...adapter.argv(options.prompt, attended)],
+			{
+				cwd: options.cwd,
+				// Never a shell: a brief carrying a backtick is text, not a second command.
+				shell: false,
+				// stdin is closed for a headless run, and the reason is measurable: a
+				// `claude -p` with an open stdin waits three seconds for input that
+				// never comes, and `codex exec` says so out loud — "Reading additional
+				// input from stdin...". An attended run is the case where something
+				// does come.
+				stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+			},
+		)
 
 		if (child.pid !== undefined) options.onStart?.(child.pid)
 

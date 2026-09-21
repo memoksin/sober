@@ -46,7 +46,9 @@ test('the probe with an accepted key prints ok, and a refused one says 401', asy
 test('an endpoint without /auth/key is probed at /models instead', async () => {
 	process.env.OPENROUTER_API_KEY = 'sk-test'
 	const fetchFn = vi.fn(async (url: string | URL | Request) =>
-		String(url).endsWith('/auth/key') ? new Response(null, { status: 404 }) : new Response(null, { status: 200 }),
+		String(url).endsWith('/auth/key')
+			? new Response(null, { status: 404 })
+			: new Response(null, { status: 200 }),
 	) as unknown as typeof fetch
 	expect(await agent({ check: true, baseUrl: 'http://localhost:1234/v1/', fetch: fetchFn })).toBe(0)
 	expect(fetchFn).toHaveBeenLastCalledWith('http://localhost:1234/v1/models', expect.anything())

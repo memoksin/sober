@@ -384,7 +384,9 @@ const openrouter: Adapter = {
 		// The loop writes `LogLine`s already; the parse is what keeps a stray
 		// line from crashing the reader rather than being dropped.
 		const kind = LogLine.shape.kind.safeParse(event.kind)
-		return kind.success ? { kind: kind.data, text: event.text ?? '', tool: event.tool ?? null } : null
+		return kind.success
+			? { kind: kind.data, text: event.text ?? '', tool: event.tool ?? null }
+			: null
 	},
 }
 
