@@ -209,6 +209,17 @@ test('one call writes the graph, its edges and the decision holding it', async (
 	expect(statusOf(loaded, auth?.[0] ?? '')).toBe('held')
 })
 
+test('a proposal missing a node’s name is refused by the tool’s own schema', async () => {
+	const { repo: created } = await board()
+	const client = await connect(created.dir)
+
+	const result = await client.callTool({
+		name: 'propose',
+		arguments: { nodes: [{ key: 'a', title: 'No name' }] },
+	})
+	expect(result.isError).toBe(true)
+})
+
 test('propose names an open node sharing files with no edge, and stays quiet once the edge is there', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
