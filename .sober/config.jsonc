@@ -42,7 +42,68 @@
 		// unattended the moment it is ready. Approval stays human and per
 		// node either way — this moves the starting position, not the trade
 		// (ADR 0056).
-		"queueByDefault": false
+		"queueByDefault": false,
+
+		// Three tiers by complexity, each a few command lines like "host".
+		// High is Opus and GPT-5.6 Sol, mid is Sonnet and GPT-5.6 Terra, low is
+		// the strongest of OpenRouter's free models through opencode. "about"
+		// is what Jev reads when it chooses within a tier (ADR 0061).
+		"models": [
+			{
+				"name": "opus",
+				"run": "claude --model claude-opus-5",
+				"complexity": [8, 10],
+				"about": "Claude Opus 5. Deep reasoning. Design choices, schema and migration work, anything subtle."
+			},
+			{
+				"name": "sol",
+				"run": "codex --model gpt-5.6-sol",
+				"complexity": [8, 10],
+				"about": "GPT-5.6 Sol. OpenAI's reliable agentic workhorse. Strong on plumbing across many files."
+			},
+			{
+				"name": "sonnet",
+				"run": "claude --model claude-sonnet-5",
+				"complexity": [4, 7],
+				"about": "Claude Sonnet 5. Balanced. Most feature work across a few files."
+			},
+			{
+				"name": "terra",
+				"run": "codex --model gpt-5.6-terra",
+				"complexity": [4, 7],
+				"about": "GPT-5.6 Terra. Balanced agentic coding for everyday work."
+			},
+			{
+				"name": "nemotron-ultra",
+				"run": "opencode --model openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+				"complexity": [1, 3],
+				"about": "Free. NVIDIA's frontier reasoning model, 550B MoE, 1M context."
+			},
+			{
+				"name": "laguna-s",
+				"run": "opencode --model openrouter/poolside/laguna-s-2.1:free",
+				"complexity": [1, 3],
+				"about": "Free. Poolside's 118B coding agent model, 262k context."
+			},
+			{
+				"name": "north-mini-code",
+				"run": "opencode --model openrouter/cohere/north-mini-code:free",
+				"complexity": [1, 3],
+				"about": "Free. Cohere's agentic coding model, 256k context."
+			},
+			{
+				"name": "qwen",
+				"run": "opencode --model openrouter/qwen/qwen3.8-27b:free",
+				"complexity": [1, 3],
+				"about": "Free. Qwen3.8 27B dense, good at coding, 262k context."
+			}
+		],
+
+		// Jev (TypeSafe's System One model) scores each node and picks among
+		// the models above. Needs JEV_API_KEY, and JEV_BASE_URL / JEV_MODEL
+		// for a router other than TypeSafe direct (ADR 0060).
+		"jevMode": true,
+		"jevSkills": ["ponytail", "engineering:testing-strategy"]
 	},
 
 	"board": {
