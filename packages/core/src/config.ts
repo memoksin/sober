@@ -42,6 +42,23 @@ export const Config = z.strictObject({
 			.refine((t) => t.high > t.mid, { message: 'high must be above mid' }),
 		jevMode: z.boolean().default(false),
 		jevSkills: z.array(z.string().min(1)).default([]),
+		models: z
+			.array(
+				z.strictObject({
+					name: z.string().min(1),
+					run: z.string().min(1),
+					complexity: z
+						.tuple([z.int().min(1).max(10), z.int().min(1).max(10)])
+						.refine(([low, high]) => low <= high, {
+							message: 'low end must not be above high end',
+						}),
+					about: z.string().default(''),
+				}),
+			)
+			.default([])
+			.refine((models) => new Set(models.map((m) => m.name)).size === models.length, {
+				message: 'model names must be unique',
+			}),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -74,6 +91,7 @@ export const DEFAULT_CONFIG: Config = {
 		thresholds: { mid: 4, high: 8 },
 		jevMode: false,
 		jevSkills: [],
+		models: [],
 	},
 	board: {
 		branch: 'sober-graph',
@@ -166,8 +184,22 @@ export const DEFAULT_CONFIG_TEXT = `{
 			"high": ${DEFAULT_CONFIG.dispatch.thresholds.high}
 		},
 
+		// Any number of models, each a command line like "host", with the
+		// complexity range it takes. Set, this wins over "tiers" and
+		// "thresholds" above. Order is preference: where ranges overlap, the
+		// first match runs. A score no entry covers runs "host", and the run
+		// record says so. "about" is the one line Jev reads when it chooses
+		// between the entries that cover the score (ADR 0061), for example:
+		//   { "name": "free",  "run": "opencode --model openrouter/qwen/qwen3-coder:free",
+		//     "complexity": [1, 3], "about": "Free. Small edits and tests." },
+		//   { "name": "codex", "run": "codex --model gpt-5.3-codex",
+		//     "complexity": [3, 7], "about": "Fast, good at plumbing." },
+		//   { "name": "fable", "run": "claude --model claude-fable-5-1",
+		//     "complexity": [6, 10], "about": "Design work and anything subtle." }
+		"models": [],
+
 		// Off by default, and the one setting that costs money of its own
-		// (ADR 0059). On, every dispatch asks Jev — TypeSafe's System One
+		// (ADR 0060). On, every dispatch asks Jev — TypeSafe's System One
 		// model — how hard the node is and which of "jevSkills" it needs,
 		// and the brief's own complexity is ignored. Jev's score still runs
 		// through "thresholds" above, so the tiers stay yours to tune.
@@ -235,6 +267,28 @@ export const hostForTier = (
 ): { host: string; fallback: boolean } => {
 	const line = dispatch.tiers[tier]
 	return line === null ? { host: dispatch.host, fallback: true } : { host: line, fallback: false }
+}
+
+export type Model = Config['dispatch']['models'][number]
+
+/** The entries whose range covers the score, in the order the list prefers them. */
+export const modelsFor = (models: readonly Model[], complexity: number): Model[] =>
+	models.filter(({ complexity: [low, high] }) => complexity >= low && complexity <= high)
+
+/**
+ * The line a score runs on when nobody asked Jev: the first covering entry, or
+ * `dispatch.host` with `fallback` set when none does. An unscored node runs
+ * `dispatch.host` as before, and that is not a fallback (ADR 0058).
+ */
+export const modelForScore = (
+	dispatch: Config['dispatch'],
+	complexity: number | null,
+): { host: string; chose: string | null; fallback: boolean } => {
+	if (complexity === null) return { host: dispatch.host, chose: null, fallback: false }
+	const first = modelsFor(dispatch.models, complexity)[0]
+	return first === undefined
+		? { host: dispatch.host, chose: null, fallback: true }
+		: { host: first.run, chose: first.name, fallback: false }
 }
 
 export type ReadConfig =

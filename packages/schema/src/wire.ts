@@ -200,7 +200,7 @@ export const LogWindow = z.strictObject({
 	ran: z
 		.strictObject({
 			host: z.string(),
-			tier: z.enum(['high', 'mid', 'low']).nullable(),
+			tier: z.string().nullable(),
 			fallback: z.boolean(),
 		})
 		.optional(),

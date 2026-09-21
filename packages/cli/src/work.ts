@@ -445,10 +445,12 @@ export const logs = async (node: string): Promise<void> => {
 	const { host, tier, fallback } = last[1]
 	const scored =
 		tier === null
-			? 'unscored'
+			? fallback
+				? 'no model covers this score, fallback to dispatch.host'
+				: 'unscored'
 			: fallback
-				? `${tier} tier named no host, fallback to dispatch.host`
-				: `${tier} tier`
+				? `${tier} named no host, fallback to dispatch.host`
+				: tier
 	say(`  ran ${cyan(host)} (${scored})`)
 	say(
 		tail(text)

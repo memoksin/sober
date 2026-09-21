@@ -69,6 +69,15 @@ export const atBottom = (box: {
 	scrollHeight: number
 }): boolean => box.scrollHeight - box.scrollTop - box.clientHeight < 24
 
-/** The host line, tier and fallback, as the run record wrote them (ADR 0058). */
-export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string =>
-	`Ran \`${host}\` — ${tier === null ? 'unscored' : fallback ? `${tier} tier named no host, fallback to dispatch.host` : `${tier} tier`}`
+/** The host line, what chose it and the fallback, as the run record wrote them (ADR 0058, 0061). */
+export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string => {
+	const chose =
+		tier === null
+			? fallback
+				? 'no model covers this score, fallback to dispatch.host'
+				: 'unscored'
+			: fallback
+				? `${tier} named no host, fallback to dispatch.host`
+				: tier
+	return `Ran \`${host}\` — ${chose}`
+}

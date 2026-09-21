@@ -7,6 +7,8 @@ import { initBoard } from './board.js'
 import {
 	DEFAULT_CONFIG,
 	hostForTier,
+	modelForScore,
+	modelsFor,
 	parseConfig,
 	readConfig,
 	setSetting,
@@ -205,6 +207,66 @@ test('jev mode is off and skill-less unless the config says otherwise', () => {
 
 test('the snake_case spelling of jevMode is broken, not silently ignored', () => {
 	expect(parseConfig('c', '{ "dispatch": { "jev_mode": true } }')).toMatchObject({ kind: 'broken' })
+})
+
+const MODELS = [
+	{ name: 'free', run: 'opencode --model free', complexity: [1, 3] as [number, number], about: '' },
+	{ name: 'codex', run: 'codex --model x', complexity: [3, 7] as [number, number], about: 'Fast.' },
+	{ name: 'big', run: 'claude --model big', complexity: [8, 10] as [number, number], about: '' },
+]
+
+test('models default to none, parse with about defaulted, and refuse a bad range or a repeated name', () => {
+	expect(parseConfig('c', '{}')).toMatchObject({ kind: 'ok', value: { dispatch: { models: [] } } })
+	expect(
+		parseConfig(
+			'c',
+			'{ "dispatch": { "models": [{ "name": "free", "run": "opencode --model free", "complexity": [1, 3] }] } }',
+		),
+	).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { models: [{ name: 'free', complexity: [1, 3], about: '' }] } },
+	})
+	expect(
+		parseConfig(
+			'c',
+			'{ "dispatch": { "models": [{ "name": "a", "run": "x", "complexity": [5, 2] }] } }',
+		),
+	).toMatchObject({
+		kind: 'broken',
+		reason: expect.stringContaining('dispatch.models.0.complexity'),
+	})
+	expect(
+		parseConfig(
+			'c',
+			'{ "dispatch": { "models": [{ "name": "a", "run": "x", "complexity": [1, 2] }, { "name": "a", "run": "y", "complexity": [3, 4] }] } }',
+		),
+	).toMatchObject({ kind: 'broken', reason: expect.stringContaining('unique') })
+})
+
+test('modelsFor keeps the list order where ranges overlap', () => {
+	expect(modelsFor(MODELS, 3).map((m) => m.name)).toEqual(['free', 'codex'])
+	expect(modelsFor(MODELS, 7).map((m) => m.name)).toEqual(['codex'])
+	expect(modelsFor(MODELS, 5).map((m) => m.name)).toEqual(['codex'])
+})
+
+test('modelForScore runs the first cover, falls back when none covers, and never for an unscored node', () => {
+	const dispatch = { ...DEFAULT_CONFIG.dispatch, models: MODELS }
+	expect(modelForScore(dispatch, 3)).toEqual({
+		host: 'opencode --model free',
+		chose: 'free',
+		fallback: false,
+	})
+	expect(modelForScore(dispatch, 10)).toEqual({
+		host: 'claude --model big',
+		chose: 'big',
+		fallback: false,
+	})
+	expect(modelForScore({ ...dispatch, models: MODELS.slice(0, 2) }, 9)).toEqual({
+		host: 'claude',
+		chose: null,
+		fallback: true,
+	})
+	expect(modelForScore(dispatch, null)).toEqual({ host: 'claude', chose: null, fallback: false })
 })
 
 test('tierFor splits complexity at the thresholds', () => {

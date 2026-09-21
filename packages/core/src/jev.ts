@@ -1,3 +1,4 @@
+import { type Model, modelsFor } from './config.js'
 import { SoberError } from './errors.js'
 
 /**
@@ -26,6 +27,13 @@ export interface JevDecision {
 	/** 1–10, the same scale a human writes into the brief. */
 	readonly complexity: number
 	readonly skills: readonly string[]
+	/** The `dispatch.models` entry Jev chose, or null when none covers the score. */
+	readonly model: string | null
+}
+
+export interface JevAsk {
+	readonly skills: readonly string[]
+	readonly models: readonly Model[]
 }
 
 /**
@@ -51,6 +59,11 @@ const SKILL_PREFIX = 'skill:'
 type JevQuestion =
 	| { readonly type: 'score'; readonly instructions: string; readonly criteria: readonly string[] }
 	| { readonly type: 'boolean'; readonly instructions: string }
+	| {
+			readonly type: 'choice'
+			readonly instructions: string
+			readonly criteria: Readonly<Record<string, string>>
+	  }
 
 export const jevQuestions = (skills: readonly string[]): Record<string, JevQuestion> => ({
 	complexity: {
@@ -99,10 +112,36 @@ export const jevDecision = (body: unknown, skills: readonly string[]): JevDecisi
 		return probability > 0.5
 	})
 
-	return { complexity: score + 1, skills: chosen }
+	return { complexity: score + 1, skills: chosen, model: null }
 }
 
-export const askJev = async (state: string, skills: readonly string[]): Promise<JevDecision> => {
+/**
+ * The constraint reaches Jev as the set it is shown: only the entries covering
+ * the score are on the list, so nothing it picks can be out of range. `about`
+ * is what it reads; an entry with none is described by its command line.
+ */
+export const modelQuestion = (eligible: readonly Model[]): Record<string, JevQuestion> => ({
+	model: {
+		type: 'choice',
+		instructions: 'Which of these models should do this node? Pick for fit, not for size.',
+		criteria: Object.fromEntries(eligible.map((m) => [m.name, m.about === '' ? m.run : m.about])),
+	},
+})
+
+/** Pure, like `jevDecision`: a name off the list is a failure, not a guess. */
+export const jevChoice = (body: unknown, names: readonly string[]): string => {
+	if (typeof body !== 'object' || body === null)
+		throw new JevError('Jev returned a body that is not an object')
+	const answers = (body as { answers?: unknown }).answers
+	if (typeof answers !== 'object' || answers === null)
+		throw new JevError('Jev returned no `answers`')
+	const choice = answerFor(answers as Record<string, unknown>, 'model').choice
+	if (typeof choice !== 'string' || !names.includes(choice))
+		throw new JevError(`Jev chose a model that is not on the list: ${String(choice)}`)
+	return choice
+}
+
+const post = async (state: string, questions: Record<string, JevQuestion>): Promise<unknown> => {
 	const key = process.env.JEV_API_KEY
 	if (key === undefined || key === '')
 		throw new JevError('`dispatch.jevMode` is on but JEV_API_KEY is not set')
@@ -114,13 +153,26 @@ export const askJev = async (state: string, skills: readonly string[]): Promise<
 		response = await fetch(`${base}/systemone`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-			body: JSON.stringify({ model, state, questions: jevQuestions(skills) }),
+			body: JSON.stringify({ model, state, questions }),
 		})
 	} catch (error) {
 		throw new JevError(`Jev at ${base} could not be reached: ${(error as Error).message}`)
 	}
 	if (!response.ok)
 		throw new JevError(`Jev at ${base} answered ${response.status}: ${await response.text()}`)
+	return response.json()
+}
 
-	return jevDecision(await response.json(), skills)
+/**
+ * Two round trips at most: the score first, then — only when more than one
+ * entry covers it — the choice among those. One entry needs no question, and
+ * none leaves the model null for dispatch to fall back on `dispatch.host`.
+ */
+export const askJev = async (state: string, ask: JevAsk): Promise<JevDecision> => {
+	const decision = jevDecision(await post(state, jevQuestions(ask.skills)), ask.skills)
+	const eligible = modelsFor(ask.models, decision.complexity)
+	if (eligible.length === 0) return decision
+	if (eligible.length === 1) return { ...decision, model: eligible[0]?.name ?? null }
+	const names = eligible.map((m) => m.name)
+	return { ...decision, model: jevChoice(await post(state, modelQuestion(eligible)), names) }
 }

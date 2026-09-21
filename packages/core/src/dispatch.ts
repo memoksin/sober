@@ -2,7 +2,14 @@ import { execFile } from 'node:child_process'
 import type { RunExit } from '@besober/schema'
 import { runAudit, unjudged } from './audit.js'
 import { renderBrief } from './brief.js'
-import { type Config, hostForTier, readConfig, readConfigFromBase, tierFor } from './config.js'
+import {
+	type Config,
+	hostForTier,
+	modelForScore,
+	readConfig,
+	readConfigFromBase,
+	tierFor,
+} from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { type AgentInput, checkHost, HostError, startAgent } from './host.js'
@@ -108,21 +115,20 @@ export const dispatch = async (
 	// point is that nobody has to guess a number (ADR 0059). A Jev that cannot
 	// answer stops the dispatch here, before the worktree and before the spend.
 	const jev = config.dispatch.jevMode
-		? await askJev(await stateFor(paths, node), config.dispatch.jevSkills)
+		? await askJev(await stateFor(paths, node), {
+				skills: config.dispatch.jevSkills,
+				models: config.dispatch.models,
+			})
 		: null
-	const tier = tierFor(
-		config.dispatch.thresholds,
-		jev?.complexity ?? record.value.brief?.complexity ?? null,
-	)
-	const chosen =
-		tier === null
-			? { host: config.dispatch.host, fallback: false }
-			: hostForTier(config.dispatch, tier)
+	const complexity = jev?.complexity ?? record.value.brief?.complexity ?? null
+	const chosen = chooseLine(config.dispatch, complexity, jev?.model ?? null)
 	const line = chosen.host
 	const named =
-		tier === null
-			? ''
-			: ` (the ${tier} tier${chosen.fallback ? ', falling back to `dispatch.host`' : ''})`
+		chosen.chose === null
+			? chosen.fallback
+				? ` (no model covers score ${complexity}, falling back to \`dispatch.host\`)`
+				: ''
+			: ` (the ${chosen.chose} ${chosen.kind}${chosen.fallback ? ', falling back to `dispatch.host`' : ''})`
 
 	// Before anything starts, and in this order: a login that expired should be
 	// one sentence, not a failure three minutes into a worktree (`PR-05-04`).
@@ -145,7 +151,11 @@ export const dispatch = async (
 		await prepare(node, worktree.path, config.dispatch.setup)
 
 	const attended = options.attended === true
-	const { id } = await startRun(paths, node, line, { attended, tier, fallback: chosen.fallback })
+	const { id } = await startRun(paths, node, line, {
+		attended,
+		tier: chosen.chose,
+		fallback: chosen.fallback,
+	})
 	// The pid file holds the **agent's** pid and nothing else, written by
 	// `onStart` below. It used to be seeded with this process's, so a `sober
 	// stop` landing before the child started killed the process that owns the
@@ -422,6 +432,28 @@ the human who has to accept them.
 Do not push, do not merge, and do not switch branches. Landing the work is a
 human's decision, made after the review.
 `
+
+/**
+ * Which line runs the node. A `models` list wins over the tiers (ADR 0061):
+ * Jev's pick when it made one, else the first entry covering the score. With
+ * no list, the score picks a tier as before (ADR 0058). `chose` is what the
+ * run record keeps — a model's name or a tier's.
+ */
+const chooseLine = (
+	dispatch: Config['dispatch'],
+	complexity: number | null,
+	picked: string | null,
+): { host: string; chose: string | null; kind: 'model' | 'tier'; fallback: boolean } => {
+	if (dispatch.models.length > 0) {
+		const entry = dispatch.models.find((m) => m.name === picked)
+		return entry === undefined
+			? { ...modelForScore(dispatch, complexity), kind: 'model' }
+			: { host: entry.run, chose: entry.name, kind: 'model', fallback: false }
+	}
+	const tier = tierFor(dispatch.thresholds, complexity)
+	if (tier === null) return { host: dispatch.host, chose: null, kind: 'tier', fallback: false }
+	return { ...hostForTier(dispatch, tier), chose: tier, kind: 'tier' }
+}
 
 /** What Jev is shown: the brief alone, without the closing instructions. */
 const stateFor = async (paths: Paths, node: string): Promise<string> => {

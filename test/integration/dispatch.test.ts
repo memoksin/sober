@@ -503,6 +503,48 @@ test('a Jev that cannot answer stops the dispatch before the worktree', async ()
 	expect((await readRuns(paths)).records.size).toBe(0)
 })
 
+const MODELS = [
+	{ name: 'free', run: `${FAKE_HOST} --model free`, complexity: [1, 3], about: 'Free.' },
+	{ name: 'codex', run: `${FAKE_HOST} --model codex`, complexity: [3, 7], about: 'Plumbing.' },
+	{ name: 'big', run: `${FAKE_HOST} --model big`, complexity: [8, 10] },
+]
+
+test('a models list wins over the tiers: the first entry covering the score runs', async () => {
+	const paths = await board({ tiers: TIERS, models: MODELS })
+	await score(paths, 3)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+
+	expect(await ran(paths)).toMatchObject({ host: MODELS[0]?.run, tier: 'free', fallback: false })
+})
+
+test('a score no entry covers runs dispatch.host, and the record says so', async () => {
+	const paths = await board({ models: MODELS.slice(0, 2) })
+	await score(paths, 9)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+
+	expect(await ran(paths)).toMatchObject({ host: FAKE_HOST, tier: null, fallback: true })
+})
+
+test('with jevMode on and a models list, Jev picks among the entries that cover its score', async () => {
+	const paths = await board({ models: MODELS, jevMode: true })
+	await score(paths, 9)
+	process.env.JEV_API_KEY = 'sk-test'
+	const fetch = vi
+		.fn()
+		.mockResolvedValueOnce(new Response(JSON.stringify(jevAnswers(2))))
+		.mockResolvedValueOnce(
+			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'codex' } } })),
+		)
+	vi.stubGlobal('fetch', fetch)
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
+
+	expect(fetch).toHaveBeenCalledTimes(2)
+	expect(await ran(paths)).toMatchObject({ host: MODELS[1]?.run, tier: 'codex', fallback: false })
+})
+
 test('tiers are read from the base, never from the working copy', async () => {
 	const paths = await board()
 	await score(paths, 9)

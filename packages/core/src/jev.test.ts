@@ -1,10 +1,19 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { askJev, JevError, jevDecision, jevQuestions } from './jev.js'
+import { askJev, JevError, jevChoice, jevDecision, jevQuestions, modelQuestion } from './jev.js'
 
 const env = { ...process.env }
 afterEach(() => {
 	vi.unstubAllGlobals()
 	process.env = { ...env }
+})
+
+const NOTHING = { skills: [], models: [] }
+
+const model = (name: string, low: number, high: number, about = '') => ({
+	name,
+	run: `opencode --model ${name}`,
+	complexity: [low, high] as [number, number],
+	about,
 })
 
 const answers = (score: number, skills: Record<string, number> = {}) => ({
@@ -63,9 +72,9 @@ test('the request names the router, the model and the key', async () => {
 	const fetch = vi.fn(async () => new Response(JSON.stringify(answers(7, { ponytail: 0.8 }))))
 	vi.stubGlobal('fetch', fetch)
 
-	const decision = await askJev('the brief', ['ponytail'])
+	const decision = await askJev('the brief', { skills: ['ponytail'], models: [] })
 
-	expect(decision).toEqual({ complexity: 8, skills: ['ponytail'] })
+	expect(decision).toEqual({ complexity: 8, skills: ['ponytail'], model: null })
 	const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
 	expect(url).toBe('https://openrouter.ai/api/v1/systemone')
 	expect(init.headers).toMatchObject({ authorization: 'Bearer sk-test' })
@@ -76,7 +85,7 @@ test('no key is a sentence, not a call', async () => {
 	process.env.JEV_API_KEY = ''
 	const fetch = vi.fn()
 	vi.stubGlobal('fetch', fetch)
-	await expect(askJev('the brief', [])).rejects.toThrow(/JEV_API_KEY/)
+	await expect(askJev('the brief', NOTHING)).rejects.toThrow(/JEV_API_KEY/)
 	expect(fetch).not.toHaveBeenCalled()
 })
 
@@ -84,7 +93,7 @@ test('a router that refuses is reported with its status', async () => {
 	process.env.JEV_API_KEY = 'sk-test'
 	delete process.env.JEV_BASE_URL
 	vi.stubGlobal('fetch', async () => new Response('no credit', { status: 402 }))
-	await expect(askJev('the brief', [])).rejects.toThrow(/402/)
+	await expect(askJev('the brief', NOTHING)).rejects.toThrow(/402/)
 })
 
 test('a router that cannot be reached names the router', async () => {
@@ -93,7 +102,7 @@ test('a router that cannot be reached names the router', async () => {
 	vi.stubGlobal('fetch', async () => {
 		throw new Error('ECONNREFUSED')
 	})
-	await expect(askJev('the brief', [])).rejects.toThrow(
+	await expect(askJev('the brief', NOTHING)).rejects.toThrow(
 		/https:\/\/api\.typesafe\.ai\/v1 could not be reached: ECONNREFUSED/,
 	)
 })
@@ -107,4 +116,57 @@ test('a body with no answers, and a skill answer with no probability, both fail'
 	expect(() =>
 		jevDecision({ answers: { complexity: { score: 1 }, 'skill:a': { type: 'boolean' } } }, ['a']),
 	).toThrow(/probability/)
+})
+
+test('the choice question shows only the covering entries, by their about or their line', () => {
+	const question = modelQuestion([model('free', 1, 3, 'Free.'), model('codex', 3, 7)])
+	expect(question.model).toMatchObject({
+		type: 'choice',
+		criteria: { free: 'Free.', codex: 'opencode --model codex' },
+	})
+})
+
+test('a choice off the list is a failure, not a guess', () => {
+	expect(jevChoice({ answers: { model: { type: 'choice', choice: 'free' } } }, ['free'])).toBe(
+		'free',
+	)
+	expect(() => jevChoice({ answers: { model: { choice: 'gpt' } } }, ['free'])).toThrow(JevError)
+	expect(() => jevChoice({ answers: {} }, ['free'])).toThrow(JevError)
+	expect(() => jevChoice(null, ['free'])).toThrow(JevError)
+})
+
+test('no covering entry is one call and no model; one entry is one call and that model', async () => {
+	process.env.JEV_API_KEY = 'sk-test'
+	const fetch = vi.fn(async () => new Response(JSON.stringify(answers(1))))
+	vi.stubGlobal('fetch', fetch)
+
+	const none = await askJev('the brief', { skills: [], models: [model('big', 8, 10)] })
+	expect(none.model).toBeNull()
+	expect(fetch).toHaveBeenCalledTimes(1)
+
+	const one = await askJev('the brief', { skills: [], models: [model('free', 1, 3)] })
+	expect(one.model).toBe('free')
+	expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+test('two covering entries is a second call, and Jev picks among those alone', async () => {
+	process.env.JEV_API_KEY = 'sk-test'
+	const fetch = vi
+		.fn()
+		.mockResolvedValueOnce(new Response(JSON.stringify(answers(4))))
+		.mockResolvedValueOnce(
+			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'codex' } } })),
+		)
+	vi.stubGlobal('fetch', fetch)
+
+	const decision = await askJev('the brief', {
+		skills: [],
+		models: [model('free', 1, 5, 'Free.'), model('codex', 3, 7, 'Plumbing.'), model('big', 8, 10)],
+	})
+
+	expect(decision).toEqual({ complexity: 5, skills: [], model: 'codex' })
+	const second = JSON.parse(
+		(fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body as string,
+	)
+	expect(Object.keys(second.questions.model.criteria)).toEqual(['free', 'codex'])
 })

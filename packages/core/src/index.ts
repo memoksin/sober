@@ -13,7 +13,16 @@ export {
 	initBoard,
 } from './board.js'
 export { renderBrief } from './brief.js'
-export { applySetting, type Config, type ReadConfig, readConfig, setSetting } from './config.js'
+export {
+	applySetting,
+	type Config,
+	type Model,
+	modelForScore,
+	modelsFor,
+	type ReadConfig,
+	readConfig,
+	setSetting,
+} from './config.js'
 export {
 	ARCHIVE_FIELD,
 	type Choices,
@@ -56,7 +65,16 @@ export { type Board, findCycle, loadBoard } from './graph.js'
 export { checkHost, HostError } from './host.js'
 export { newId } from './id.js'
 export { type Editing, editDecision, ImpactError, impactOf } from './impact.js'
-export { askJev, type JevDecision, JevError, jevDecision, jevQuestions } from './jev.js'
+export {
+	askJev,
+	type JevAsk,
+	type JevDecision,
+	JevError,
+	jevChoice,
+	jevDecision,
+	jevQuestions,
+	modelQuestion,
+} from './jev.js'
 export {
 	type Feedback,
 	readFeedback,
