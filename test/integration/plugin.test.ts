@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test } from 'vitest'
 import { DEFAULT_CONFIG } from '@besober/core'
+import { expect, test } from 'vitest'
 
 /**
  * The plugins are data, not code: nothing typechecks them and nothing imports
@@ -69,8 +69,11 @@ test('every host declares the server the CLI publishes, in that host’s own for
 	// ahead of `dispatch.timeoutMinutes` rather than drifting behind it.
 	expect(read('packages/codex-plugin/.mcp.json')).toMatchObject({ mcpServers: { sober: server } })
 	expect(
-		(read('packages/codex-plugin/.mcp.json') as { mcpServers: { sober: { tool_timeout_sec: number } } })
-			.mcpServers.sober.tool_timeout_sec,
+		(
+			read('packages/codex-plugin/.mcp.json') as {
+				mcpServers: { sober: { tool_timeout_sec: number } }
+			}
+		).mcpServers.sober.tool_timeout_sec,
 	).toBeGreaterThan(DEFAULT_CONFIG.dispatch.timeoutMinutes * 60)
 	// Cursor spells it the same way and keeps it unhidden, beside the manifest.
 	expect(read('packages/cursor-plugin/mcp.json')).toEqual({ mcpServers: { sober: server } })
