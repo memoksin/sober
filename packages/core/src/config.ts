@@ -361,7 +361,13 @@ export const setSetting = (
 	text: string,
 	path: readonly (string | number)[],
 	value: unknown,
-): string => applyEdits(text, modify(text, [...path], value, {}))
+): string =>
+	// Tabs, like the template: an object written here reads like the ones
+	// around it rather than as one long line.
+	applyEdits(
+		text,
+		modify(text, [...path], value, { formattingOptions: { insertSpaces: false, tabSize: 1 } }),
+	)
 
 export const writeConfig = (paths: Paths, text: string): Promise<void> =>
 	writeAtomic(paths.config, text)

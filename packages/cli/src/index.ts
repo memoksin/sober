@@ -52,6 +52,8 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['brief <node>', 'read the brief an agent will work from'],
 			['approve <node>', 'approve it — nothing runs without this'],
+			['models [--all]', 'what the installed hosts can run, for dispatch.models'],
+			['models add <name> "<run>" --complexity 1-3', 'add one entry, with the scores it takes'],
 		],
 	],
 	[
@@ -185,6 +187,8 @@ const options = {
 	green: { type: 'boolean' },
 	diff: { type: 'boolean' },
 	port: { type: 'string' },
+	complexity: { type: 'string' },
+	about: { type: 'string' },
 	version: { type: 'boolean', short: 'v' },
 	help: { type: 'boolean', short: 'h' },
 } as const
@@ -300,6 +304,14 @@ const main = async (): Promise<void> => {
 		}
 		case 'archive':
 			return archive(need('node or decision'))
+		case 'models': {
+			const { addModel, models } = await import('./models.js')
+			if (rest[0] !== 'add') return models({ all: values.all === true })
+			const [, name, run] = rest
+			if (name === undefined || run === undefined)
+				return fail('sober models add <name> "<run>" --complexity 1-3')
+			return addModel(name, run, { complexity: values.complexity, about: values.about })
+		}
 		case 'dispatch': {
 			const { dispatcher } = await import('./queue.js')
 			const { baseOf, openBoard, settingsOf } = await import('./board.js')

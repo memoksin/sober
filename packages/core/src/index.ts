@@ -89,6 +89,13 @@ export {
 export { acquire, LockBusyError } from './lock.js'
 export { type Merged, MergeRefusedError, mergeNode } from './merge.js'
 export { type Migrated, migrateBoard, needsMigration } from './migrate.js'
+export {
+	type Candidate,
+	claudeModels,
+	codexModels,
+	installed,
+	openRouterModels,
+} from './models.js'
 export { findRoot, type Paths, paths } from './paths.js'
 export {
 	checksOf,

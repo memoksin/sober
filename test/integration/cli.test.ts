@@ -729,3 +729,31 @@ test('a run of linked nodes is taken, refused and given back from the terminal',
 		repo.cleanup()
 	}
 })
+
+test('models add appends an entry to dispatch.models and refuses a bad range or a repeat', () => {
+	const { dir } = project()
+	sober(dir, 'init')
+
+	const said = sober(
+		dir,
+		'models',
+		'add',
+		'free',
+		'opencode --model x:free',
+		'--complexity',
+		'1-3',
+		'--about',
+		'Free.',
+	)
+	expect(said).toContain('free added to dispatch.models, for scores 1–3')
+	const text = readFileSync(join(dir, '.sober/config.jsonc'), 'utf8')
+	expect(text).toContain('"run": "opencode --model x:free"')
+	// The comments around the setting survive the write.
+	expect(text).toContain("// SOBER's machine settings")
+
+	expect(failed(dir, 'models', 'add', 'big', 'claude', '--complexity', '9-2')).toContain('1 to 10')
+	expect(failed(dir, 'models', 'add', 'free', 'claude', '--complexity', '1-2')).toContain(
+		'already in',
+	)
+	expect(failed(dir, 'models', 'add', 'x')).toContain('sober models add')
+})

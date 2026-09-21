@@ -63,6 +63,10 @@ tier named none, or because no entry covered the score.
 - `about` is prose the user maintains, and the only thing Jev knows about a
   model. A stale line steers a wrong choice; that is the cost of not asking
   SOBER to know what each model is good at.
+- `sober models` prints what the installed hosts can reach — the Claude
+  family, Codex's own cached list, OpenRouter's public catalogue (free ones
+  unless `--all`) — and `sober models add` appends one entry with its range.
+  The range is still typed by a person: it is a budget, not a fact.
 
 ## Alternatives rejected
 
