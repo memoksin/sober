@@ -34,6 +34,11 @@ dispatched to Codex cannot be answered while it runs. SOBER refuses an attended
 run on this host rather than putting somebody in front of a session that cannot
 hear them.
 
+**Asking is per turn.** Codex offers `request_user_input` by mode — it is
+there in interactive Default and Plan modes, never under `codex exec` — so the
+skills use it when it is listed in the turn's tools and fall back to asking in
+the chat when it is missing. Verified against codex-cli 0.154.0.
+
 ## Do not edit the skills here
 
 `skills/` is generated from `plugins/skills/` by `scripts/build-plugins.mjs`.

@@ -158,6 +158,26 @@ test('every host’s decision skill asks with the host’s own question, and rel
 	}
 })
 
+test('codex names its own question tool and falls back when the mode has none', () => {
+	// The `ask` slot names `request_user_input` and says what to do when the
+	// current mode does not offer it (`codex exec`, or any turn without it).
+	// Only `decide` and `loop` render the `{{ask}}` slot — `next` and `brief`
+	// ask a plain yes/no through the host's question tool without naming it.
+	for (const skill of ['decide', 'loop']) {
+		const text = buildSkills('codex').get(skill) ?? ''
+		expect(text, `codex/${skill}`).toContain('request_user_input')
+		expect(text, `codex/${skill}`).toContain('When it is not listed')
+	}
+
+	const claudeDecide = buildSkills('claude').get('decide') ?? ''
+	expect(claudeDecide).toContain('AskUserQuestion')
+	expect(claudeDecide).not.toContain('request_user_input')
+
+	const opencodeDecide = buildSkills('opencode').get('decide') ?? ''
+	expect(opencodeDecide).not.toContain('request_user_input')
+	expect(opencodeDecide).not.toContain('AskUserQuestion')
+})
+
 test('every skill that leads to a question carries the paste rule word for word', () => {
 	// Seven copies of one rule stay in step only if rewording one fails here.
 	const rule =
