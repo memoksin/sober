@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
+import { DEFAULT_CONFIG } from '@besober/core'
 
 /**
  * The plugins are data, not code: nothing typechecks them and nothing imports
@@ -63,7 +64,14 @@ test('every host declares the server the CLI publishes, in that host’s own for
 	// (`PR-00-01`) — not a path into anyone's checkout.
 	const server = { command: 'sober', args: ['mcp'] }
 	expect(read('packages/claude-code-plugin/.mcp.json')).toEqual({ mcpServers: { sober: server } })
-	expect(read('packages/codex-plugin/.mcp.json')).toEqual({ mcpServers: { sober: server } })
+	// Codex cuts a tool call off at its own limit unless the server names one,
+	// so this file adds `tool_timeout_sec` — the check here is that it stays
+	// ahead of `dispatch.timeoutMinutes` rather than drifting behind it.
+	expect(read('packages/codex-plugin/.mcp.json')).toMatchObject({ mcpServers: { sober: server } })
+	expect(
+		(read('packages/codex-plugin/.mcp.json') as { mcpServers: { sober: { tool_timeout_sec: number } } })
+			.mcpServers.sober.tool_timeout_sec,
+	).toBeGreaterThan(DEFAULT_CONFIG.dispatch.timeoutMinutes * 60)
 	// Cursor spells it the same way and keeps it unhidden, beside the manifest.
 	expect(read('packages/cursor-plugin/mcp.json')).toEqual({ mcpServers: { sober: server } })
 

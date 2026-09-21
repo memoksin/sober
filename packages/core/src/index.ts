@@ -16,6 +16,7 @@ export { renderBrief } from './brief.js'
 export {
 	applySetting,
 	type Config,
+	DEFAULT_CONFIG,
 	type Model,
 	modelForScore,
 	modelsFor,

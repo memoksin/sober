@@ -111,7 +111,10 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 						anyway: confirmed,
 						// The progress notification is what keeps a run of several
 						// minutes from timing out in the host, and it is also the only
-						// thing the human sees while it works.
+						// thing the human sees while it works. Codex does not reset its
+						// timer on it, so that host instead gets a longer built-in limit:
+						// `tool_timeout_sec` in packages/codex-plugin/.mcp.json (README
+						// there says what to change if dispatch.timeoutMinutes goes up).
 						onLine: (line) => {
 							const [rendered] = tail(line)
 							if (rendered === undefined) return

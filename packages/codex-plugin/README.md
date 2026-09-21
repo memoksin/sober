@@ -39,6 +39,16 @@ there in interactive Default and Plan modes, never under `codex exec` — so the
 skills use it when it is listed in the turn's tools and fall back to asking in
 the chat when it is missing. Verified against codex-cli 0.154.0.
 
+**A tool-call timeout that outlasts a run.** Codex cuts an MCP tool call off at
+its own built-in limit unless the server's config names `tool_timeout_sec`, so
+`.mcp.json` here sets it to 1860 seconds — one minute past `dispatch
+.timeoutMinutes` (30 minutes, `packages/core/src/config.ts`), so SOBER's own
+timeout fires first and a run ends as `failed` for its own reason, never cut
+by the host. Raising `timeoutMinutes` past 30 needs `tool_timeout_sec` raised
+to match — in this file if it is yours to edit, otherwise under
+`[mcp_servers.sober]` in `~/.codex/config.toml`. The hosted ChatGPT client may
+still cap a call regardless of this setting.
+
 ## Do not edit the skills here
 
 `skills/` is generated from `plugins/skills/` by `scripts/build-plugins.mjs`.

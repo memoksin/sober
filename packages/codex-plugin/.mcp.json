@@ -2,7 +2,8 @@
 	"mcpServers": {
 		"sober": {
 			"command": "sober",
-			"args": ["mcp"]
+			"args": ["mcp"],
+			"tool_timeout_sec": 1860
 		}
 	}
 }
