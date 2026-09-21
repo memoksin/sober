@@ -3,6 +3,7 @@
 // here is importable from inside the package, and re-exporting one is a
 // one-line diff the day something outside asks for it.
 
+export { type LoopOptions, runAgent } from './agent.js'
 export { answerRun } from './answer.js'
 export { archiveDecision, archiveNode } from './archive.js'
 export { type Audited, auditNode } from './audit.js'
