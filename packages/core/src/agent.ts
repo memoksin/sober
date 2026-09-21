@@ -16,11 +16,12 @@ export interface LoopOptions {
 	readonly onLine: (line: LogLine) => void
 	readonly signal?: AbortSignal
 	readonly fetch?: typeof fetch
+	readonly backoffMs?: readonly number[]
 }
 
 const MAX_TURNS = 200
 const MAX_RETRIES = 3
-const BACKOFF_MS = [2000, 4000]
+const DEFAULT_BACKOFF_MS = [2000, 4000]
 const BASH_TIMEOUT_MS = 120_000
 
 interface ToolDef {
@@ -135,7 +136,13 @@ const withinCwd = (cwd: string, path: string): string | null => {
 }
 
 const runBash = (command: string, cwd: string, signal?: AbortSignal): Promise<string> =>
-	new Promise((res) => {
+	new Promise((resolvePromise) => {
+		let done = false
+		const res = (value: string): void => {
+			if (done) return
+			done = true
+			resolvePromise(value)
+		}
 		const child = spawn('sh', ['-c', command], { cwd, signal })
 		let output = ''
 		child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
@@ -145,6 +152,10 @@ const runBash = (command: string, cwd: string, signal?: AbortSignal): Promise<st
 			timedOut = true
 			child.kill('SIGTERM')
 		}, BASH_TIMEOUT_MS)
+		child.on('error', (error) => {
+			clearTimeout(timer)
+			res(`error: ${error.message}\nexit code: null`)
+		})
 		child.on('close', (code) => {
 			clearTimeout(timer)
 			const note = timedOut ? '\n[timed out after 120s, killed]' : ''
@@ -243,6 +254,7 @@ export const runAgent = async (options: LoopOptions): Promise<AgentExit> => {
 	const baseUrl = (options.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '')
 	const fetchFn = options.fetch ?? fetch
 	const { signal } = options
+	const backoffMs = options.backoffMs ?? DEFAULT_BACKOFF_MS
 
 	const messages: Message[] = [
 		{ role: 'system', content: await systemPrompt(options.cwd) },
@@ -282,7 +294,7 @@ export const runAgent = async (options: LoopOptions): Promise<AgentExit> => {
 					text: `waiting on network error, try ${attempt} of ${MAX_RETRIES}`,
 					tool: null,
 				})
-				await sleep(BACKOFF_MS[attempt - 1] ?? BACKOFF_MS.at(-1) ?? 4000, signal)
+				await sleep(backoffMs[attempt - 1] ?? backoffMs.at(-1) ?? 4000, signal)
 				continue
 			}
 
@@ -304,7 +316,7 @@ export const runAgent = async (options: LoopOptions): Promise<AgentExit> => {
 				text: `waiting on ${res.status}, try ${attempt} of ${MAX_RETRIES}`,
 				tool: null,
 			})
-			await sleep(BACKOFF_MS[attempt - 1] ?? BACKOFF_MS.at(-1) ?? 4000, signal)
+			await sleep(backoffMs[attempt - 1] ?? backoffMs.at(-1) ?? 4000, signal)
 		}
 
 		if (response === null) return { kind: 'failed', reason: `${baseUrl} gave no response` }

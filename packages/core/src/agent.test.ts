@@ -89,6 +89,7 @@ test('retries a 429 once, logs a waiting line, then finishes', async () => {
 		prompt: 'p',
 		onLine: (line) => lines.push(line),
 		fetch: fetchFn,
+		backoffMs: [0, 0],
 	})
 
 	expect(exit).toEqual({ kind: 'finished' })
@@ -107,11 +108,12 @@ test('fails after four 429s naming the status', async () => {
 		prompt: 'p',
 		onLine: () => {},
 		fetch: fetchFn,
+		backoffMs: [0, 0],
 	})
 
 	expect(exit.kind).toBe('failed')
 	expect((exit as { reason: string }).reason).toContain('429')
-}, 15000)
+})
 
 test('fails at once on a 401 with no waiting line', async () => {
 	const cwd = setup()
@@ -209,4 +211,24 @@ test('a path outside cwd is refused in the tool result', async () => {
 
 	expect(exit).toEqual({ kind: 'finished' })
 	expect(toolResults[0]).toContain('outside the working directory')
+})
+
+test('a bash tool call whose signal is aborted while it runs returns stopped', async () => {
+	const cwd = setup()
+	const controller = new AbortController()
+	const fetchFn = (async () => toolCallResponse('bash', { command: 'sleep 5' })) as typeof fetch
+
+	const promise = runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+		signal: controller.signal,
+	})
+	setTimeout(() => controller.abort(), 50)
+
+	const exit = await promise
+	expect(exit).toEqual({ kind: 'stopped' })
 })
