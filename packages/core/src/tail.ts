@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises'
-import type { LogLine, LogWindow } from '@besober/schema'
+import { LogLine, type LogWindow } from '@besober/schema'
 import { type Event, renderLine } from './hosts.js'
 import { readRun, runLog } from './local.js'
 import type { Paths } from './paths.js'
@@ -120,14 +120,13 @@ export const followRun = async (
 const tailLine = (line: string): readonly LogLine[] => {
 	// The audit's own lines (`audit.ts`), written between the host's events.
 	const check = /^--- (check|checked): (.*)$/.exec(line.trim())
-	if (check !== null)
-		return [{ kind: check[1] as 'check' | 'checked', text: check[2] ?? '', tool: null }]
+	if (check !== null) return [LogLine.parse({ kind: check[1], text: check[2] ?? '' })]
 	try {
 		return renderLine(JSON.parse(line) as Event)
 	} catch {
 		// Not JSON at all: the host's own stderr, which is the one thing a
 		// failing run always has and the last thing to hide from the person
 		// reading it.
-		return [{ kind: 'raw', text: line.trim(), tool: null }]
+		return [LogLine.parse({ kind: 'raw', text: line.trim() })]
 	}
 }

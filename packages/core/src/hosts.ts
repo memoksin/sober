@@ -1,5 +1,54 @@
-import { LogLine } from '@besober/schema'
+import { LogLine, type LogLineInput } from '@besober/schema'
 import { SoberError } from './errors.js'
+
+const BODY_LINES = 40
+const BODY_CHARS = 4096
+
+/** A result's text as the log keeps it: the first 40 lines or 4 KB, and a marker when cut. */
+export const capBody = (text: string): string => {
+	const kept = text.split('\n').slice(0, BODY_LINES).join('\n').slice(0, BODY_CHARS)
+	return kept.length < text.length ? `${kept}\n… (truncated)` : kept
+}
+
+/**
+ * A result in one line: `error: …` when the host says it failed, `exit N`
+ * where the text carries an exit code, the line itself when there is one, and
+ * a line count otherwise.
+ */
+export const summarize = (text: string, failed = false): string => {
+	const lines = text.trimEnd().split('\n')
+	const first = (lines[0] ?? '').trim()
+	if (failed) return `error: ${first}`
+	// Claude Code opens a failed Bash result with `Exit code N`; SOBER's own
+	// loop closes every bash result with `exit code: N`.
+	const exit = /^Exit code (\d+)/.exec(first) ?? /^exit code: (\d+)$/.exec(lines.at(-1) ?? '')
+	if (exit !== null) return `exit ${exit[1]}`
+	return lines.length === 1 ? first : `${lines.length} lines`
+}
+
+/** The one line of a tool's input a person wants beside its name. */
+const oneLine = (value: unknown): string | null =>
+	typeof value === 'string' && value.trim().length > 0
+		? (value.trim().split('\n')[0] ?? null)
+		: null
+
+/** Which key of a Claude Code tool's input names what it touched. */
+const CLAUDE_DETAIL: Readonly<Record<string, string>> = {
+	Read: 'file_path',
+	Edit: 'file_path',
+	Write: 'file_path',
+	Bash: 'command',
+	Grep: 'pattern',
+	Glob: 'pattern',
+	WebFetch: 'url',
+	Task: 'description',
+}
+
+/** A Claude `tool_result`'s content is a string or a list of text blocks. */
+const resultText = (content: string | readonly { text?: string }[] | undefined): string =>
+	typeof content === 'string'
+		? content
+		: (content ?? []).map((block) => block.text ?? '').join('\n')
 
 /**
  * `dispatch.host` is a command line, not just a program name, so `npx claude`
@@ -126,7 +175,7 @@ export interface Adapter {
 	/** Whether a watching human can reply to this host mid-run (ADR 0046). */
 	readonly attendable: boolean
 	/** One raw event, rendered — or null when the event is not this host's shape. */
-	readonly line: (event: Event) => LogLine | readonly LogLine[] | null
+	readonly line: (event: Event) => LogLineInput | readonly LogLineInput[] | null
 }
 
 export class UnknownHostError extends SoberError {
@@ -172,6 +221,25 @@ const claude: Adapter = {
 				tool: null,
 			}
 
+		// A tool's result comes back as a `user` message, paired to its call by
+		// `tool_use_id`. The result names no tool, so `tool` stays null; `at`
+		// stays null on every Claude line, because stream-json carries no time.
+		if (event.type === 'user') {
+			const outputs = (event.message?.content ?? []).flatMap((part): LogLineInput[] => {
+				if (part.type !== 'tool_result') return []
+				const text = resultText(part.content)
+				return [
+					{
+						kind: 'output',
+						text: summarize(text, part.is_error === true),
+						call: part.tool_use_id ?? null,
+						body: capBody(text),
+					},
+				]
+			})
+			if (outputs.length > 0) return outputs
+		}
+
 		// What the human said, echoed back by the host under
 		// `--replay-user-messages` (ADR 0046). It is in the log so the transcript
 		// holds both halves: a conversation where only one side was recorded is
@@ -192,9 +260,19 @@ const claude: Adapter = {
 		}
 
 		if (event.type === 'assistant') {
-			const lines = (event.message?.content ?? []).flatMap((part): LogLine[] => {
-				if (part.type === 'tool_use' && part.name !== undefined && part.name.length > 0)
-					return [{ kind: 'tool', text: part.name, tool: part.name }]
+			const lines = (event.message?.content ?? []).flatMap((part): LogLineInput[] => {
+				if (part.type === 'tool_use' && part.name !== undefined && part.name.length > 0) {
+					const key = CLAUDE_DETAIL[part.name]
+					return [
+						{
+							kind: 'tool',
+							text: part.name,
+							tool: part.name,
+							call: part.id ?? null,
+							detail: key === undefined ? null : oneLine(part.input?.[key]),
+						},
+					]
+				}
 				const kind = part.type === 'text' ? 'text' : part.type === 'thinking' ? 'thinking' : null
 				const text = (part.type === 'thinking' ? part.thinking : part.text)?.trim()
 				return kind !== null && text !== undefined && text.length > 0
@@ -252,9 +330,29 @@ const codex: Adapter = {
 			}
 			if (item?.type === 'command_execution') {
 				const command = item.command?.trim()
-				return command !== undefined && command.length > 0
-					? { kind: 'tool', text: command, tool: 'command' }
-					: null
+				if (command === undefined || command.length === 0) return null
+				const call = item.id ?? null
+				const ran: LogLineInput = {
+					kind: 'tool',
+					text: command,
+					tool: 'command',
+					call,
+					detail: command,
+				}
+				// The completed item carries the result with the call, so both lines come from it.
+				if (typeof item.exit_code !== 'number' && typeof item.aggregated_output !== 'string')
+					return ran
+				const output = item.aggregated_output ?? ''
+				return [
+					ran,
+					{
+						kind: 'output',
+						text: typeof item.exit_code === 'number' ? `exit ${item.exit_code}` : summarize(output),
+						tool: 'command',
+						call,
+						body: capBody(output),
+					},
+				]
 			}
 			// Codex reports its own complaints as items rather than on stderr, and
 			// they are the sentences that explain why a run behaved oddly.
@@ -300,7 +398,23 @@ const opencode: Adapter = {
 		}
 		if (event.type === 'tool_use') {
 			const tool = event.part?.tool?.trim()
-			return tool !== undefined && tool.length > 0 ? { kind: 'tool', text: tool, tool } : null
+			if (tool === undefined || tool.length === 0) return null
+			const call = event.part?.callID ?? null
+			const state = event.part?.state
+			// Only `command` is in the recording; other tools' input keys are not,
+			// so their detail stays null rather than guessed.
+			const ran: LogLineInput = {
+				kind: 'tool',
+				text: tool,
+				tool,
+				call,
+				detail: oneLine(state?.input?.command),
+			}
+			if (state?.status !== 'completed' || typeof state.output !== 'string') return ran
+			return [
+				ran,
+				{ kind: 'output', text: summarize(state.output), tool, call, body: capBody(state.output) },
+			]
 		}
 		return null
 	},
@@ -362,6 +476,9 @@ const cursor: Adapter = {
 		// they touch; anything else arrives under `function`, with its own name.
 		const tool = name === 'function' ? (call?.name ?? 'tool') : name.replace(/ToolCall$/, '')
 		const path = call?.args?.path
+		// No `call`, `detail` or output line: the documented shape carries no
+		// correlator between `started` and `completed`, and a wrong pairing is
+		// worse than none.
 		return { kind: 'tool', text: path === undefined ? tool : `${tool} ${path}`, tool }
 	},
 }
@@ -393,10 +510,9 @@ const openrouter: Adapter = {
 		if (event.type !== 'sober') return null
 		// The loop writes `LogLine`s already; the parse is what keeps a stray
 		// line from crashing the reader rather than being dropped.
-		const kind = LogLine.shape.kind.safeParse(event.kind)
-		return kind.success
-			? { kind: kind.data, text: event.text ?? '', tool: event.tool ?? null }
-			: null
+		const { type: _, ...line } = event
+		const parsed = LogLine.safeParse(line)
+		return parsed.success ? parsed.data : null
 	},
 }
 
@@ -433,7 +549,8 @@ export const adapterFor = (host: string): Adapter => {
 export const renderLine = (event: Event): readonly LogLine[] => {
 	for (const adapter of ADAPTERS) {
 		const result = adapter.line(event)
-		if (result !== null) return 'kind' in result ? [result] : result
+		if (result !== null)
+			return ('kind' in result ? [result] : result).map((line) => LogLine.parse(line))
 	}
 	return []
 }
@@ -453,14 +570,24 @@ export interface Event {
 			readonly text?: string
 			readonly thinking?: string
 			readonly name?: string
+			/** A `tool_use` part's call id and arguments. */
+			readonly id?: string
+			readonly input?: Readonly<Record<string, unknown>>
+			/** A `tool_result` part: the call it answers and what came back. */
+			readonly tool_use_id?: string
+			readonly content?: string | readonly { readonly type?: string; readonly text?: string }[]
+			readonly is_error?: boolean
 		}[]
 	}
 	/** Codex: one item in a turn. */
 	readonly item?: {
+		readonly id?: string
 		readonly type?: string
 		readonly text?: string
 		readonly command?: string
 		readonly message?: string
+		readonly aggregated_output?: string
+		readonly exit_code?: number
 	}
 	/** Cursor: one tool call, under a key that names the tool that made it. */
 	readonly tool_call?: Readonly<
@@ -473,10 +600,20 @@ export interface Event {
 	readonly kind?: string
 	readonly text?: string
 	readonly tool?: string | null
+	readonly at?: string | null
+	readonly call?: string | null
+	readonly detail?: string | null
+	readonly body?: string | null
 	/** OpenCode: one part of a step. */
 	readonly part?: {
 		readonly type?: string
 		readonly text?: string
 		readonly tool?: string
+		readonly callID?: string
+		readonly state?: {
+			readonly status?: string
+			readonly input?: Readonly<Record<string, unknown>>
+			readonly output?: string
+		}
 	}
 }

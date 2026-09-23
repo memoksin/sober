@@ -22,6 +22,7 @@ export const MARK: Readonly<Record<LogLine['kind'], string>> = {
 	// What the human said back, echoed into the log by the host. It points the
 	// other way because it is the one line that came from this side.
 	answer: '›',
+	output: '⎿',
 }
 
 // The transcript's own tones (ADR 0064), not the board's status colours: a
@@ -38,6 +39,7 @@ export const TONE: Readonly<Record<LogLine['kind'], string>> = {
 	// it is the one thing that must not read like ordinary output.
 	raw: 'var(--tx-error)',
 	answer: 'var(--tx-human)',
+	output: 'var(--tx-result)',
 }
 
 // A display convenience, not an allowlist: a host naming a tool nobody listed is

@@ -1,4 +1,4 @@
-import type { LogWindow } from '@besober/schema'
+import { type LogLineInput, LogWindow } from '@besober/schema'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Wire } from '../wire.js'
@@ -25,12 +25,10 @@ const surfaceOf = (
 	}) as Wire['watch'],
 })
 
-const window = (over: Partial<LogWindow> = {}): LogWindow => ({
-	lines: [],
-	offset: 0,
-	live: false,
-	...over,
-})
+// Lines are written as a host writes them; the parse fills the fields they leave out.
+const window = (
+	over: Partial<Omit<LogWindow, 'lines'>> & { lines?: readonly LogLineInput[] } = {},
+): LogWindow => LogWindow.parse({ lines: [], offset: 0, live: false, ...over })
 
 test('a person reads what the agent said, without opening a terminal', async () => {
 	render(

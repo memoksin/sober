@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { NO_HUMAN } from './host.js'
-import { adapterFor, renderLine, UnknownHostError } from './hosts.js'
+import { adapterFor, capBody, renderLine, summarize, UnknownHostError } from './hosts.js'
 
 test('the adapter is chosen from the host command, whatever else is on the line', () => {
 	// `dispatch.host` is a command line, not a program name (host.ts), so the
@@ -193,7 +193,7 @@ test('one Claude assistant event is a line per part, each tool named, thinking k
 				],
 			},
 		}),
-	).toEqual([
+	).toMatchObject([
 		{ kind: 'thinking', text: 'weighing it', tool: null },
 		{ kind: 'text', text: 'Reading the brief.', tool: null },
 		{ kind: 'tool', text: 'Read', tool: 'Read' },
@@ -202,10 +202,10 @@ test('one Claude assistant event is a line per part, each tool named, thinking k
 })
 
 test('a Claude init event names the resolved model, so an alias run still says what ran', () => {
-	expect(renderLine({ type: 'system', subtype: 'init' })).toEqual([
+	expect(renderLine({ type: 'system', subtype: 'init' })).toMatchObject([
 		{ kind: 'started', text: 'session started', tool: null },
 	])
-	expect(renderLine({ type: 'system', subtype: 'init', model: 'claude-opus-4-6' })).toEqual([
+	expect(renderLine({ type: 'system', subtype: 'init', model: 'claude-opus-4-6' })).toMatchObject([
 		{ kind: 'started', text: 'session started (claude-opus-4-6)', tool: null },
 	])
 })
@@ -213,8 +213,8 @@ test('a Claude init event names the resolved model, so an alias run still says w
 test('every host carries the tool name on the line', () => {
 	expect(
 		renderLine({ type: 'item.completed', item: { type: 'command_execution', command: 'ls -la' } }),
-	).toEqual([{ kind: 'tool', text: 'ls -la', tool: 'command' }])
-	expect(renderLine({ type: 'tool_use', part: { tool: 'edit' } })).toEqual([
+	).toMatchObject([{ kind: 'tool', text: 'ls -la', tool: 'command' }])
+	expect(renderLine({ type: 'tool_use', part: { tool: 'edit' } })).toMatchObject([
 		{ kind: 'tool', text: 'edit', tool: 'edit' },
 	])
 	expect(
@@ -223,7 +223,7 @@ test('every host carries the tool name on the line', () => {
 			subtype: 'started',
 			tool_call: { readToolCall: { args: { path: 'README.md' } } },
 		}),
-	).toEqual([{ kind: 'tool', text: 'read README.md', tool: 'read' }])
+	).toMatchObject([{ kind: 'tool', text: 'read README.md', tool: 'read' }])
 })
 
 test('openrouter is found from its run line and spawns `sober`, not a CLI called openrouter', () => {
@@ -244,10 +244,123 @@ test('openrouter is found from its run line and spawns `sober`, not a CLI called
 })
 
 test('the loop’s own JSON events render, and a kind it does not know is dropped', () => {
-	expect(renderLine({ type: 'sober', kind: 'tool', text: 'bash ls', tool: 'bash' })).toEqual([
+	expect(renderLine({ type: 'sober', kind: 'tool', text: 'bash ls', tool: 'bash' })).toMatchObject([
 		{ kind: 'tool', text: 'bash ls', tool: 'bash' },
 	])
 	expect(renderLine({ type: 'sober', kind: 'nope' })).toEqual([])
 	// Not the loop's shape: the other adapters still own theirs.
 	expect(renderLine({ type: 'system', subtype: 'init' })).toMatchObject([{ kind: 'started' }])
+})
+
+test('a Claude tool call carries its call id and the argument a person reads', () => {
+	const tool = (name: string, input: Record<string, unknown>) =>
+		renderLine({
+			type: 'assistant',
+			message: { content: [{ type: 'tool_use', id: 'toolu_1', name, input }] },
+		})
+	expect(tool('Read', { file_path: 'src/a.ts' })).toMatchObject([
+		{ kind: 'tool', tool: 'Read', call: 'toolu_1', detail: 'src/a.ts' },
+	])
+	expect(tool('Bash', { command: 'pnpm test\n--run' })).toMatchObject([{ detail: 'pnpm test' }])
+	expect(tool('Grep', { pattern: 'TODO' })).toMatchObject([{ detail: 'TODO' }])
+	expect(tool('WebFetch', { url: 'https://x.dev' })).toMatchObject([{ detail: 'https://x.dev' }])
+	expect(tool('Task', { description: 'find it' })).toMatchObject([{ detail: 'find it' }])
+	// A tool whose argument SOBER does not know is named, never guessed at.
+	expect(tool('TodoWrite', { todos: [] })).toMatchObject([{ detail: null }])
+})
+
+test('a Claude tool result is an output line paired by tool_use_id, with a summary', () => {
+	const result = (content: unknown, is_error?: boolean) =>
+		renderLine({
+			type: 'user',
+			session_id: 's',
+			message: {
+				content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content, is_error } as never],
+			},
+		})
+	const file = Array.from({ length: 92 }, (_, i) => `line ${i}`).join('\n')
+	expect(result(file)).toMatchObject([
+		{ kind: 'output', text: '92 lines', call: 'toolu_1', tool: null, at: null },
+	])
+	expect(result([{ type: 'text', text: 'done' }])).toMatchObject([{ text: 'done', body: 'done' }])
+	expect(result('Exit code 2\nboom', true)).toMatchObject([{ text: 'error: Exit code 2' }])
+	expect(result('Exit code 2\nboom')).toMatchObject([{ text: 'exit 2' }])
+})
+
+test('a Codex command carries its item id, and its exit code and output become an output line', () => {
+	expect(
+		renderLine({
+			type: 'item.completed',
+			item: {
+				id: 'item_3',
+				type: 'command_execution',
+				command: 'ls',
+				aggregated_output: 'a\nb\n',
+				exit_code: 1,
+			},
+		}),
+	).toMatchObject([
+		{ kind: 'tool', text: 'ls', call: 'item_3', detail: 'ls' },
+		{ kind: 'output', text: 'exit 1', call: 'item_3', body: 'a\nb\n' },
+	])
+})
+
+test('an OpenCode tool carries its callID, its command, and its completed output', () => {
+	expect(
+		renderLine({
+			type: 'tool_use',
+			part: {
+				type: 'tool',
+				tool: 'bash',
+				callID: 'c1',
+				state: { status: 'completed', input: { command: 'ls' }, output: 'a\nb' },
+			},
+		}),
+	).toMatchObject([
+		{ kind: 'tool', tool: 'bash', call: 'c1', detail: 'ls' },
+		{ kind: 'output', text: '2 lines', tool: 'bash', call: 'c1', body: 'a\nb' },
+	])
+})
+
+test('a host whose stream carries no correlator leaves call, detail and at null', () => {
+	// Cursor's documented tool_call has no id pairing `started` to `completed`.
+	expect(
+		renderLine({
+			type: 'tool_call',
+			subtype: 'started',
+			tool_call: { readToolCall: { args: { path: 'README.md' } } },
+		}),
+	).toEqual([
+		{
+			kind: 'tool',
+			text: 'read README.md',
+			tool: 'read',
+			at: null,
+			call: null,
+			detail: null,
+			body: null,
+		},
+	])
+})
+
+test('the loop’s output line survives the round trip through its own JSON', () => {
+	expect(
+		renderLine({
+			type: 'sober',
+			kind: 'output',
+			text: 'exit 0',
+			tool: 'bash',
+			call: 'c',
+			body: 'hi',
+		}),
+	).toMatchObject([{ kind: 'output', text: 'exit 0', call: 'c', body: 'hi' }])
+})
+
+test('a body is capped at 40 lines or 4 KB, and says so', () => {
+	expect(capBody('short')).toBe('short')
+	const long = Array.from({ length: 50 }, (_, i) => `${i}`).join('\n')
+	expect(capBody(long).split('\n')).toHaveLength(41)
+	expect(capBody(long)).toMatch(/\n… \(truncated\)$/)
+	expect(capBody('x'.repeat(5000))).toHaveLength(4096 + '\n… (truncated)'.length)
+	expect(summarize('hi\nerr\n\nexit code: 0')).toBe('exit 0')
 })
