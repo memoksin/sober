@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { STATUSES } from '@besober/schema'
 import { expect, test } from 'vitest'
@@ -51,6 +52,57 @@ test('both themes carry the surfaces a screen needs', () => {
 		expect(theme, `${token} (dark)`).toContain(`${token}:`)
 		expect(lightBlock, `${token} (light)`).toContain(`${token}:`)
 	}
+})
+
+const TX_TOKENS = [
+	'--tx-tool',
+	'--tx-result',
+	'--tx-error',
+	'--tx-think',
+	'--tx-human',
+	'--tx-pass',
+]
+const PROVIDER_TOKENS = [
+	'--provider-anthropic',
+	'--provider-openai',
+	'--provider-google',
+	'--provider-mistral',
+	'--provider-other',
+]
+
+test('ADR 0064: the transcript and provider tokens exist in the dark root and the light theme', () => {
+	for (const token of [...TX_TOKENS, ...PROVIDER_TOKENS]) {
+		expect(theme, `${token} (dark)`).toContain(`${token}:`)
+		expect(lightBlock, `${token} (light)`).toContain(`${token}:`)
+	}
+})
+
+test('ADR 0064: no Google Fonts URL anywhere in the dashboard', () => {
+	const srcDir = fileURLToPath(new URL('../../apps/dashboard/src', import.meta.url))
+	const indexHtml = fileURLToPath(new URL('../../apps/dashboard/index.html', import.meta.url))
+	const offenders: string[] = []
+
+	const check = (path: string): void => {
+		const contents = readFileSync(path, 'utf8')
+		if (/@import|url\(|href=/.test(contents) && contents.includes('fonts.googleapis.com')) {
+			offenders.push(path)
+		}
+	}
+
+	const walk = (dir: string): void => {
+		for (const entry of readdirSync(dir)) {
+			const path = join(dir, entry)
+			if (statSync(path).isDirectory()) {
+				walk(path)
+				continue
+			}
+			check(path)
+		}
+	}
+	walk(srcDir)
+	check(indexHtml)
+
+	expect(offenders).toEqual([])
 })
 
 test('the glow reach is a fraction of a radius, not a pixel count', () => {

@@ -2,6 +2,18 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App.js'
 import './theme.css'
+// ADR 0064: the run screen's transcript typeface, bundled so the dashboard
+// keeps working with no network reachable (ADR 0008). Only the latin and
+// latin-ext subsets ship — latin-ext covers Turkish — instead of every
+// subset (cyrillic, greek, vietnamese...) the default imports would pull.
+import '@fontsource/jetbrains-mono/latin-400.css'
+import '@fontsource/jetbrains-mono/latin-ext-400.css'
+import '@fontsource/ibm-plex-sans/latin-400.css'
+import '@fontsource/ibm-plex-sans/latin-ext-400.css'
+import '@fontsource/ibm-plex-sans/latin-500.css'
+import '@fontsource/ibm-plex-sans/latin-ext-500.css'
+import '@fontsource/ibm-plex-sans/latin-600.css'
+import '@fontsource/ibm-plex-sans/latin-ext-600.css'
 import { claimToken } from './wire.js'
 
 const mount = document.getElementById('root')

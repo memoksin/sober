@@ -18,6 +18,11 @@
 	--font-ui: ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
+	/* ADR 0064: the run screen's transcript reads in bundled fonts, never
+	   fetched — the system stacks above stay the fallback. */
+	--font-transcript-mono: "JetBrains Mono", var(--font-mono);
+	--font-transcript-sans: "IBM Plex Sans", var(--font-ui);
+
 	/* A tool, not a document. The scale stops at 24 because nothing here is
 	   marketing (ADR 0039 §3). */
 	--text-xs: 11px;
@@ -76,6 +81,30 @@
 	   ground's opposite. An edge, not a new colour. */
 	--rim-mix: 30%;
 	--rim-to: white;
+
+	/* ADR 0064: the run screen's transcript, an exception to §2 — never the
+	   canvas, never the rest of the chrome. Tool and human are periwinkle
+	   (275), clear of running (235) and blocked (300). Error is rose (350),
+	   think is magenta (325), both clear of danger (25). Result stays
+	   neutral. */
+	--tx-tool: oklch(0.78 0.11 275);
+	--tx-result: oklch(0.68 0.008 260);
+	--tx-error: oklch(0.78 0.12 350);
+	--tx-think: oklch(0.74 0.08 325);
+	--tx-human: oklch(0.88 0.055 275);
+	/* The checklist ✓ gets its own token instead of borrowing --status-ready:
+	   that colour means "ready", which a passed check does not. Desaturated
+	   teal-green at 168, clear of ready (150) in both hue and, at L 0.62, in
+	   greyscale from ready's 0.74. */
+	--tx-pass: oklch(0.62 0.07 168);
+
+	/* ADR 0064: provider brand colours, shown only in the run screen's model
+	   badge, next to that provider's mark — never a status signal. */
+	--provider-anthropic: oklch(0.68 0.115 42);
+	--provider-openai: oklch(0.62 0.11 170);
+	--provider-google: oklch(0.63 0.19 260);
+	--provider-mistral: oklch(0.72 0.17 55);
+	--provider-other: var(--ink-dim);
 }
 
 @media (prefers-color-scheme: light) {
@@ -108,6 +137,20 @@
 		--glow-power: 0.65;
 		--rim-mix: 22%;
 		--rim-to: black;
+
+		/* ADR 0064 */
+		--tx-tool: oklch(0.46 0.14 275);
+		--tx-result: oklch(0.5 0.008 260);
+		--tx-error: oklch(0.43 0.14 350);
+		--tx-think: oklch(0.43 0.1 325);
+		--tx-human: oklch(0.34 0.075 275);
+		--tx-pass: oklch(0.46 0.07 168);
+
+		--provider-anthropic: oklch(0.52 0.115 42);
+		--provider-openai: oklch(0.48 0.11 170);
+		--provider-google: oklch(0.5 0.19 260);
+		--provider-mistral: oklch(0.55 0.17 55);
+		--provider-other: var(--ink-dim);
 	}
 }
 
@@ -138,6 +181,20 @@
 	--glow-power: 0.65;
 	--rim-mix: 22%;
 	--rim-to: black;
+
+	/* ADR 0064 */
+	--tx-tool: oklch(0.46 0.14 275);
+	--tx-result: oklch(0.5 0.008 260);
+	--tx-error: oklch(0.43 0.14 350);
+	--tx-think: oklch(0.43 0.1 325);
+	--tx-human: oklch(0.34 0.075 275);
+	--tx-pass: oklch(0.46 0.07 168);
+
+	--provider-anthropic: oklch(0.52 0.115 42);
+	--provider-openai: oklch(0.48 0.11 170);
+	--provider-google: oklch(0.5 0.19 260);
+	--provider-mistral: oklch(0.55 0.17 55);
+	--provider-other: var(--ink-dim);
 }
 
 html,
