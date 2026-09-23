@@ -1,0 +1,21 @@
+{
+	"title": "Windows audit entegrasyon testlerindeki CI hatasını gider",
+	"name": "windows-audit-suite",
+	"description": "Windows matrix integration işinde test/integration/audit.test.ts hatasını yeniden üret veya CI çıktısıyla kesinleştir. Platforma bağlı yol, shell, git ve zamanlama varsayımlarını incele; audit davranışını ve testi birlikte düzelt. Ubuntu/macOS davranışını koruyarak Windows geçişini kanıtla. Audit CI işinin ayrı, ubuntu-latest üzerinde çalışan pnpm audit adımı olduğunu dikkate al.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"test/integration/audit.test.ts",
+		"packages/core/src/audit.ts",
+		"packages/core/src/git.ts",
+		".github/workflows/ci.yml"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-23T22:43:21.893Z"
+}
