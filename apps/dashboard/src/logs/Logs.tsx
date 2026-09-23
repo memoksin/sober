@@ -170,9 +170,9 @@ export const LogScreen = ({
 										: MARK[line.kind]}
 							</span>
 							{line.kind === 'text' || line.kind === 'answer' ? (
-								<div className="max-w-[68ch] whitespace-pre-wrap break-words rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 font-sans text-[var(--ink)] text-sm">
+								<span className="max-w-[68ch] whitespace-pre-wrap break-words font-sans text-[var(--ink)]">
 									{line.text}
-								</div>
+								</span>
 							) : (
 								<span className="whitespace-pre-wrap break-words text-[var(--ink-dim)]">
 									{line.text}
