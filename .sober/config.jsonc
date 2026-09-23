@@ -45,8 +45,8 @@
 		"queueByDefault": false,
 
 		// Three tiers by complexity, each a few command lines like "host".
-		// High is Opus and GPT-5.6 Sol, mid is Sonnet and GPT-5.6 Terra, low is
-		// the strongest of OpenRouter's free models. "about" is what Jev reads
+		// High is Opus, mid is Sonnet, GPT-6 Astra covers both; low is the
+		// strongest of OpenRouter's free models. "about" is what Jev reads
 		// when it chooses within a tier (ADR 0061). `openrouter --model <id>`
 		// runs SOBER's own loop and needs OPENROUTER_API_KEY in .sober/.env
 		// (ADR 0062).
@@ -58,22 +58,16 @@
 				"about": "Claude Opus 5. Deep reasoning. Design choices, schema and migration work, anything subtle."
 			},
 			{
-				"name": "sol",
-				"run": "codex --model gpt-5.6-sol",
-				"complexity": [8, 10],
-				"about": "GPT-5.6 Sol. OpenAI's reliable agentic workhorse. Strong on plumbing across many files."
+				"name": "astra",
+				"run": "codex --model gpt-6-astra",
+				"complexity": [4, 10],
+				"about": "GPT-6 Astra. Frontier intelligence for the most demanding work."
 			},
 			{
 				"name": "sonnet",
 				"run": "claude --model claude-sonnet-5",
 				"complexity": [4, 7],
 				"about": "Claude Sonnet 5. Balanced. Most feature work across a few files."
-			},
-			{
-				"name": "terra",
-				"run": "codex --model gpt-5.6-terra",
-				"complexity": [4, 7],
-				"about": "GPT-5.6 Terra. Balanced agentic coding for everyday work."
 			},
 			{
 				"name": "nemotron-ultra",
