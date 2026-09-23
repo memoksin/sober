@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { LogLine } from '@besober/schema'
+import type { LogLineInput as LogLine } from '@besober/schema'
 import { afterEach, expect, test } from 'vitest'
 import { runAgent } from './agent.js'
 
@@ -64,7 +64,7 @@ test('edits a file through a tool call, carries CLAUDE.md and NO_HUMAN, and fini
 
 	expect(exit).toEqual({ kind: 'finished' })
 	expect(readFileSync(join(cwd, 'target.txt'), 'utf8')).toBe('hello there')
-	expect(lines.map((l) => l.kind)).toEqual(['tool', 'text', 'result'])
+	expect(lines.map((l) => l.kind)).toEqual(['tool', 'output', 'text', 'result'])
 
 	const firstBody = JSON.parse(calls[0]?.body ?? '{}') as {
 		messages: { role: string; content: string }[]
@@ -298,7 +298,7 @@ test('every tool answers, and a bad call is a tool result rather than a crash', 
 	expect(toolResults[6]).toBe('unknown tool: nope')
 	expect(toolResults[7]).toContain('invalid arguments')
 	expect(calls[0]).toBe('tool bash echo hi; echo err >&2')
-	expect(calls.at(-3)).toBe('tool bash {not json')
+	expect(calls.filter((c) => c.startsWith('tool ')).at(-1)).toBe('tool bash {not json')
 })
 
 test('a network error is retried like a 5xx, and a malformed body fails', async () => {
@@ -452,4 +452,26 @@ test('a stop that lands between two tool calls is honoured before the second one
 	})
 	expect(exit).toEqual({ kind: 'stopped' })
 	expect(seen).toBe(1)
+})
+
+test('a tool line carries its call and argument, and its result follows as an output line', async () => {
+	const cwd = setup()
+	let turn = 0
+	const fetchFn = (async () =>
+		++turn === 1
+			? toolCallResponse('bash', { command: 'echo hi' })
+			: textResponse('done')) as typeof fetch
+	const lines: LogLine[] = []
+	await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: (line) => lines.push(line),
+		fetch: fetchFn,
+	})
+
+	expect(lines[0]).toMatchObject({ kind: 'tool', tool: 'bash', call: 'call_1', detail: 'echo hi' })
+	expect(lines[1]).toMatchObject({ kind: 'output', text: 'exit 0', tool: 'bash', call: 'call_1' })
+	expect(lines[1]?.body).toContain('hi')
 })

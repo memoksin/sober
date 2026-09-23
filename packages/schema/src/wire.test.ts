@@ -90,7 +90,24 @@ test('a log line written before lines named their tool still parses', () => {
 		kind: 'tool',
 		text: 'Read',
 		tool: null,
+		at: null,
+		call: null,
+		detail: null,
+		body: null,
 	})
+})
+
+test('an output line parses, paired to its tool line by call', () => {
+	const line = {
+		kind: 'output',
+		text: '92 lines',
+		tool: 'Read',
+		at: '2026-09-24T10:00:00.000Z',
+		call: 'toolu_01',
+		detail: null,
+		body: 'one\ntwo',
+	}
+	expect(LogLine.parse(line)).toEqual(line)
 })
 
 test('a check line and a checked line both parse off the wire', () => {
