@@ -158,7 +158,8 @@ h1 span { color: var(--ink-dim); }
 .entry.result { color: var(--tx-result); margin-top: -10px; padding-left: 26px; }
 .entry.raw { color: var(--tx-error); }
 .entry.answer { color: var(--tx-human); }
-.entry.thinking { color: var(--tx-think); font-size: var(--text-sm); }
+.working-indicator { flex-shrink: 0; display: flex; gap: 8px; padding: 8px 24px; color: var(--tx-think); font: var(--text-sm)/1.65 var(--font-mono); }
+.working-indicator .mark { width: 18px; text-align: center; }
 .entry.started { color: var(--ink-dim); font-size: var(--text-xs); }
 .entry.check, .entry.checked { color: var(--ink-dim); font-size: var(--text-sm); }
 .result-summary { color: var(--ink-dim); }
@@ -200,6 +201,7 @@ textarea::placeholder { color: var(--ink-dim); }
   .entry time { display: none; }
   .run-heading time { display: none; }
   .answer-area { padding: 12px; }
+  .working-indicator { padding: 8px 12px; }
   .statusbar { padding: 10px 12px; gap: 12px; }
   .design-note { left: 12px; bottom: 8px; }
 }
@@ -236,13 +238,13 @@ textarea::placeholder { color: var(--ink-dim); }
       <div class="transcript-inner">
         <div class="run-heading"><div><h2>Watch the run</h2><p>A live HTML mockup of the session · design only</p></div><time>Replay / 00:40</time></div>
         <ol class="lines" id="lines"></ol>
-        <div class="entry thinking" id="thinking"><span class="mark" aria-hidden="true">✻</span><span class="body">Thinking… (0s)</span></div>
         <section class="checklist" id="checklist" aria-label="Acceptance checklist" hidden></section>
         <p id="empty" hidden>No matching lines.</p>
       </div>
     </section>
     <button class="jump" id="jump" hidden>0 new lines ↓</button>
   </div>
+  <div class="working-indicator" id="working-indicator"><span class="mark" aria-hidden="true">✻</span><span class="body">Thinking… (0s)</span></div>
   <form class="answer-area" id="answer-form">
     <div class="answer-line"><label for="answer" aria-label="Answer the agent">&gt;</label><textarea id="answer" rows="1" aria-describedby="answer-hint" placeholder="Answer the agent…"></textarea><button id="send" type="submit">Send ↵</button></div>
     <p class="answer-hint" id="answer-hint">Enter to send · Shift+Enter for a new line · local demo only</p>
@@ -296,7 +298,7 @@ $('jump').onclick = () => { jumpToBottom(); scroller.focus({ preventScroll: true
 function makeEntry(line) {
   const li = document.createElement('li'); li.className = `entry ${line.kind}`;
   const mark = document.createElement('span'); mark.className = 'mark'; mark.setAttribute('aria-hidden', 'true');
-  mark.textContent = ({ result: '⎿', answer: '›', raw: '!', check: '◌', checked: line.passed ? '✓' : '✗', started: '▸', thinking: '✻' })[line.kind] || '⏺';
+  mark.textContent = ({ result: '⎿', answer: '›', raw: '!', check: '◌', checked: line.passed ? '✓' : '✗', started: '▸' })[line.kind] || '⏺';
   const body = document.createElement('div'); body.className = 'body';
   body.textContent = line.argumentSummary || line.resultSummary || line.text;
   if (line.kind === 'result' && line.text) {
@@ -322,16 +324,7 @@ function makeEntry(line) {
   li.dataset.search = [line.text, line.argumentSummary, line.resultSummary, line.tool].filter(Boolean).join(' ').toLowerCase();
   return li;
 }
-function freezeThinking(now, incoming) {
-  if (now - thinkingSince < 1000) return;
-  const previous = rendered.at(-1)?.line;
-  const line = fixture(now, 'thinking', `Thinking… (${Math.floor((now - thinkingSince) / 1000)}s)`);
-  line.checkGroup = ['check', 'checked'].includes(incoming.kind) || ['check', 'checked'].includes(previous?.kind);
-  const row = makeEntry(line);
-  $('lines').append(row); rendered.push({ line, row });
-}
 function append(line, now) {
-  freezeThinking(now, line);
   const row = makeEntry(line); $('lines').append(row); rendered.push({ line, row }); thinkingSince = now;
   if (!following) unseen++;
   applyFilter(); if (following) jumpToBottom(); else updateJump();
@@ -341,17 +334,17 @@ function applyFilter() {
   const matchingCalls = new Set(rendered.filter(({ line, row }) => line.callId && row.dataset.search.includes(query)).map(({ line }) => line.callId));
   let count = 0;
   rendered.forEach(({ line, row }) => {
-    const collapsed = ended && (['check', 'checked'].includes(line.kind) || line.checkGroup);
+    const collapsed = ended && ['check', 'checked'].includes(line.kind);
     row.hidden = collapsed || !(row.dataset.search.includes(query) || matchingCalls.has(line.callId));
     if (!row.hidden) count++;
   });
   $('checklist').hidden = !ended || (query !== '' && !$('checklist').textContent.toLowerCase().includes(query));
-  $('thinking').hidden = ended || query !== '';
   $('empty').hidden = !query || count > 0 || !$('checklist').hidden;
   $('matches').textContent = query ? `${count} lines` : 'All lines';
 }
 function finish() {
   ended = true; clearInterval(timer); $('session').classList.add('ended'); $('state').textContent = 'ended';
+  $('working-indicator').hidden = true;
   $('answer').disabled = true; $('send').disabled = true; $('answer').placeholder = 'Run ended. Replay to answer again.';
   $('answer-hint').textContent = 'Session ended · this transcript stays available to read and search';
   const heading = document.createElement('h3'); heading.textContent = 'Acceptance checks';
@@ -372,12 +365,13 @@ function tick() {
   const status = { elapsed: elapsed(now), tools: `⚒ ${rendered.filter(({ line }) => line.kind === 'tool').length} tools`, checks: `◌ ${rendered.filter(({ line }) => line.kind === 'checked').length}/4 checks` };
   for (const [id, value] of Object.entries(status)) if ($(id).textContent !== value) $(id).textContent = value;
   const seconds = Math.floor((now - thinkingSince) / 1000);
-  $('thinking').querySelector('.mark').textContent = reducedMotion.matches ? '✻' : ['✻', '✳', '✢', '·'][Math.floor(now / 350) % 4];
-  $('thinking').querySelector('.body').textContent = `${['Thinking', 'Considering', 'Working', 'Connecting the pieces'][Math.floor(seconds / 4) % 4]}… (${seconds}s)`;
+  $('working-indicator').querySelector('.mark').textContent = reducedMotion.matches ? '✻' : ['✻', '✳', '✢', '·'][Math.floor(now / 350) % 4];
+  $('working-indicator').querySelector('.body').textContent = `${['Thinking', 'Considering', 'Working', 'Connecting the pieces'][Math.floor(seconds / 4) % 4]}… (${seconds}s)`;
   if (next === logLines.length) finish();
 }
 function replay() {
   clearInterval(timer); start = performance.now(); next = 0; ended = false; rendered = []; thinkingSince = 0;
+  $('working-indicator').hidden = false;
   following = true; unseen = 0; $('lines').replaceChildren(); $('checklist').replaceChildren(); $('query').value = '';
   $('session').classList.remove('ended'); $('state').textContent = 'running'; $('answer').disabled = false; $('send').disabled = false;
   $('answer').value = ''; $('answer').placeholder = 'Answer the agent…';
