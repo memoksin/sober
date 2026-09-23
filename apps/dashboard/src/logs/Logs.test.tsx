@@ -232,7 +232,7 @@ test('an empty answer is not sent', async () => {
 	expect(op).not.toHaveBeenCalled()
 })
 
-test('prose renders in a box and a tool call does not', async () => {
+test('prose is a line like any other', async () => {
 	render(
 		<LogScreen
 			node="n-k7f2"
@@ -240,6 +240,7 @@ test('prose renders in a box and a tool call does not', async () => {
 				window({
 					lines: [
 						{ kind: 'text', text: 'a paragraph', tool: null },
+						{ kind: 'answer', text: 'the answer', tool: null },
 						{ kind: 'tool', text: 'Read', tool: null },
 					],
 				}),
@@ -248,8 +249,15 @@ test('prose renders in a box and a tool call does not', async () => {
 		/>,
 	)
 
-	expect((await screen.findByText('a paragraph')).className).toContain('border')
-	expect(screen.getByText('Read').className).not.toContain('border')
+	const prose = await screen.findByText('a paragraph')
+	expect(prose.className).not.toContain('border')
+	expect(prose.className).not.toContain('bg-[var(--surface)]')
+	for (const text of ['a paragraph', 'Read']) {
+		const row = screen.getByText(text).parentElement
+		expect(row?.tagName).toBe('LI')
+		expect(row?.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
+	}
+	expect(screen.getByText('the answer').closest('li')?.firstElementChild?.textContent).toBe('›')
 })
 
 const markOf = (text: string): string | undefined =>
