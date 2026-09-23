@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { basename } from 'node:path'
 import { promisify } from 'node:util'
 import { SoberError } from './errors.js'
 import { adapterFor, hostCommand } from './hosts.js'
@@ -12,6 +13,18 @@ export {
 } from './hosts.js'
 
 const run = promisify(execFile)
+
+/**
+ * On Windows the `sober` on the PATH is npm's `sober.cmd` shim, which a spawn
+ * without a shell cannot start (ENOENT). When this process is sober itself, it
+ * runs its own entry under its own node instead — the same version, anywhere.
+ */
+const program = (command: string): readonly [string, string[]] => {
+	const self = process.argv[1]
+	return command === 'sober' && self !== undefined && /^sober(\.js)?$/.test(basename(self))
+		? [process.execPath, [self]]
+		: [command, []]
+}
 
 /**
  * Launching an adapter (DESIGN §5.1): SOBER shells out to the host CLI the user
@@ -51,17 +64,14 @@ const withoutModel = (args: readonly string[]): string[] =>
 export const checkHost = async (host: string): Promise<HostReady> => {
 	const adapter = adapterFor(host)
 	const [command, args] = hostCommand(host)
+	const [file, lead] = program(adapter.command ?? command)
 	let stdout: string
 	try {
 		// The model flag is the run's, not the probe's: `opencode providers list`
 		// rejects `--model` and prints its help, which read as "not logged in".
-		;({ stdout } = await run(
-			adapter.command ?? command,
-			[...withoutModel(args), ...adapter.probe],
-			{
-				encoding: 'utf8',
-			},
-		))
+		;({ stdout } = await run(file, [...lead, ...withoutModel(args), ...adapter.probe], {
+			encoding: 'utf8',
+		}))
 	} catch (error) {
 		const code = (error as { code?: string }).code
 		if (code === 'ENOENT')
@@ -124,21 +134,18 @@ export const startAgent = (options: AgentOptions): Promise<AgentExit> =>
 		const [command, args] = hostCommand(options.host)
 		const adapter = adapterFor(options.host)
 		const attended = options.attended === true && adapter.attendable
-		const child = spawn(
-			adapter.command ?? command,
-			[...args, ...adapter.argv(options.prompt, attended)],
-			{
-				cwd: options.cwd,
-				// Never a shell: a brief carrying a backtick is text, not a second command.
-				shell: false,
-				// stdin is closed for a headless run, and the reason is measurable: a
-				// `claude -p` with an open stdin waits three seconds for input that
-				// never comes, and `codex exec` says so out loud — "Reading additional
-				// input from stdin...". An attended run is the case where something
-				// does come.
-				stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-			},
-		)
+		const [file, lead] = program(adapter.command ?? command)
+		const child = spawn(file, [...lead, ...args, ...adapter.argv(options.prompt, attended)], {
+			cwd: options.cwd,
+			// Never a shell: a brief carrying a backtick is text, not a second command.
+			shell: false,
+			// stdin is closed for a headless run, and the reason is measurable: a
+			// `claude -p` with an open stdin waits three seconds for input that
+			// never comes, and `codex exec` says so out loud — "Reading additional
+			// input from stdin...". An attended run is the case where something
+			// does come.
+			stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+		})
 
 		if (child.pid !== undefined) options.onStart?.(child.pid)
 

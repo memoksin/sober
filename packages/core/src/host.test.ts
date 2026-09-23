@@ -58,22 +58,46 @@ test('the probe never carries the model flag the run line names', async () => {
 	expect(await checkHost(`${host} -m some/model`)).toEqual({ ok: true, reason: null })
 })
 
-test('the openrouter probe spawns `sober`, never a program called openrouter', async () => {
-	// ADR 0062: the run line names the host, the adapter names the binary. A
-	// `sober` on the PATH here is this fake, and it sees the probe with the
-	// model flag stripped, like every other host.
-	const dir = join(scripts, 'openrouter-path')
+test.skipIf(process.platform === 'win32')(
+	'the openrouter probe spawns `sober`, never a program called openrouter',
+	async () => {
+		// ADR 0062: the run line names the host, the adapter names the binary. A
+		// `sober` on the PATH here is this fake, and it sees the probe with the
+		// model flag stripped, like every other host.
+		const dir = join(scripts, 'openrouter-path')
+		mkdirSync(dir)
+		writeFileSync(
+			join(dir, 'sober'),
+			`#!/bin/sh\ncase "$*" in *--model*) exit 1;; "agent --check") echo ok;; *) echo "no key";; esac\n`,
+			{ mode: 0o755 },
+		)
+		const path = process.env.PATH
+		process.env.PATH = `${dir}:${path ?? ''}`
+		try {
+			expect(await checkHost('openrouter --model some/model')).toEqual({ ok: true, reason: null })
+		} finally {
+			process.env.PATH = path
+		}
+	},
+)
+
+test('a sober process runs its own entry for openrouter, never the PATH shim', async () => {
+	// On Windows the PATH `sober` is a `.cmd` shim a shell-less spawn cannot
+	// start. Nothing called sober is on this PATH, so only the self path passes.
+	const dir = join(scripts, 'openrouter-self')
 	mkdirSync(dir)
+	const self = join(dir, 'sober.js')
 	writeFileSync(
-		join(dir, 'sober'),
-		`#!/bin/sh\ncase "$*" in *--model*) exit 1;; "agent --check") echo ok;; *) echo "no key";; esac\n`,
-		{ mode: 0o755 },
+		self,
+		`const a = process.argv.slice(2).join(' '); console.log(a === 'agent --check' ? 'ok' : 'no key')\n`,
 	)
-	const path = process.env.PATH
-	process.env.PATH = `${dir}:${path ?? ''}`
+	const [argv1, path] = [process.argv[1], process.env.PATH]
+	process.argv[1] = self
+	process.env.PATH = dir
 	try {
 		expect(await checkHost('openrouter --model some/model')).toEqual({ ok: true, reason: null })
 	} finally {
+		process.argv[1] = argv1 as string
 		process.env.PATH = path
 	}
 })
