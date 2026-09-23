@@ -92,13 +92,14 @@
 }
 
 /* proposed for ADR 0064 — transcript only. ADR 0039 still governs all chrome.
-   Cyan 195, rose 350, and magenta 325 avoid the status and danger hues.
+   Periwinkle 275 separates tool/human from running 235 and blocked 300.
+   Rose 350 and magenta 325 separate errors and thinking from danger.
    Results stay neutral; glyphs and labels carry meaning without colour. */
-:root { --tx-tool: oklch(0.8 0.085 195); --tx-result: oklch(0.68 0.008 260); --tx-error: oklch(0.78 0.12 350); --tx-think: oklch(0.74 0.08 325); --tx-human: oklch(0.86 0.07 195); }
+:root { --tx-tool: oklch(0.78 0.11 275); --tx-result: oklch(0.68 0.008 260); --tx-error: oklch(0.78 0.12 350); --tx-think: oklch(0.74 0.08 325); --tx-human: oklch(0.88 0.055 275); }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) { --tx-tool: oklch(0.4 0.07 195); --tx-result: oklch(0.5 0.008 260); --tx-error: oklch(0.43 0.14 350); --tx-think: oklch(0.43 0.1 325); --tx-human: oklch(0.34 0.06 195); }
+  :root:not([data-theme="dark"]) { --tx-tool: oklch(0.46 0.14 275); --tx-result: oklch(0.5 0.008 260); --tx-error: oklch(0.43 0.14 350); --tx-think: oklch(0.43 0.1 325); --tx-human: oklch(0.34 0.075 275); }
 }
-[data-theme="light"] { --tx-tool: oklch(0.4 0.07 195); --tx-result: oklch(0.5 0.008 260); --tx-error: oklch(0.43 0.14 350); --tx-think: oklch(0.43 0.1 325); --tx-human: oklch(0.34 0.06 195); }
+[data-theme="light"] { --tx-tool: oklch(0.46 0.14 275); --tx-result: oklch(0.5 0.008 260); --tx-error: oklch(0.43 0.14 350); --tx-think: oklch(0.43 0.1 325); --tx-human: oklch(0.34 0.075 275); }
 * { box-sizing: border-box; }
 body { margin: 0; height: 100dvh; overflow: hidden; background: var(--bg); color: var(--ink); font: var(--text-base)/var(--leading-prose) var(--font-ui); }
 button, input, textarea { font: inherit; color: inherit; }
@@ -118,8 +119,12 @@ button:disabled { cursor: default; opacity: .5; }
 .graph .review { stroke: var(--status-in-review); }
 .graph text { fill: var(--ink-dim); font: 12px var(--font-mono); text-anchor: middle; }
 .shade { position: fixed; inset: 0; background: oklch(from var(--bg) l c h / .72); }
-.review-tools { position: fixed; z-index: 5; top: 12px; right: 16px; display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); }
-.review-tools > span { color: var(--ink-dim); }
+.review-tools { position: fixed; z-index: 5; bottom: 48px; right: 16px; font-size: var(--text-xs); }
+body:has(.session.full:not([hidden])) .review-tools { bottom: 174px; }
+.review-tools summary { cursor: pointer; width: max-content; margin-left: auto; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised); }
+.review-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: min(540px, calc(100vw - 32px)); margin-bottom: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 8px 32px oklch(0 0 0 / .2); }
+.review-panel > span { width: 100%; color: var(--ink-dim); }
+.review-tools[open] { display: flex; flex-direction: column-reverse; align-items: flex-end; }
 .font-options { display: flex; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
 .font-options button { border: 0; border-radius: 0; text-align: left; line-height: 1.35; padding: 6px 12px; }
 .font-options button + button { border-left: 1px solid var(--line); }
@@ -130,12 +135,16 @@ button:disabled { cursor: default; opacity: .5; }
 .session { position: fixed; z-index: 3; width: min(980px, calc(100% - 48px)); height: min(720px, calc(100dvh - 160px)); left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: 0 24px 80px oklch(0 0 0 / .3); display: flex; flex-direction: column; overflow: hidden; transform-origin: top left; }
 .session.full { width: 100%; height: 100dvh; left: 0; top: 0; transform: none; border-radius: 0; border: 0; }
 .titlebar { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 12px 20px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
-.full .titlebar { padding-top: 72px; }
 .dots { display: flex; gap: 6px; }
 .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); opacity: .5; }
 h1 { font: 500 var(--text-base) var(--font-mono); margin: 0; }
 h1 span { color: var(--ink-dim); }
-.host { margin-left: auto; font: var(--text-xs) var(--font-mono); color: var(--ink-dim); white-space: nowrap; }
+.model-badge { margin-left: auto; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised); min-width: 0; }
+.model-identity { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; line-height: 1.4; }
+.provider-logo { width: 20px; height: 20px; flex-shrink: 0; color: var(--provider-colour); }
+.provider-name { font-weight: 600; }
+.model-id { font: var(--text-xs) var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
+.host { display: block; margin: 2px 0 0 27px; font: var(--text-xs) var(--font-mono); color: var(--ink-dim); }
 .header-actions { display: flex; gap: 6px; }
 .header-actions button { background: none; }
 .find { display: flex; align-items: center; gap: 12px; padding: 8px 24px; border-bottom: 1px solid var(--line-soft); }
@@ -158,8 +167,15 @@ h1 span { color: var(--ink-dim); }
 .entry.result { color: var(--tx-result); margin-top: -10px; padding-left: 26px; }
 .entry.raw { color: var(--tx-error); }
 .entry.answer { color: var(--tx-human); }
-.working-indicator { flex-shrink: 0; display: flex; gap: 8px; padding: 8px 24px; color: var(--tx-think); font: var(--text-sm)/1.65 var(--font-mono); }
-.working-indicator .mark { width: 18px; text-align: center; }
+.working-indicator { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 8px 24px; color: var(--tx-think); font: var(--text-sm)/1.65 var(--font-mono); }
+.graph-pulse { width: 62px; height: 16px; flex-shrink: 0; overflow: visible; }
+.pulse-edge { stroke: var(--ink-faint); stroke-width: 1; }
+.edge-glow { stroke: var(--tx-think); stroke-width: 2; opacity: 0; animation: edge-travel 2.4s linear infinite; }
+.edge-glow.second { animation-delay: -1.2s; }
+.pulse-node { fill: var(--surface); stroke: var(--ink-faint); stroke-width: 1.5; animation: node-arrival 2.4s linear infinite; }
+.pulse-node.middle { animation-delay: -1.2s; }
+.pulse-node.last { animation-delay: -0.24s; }
+.signal { fill: var(--tx-think); animation: signal-travel 2.4s linear infinite; }
 .entry.started { color: var(--ink-dim); font-size: var(--text-xs); }
 .entry.check, .entry.checked { color: var(--ink-dim); font-size: var(--text-sm); }
 .result-summary { color: var(--ink-dim); }
@@ -187,14 +203,25 @@ textarea::placeholder { color: var(--ink-dim); }
 .design-note { position: fixed; bottom: 18px; left: 24px; right: 24px; color: var(--ink-dim); font-size: var(--text-xs); display: flex; justify-content: space-between; gap: 16px; }
 .reopen { position: fixed; z-index: 2; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 @keyframes pulse { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
+@keyframes signal-travel { 0%, 8% { transform: translateX(0); opacity: 0; } 12% { opacity: 1; } 50% { transform: translateX(25px); } 88% { opacity: 1; } 92%, 100% { transform: translateX(50px); opacity: 0; } }
+@keyframes node-arrival { 0%, 10% { fill: var(--tx-think); stroke: var(--tx-think); } 22%, 88% { fill: var(--surface); stroke: var(--ink-faint); } 100% { fill: var(--tx-think); stroke: var(--tx-think); } }
+@keyframes edge-travel { 0%, 8%, 55%, 100% { opacity: 0; } 25%, 42% { opacity: .45; } }
+@keyframes dot-wave { 0%, 40%, 100% { transform: translateY(0); } 20% { transform: translateY(-4px); } }
+.full:not(.ended) .dots i { animation: dot-wave 1.5s ease-in-out infinite; }
+.full:not(.ended) .dots i:nth-child(2) { animation-delay: .15s; }
+.full:not(.ended) .dots i:nth-child(3) { animation-delay: .3s; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
+  .pulse-node.middle { fill: var(--tx-think); stroke: var(--tx-think); }
+  .signal, .edge-glow { display: none; }
+}
 @media (max-width: 700px) {
-  .review-tools { left: 8px; right: 8px; justify-content: flex-end; gap: 5px; }
-  .review-tools > span, .font-options small, .dots, .shortcuts, .design-note span:last-child { display: none; }
+  .review-tools { right: 8px; }
+  .font-options small, .shortcuts, .design-note span:last-child { display: none; }
   .font-options button { max-width: 180px; padding: 8px; }
   .session { width: calc(100% - 16px); height: calc(100dvh - 140px); }
   .titlebar { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
-  .host { font-size: 11px; }
+  .model-badge { order: 3; width: 100%; }
   .header-actions { margin-left: auto; }
   .transcript { padding: 18px 12px 36px; }
   .entry { grid-template-columns: 16px minmax(0, 1fr); gap: 5px; }
@@ -207,7 +234,7 @@ textarea::placeholder { color: var(--ink-dim); }
 }
 </style>
 </head>
-<body>
+<body data-font="web">
 <div class="canvas" aria-hidden="true">
   <div class="board-bar"><strong>sober</strong><span>Watch the run</span><span>8 nodes · 1 running</span></div>
   <svg class="graph" viewBox="0 0 1200 640" preserveAspectRatio="xMidYMid slice">
@@ -216,20 +243,27 @@ textarea::placeholder { color: var(--ink-dim); }
   </svg>
 </div>
 <div class="shade" id="shade"></div>
-<aside class="review-tools" aria-label="Design review controls">
+<details class="review-tools" id="review-tools">
+  <summary>Review controls</summary>
+  <div class="review-panel" aria-label="Design review controls">
   <span>Transcript font</span>
   <div class="font-options" role="group" aria-label="Choose transcript font">
-    <button id="system-font" aria-pressed="true">System mono<small class="system-sample">⏺ Read(path) · 92 lines</small></button>
-    <button id="web-font" aria-pressed="false">JetBrains Mono + IBM Plex Sans<small class="web-sample">⏺ Read(path) · 92 lines</small></button>
+    <button id="system-font" aria-pressed="false">System mono<small class="system-sample">⏺ Read(path) · 92 lines</small></button>
+    <button id="web-font" aria-pressed="true">JetBrains Mono + IBM Plex Sans<small class="web-sample">⏺ Read(path) · 92 lines</small></button>
   </div>
   <button id="theme" aria-label="Toggle colour theme">Theme: dark</button>
-</aside>
+  <button id="cycle-provider">Preview next provider</button>
+  </div>
+</details>
 <button class="reopen" id="reopen" hidden>Open session</button>
 <main class="session" id="session" aria-labelledby="session-title">
   <header class="titlebar">
     <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
     <h1 id="session-title"><span>sober ›</span> session-mock</h1>
-    <span class="host">claude · opus</span>
+    <div class="model-badge" id="model-badge">
+      <div class="model-identity"><svg class="provider-logo" id="provider-logo" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="provider-name" id="provider-name"></span><span class="model-id" id="model-id"></span></div>
+      <span class="host" id="host"></span>
+    </div>
     <div class="header-actions"><button id="replay">↻ Replay</button><button id="fullscreen" aria-label="Enter full screen (f)" aria-pressed="false">⛶ Full screen</button><button id="close" aria-label="Close session">×</button></div>
   </header>
   <div class="find" id="find" hidden><label for="query">Find</label><input id="query" type="search" placeholder="Filter the transcript…"><span id="matches"></span><button id="clear-find" aria-label="Close find">×</button></div>
@@ -244,7 +278,16 @@ textarea::placeholder { color: var(--ink-dim); }
     </section>
     <button class="jump" id="jump" hidden>0 new lines ↓</button>
   </div>
-  <div class="working-indicator" id="working-indicator"><span class="mark" aria-hidden="true">✻</span><span class="body">Thinking… (0s)</span></div>
+  <!-- Graph pulse replaces the former ✻ spinner. -->
+  <div class="working-indicator" id="working-indicator">
+    <svg class="graph-pulse" viewBox="0 0 62 16" aria-hidden="true">
+      <path class="pulse-edge" d="M6 8H31M31 8H56"/>
+      <path class="edge-glow" d="M6 8H31"/><path class="edge-glow second" d="M31 8H56"/>
+      <circle class="signal" cx="6" cy="8" r="2"/>
+      <circle class="pulse-node" cx="6" cy="8" r="3.5"/><circle class="pulse-node middle" cx="31" cy="8" r="3.5"/><circle class="pulse-node last" cx="56" cy="8" r="3.5"/>
+    </svg>
+    <span class="body">Consulting the graph… (0s)</span>
+  </div>
   <form class="answer-area" id="answer-form">
     <div class="answer-line"><label for="answer" aria-label="Answer the agent">&gt;</label><textarea id="answer" rows="1" aria-describedby="answer-hint" placeholder="Answer the agent…"></textarea><button id="send" type="submit">Send ↵</button></div>
     <p class="answer-hint" id="answer-hint">Enter to send · Shift+Enter for a new line · local demo only</p>
@@ -285,10 +328,66 @@ const logLines = [
   fixture(40000, 'text', 'The mockup is ready for review. Replay it, switch the font, or expand the session to compare the two reading modes.')
 ];
 const $ = id => document.getElementById(id);
+const THINKING_VERBS = [
+  'Untangling spaghetti', 'Sobering up', 'Consulting the graph', 'Negotiating with the linter',
+  'Herding edges', 'Counting loose ends', 'Interviewing a semicolon', 'Waking the dependency tree',
+  'Bribing the compiler with whitespace', 'Asking the nodes nicely', 'Unknotting the plot', 'Sweeping up race conditions',
+  'Checking the graph’s pulse', 'Rehearsing the happy path', 'Putting loops on a leash', 'Following the breadcrumb imports',
+  'Giving the types a pep talk', 'Finding the missing parenthesis', 'Taming a feral promise', 'Reading between the log lines',
+  'Taking the scenic dependency', 'Teaching edges some manners', 'Dusting off an invariant', 'Sorting the thought drawer',
+  'Making peace with the parser', 'Convincing the tests to cooperate', 'Untying a very small knot', 'Tracing suspicious arrows',
+  'Putting the graph on decaf', 'Checking for imaginary friends', 'Assembling a plausible plan', 'Shaking the syntax tree',
+  'Looking under the abstraction', 'Turning coffee into checkpoints', 'Following a well-behaved hunch', 'Reconnecting the dots',
+  'Giving the stack some space', 'Hunting an off-by-one gremlin', 'Consulting the sober council', 'Polishing a rough edge',
+  'Auditing the rubber duck', 'Folding a stubborn branch', 'Taking inventory of intentions', 'Offering the DAG a biscuit',
+  'Asking why this node is here', 'Waiting for the penny to drop', 'Untangling yesterday’s shortcut', 'Keeping the graph out of trouble'
+];
+let verbIndex = -1, verbChangedAt = 0;
+function pickThinkingVerb(now) {
+  // Draw from all but the previous index, without a retry loop.
+  const pick = Math.floor(Math.random() * (THINKING_VERBS.length - (verbIndex < 0 ? 0 : 1)));
+  verbIndex = verbIndex >= 0 && pick >= verbIndex ? pick + 1 : pick;
+  verbChangedAt = now;
+}
+// Simplified provider marks; brand colours are OKLCH approximations, not status.
+const PROVIDERS = {
+  anthropic: { name: 'Anthropic', colour: 'oklch(0.68 0.115 42)', mark: '<path fill="currentColor" d="M2 20 9 4h3l7 16h-3l-1.5-4h-8L5 20Zm5.5-7h6L10.5 6ZM16 4h3l4 16h-3Z"/>' },
+  openai: { name: 'OpenAI', colour: 'oklch(0.62 0.11 170)', mark: Array.from({ length: 6 }, (_, i) => `<path transform="rotate(${i * 60} 12 12)" d="M12 12 7 9V5a4 4 0 0 1 7-2l3 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>`).join('') },
+  google: { name: 'Google', colour: 'oklch(0.63 0.19 260)', mark: '<path fill="currentColor" d="M22 12c0-.7-.1-1.4-.2-2H12v4h5.6a6 6 0 1 1-1.4-6.3L19 4.9A10 10 0 1 0 22 12Z"/>' },
+  mistral: { name: 'Mistral', colour: 'oklch(0.72 0.17 55)', mark: '<path fill="currentColor" d="M2 3h4v4h4v4h4V7h4V3h4v18h-4v-6h-4v4h-4v-4H6v6H2Z"/>' },
+  unknown: { name: 'Other provider', colour: 'var(--ink-dim)', mark: '<path d="m12 3 9 5v8l-9 5-9-5V8Zm0 0v18M3 8l9 5 9-5" fill="none" stroke="currentColor" stroke-width="1.5"/>' }
+};
+const PROVIDER_PREVIEWS = [
+  { model: 'claude-opus-5-5', host: 'claude code' },
+  { model: 'openai/gpt-5.4', host: 'openrouter' },
+  { model: 'google/gemini-2.5-pro', host: 'openrouter' },
+  { model: 'mistralai/mistral-large', host: 'openrouter' },
+  { model: 'local/custom-model', host: 'local runner' },
+  { model: 'anthropic/claude-opus-5-5', host: 'openrouter' }
+];
+let providerPreview = 0;
+function providerForModel(model) {
+  const id = model.toLowerCase();
+  if (/(^|\/)(anthropic\/|claude-)/.test(id)) return PROVIDERS.anthropic;
+  if (/(^|\/)(openai\/|gpt-|chatgpt-|o[134](?:-|$))/.test(id)) return PROVIDERS.openai;
+  if (/(^|\/)(google\/|gemini-)/.test(id)) return PROVIDERS.google;
+  if (/(^|\/)(mistralai\/|mistral-|mixtral-|codestral-)/.test(id)) return PROVIDERS.mistral;
+  return PROVIDERS.unknown;
+}
+function showProvider() {
+  const { model, host } = PROVIDER_PREVIEWS[providerPreview];
+  const provider = providerForModel(model);
+  $('model-badge').style.setProperty('--provider-colour', provider.colour);
+  $('provider-logo').innerHTML = provider.mark;
+  $('provider-name').textContent = provider.name;
+  $('model-id').textContent = model;
+  $('host').textContent = `via ${host}`;
+}
+$('cycle-provider').onclick = () => { providerPreview = (providerPreview + 1) % PROVIDER_PREVIEWS.length; showProvider(); };
 const scroller = $('transcript');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let start, timer, next, ended, following = true, unseen = 0, thinkingSince = 0;
-let rendered = [], transition;
+let rendered = [], transition, stageTransitions = [], backdropTransitions = [];
 const elapsed = ms => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 const atBottom = box => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
 function jumpToBottom() { following = true; unseen = 0; scroller.scrollTop = scroller.scrollHeight; updateJump(); }
@@ -361,16 +460,17 @@ function finish() {
 function tick() {
   const now = Math.min(performance.now() - start, 40000);
   while (next < logLines.length && now >= logLines[next].at) append(logLines[next++], now);
-  // Avoid repeated live-region announcements when only the spinner changes.
+  // Avoid repeated live-region announcements when only the graph pulse changes.
   const status = { elapsed: elapsed(now), tools: `⚒ ${rendered.filter(({ line }) => line.kind === 'tool').length} tools`, checks: `◌ ${rendered.filter(({ line }) => line.kind === 'checked').length}/4 checks` };
   for (const [id, value] of Object.entries(status)) if ($(id).textContent !== value) $(id).textContent = value;
   const seconds = Math.floor((now - thinkingSince) / 1000);
-  $('working-indicator').querySelector('.mark').textContent = reducedMotion.matches ? '✻' : ['✻', '✳', '✢', '·'][Math.floor(now / 350) % 4];
-  $('working-indicator').querySelector('.body').textContent = `${['Thinking', 'Considering', 'Working', 'Connecting the pieces'][Math.floor(seconds / 4) % 4]}… (${seconds}s)`;
+  if (now - verbChangedAt >= 4000) pickThinkingVerb(now);
+  $('working-indicator').querySelector('.body').textContent = `${THINKING_VERBS[verbIndex]}… (${seconds}s)`;
   if (next === logLines.length) finish();
 }
 function replay() {
   clearInterval(timer); start = performance.now(); next = 0; ended = false; rendered = []; thinkingSince = 0;
+  pickThinkingVerb(0);
   $('working-indicator').hidden = false;
   following = true; unseen = 0; $('lines').replaceChildren(); $('checklist').replaceChildren(); $('query').value = '';
   $('session').classList.remove('ended'); $('state').textContent = 'running'; $('answer').disabled = false; $('send').disabled = false;
@@ -379,8 +479,9 @@ function replay() {
   tick(); timer = setInterval(tick, 200); jumpToBottom();
 }
 function toggleFull() {
-  transition?.cancel();
   const box = $('session'), first = box.getBoundingClientRect(), scrollTop = scroller.scrollTop;
+  transition?.cancel(); stageTransitions.forEach(animation => animation.cancel());
+  $('review-tools').open = false;
   if (reducedMotion.matches) {
     const previous = box.cloneNode(true);
     previous.removeAttribute('id'); previous.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
@@ -400,11 +501,29 @@ function toggleFull() {
     { transform: `translate(${first.left - last.left}px, ${first.top - last.top}px) ${finalTransform} scale(${first.width / last.width}, ${first.height / last.height})`, opacity: .7 },
     { transform: finalTransform || 'none', opacity: 1 }
   ];
-  transition = box.animate(frames, { duration: reducedMotion.matches ? 120 : full ? 280 : 220, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+  const duration = reducedMotion.matches ? 120 : full ? 450 : 330;
+  transition = box.animate(frames, { duration, easing: reducedMotion.matches ? 'linear' : full ? 'linear(0, 0.32 12%, 0.72 27%, 0.95 43%, 1.018 60%, 0.995 80%, 1)' : 'cubic-bezier(.22, 1, .36, 1)' });
+  if (!reducedMotion.matches) {
+    const stages = [box.querySelector('.titlebar'), box.querySelector('.transcript-wrap'), box.querySelector('.statusbar')];
+    stageTransitions = stages.map((element, index) => element.animate([
+      { opacity: 0, transform: `translateY(${full ? 8 : -5}px)` },
+      { opacity: 1, transform: 'translateY(0)' }
+    ], { duration: full ? 220 : 170, delay: full ? 110 + index * 60 : 40 + (2 - index) * 45, easing: 'ease-out', fill: 'backwards' }));
+  }
+  animateBackdrop(full, duration);
   if (following) jumpToBottom(); else scroller.scrollTop = scrollTop;
 }
-function closeSession() { $('session').hidden = true; $('shade').hidden = true; $('reopen').hidden = false; $('reopen').focus(); }
-$('reopen').onclick = () => { $('session').hidden = false; $('shade').hidden = false; $('reopen').hidden = true; scroller.focus(); if (following) jumpToBottom(); };
+function animateBackdrop(full, duration) {
+  const canvas = document.querySelector('.canvas'), shade = $('shade');
+  const fromFilter = getComputedStyle(canvas).filter, fromColour = getComputedStyle(shade).backgroundColor;
+  backdropTransitions.forEach(animation => animation.cancel());
+  canvas.style.filter = full && !reducedMotion.matches ? 'blur(5px)' : 'none';
+  shade.style.backgroundColor = full ? 'oklch(0 0 0 / .65)' : 'oklch(from var(--bg) l c h / .72)';
+  backdropTransitions = [canvas.animate([{ filter: fromFilter }, { filter: canvas.style.filter }], { duration, easing: 'ease-out' }),
+    shade.animate([{ backgroundColor: fromColour }, { backgroundColor: shade.style.backgroundColor }], { duration, easing: 'ease-out' })];
+}
+function closeSession() { $('session').hidden = true; $('shade').hidden = true; $('reopen').hidden = false; $('reopen').focus(); animateBackdrop(false, reducedMotion.matches ? 120 : 220); }
+$('reopen').onclick = () => { $('session').hidden = false; $('shade').hidden = false; $('reopen').hidden = true; animateBackdrop($('session').classList.contains('full'), reducedMotion.matches ? 120 : 220); scroller.focus(); if (following) jumpToBottom(); };
 $('close').onclick = closeSession; $('fullscreen').onclick = toggleFull; $('replay').onclick = replay;
 $('query').oninput = () => { applyFilter(); following = atBottom(scroller); updateJump(); };
 function closeFind() { $('find').hidden = true; $('query').value = ''; applyFilter(); scroller.focus(); }
@@ -439,7 +558,7 @@ for (const name of ['system', 'web']) $(name + '-font').onclick = () => {
 };
 document.fonts.ready.then(() => { if (following) jumpToBottom(); });
 new ResizeObserver(() => { if (following) jumpToBottom(); }).observe(scroller);
-themeLabel(); replay();
+showProvider(); themeLabel(); replay();
 </script>
 </body>
 </html>
