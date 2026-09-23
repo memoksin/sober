@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import type { RunExit } from '@besober/schema'
-import { runAudit, unjudged } from './audit.js'
+import { posixShell, runAudit, unjudged } from './audit.js'
 import { renderBrief } from './brief.js'
 import {
 	type Config,
@@ -557,17 +557,23 @@ const settings = async (paths: Paths, base: string): Promise<Config> => {
  * gets an unverified diff. If this fails the agent is never started: otherwise
  * you pay for a session that cannot work (§5.2).
  */
-const prepare = (node: string, cwd: string, command: string): Promise<void> =>
-	new Promise((resolve, reject) => {
-		// A shell here, unlike everywhere else in SOBER: this value is written by
-		// the user into their own config and is expected to be a shell line
-		// (`pnpm install && pnpm build`). It is read from the base ref, so an
-		// agent cannot put anything into it that a human has not merged.
-		execFile(command, { cwd, shell: true, encoding: 'utf8' }, (error, stdout, stderr) => {
+const prepare = (node: string, cwd: string, command: string): Promise<void> => {
+	// A shell here, unlike everywhere else in SOBER: this value is written by
+	// the user into their own config and is expected to be a shell line
+	// (`pnpm install && pnpm build`). It is read from the base ref, so an
+	// agent cannot put anything into it that a human has not merged.
+	const shell = posixShell()
+	if (shell === null)
+		return Promise.reject(
+			new SetupFailedError(node, command, 'no POSIX shell found: install Git for Windows'),
+		)
+	return new Promise((resolve, reject) => {
+		execFile(command, { cwd, shell, encoding: 'utf8' }, (error, stdout, stderr) => {
 			if (error) return reject(new SetupFailedError(node, command, `${stdout}${stderr}`))
 			resolve()
 		})
 	})
+}
 
 /**
  * The pull request, after the run and never before it (§6.1): a branch with

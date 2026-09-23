@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import type { Finding, ScanReport } from '@besober/schema'
-import { notInstalled } from './audit.js'
+import { notInstalled, posixShell } from './audit.js'
 import { readConfigFromBase } from './config.js'
 import { type AddedFile, addedLines } from './diff.js'
 import { git, showFromRef } from './git.js'
@@ -208,9 +208,14 @@ const extraScanners = async (
 
 	const findings: Finding[] = []
 	const didNotRun: string[] = []
+	const shell = posixShell()
 	for (const command of config.value.scan.extra) {
+		if (shell === null) {
+			didNotRun.push('no POSIX shell found: install Git for Windows')
+			continue
+		}
 		try {
-			await run(command, { cwd: worktreeOf(paths, node), shell: true, encoding: 'utf8' })
+			await run(command, { cwd: worktreeOf(paths, node), shell, encoding: 'utf8' })
 		} catch (error) {
 			const failure = error as { code?: number | string; stdout?: string; stderr?: string }
 			if (notInstalled(failure)) {
