@@ -1,0 +1,66 @@
+{
+	"title": "A log line carries what the tool was called with, what it returned, and when",
+	"name": "line-detail",
+	"description": "Today `packages/core/src/hosts.ts` renders a Claude tool call as its name only (line ~197): no argument, no result, no time. The session look needs `Read(path)`, a `⎿` result summary (`92 lines`, `+14 −6`, exit code), and a timestamp for elapsed and spinner timers.\n\nImplement the shape the line-shape decision picks: extend `LogLine` in `packages/schema/src/wire.ts`, render it for every host adapter in `hosts.ts` (claude, codex, opencode, cursor, openrouter), keep old logs readable (defaults), and make `sober logs` (`TAIL` in `packages/cli/src/work.ts`) print the same detail so the two surfaces stay one vocabulary. Tests beside each changed file.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-the-detail-a-claude-code-styl-iepy"
+	],
+	"files": [
+		"packages/schema/src/wire.ts",
+		"packages/schema/src/*.test.ts",
+		"packages/core/src/hosts.ts",
+		"packages/core/src/hosts.test.ts",
+		"packages/core/src/tail.ts",
+		"packages/core/src/tail.test.ts",
+		"packages/cli/src/work.ts",
+		"packages/cli/src/*.test.ts"
+	],
+	"brief": {
+		"approach": "Core renders a richer `LogLine` (the line-shape decision). The field names are fixed, because session-shell, tool-blocks and session-statusbar are written against them:\n\n1. `packages/schema/src/wire.ts`, `LogLine`. Add four fields, each `z.string().nullable().default(null)`, so old logs still parse:\n   - `at`: ISO time of the event.\n   - `call`: the host's tool-call id, which pairs a `tool` line with its result.\n   - `detail`: a one-line argument summary on `tool` lines.\n   - `body`: a result's text, capped at the first 40 lines / 4 KB with a `… (truncated)` marker.\n   Add a new kind `'output'`, which is a tool result: `text` is a one-line summary (`92 lines`, `+14 −6`, `exit 0`, `error: …`), plus `call` and `body`. Tests go in `packages/schema/src/wire.test.ts`: an old line with no new fields parses with nulls, and an `output` line parses.\n\n2. `packages/core/src/hosts.ts`, per adapter. Take real field names from the recordings in `docs/testing/v1x-4-other-hosts.tdd.md` and the existing fixtures in `hosts.test.ts`. Never guess a key: where a host's stream lacks something, the field stays null, and a comment says so.\n   - **claude** (~line 197):\n     - A `tool_use` part gives `call: part.id` and a `detail` built from `part.input`: path for Read/Edit/Write, `command` for Bash, `pattern` for Grep/Glob, `url` for WebFetch, `description` for Task.\n     - The `user` message's `tool_result` content items, which are dropped today, become `output` lines paired by `tool_use_id`.\n     - The summary depends on the tool: line count for Read, `+a −b` for Edit/Write when the content allows it, `exit N` for Bash when present, `error: …` when `is_error` is set.\n     - `at` stays null, because Claude's stream-json carries no timestamp. The screen falls back to arrival time.\n   - **codex**: `command_execution` keeps its command as `detail`, takes `call` from the item id, and its completed item's exit code and output become an `output` line when the recording carries them.\n   - **opencode / cursor**: add `call`, `detail` and a completion `output` line only where the recorded events carry a correlator and a result. Otherwise leave them null. A wrong pairing is worse than none.\n   - **openrouter** (`packages/core/src/agent.ts` ~338–349): `call.id` and the argument are already in hand. After `runTool` returns, emit an `output` line with the summary and a capped `body`.\n   Add one test per changed branch in `hosts.test.ts` / `agent.test.ts`, including an explicit null-field case for a host that lacks the data.\n\n3. `packages/core/src/tail.ts`: no logic change is expected. Add one round-trip fixture with the new fields to `tail.test.ts`, and make sure the tail's allowlist lets `output` through.\n\n4. `sober logs` (`packages/cli/src/work.ts`):\n   - Add `output: ['⎿', dim]` to `TAIL`.\n   - A `tool` line prints `Tool(detail)` when `detail` is set, and the bare text as today when it is null, so old logs look unchanged.\n   - An `output` line prints indented under its tool line as `⎿ summary`. `body` is never printed; there is no flag for it and none is added.\n\nKeep `apps/dashboard` compiling. If the new `output` kind breaks the exhaustive `MARK`/`TONE` records in `apps/dashboard/src/logs/data.ts`, add `output: '⎿'` and `var(--tx-result)` there. Nothing more on the dashboard; tool-blocks renders the rest.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/schema/src/wire.test.ts",
+				"proves": "old lines still parse and the new fields and output kind are accepted"
+			},
+			{
+				"run": "pnpm exec vitest run packages/core/src/hosts.test.ts packages/core/src/tail.test.ts packages/core/src/agent.test.ts",
+				"proves": "each host adapter emits call, detail and output where its stream carries them, and null where it does not"
+			},
+			{
+				"run": "pnpm exec vitest run packages/cli apps/dashboard/src/logs",
+				"proves": "sober logs and the dashboard still render, old logs unchanged"
+			},
+			{
+				"run": "pnpm --filter @besober/schema typecheck && pnpm --filter @besober/core typecheck && pnpm --filter @besober/cli typecheck && pnpm --filter @besober/dashboard typecheck",
+				"proves": "every package that reads LogLine still type-checks"
+			},
+			{
+				"run": "npx biome check packages/schema/src packages/core/src packages/cli/src apps/dashboard/src/logs",
+				"proves": "lint and format are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T21:48:58.423Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T22:13:45.959Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T22:21:05.545Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-23T18:38:33.782Z"
+}

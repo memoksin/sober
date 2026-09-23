@@ -1,0 +1,57 @@
+{
+	"title": "The verbs the run screen's thinking pulse cycles through are the user's to set",
+	"name": "thinking-verbs",
+	"description": "session-statusbar ships a built-in pool of funny thinking verbs (`THINKING_VERBS`, 40+) next to the graph-pulse indicator. Make that pool customizable per board.\n\n- Add an optional key to the board config read by `packages/core/src/config.ts` (next to `dispatch.*`), e.g. `dashboard.thinkingVerbs: string[]` with a `mode: \"replace\" | \"extend\"` (default extend), validated by the same config schema. Empty or absent means the built-in pool.\n- Hand it to the dashboard over the existing server routes (`packages/server/src/routes.ts`), whichever read the dashboard already makes at startup. Do not add a new channel.\n- In `apps/dashboard/src/logs/` the indicator draws from the merged pool, at random, never the same verb twice in a row.\n- Document the key where the other config keys are documented (README / DESIGN config section).\n- Tests beside each changed file: config parse (valid, invalid, extend vs replace), the merge function in `logs/data.ts`, and the route carrying it.",
+	"notes": "",
+	"dependsOn": [
+		"session-statusbar-tind"
+	],
+	"decisions": [],
+	"files": [
+		"packages/core/src/config.ts",
+		"packages/core/src/config.test.ts",
+		"packages/server/src/routes.ts",
+		"packages/server/src/routes.test.ts",
+		"apps/dashboard/src/logs/data.ts",
+		"apps/dashboard/src/logs/data.test.ts",
+		"apps/dashboard/src/logs/Logs.tsx",
+		"README.md"
+	],
+	"brief": {
+		"approach": "This node makes the built-in `THINKING_VERBS` pool, added by session-statusbar, configurable per board. The pattern is the one every other config key already uses.\n\n1. **Config** in `packages/core/src/config.ts`. Add an optional key:\n   `dashboard: { thinkingVerbs: { mode: 'extend' | 'replace' (default 'extend'), words: string[] (each a non-empty single word, trimmed; hyphenated compounds allowed; default []) } }`\n   - Add it to the schema, to `DEFAULT_CONFIG`, and to the merge in `parseConfig`, following how `dispatch` and `board` are merged.\n   - Document it in `DEFAULT_CONFIG_TEXT` in the same comment style as the neighbouring keys.\n   - Validation rejects a word containing a space, with a message that names the key.\n2. **Delivery.** Use no new route and no new channel. The dashboard already reads `board` (`packages/server/src/routes.ts`, the `board` read, ~line 413) and polls it. Add `thinkingVerbs: config.dashboard?.thinkingVerbs ?? null` to that response. Extend the wire type the dashboard parses for it, and keep old servers readable (default null). Check `packages/server/src/routes.test.ts` and the client-parity contract test if one covers the board read shape.\n3. **Merge** as a pure function in `apps/dashboard/src/logs/data.ts`: `mergeThinkingVerbs(base, config)`.\n   - `extend` concatenates and dedupes, case-insensitively.\n   - `replace` uses `words` only when it is non-empty, otherwise the base.\n   `App.tsx` passes the merged list into `LogScreen`, and the verb picker from session-statusbar draws from that list instead of the constant.\n4. **Docs.** One short entry next to the other `.sober/config.jsonc` keys in `README.md`, if the README lists config keys. Otherwise the `DEFAULT_CONFIG_TEXT` comment is the documentation.\n\n**Tests:**\n- Add `packages/core/src/config.test.ts`, or extend the existing config tests if they live elsewhere; find them first. Cases: absent → defaults; extend; replace; a word with a space is rejected.\n- The `board` read route carries `thinkingVerbs` (`routes.test.ts`).\n- `mergeThinkingVerbs` cases in `data.test.ts`.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src packages/server/src",
+				"proves": "the config key parses, validates and reaches the board read"
+			},
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src",
+				"proves": "the merge function and the verb picker use the configured pool"
+			},
+			{
+				"run": "grep -q 'thinkingVerbs' packages/core/src/config.ts && grep -q 'thinkingVerbs' packages/server/src/routes.ts",
+				"proves": "the key is defined in config and delivered through the existing board read"
+			},
+			{
+				"run": "pnpm --filter @besober/core typecheck && pnpm --filter @besober/server typecheck && pnpm --filter @besober/dashboard typecheck",
+				"proves": "all three packages type-check"
+			},
+			{
+				"run": "npx biome check packages/core/src packages/server/src apps/dashboard/src",
+				"proves": "lint and format are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T21:55:12.143Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-23T19:21:45.366Z"
+}

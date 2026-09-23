@@ -1,9 +1,11 @@
 {
-	"title": "A tool line carries its own glyph in its own colour, on the dashboard and in `sober logs`",
+	"title": "A tool line carries its glyph once, in the mark column, in the transcript's tool colour",
 	"name": "tool-colour",
-	"description": "Today a `tool` line in apps/dashboard/src/logs/Logs.tsx shows two marks: the generic `⚒` in the mark column painted `var(--status-ready)` green (TONE.tool in apps/dashboard/src/logs/data.ts), then the per-tool glyph from `TOOL` (◧ ✎ ✍ $ ⌕ ✱ ⧉ ⇣) inside the text, in dim ink. The green means nothing — it is a status colour on a line that has no status — and the two marks fight. Change it so the mark column holds the tool's glyph, painted in a colour that is that tool's own. Add one token per listed tool to apps/dashboard/src/theme.css (dark, light and the forced-theme block, following the `--status-*` layout) plus one fallback token for an unlisted tool; pick hues that stay distinct from the five status colours and from `--danger`, so a tool line is never mistaken for a status. Move the glyph into the mark column and drop the second copy in the text. `packages/cli/src/work.ts` `TAIL`/`TOOL` are the CLI's hand-aligned copy of these tables: give the CLI the same glyph placement and, where the terminal has colour, the nearest ANSI colour per tool, so `sober logs` and the screen keep showing one run in one vocabulary. This contradicts ADR 0039 §2 (\"colour is reserved for status\"): write a short new ADR that amends §2 with a second named exception — the tool palette in the run log, which is not on the canvas and not in the chrome — and reference it from the token block. Tests with the code: apps/dashboard/src/logs/Logs.test.tsx asserts a tool line renders the tool's glyph once, in the mark column, with that tool's token as its colour; a data test that every `TOOL` key has a token; a CLI test that a tool line uses the same glyph.",
+	"description": "Today a `tool` line in `apps/dashboard/src/logs/Logs.tsx` shows two marks:\n- the generic `⚒` in the mark column, painted `var(--status-ready)` green (TONE.tool in `apps/dashboard/src/logs/data.ts`);\n- the per-tool glyph from `TOOL` (◧ ✎ ✍ $ ⌕ ✱ ⧉ ⇣) inside the text, in dim ink.\n\nThe green means nothing (it is a status colour on a line that has no status), and the two marks fight.\n\nThe user chose one colour plus a glyph, as ADR 0064 records:\n- The mark column holds the tool's glyph (fallback for an unlisted tool), painted `var(--tx-tool)` (periwinkle).\n- The second copy in the text goes.\n- The other transcript tones move to their ADR 0064 tokens (`--tx-error`, `--tx-human`, `--tx-think`).\n\nThere are no per-tool colour tokens and no new ADR. `sober logs` (`packages/cli/src/work.ts`) already puts the glyph in the mark column in blue, the nearest ANSI colour to periwinkle, so it only needs its comment aligned.",
 	"notes": "",
-	"dependsOn": [],
+	"dependsOn": [
+		"transcript-adr-a7he"
+	],
 	"decisions": [],
 	"files": [
 		"apps/dashboard/src/logs/Logs.tsx",
@@ -15,11 +17,46 @@
 		"packages/cli/src/*.test.ts",
 		"docs/adr/*.md"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "The user chose one colour plus a glyph over per-tool colours, which is what ADR 0064 records. So: no per-tool tokens and no new ADR, because 0064 already covers the exception.\n\nDashboard only:\n1. `apps/dashboard/src/logs/data.ts`: point `TONE` at the ADR 0064 tokens instead of borrowing status colours:\n   - `tool` → `var(--tx-tool)`\n   - `raw` → `var(--tx-error)`\n   - `answer` → `var(--tx-human)`\n   - `thinking` → `var(--tx-think)`\n   Leave the rest as they are. Update the comment above `TONE` to cite ADR 0064. Keep `TOOL`, `TOOL_FALLBACK` and `toolMark` as they are.\n2. `apps/dashboard/src/logs/Logs.tsx`: for a `tool` line, the mark column shows `toolMark(line.tool ?? '')` (the fallback when `tool` is null), painted with `TONE.tool`. Delete the second glyph copy inside the text span. The thinking dot uses `bg-[var(--tx-think)]` instead of `--status-running`. Nothing else in the file changes; tool-blocks rewrites the rest later.\n3. `apps/dashboard/src/logs/Logs.test.tsx`: update 'a tool line shows its glyph, and an unlisted tool falls back'. A tool line renders its glyph exactly once, in the mark column, styled `var(--tx-tool)`. An unlisted tool shows `TOOL_FALLBACK`. Add a data test in `logs/data.test.ts`: no `TONE` value references `--status-ready`.\n\nCLI: `packages/cli/src/work.ts` already puts the tool glyph in the mark column in blue, the nearest ANSI colour to periwinkle. Update only the comment on `TAIL` so it names ADR 0064 and `--tx-tool` as the dashboard counterpart. No behaviour change.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src/logs",
+				"proves": "the tool glyph renders once in the mark column in --tx-tool, the fallback works, and no tone borrows a status colour"
+			},
+			{
+				"run": "pnpm --filter @besober/dashboard typecheck",
+				"proves": "the dashboard still type-checks"
+			},
+			{
+				"run": "! grep -n 'status-ready' apps/dashboard/src/logs/data.ts apps/dashboard/src/logs/Logs.tsx",
+				"proves": "the run log no longer paints tool lines in a status colour"
+			},
+			{
+				"run": "npx biome check apps/dashboard/src/logs packages/cli/src/work.ts",
+				"proves": "lint and format are clean for everything touched"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T21:34:18.689Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T21:34:33.760Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T21:38:11.317Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-21T13:22:24.585Z"
 }

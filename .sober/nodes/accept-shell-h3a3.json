@@ -1,0 +1,52 @@
+{
+	"title": "An acceptance command runs on Windows the way it was written, single quotes included",
+	"name": "accept-shell",
+	"description": "`judge` in packages/core/src/audit.ts runs each acceptance command with `shell: true`, which is `cmd.exe` on Windows. Acceptance lists are written in POSIX shell syntax, and `cmd.exe` does not treat single quotes as quotes: on brief-toggle-2ubj, `rg -n '<details|<summary' …` read `<` as a redirect (exit 255) and `rg -c 'not approved yet' …` split into three arguments (exit 1). Both passed when run with the same quoting in a real shell, so the review showed two FAILED criteria for work that met them. Run acceptance commands through a POSIX shell on every platform (Git for Windows ships `sh`), and when none can be found say so as \"did not run\", never as a failure (ADR 0021). The `dispatch.setup`/`verify` paths in dispatch.ts and `scan.extra` in scan.ts share the same `shell: true` and should read the same way. A test proves a single-quoted command with `<` and spaces exits 0 through `judge`.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/core/src/audit.ts",
+		"packages/core/src/audit.test.ts",
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/scan.ts"
+	],
+	"brief": {
+		"approach": "One helper, three call sites, one new test file.\n\n1. `packages/core/src/audit.ts`, next to `notInstalled`: add `posixShell(): string | true | null`. Off Windows it returns `true` (Node's `/bin/sh`, unchanged). On `win32` it finds Git for Windows' `sh.exe` from `git --exec-path` (`execFileSync`, once, memoised): that prints `<root>/mingw64/libexec/git-core`, so the shell is `<root>/usr/bin/sh.exe`, else `<root>/bin/sh.exe` — whichever `existsSync` finds. Never take `sh`/`bash` off the PATH: on this machine `bash.exe` on PATH is WSL's `WindowsApps\\bash.exe`, a different filesystem. Git is already a hard dependency of SOBER, so this adds none. Nothing found → `null`.\n\n2. `judge` in the same file: pass `shell: posixShell()` instead of `shell: true`. When it is `null`, resolve `{ result: null, output: 'no POSIX shell found: install Git for Windows' }` without running anything — did not run, never failed (ADR 0021). `dispatch.verify` goes through `judge` already, so it is covered.\n\n3. `packages/core/src/scan.ts:213` (`scan.extra`) and `packages/core/src/dispatch.ts:566` (`prepare`, `dispatch.setup`): same `shell: posixShell()`. `null` in scan joins the existing `didNotRun` list with the same sentence; `null` in `prepare` rejects with `SetupFailedError` carrying that sentence, since a run that cannot be prepared must not start.\n\n4. `packages/core/src/audit.test.ts` (new): through `judge` in a temp dir, `node -e 'process.exit(process.argv[1] === \"a <b c\" ? 0 : 3)' 'a <b c'` exits 0 — single quotes, `<` and spaces survive on every platform; `exit 7` reads `{ exit: 7 }`; a command that does not exist reads `result: null`. `posixShell()` on win32 returns a path ending in `sh.exe` that exists (`test.runIf(process.platform === 'win32')`).\n\nSkipped: a config knob for the shell path — add one when someone runs SOBER on Windows without Git, which cannot happen today.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/audit.test.ts",
+				"proves": "A single-quoted command with < and spaces exits 0 through judge, a non-zero exit is kept, a missing tool reads as did-not-run, and on Windows the shell is Git's sh.exe"
+			},
+			{
+				"run": "pnpm vitest run packages/core/src/dispatch.test.ts",
+				"proves": "setup, verify and the acceptance audit still behave as before through the new shell"
+			},
+			{
+				"run": "pnpm lint && pnpm typecheck",
+				"proves": "The repo's gate is green"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T12:45:05.507Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T12:46:36.624Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T12:56:49.470Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-23T12:42:25.727Z"
+}
