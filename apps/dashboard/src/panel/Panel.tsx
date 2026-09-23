@@ -97,7 +97,15 @@ export const Panel = ({
 						<Waiting board={board} id={id} onPick={onPick} onDecide={onDecide} />
 
 						{node.brief !== null && (
-							<Section title="Brief">
+							<details>
+								<summary className="mb-1.5 cursor-pointer select-none font-medium text-[length:var(--text-xs)] text-[var(--ink-faint)] uppercase tracking-wider">
+									Brief
+									<span className="ml-2 font-normal normal-case tracking-normal">
+										{node.brief.approval === null
+											? 'not approved yet'
+											: `approved by ${node.brief.approval.by}${node.brief.approval.queue ? ', queued' : ''}`}
+									</span>
+								</summary>
 								{/*
 								  Written by an agent, and an agent writes markdown (M3's gate,
 								  finding 3). Rendered as elements, never as a string of HTML —
@@ -117,12 +125,7 @@ export const Panel = ({
 										</li>
 									))}
 								</ul>
-								<p className="mt-2 text-[length:var(--text-xs)] text-[var(--ink-faint)]">
-									{node.brief.approval === null
-										? 'not approved yet'
-										: `approved by ${node.brief.approval.by}${node.brief.approval.queue ? ', queued' : ''}`}
-								</p>
-							</Section>
+							</details>
 						)}
 
 						{node.decisions.length > 0 && (

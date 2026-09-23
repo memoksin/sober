@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test } from 'vitest'
 import type { BoardRead } from './data.js'
 import { nextMove } from './data.js'
@@ -86,4 +86,30 @@ test('the approach renders as what was written, not as its source', () => {
 	expect(container.textContent).not.toContain('## How')
 	// A criterion's `proves` is one phrase, and its inline code is marked too.
 	expect([...container.querySelectorAll('code')].map((one) => one.textContent)).toContain('board')
+})
+
+test('the brief starts closed, opens on a click, and says whether it is approved either way', () => {
+	const { container } = panel(
+		node({
+			status: 'needs-approval',
+			brief: {
+				complexity: null,
+				approach: 'a long approach',
+				acceptance: [],
+				approval: null,
+				at: '2026-09-07T00:00:00.000Z',
+				by: 'agent',
+			} as BoardRead['nodes'][number]['brief'],
+		}),
+	)
+
+	const details = container.querySelector('details') as HTMLDetailsElement
+	const summary = details.querySelector('summary') as HTMLElement
+	expect(details.hasAttribute('open')).toBe(false)
+	expect(summary.textContent).toContain('not approved yet')
+
+	fireEvent.click(summary)
+
+	expect(details.hasAttribute('open')).toBe(true)
+	expect(summary.textContent).toContain('not approved yet')
 })
