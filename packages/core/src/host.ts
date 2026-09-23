@@ -1,5 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
-import { basename } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { basename, delimiter, join } from 'node:path'
 import { promisify } from 'node:util'
 import { SoberError } from './errors.js'
 import { adapterFor, hostCommand } from './hosts.js'
@@ -15,15 +16,34 @@ export {
 const run = promisify(execFile)
 
 /**
- * On Windows the `sober` on the PATH is npm's `sober.cmd` shim, which a spawn
- * without a shell cannot start (ENOENT). When this process is sober itself, it
- * runs its own entry under its own node instead — the same version, anywhere.
+ * The script an npm `.cmd` shim runs, found the way Windows finds the command:
+ * PATH in order, and a native `.exe` in the same directory wins. Null when the
+ * command is not a shim — then it is spawned as it is.
+ */
+export const npmShimTarget = (command: string, path = process.env.PATH ?? ''): string | null => {
+	if (/[\\/.]/.test(command)) return null
+	for (const dir of path.split(delimiter).filter(Boolean)) {
+		if (existsSync(join(dir, `${command}.exe`))) return null
+		const shim = join(dir, `${command}.cmd`)
+		if (!existsSync(shim)) continue
+		const script = /"%~?dp0%\\?([^"]+\.[cm]?js)"/i.exec(readFileSync(shim, 'utf8'))?.[1]
+		return script === undefined ? null : join(dir, script)
+	}
+	return null
+}
+
+/**
+ * On Windows an npm-installed host (`codex`, `sober`) is a `.cmd` shim, which a
+ * spawn without a shell cannot start (ENOENT) — and a shell cannot carry a
+ * multi-line brief. So the shim's script runs under this node instead. When
+ * this process is sober itself, `sober` is its own entry: the same version.
  */
 const program = (command: string): readonly [string, string[]] => {
 	const self = process.argv[1]
-	return command === 'sober' && self !== undefined && /^sober(\.js)?$/.test(basename(self))
-		? [process.execPath, [self]]
-		: [command, []]
+	if (command === 'sober' && self !== undefined && /^sober(\.js)?$/.test(basename(self)))
+		return [process.execPath, [self]]
+	const script = process.platform === 'win32' ? npmShimTarget(command) : null
+	return script === null ? [command, []] : [process.execPath, [script]]
 }
 
 /**

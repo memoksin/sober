@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { afterAll, expect, test } from 'vitest'
-import { checkHost, HOST_ARGS, hostCommand, NO_HUMAN, startAgent } from './host.js'
+import { checkHost, HOST_ARGS, hostCommand, NO_HUMAN, npmShimTarget, startAgent } from './host.js'
 
 const scripts = mkdtempSync(join(tmpdir(), 'sober-host-'))
 afterAll(() => rmSync(scripts, { recursive: true, force: true }))
@@ -100,6 +100,23 @@ test('a sober process runs its own entry for openrouter, never the PATH shim', a
 		process.argv[1] = argv1 as string
 		process.env.PATH = path
 	}
+})
+
+test('an npm .cmd shim resolves to the script it runs, and a native .exe wins', () => {
+	// The tail of the shim `npm i -g @openai/codex` wrote on Windows, verbatim.
+	const shim = `endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`
+	const [first, second] = [join(scripts, 'shim-a'), join(scripts, 'shim-b')]
+	mkdirSync(first)
+	mkdirSync(second)
+	writeFileSync(join(second, 'codex.cmd'), shim)
+	const path = [first, second].join(delimiter)
+	expect(npmShimTarget('codex', path)).toBe(
+		join(second, 'node_modules\\@openai\\codex\\bin\\codex.js'),
+	)
+	expect(npmShimTarget('claude', path)).toBeNull()
+	expect(npmShimTarget('/usr/bin/codex', path)).toBeNull()
+	writeFileSync(join(first, 'codex.exe'), '')
+	expect(npmShimTarget('codex', path)).toBeNull()
 })
 
 test('a host that is logged out says which command signs in', async () => {
