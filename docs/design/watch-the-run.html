@@ -318,18 +318,14 @@ const logLines = [
 ];
 const $ = id => document.getElementById(id);
 const THINKING_VERBS = [
-  'Untangling spaghetti', 'Sobering up', 'Consulting the graph', 'Negotiating with the linter',
-  'Herding edges', 'Counting loose ends', 'Interviewing a semicolon', 'Waking the dependency tree',
-  'Bribing the compiler with whitespace', 'Asking the nodes nicely', 'Unknotting the plot', 'Sweeping up race conditions',
-  'Checking the graph’s pulse', 'Rehearsing the happy path', 'Putting loops on a leash', 'Following the breadcrumb imports',
-  'Giving the types a pep talk', 'Finding the missing parenthesis', 'Taming a feral promise', 'Reading between the log lines',
-  'Taking the scenic dependency', 'Teaching edges some manners', 'Dusting off an invariant', 'Sorting the thought drawer',
-  'Making peace with the parser', 'Convincing the tests to cooperate', 'Untying a very small knot', 'Tracing suspicious arrows',
-  'Putting the graph on decaf', 'Checking for imaginary friends', 'Assembling a plausible plan', 'Shaking the syntax tree',
-  'Looking under the abstraction', 'Turning coffee into checkpoints', 'Following a well-behaved hunch', 'Reconnecting the dots',
-  'Giving the stack some space', 'Hunting an off-by-one gremlin', 'Consulting the sober council', 'Polishing a rough edge',
-  'Auditing the rubber duck', 'Folding a stubborn branch', 'Taking inventory of intentions', 'Offering the DAG a biscuit',
-  'Asking why this node is here', 'Waiting for the penny to drop', 'Untangling yesterday’s shortcut', 'Keeping the graph out of trouble'
+  'Sobering', 'Hydrating', 'Untangling', 'Noodling', 'Wrangling', 'Bamboozling', 'Kerfuffling', 'Galumphing',
+  'Doodling', 'Graphing', 'Edge-herding', 'Dag-wrangling', 'Hiccuping', 'Fermenting', 'Unknotting', 'Squinting',
+  'Rummaging', 'Tiptoeing', 'Befuddling', 'Moseying', 'Percolating', 'Marinating', 'Spelunking', 'Bumbling',
+  'Ruminating', 'Cogitating', 'Meandering', 'Fidgeting', 'Puttering', 'Loitering', 'Scheming', 'Pondering',
+  'Simmering', 'Wobbling', 'Skittering', 'Fossicking', 'Nudging', 'Fiddling', 'Waffling', 'Dithering',
+  'Sketching', 'Tinkering', 'Whittling', 'Excavating', 'Deciphering', 'Foraging', 'Sniffing', 'Burrowing',
+  'Cranking', 'Untwisting', 'Reticulating', 'Node-nudging', 'Gremlin-hunting', 'Backfilling', 'Overthinking', 'Recalibrating',
+  'Dot-connecting', 'Loop-de-looping', 'Semicoloning', 'Bikeshedding', 'Yak-shaving'
 ];
 let verbIndex = -1, verbChangedAt = 0;
 function pickThinkingVerb(now) {
@@ -386,24 +382,40 @@ function setMotionForced(forced) {
 }
 let start, timer, next, ended = false, following = true, unseen = 0, thinkingSince = 0;
 let rendered = [], transition, stageTransitions = [], backdropTransitions = [];
-let ekgBeats = [], ekgFrame = null;
-// PQRST: P bump, Q dip, R spike, S dip, T bump — each a gaussian offset from beat centre (ms).
-const EKG_PQRST = [[-260, .15, 60], [-40, -.15, 12], [0, 1, 8], [50, -.35, 14], [220, .25, 70]];
-function ekgBeatShape(dt, amp) {
-  let y = 0;
-  for (const [offset, weight, width] of EKG_PQRST) { const t = dt - offset; y += weight * Math.exp(-(t * t) / (2 * width * width)); }
-  return amp * y;
+let ekgBeatQueue = [], ekgNextBeatAt = 0, ekgFrame = null;
+// Each beat is an explicit PQRST polyline: [offsetMs, heightFraction] pairs from a beat centre,
+// drawn at fixed x = W - (now - beatTime)/msPerPx + offset/msPerPx so the shape never resamples.
+const EKG_W = 90, EKG_H = 18, EKG_BASELINE = EKG_H / 2, EKG_WINDOW_MS = 3000;
+const EKG_SHAPE_REGULAR = [[-320, 0], [-260, .15], [-200, 0], [-60, 0], [-40, -.15], [0, 1], [40, -.35], [90, 0], [220, .25], [320, 0]];
+const EKG_SHAPE_DOUBLE = [...EKG_SHAPE_REGULAR.slice(0, -1), [370, .12], [420, 0]];
+const EKG_SHAPE_LOG = [[-220, 0], [-180, .18], [-140, 0], [-40, 0], [-25, -.25], [0, 1.4], [25, -.5], [60, 0], [160, .3], [240, 0]];
+function scheduleEkgBeats(now) {
+  if (!ekgNextBeatAt) ekgNextBeatAt = now;
+  while (ekgNextBeatAt < now + EKG_WINDOW_MS) {
+    const amp = 6 * (0.75 + Math.random() * 0.5); // ±25%
+    const shape = Math.random() < 1 / 6 ? EKG_SHAPE_DOUBLE : EKG_SHAPE_REGULAR;
+    ekgBeatQueue.push({ time: ekgNextBeatAt, amp, shape });
+    ekgNextBeatAt += 900 + Math.random() * 600; // 0.9-1.5s
+  }
+  ekgBeatQueue = ekgBeatQueue.filter(b => now - b.time < EKG_WINDOW_MS + 500);
 }
 function ekgDraw(now) {
-  const W = 90, H = 18, baseline = H / 2, WINDOW = 3000, BEAT_MS = 1200;
-  let d = `M0 ${baseline}`;
-  for (let x = 0; x <= W; x += 1) {
-    const t = now - (W - x) * (WINDOW / W);
-    let y = baseline;
-    for (let k = Math.floor((t - 600) / BEAT_MS); k <= Math.floor((t + 600) / BEAT_MS); k++) y -= ekgBeatShape(t - k * BEAT_MS, 6);
-    for (const beat of ekgBeats) y -= ekgBeatShape(t - beat, 10);
-    d += ` L${x} ${y.toFixed(2)}`;
+  scheduleEkgBeats(now);
+  const msPerPx = EKG_WINDOW_MS / EKG_W;
+  const points = [];
+  for (const beat of ekgBeatQueue) {
+    for (const [offset, h] of beat.shape) {
+      const x = EKG_W - (now - beat.time) / msPerPx + offset / msPerPx;
+      points.push([x, EKG_BASELINE - beat.amp * h, beat.time, offset]);
+    }
   }
+  points.sort((a, b) => a[2] - b[2] || a[3] - b[3]);
+  let d = `M0 ${EKG_BASELINE}`;
+  for (const [x, y] of points) {
+    if (x < -5 || x > EKG_W + 5) continue;
+    d += ` L${x.toFixed(2)} ${y.toFixed(2)}`;
+  }
+  d += ` L${EKG_W} ${EKG_BASELINE}`;
   $('ekg-trace').setAttribute('d', d);
 }
 function ekgFlat() { $('ekg-trace').setAttribute('d', 'M0 9H90'); }
@@ -412,7 +424,7 @@ function ekgSetup() {
   cancelAnimationFrame(ekgFrame); ekgFrame = null;
   if (effectiveReducedMotion()) ekgDraw(0); else if (!ended) ekgFrame = requestAnimationFrame(ekgLoop);
 }
-function ekgSpike(now) { ekgBeats.push(now); ekgBeats = ekgBeats.filter(t => now - t < 3200); }
+function ekgSpike(now) { ekgBeatQueue.push({ time: now, amp: 10, shape: EKG_SHAPE_LOG }); }
 const elapsed = ms => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 const atBottom = box => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
 function jumpToBottom() { following = true; unseen = 0; scroller.scrollTop = scroller.scrollHeight; updateJump(); }
@@ -499,7 +511,7 @@ function replay() {
   clearInterval(timer); start = performance.now(); next = 0; ended = false; rendered = []; thinkingSince = 0;
   pickThinkingVerb(0);
   $('working-indicator').hidden = false;
-  ekgBeats = []; ekgSetup();
+  ekgBeatQueue = []; ekgNextBeatAt = 0; ekgSetup();
   following = true; unseen = 0; $('lines').replaceChildren(); $('checklist').replaceChildren(); $('query').value = '';
   $('session').classList.remove('ended'); $('state').textContent = 'running'; $('answer').disabled = false; $('send').disabled = false;
   $('answer').value = ''; $('answer').placeholder = 'Answer the agent…';
