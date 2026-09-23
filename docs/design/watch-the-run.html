@@ -327,12 +327,11 @@ const THINKING_VERBS = [
   'Cranking', 'Untwisting', 'Reticulating', 'Node-nudging', 'Gremlin-hunting', 'Backfilling', 'Overthinking', 'Recalibrating',
   'Dot-connecting', 'Loop-de-looping', 'Semicoloning', 'Bikeshedding', 'Yak-shaving'
 ];
-let verbIndex = -1, verbChangedAt = 0;
-function pickThinkingVerb(now) {
+let verbIndex = -1;
+function pickThinkingVerb() {
   // Draw from all but the previous index, without a retry loop.
   const pick = Math.floor(Math.random() * (THINKING_VERBS.length - (verbIndex < 0 ? 0 : 1)));
   verbIndex = verbIndex >= 0 && pick >= verbIndex ? pick + 1 : pick;
-  verbChangedAt = now;
 }
 // Simplified provider marks; brand colours are OKLCH approximations, not status.
 const PROVIDERS = {
@@ -432,6 +431,16 @@ function ekgDraw(now) {
     }
   }
 })();
+(function thinkingVerbSelfCheck() {
+  // Self-check: the verb must hold steady across ticks with no new line, and change only when a line lands.
+  const savedIndex = verbIndex;
+  verbIndex = -1; pickThinkingVerb();
+  const held = THINKING_VERBS[verbIndex];
+  for (let t = 0; t <= 10000; t += 200) console.assert(THINKING_VERBS[verbIndex] === held, 'verb changed without a new line');
+  pickThinkingVerb();
+  console.assert(THINKING_VERBS[verbIndex] !== held, 'verb did not change on a new line');
+  verbIndex = savedIndex;
+})();
 function ekgFlat() { $('ekg-trace').setAttribute('d', 'M0 9H90'); }
 function ekgLoop() { ekgDraw(performance.now() - start); ekgFrame = requestAnimationFrame(ekgLoop); }
 function ekgSetup() {
@@ -482,6 +491,7 @@ function makeEntry(line) {
 }
 function append(line, now) {
   const row = makeEntry(line); $('lines').append(row); rendered.push({ line, row }); thinkingSince = now;
+  pickThinkingVerb();
   ekgSpike(now);
   if (!following) unseen++;
   applyFilter(); if (following) jumpToBottom(); else updateJump();
@@ -523,13 +533,12 @@ function tick() {
   const status = { elapsed: elapsed(now), tools: `⚒ ${rendered.filter(({ line }) => line.kind === 'tool').length} tools`, checks: `◌ ${rendered.filter(({ line }) => line.kind === 'checked').length}/4 checks` };
   for (const [id, value] of Object.entries(status)) if ($(id).textContent !== value) $(id).textContent = value;
   const seconds = Math.floor((now - thinkingSince) / 1000);
-  if (now - verbChangedAt >= 4000) pickThinkingVerb(now);
   $('working-indicator').querySelector('.body').textContent = `${THINKING_VERBS[verbIndex]}… (${seconds}s)`;
   if (next === logLines.length) finish();
 }
 function replay() {
   clearInterval(timer); start = performance.now(); next = 0; ended = false; rendered = []; thinkingSince = 0;
-  pickThinkingVerb(0);
+  pickThinkingVerb();
   $('working-indicator').hidden = false;
   ekgBeatQueue = []; ekgNextBeatAt = 0; ekgSetup();
   following = true; unseen = 0; $('lines').replaceChildren(); $('checklist').replaceChildren(); $('query').value = '';
