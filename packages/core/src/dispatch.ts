@@ -446,6 +446,7 @@ export const dispatchWave = async (
  * done. Found in the M1 gate: an agent wrote the files, left them uncommitted,
  * and the review that followed was empty — correctly, because a diff against
  * the base has nothing in it until there is a commit. Nothing had told it.
+ * host-avail-7f0g's first run backgrounded its test suite, ended its turn to wait, and the run ended uncommitted.
  *
  * It is not part of the brief. The brief is what a human approves, and this is
  * a fact about the machinery around the run.
@@ -455,6 +456,8 @@ const HOW_IT_ENDS = `
 ---
 
 ## When you are done
+
+This is a headless run and nobody is watching it. The turn you end is the run you end: when you stop, the process exits, and nothing that was still running reports back. Run every command in the foreground and wait for it to finish — never background a command, schedule a wakeup, or stop to wait for a notification. Long commands (the full test suite, coverage) are part of the work; wait for them.
 
 Commit your work on this branch. Nothing outside a commit is reviewed: SOBER
 reads \`git diff <base>...<this branch>\`, so uncommitted files are invisible to
