@@ -1,4 +1,5 @@
 import { flagsOf, lastRun, openDecisions, statusOf, unbound, waitingOn } from '@besober/core'
+import { ranLabel } from '@besober/schema'
 import { openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
 
@@ -109,5 +110,8 @@ const waiting = (board: Awaited<ReturnType<typeof readBoard>>, id: string): stri
 	}
 
 	const run = lastRun(board, id)
-	return run !== null && run.run.exit === null ? dim(`run ${run.id}`) : ''
+	if (run === null) return ''
+	const ran = `${cyan(run.run.host)} (${ranLabel(run.run)})`
+	if (run.run.exit === null) return dim(`run ${run.id} · ${ran}`)
+	return statusOf(board, id) === 'in-review' ? dim(ran) : ''
 }

@@ -20,7 +20,7 @@ import {
 	whoami,
 	writeBrief,
 } from '@besober/core'
-import { Brief, decisionState } from '@besober/schema'
+import { Brief, decisionState, ranLabel } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
 import { source } from './input.js'
 import {
@@ -446,15 +446,7 @@ export const logs = async (node: string): Promise<void> => {
 
 	const text = await readRunOutput(paths, last[0])
 	const { host, tier, fallback } = last[1]
-	const scored =
-		tier === null
-			? fallback
-				? 'no model covers this score, fallback to dispatch.host'
-				: 'unscored'
-			: fallback
-				? `${tier} named no host, fallback to dispatch.host`
-				: tier
-	say(`  ran ${cyan(host)} (${scored})`)
+	say(`  ran ${cyan(host)} (${ranLabel({ tier, fallback })})`)
 	say(
 		tail(text)
 			.map((line) => `  ${mark(line.kind, line.tool)} ${line.text}`)

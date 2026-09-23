@@ -1,4 +1,4 @@
-import type { LogLine, LogWindow } from '@besober/schema'
+import { type LogLine, type LogWindow, ranLabel } from '@besober/schema'
 
 /**
  * What each kind of line looks like, beside the component for the reason
@@ -72,14 +72,5 @@ export const atBottom = (box: {
 }): boolean => box.scrollHeight - box.scrollTop - box.clientHeight < 24
 
 /** The host line, what chose it and the fallback, as the run record wrote them (ADR 0058, 0061). */
-export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string => {
-	const chose =
-		tier === null
-			? fallback
-				? 'no model covers this score, fallback to dispatch.host'
-				: 'unscored'
-			: fallback
-				? `${tier} named no host, fallback to dispatch.host`
-				: tier
-	return `Ran \`${host}\` — ${chose}`
-}
+export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string =>
+	`Ran \`${host}\` — ${ranLabel({ tier, fallback })}`
