@@ -356,6 +356,7 @@ export const runAgent = async (options: LoopOptions): Promise<AgentExit> => {
 				call: call.id,
 				body: capBody(result),
 			})
+			if (signal?.aborted) return { kind: 'stopped' }
 			messages.push({ role: 'tool', tool_call_id: call.id, content: result })
 		}
 	}
