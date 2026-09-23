@@ -75,6 +75,29 @@ test('stopping a run whose owning process is gone closes it as failed', async ()
 
 afterEach(() => vi.resetAllMocks())
 
+test('closing instructions keep the foreground rule before the commit instruction', async () => {
+	const { readConfigFromBase } = await import('./config.js')
+	const { liveModels } = await import('./models.js')
+	const config: Config = {
+		...DEFAULT_CONFIG,
+		dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false },
+	}
+	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: config })
+	vi.mocked(liveModels).mockResolvedValue({ models: [], dropped: [] })
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	const { startAgent } = await import('./host.js')
+	// `startAgent` is the fake host; inspect the prompt in its recorded call
+	// input rather than exporting the private closing-instructions constant.
+	const prompt = vi.mocked(startAgent).mock.calls[0]?.[0]?.prompt
+	expect(prompt).toContain('Run every command in the foreground')
+	expect(prompt).toContain('Commit your work on this branch')
+	expect(prompt?.indexOf('Commit your work on this branch')).toBeGreaterThan(
+		prompt?.indexOf('Run every command in the foreground') ?? -1,
+	)
+})
+
 test('dispatch logs one models event naming what liveModels built and dropped', async () => {
 	const { readConfigFromBase } = await import('./config.js')
 	const { liveModels } = await import('./models.js')
