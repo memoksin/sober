@@ -31,7 +31,11 @@ vi.mock('./host.js', async (original) => ({
 }))
 vi.mock('./worktree.js', async (original) => ({
 	...(await original<typeof import('./worktree.js')>()),
-	addWorktree: vi.fn(async () => ({ path: '/tmp/sober-dispatch-test', branch: 'x', created: false })),
+	addWorktree: vi.fn(async () => ({
+		path: '/tmp/sober-dispatch-test',
+		branch: 'x',
+		created: false,
+	})),
 }))
 vi.mock('./audit.js', async (original) => ({
 	...(await original<typeof import('./audit.js')>()),
@@ -74,7 +78,10 @@ afterEach(() => vi.resetAllMocks())
 test('dispatch logs one models event naming what liveModels built and dropped', async () => {
 	const { readConfigFromBase } = await import('./config.js')
 	const { liveModels } = await import('./models.js')
-	const config: Config = { ...DEFAULT_CONFIG, dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false } }
+	const config: Config = {
+		...DEFAULT_CONFIG,
+		dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false },
+	}
 	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: config })
 	vi.mocked(liveModels).mockResolvedValue({
 		models: [{ name: 'free', run: 'codex --model x', complexity: [1, 10], about: '' }],
@@ -100,7 +107,14 @@ test('with jevMode on, Jev is asked among the list liveModels built, and its pic
 	const { liveModels } = await import('./models.js')
 	const { askJev } = await import('./jev.js')
 	const { startAgent } = await import('./host.js')
-	const built = [{ name: 'free', run: 'codex --model built-only', complexity: [1, 10] as [number, number], about: '' }]
+	const built = [
+		{
+			name: 'free',
+			run: 'codex --model built-only',
+			complexity: [1, 10] as [number, number],
+			about: '',
+		},
+	]
 	const config: Config = {
 		...DEFAULT_CONFIG,
 		dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false, jevMode: true, models: [] },

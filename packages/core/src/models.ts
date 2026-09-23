@@ -149,7 +149,10 @@ export interface BuiltModels {
  * claude pin, or a pin on a source this dispatch could not reach, is kept
  * unconditionally — there is nothing to check it against.
  */
-export const candidatesFor = (dispatch: Config['dispatch'], catalogues: Catalogues): BuiltModels => {
+export const candidatesFor = (
+	dispatch: Config['dispatch'],
+	catalogues: Catalogues,
+): BuiltModels => {
 	const dropped: string[] = []
 	const kept: Model[] = []
 	const names = new Set<string>()
@@ -185,7 +188,7 @@ export const candidatesFor = (dispatch: Config['dispatch'], catalogues: Catalogu
 		const deny = rule.deny?.map(globToRegExp)
 		for (const candidate of catalogue) {
 			if (only !== undefined && !only.some((re) => re.test(candidate.id))) continue
-			if (deny !== undefined && deny.some((re) => re.test(candidate.id))) continue
+			if (deny?.some((re) => re.test(candidate.id))) continue
 			if (names.has(candidate.name)) {
 				dropped.push(`${candidate.name}: clashes with an earlier entry, dropped`)
 				continue
@@ -251,7 +254,9 @@ export const liveModels = async (
 			if (source === 'codex') return await codexModels(deps.home ?? homedir())
 			return await openRouterModels(deps.fetch ?? fetch)
 		} catch (error) {
-			console.error(`sober: the ${source} catalogue could not be reached: ${(error as Error).message}`)
+			console.error(
+				`sober: the ${source} catalogue could not be reached: ${(error as Error).message}`,
+			)
 			return null
 		}
 	}
@@ -260,7 +265,12 @@ export const liveModels = async (
 	let fetched = false
 	for (const source of named) {
 		const known = fresh ? cache.models[source] : undefined
-		found[source] = known !== undefined ? known : ((fetched = true), await fetchOne(source))
+		if (known !== undefined) {
+			found[source] = known
+		} else {
+			fetched = true
+			found[source] = await fetchOne(source)
+		}
 	}
 
 	if (fetched) {

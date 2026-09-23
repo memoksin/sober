@@ -273,9 +273,10 @@ test('dispatch.sources defaults to none, parses per-source, and refuses a bad ra
 })
 
 test('dispatch.catalogueSeconds parses and defaults to an hour', () => {
-	expect(
-		parseConfig('c', '{ "dispatch": { "catalogueSeconds": 60 } }'),
-	).toMatchObject({ kind: 'ok', value: { dispatch: { catalogueSeconds: 60 } } })
+	expect(parseConfig('c', '{ "dispatch": { "catalogueSeconds": 60 } }')).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { catalogueSeconds: 60 } },
+	})
 })
 
 test('modelsFor keeps the list order where ranges overlap', () => {

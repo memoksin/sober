@@ -15,7 +15,6 @@ import { loadBoard } from './graph.js'
 import { type AgentInput, checkHost, HostError, type HostReady, startAgent } from './host.js'
 import { adapterFor, UnknownHostError } from './hosts.js'
 import { askJev } from './jev.js'
-import { liveModels } from './models.js'
 import {
 	appendEvent,
 	appendRunOutput,
@@ -29,6 +28,7 @@ import {
 	wasStopped,
 	writeRunPid,
 } from './local.js'
+import { liveModels } from './models.js'
 import type { Paths } from './paths.js'
 import { type Published, publish } from './pr.js'
 import { readNode, readNodes } from './records.js'

@@ -21,7 +21,8 @@ export const modelsFromSources = async (): Promise<void> => {
 	const paths = await openBoard()
 	const config = await settingsOf(paths)
 	const built = await liveModels(paths, config.dispatch)
-	if (built.models.length === 0) return fail('dispatch.sources names nothing, and dispatch.models is empty')
+	if (built.models.length === 0)
+		return fail('dispatch.sources names nothing, and dispatch.models is empty')
 
 	for (const line of columns(
 		built.models.map((m) => [

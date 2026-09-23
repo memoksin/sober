@@ -102,13 +102,13 @@ export { type Migrated, migrateBoard, needsMigration } from './migrate.js'
 export {
 	type BuiltModels,
 	type Candidate,
-	candidatesFor,
 	type Catalogues,
+	candidatesFor,
 	claudeModels,
 	codexModels,
 	installed,
-	liveModels,
 	type LiveModelsDeps,
+	liveModels,
 	openRouterModels,
 } from './models.js'
 export { findRoot, type Paths, paths } from './paths.js'

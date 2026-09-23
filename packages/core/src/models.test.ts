@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, expect, test, vi } from 'vitest'
 import { DEFAULT_CONFIG } from './config.js'
 import {
-	candidatesFor,
 	type Candidate,
+	candidatesFor,
 	claudeModels,
 	codexModels,
 	installed,
@@ -172,7 +172,12 @@ test('a pin wins a name clash with a discovered entry', () => {
 	const dispatch = {
 		...DEFAULT_CONFIG.dispatch,
 		models: [
-			{ name: 'free', run: 'claude --model opus', complexity: [1, 3] as [number, number], about: 'pinned' },
+			{
+				name: 'free',
+				run: 'claude --model opus',
+				complexity: [1, 3] as [number, number],
+				about: 'pinned',
+			},
 		],
 		sources: { openrouter: { complexity: [1, 3] as [number, number] } },
 	}
@@ -203,7 +208,12 @@ test('a codex or openrouter pin missing from a reachable catalogue is dropped, r
 	const dispatch = {
 		...DEFAULT_CONFIG.dispatch,
 		models: [
-			{ name: 'old', run: 'codex --model gpt-5-old', complexity: [4, 7] as [number, number], about: '' },
+			{
+				name: 'old',
+				run: 'codex --model gpt-5-old',
+				complexity: [4, 7] as [number, number],
+				about: '',
+			},
 		],
 	}
 	const built = candidatesFor(dispatch, { claude: [], codex: [], openrouter: [] })
@@ -214,7 +224,12 @@ test('a pin on a source this dispatch could not reach is kept, unchecked', () =>
 	const dispatch = {
 		...DEFAULT_CONFIG.dispatch,
 		models: [
-			{ name: 'old', run: 'codex --model gpt-5-old', complexity: [4, 7] as [number, number], about: '' },
+			{
+				name: 'old',
+				run: 'codex --model gpt-5-old',
+				complexity: [4, 7] as [number, number],
+				about: '',
+			},
 		],
 	}
 	const built = candidatesFor(dispatch, { claude: [], codex: null, openrouter: [] })
