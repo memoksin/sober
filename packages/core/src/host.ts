@@ -86,10 +86,11 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 	const [command, args] = hostCommand(host)
 	const [file, lead] = program(adapter.command ?? command)
 	let stdout: string
+	let stderr: string
 	try {
 		// The model flag is the run's, not the probe's: `opencode providers list`
 		// rejects `--model` and prints its help, which read as "not logged in".
-		;({ stdout } = await run(file, [...lead, ...withoutModel(args), ...adapter.probe], {
+		;({ stdout, stderr } = await run(file, [...lead, ...withoutModel(args), ...adapter.probe], {
 			encoding: 'utf8',
 		}))
 	} catch (error) {
@@ -99,7 +100,9 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 		return { ok: false, reason: `${host} could not report its authentication status` }
 	}
 
-	const loggedIn = adapter.loggedIn(stdout)
+	// `codex login status` answers on stderr; stdout still goes first, so a JSON
+	// answer is never read with a warning glued to it.
+	const loggedIn = adapter.loggedIn(stdout) ?? adapter.loggedIn(stderr)
 	if (loggedIn === true) return { ok: true, reason: null }
 	if (loggedIn === null)
 		return { ok: false, reason: `${host} reported an authentication status SOBER cannot read` }

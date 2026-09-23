@@ -137,6 +137,12 @@ test('a host that cannot report its status is a refusal, never a silent pass', a
 	})
 })
 
+test('a host that answers its status on stderr is read there', async () => {
+	// `codex login status` prints this to stderr and nothing to stdout.
+	const host = node('console.error("Logged in using ChatGPT")', 'codex')
+	expect(await checkHost(host)).toEqual({ ok: true, reason: null })
+})
+
 test('a logged-in host is ready, and says nothing else', async () => {
 	expect(await checkHost(node('console.log(JSON.stringify({ loggedIn: true }))'))).toEqual({
 		ok: true,
