@@ -69,13 +69,7 @@
 		// the retired GPT-5 family, and OpenRouter's free catalogue for the
 		// low end. "sober models --sources" prints what Jev would see.
 		"sources": {
-			"codex": { "complexity": [4, 10], "deny": ["gpt-5*"] },
-			"openrouter": {
-				"complexity": [1, 3],
-				"only": ["*:free"],
-				// Free but not coding models: a safety classifier and domain-tuned variants.
-				"deny": ["*content-safety*", "*-fin:*", "*-sante:*", "*-vl:*"]
-			}
+			"codex": { "complexity": [4, 10], "deny": ["gpt-5*"] }
 		},
 
 		// Jev (TypeSafe's System One model) scores each node and picks among
