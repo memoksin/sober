@@ -1,4 +1,4 @@
-import type { LogWindow } from '@besober/schema'
+import { type LogLineInput, LogWindow } from '@besober/schema'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Wire } from '../wire.js'
@@ -25,12 +25,10 @@ const surfaceOf = (
 	}) as Wire['watch'],
 })
 
-const window = (over: Partial<LogWindow> = {}): LogWindow => ({
-	lines: [],
-	offset: 0,
-	live: false,
-	...over,
-})
+// Lines are written as a host writes them; the parse fills the fields they leave out.
+const window = (
+	over: Partial<Omit<LogWindow, 'lines'>> & { lines?: readonly LogLineInput[] } = {},
+): LogWindow => LogWindow.parse({ lines: [], offset: 0, live: false, ...over })
 
 test('a person reads what the agent said, without opening a terminal', async () => {
 	render(
@@ -232,7 +230,7 @@ test('an empty answer is not sent', async () => {
 	expect(op).not.toHaveBeenCalled()
 })
 
-test('prose renders in a box and a tool call does not', async () => {
+test('prose is a line like any other', async () => {
 	render(
 		<LogScreen
 			node="n-k7f2"
@@ -240,6 +238,7 @@ test('prose renders in a box and a tool call does not', async () => {
 				window({
 					lines: [
 						{ kind: 'text', text: 'a paragraph', tool: null },
+						{ kind: 'answer', text: 'the answer', tool: null },
 						{ kind: 'tool', text: 'Read', tool: null },
 					],
 				}),
@@ -248,8 +247,15 @@ test('prose renders in a box and a tool call does not', async () => {
 		/>,
 	)
 
-	expect((await screen.findByText('a paragraph')).className).toContain('border')
-	expect(screen.getByText('Read').className).not.toContain('border')
+	const prose = await screen.findByText('a paragraph')
+	expect(prose.className).not.toContain('border')
+	expect(prose.className).not.toContain('bg-[var(--surface)]')
+	for (const text of ['a paragraph', 'Read']) {
+		const row = screen.getByText(text).parentElement
+		expect(row?.tagName).toBe('LI')
+		expect(row?.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
+	}
+	expect(screen.getByText('the answer').closest('li')?.firstElementChild?.textContent).toBe('›')
 })
 
 const markOf = (text: string): string | undefined =>

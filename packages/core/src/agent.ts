@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import type { LogLine } from '@besober/schema'
+import type { LogLineInput } from '@besober/schema'
 import type { AgentExit } from './host.js'
-import { NO_HUMAN } from './hosts.js'
+import { capBody, NO_HUMAN, summarize } from './hosts.js'
 
 export type { AgentExit }
 
@@ -13,7 +13,7 @@ export interface LoopOptions {
 	readonly apiKey: string
 	readonly cwd: string
 	readonly prompt: string
-	readonly onLine: (line: LogLine) => void
+	readonly onLine: (line: LogLineInput) => void
 	readonly signal?: AbortSignal
 	readonly fetch?: typeof fetch
 	readonly backoffMs?: readonly number[]
@@ -344,13 +344,19 @@ export const runAgent = async (options: LoopOptions): Promise<AgentExit> => {
 		}
 
 		for (const call of toolCalls) {
+			const detail = oneLineArg(call.function.arguments)
+			const tool = call.function.name
+			options.onLine({ kind: 'tool', text: `${tool} ${detail}`, tool, call: call.id, detail })
+			if (signal?.aborted) return { kind: 'stopped' }
+			const result = await runTool(tool, call.function.arguments, options.cwd, signal)
 			options.onLine({
-				kind: 'tool',
-				text: `${call.function.name} ${oneLineArg(call.function.arguments)}`,
-				tool: call.function.name,
+				kind: 'output',
+				text: summarize(result),
+				tool,
+				call: call.id,
+				body: capBody(result),
 			})
 			if (signal?.aborted) return { kind: 'stopped' }
-			const result = await runTool(call.function.name, call.function.arguments, options.cwd, signal)
 			messages.push({ role: 'tool', tool_call_id: call.id, content: result })
 		}
 	}

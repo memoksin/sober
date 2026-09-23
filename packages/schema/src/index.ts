@@ -45,6 +45,7 @@ export {
 	Digest,
 	Impact,
 	LogLine,
+	type LogLineInput,
 	LogWindow,
 	ProjectedNode,
 	Projection,

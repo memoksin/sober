@@ -20,7 +20,7 @@ import {
 	whoami,
 	writeBrief,
 } from '@besober/core'
-import { Brief, decisionState, ranLabel } from '@besober/schema'
+import { Brief, decisionState, ranLabel, type LogLine } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
 import { source } from './input.js'
 import {
@@ -63,6 +63,7 @@ const TAIL: Record<string, readonly [string, (text: string) => string] | undefin
 	checked: ['■', dim],
 	raw: ['!', red],
 	answer: ['›', magenta],
+	output: ['⎿', dim],
 }
 
 // Same glyphs as `TOOL` in apps/dashboard/src/logs/data.ts; unknown names fall back.
@@ -80,6 +81,20 @@ const TOOL: Record<string, string | undefined> = {
 const mark = (kind: string, tool: string | null = null): string => {
 	const [glyph, colour] = TAIL[kind] ?? ['·', dim]
 	return tool === null ? colour(glyph) : colour(TOOL[tool.trim().toLowerCase()] ?? glyph)
+}
+
+/**
+ * One rendered line as `sober logs` prints it. A tool line with no detail — any
+ * line written before detail existed — prints exactly as it always did. An
+ * output sits under its tool line; its body is never printed.
+ */
+export const shown = (line: LogLine): string => {
+	if (line.kind === 'output') return `    ${mark('output')} ${line.text}`
+	const text =
+		line.kind === 'tool' && line.detail !== null
+			? `${line.tool ?? line.text}(${line.detail})`
+			: line.text
+	return `  ${mark(line.kind, line.tool)} ${text}`
 }
 
 const ORDER = { open: 0, unopened: 1, answered: 2 } as const
@@ -331,10 +346,11 @@ export const run = async (
 				anyway,
 				attended: watch,
 				onLine: (line) => {
-					const [rendered] = tail(line)
-					if (rendered === undefined) return
+					// One event can hold several lines: a turn's tool results arrive together.
+					const rendered = tail(line)
+					if (rendered.length === 0) return
 					spin.clear()
-					say(`  ${mark(rendered.kind, rendered.tool)} ${rendered.text}`)
+					say(rendered.map(shown).join('\n'))
 				},
 			})
 			spin.stop()
@@ -447,11 +463,7 @@ export const logs = async (node: string): Promise<void> => {
 	const text = await readRunOutput(paths, last[0])
 	const { host, tier, fallback } = last[1]
 	say(`  ran ${cyan(host)} (${ranLabel({ tier, fallback })})`)
-	say(
-		tail(text)
-			.map((line) => `  ${mark(line.kind, line.tool)} ${line.text}`)
-			.join('\n'),
-	)
+	say(tail(text).map(shown).join('\n'))
 }
 
 /**

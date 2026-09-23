@@ -171,14 +171,26 @@ export const LogLine = z.strictObject({
 		'checked',
 		'raw',
 		'answer',
+		// A tool's result: `text` is a one-line summary, `call` pairs it with its tool line.
+		'output',
 	]),
 	text: z.string(),
 	// Not under SCHEMA_VERSION: that versions board records, and this is read off a local log.
 	/** Which tool, where the line is one. Null on a line that names none, and on every line written before this existed. */
 	tool: z.string().nullable().default(null),
+	/** ISO time of the event. Null where the host's stream carries none — Claude Code's does not. */
+	at: z.string().nullable().default(null),
+	/** The host's tool-call id, which pairs a `tool` line with its `output`. */
+	call: z.string().nullable().default(null),
+	/** A one-line summary of what a `tool` line was called with. */
+	detail: z.string().nullable().default(null),
+	/** An `output` line's text, capped at 40 lines / 4 KB. */
+	body: z.string().nullable().default(null),
 })
 
 export type LogLine = z.infer<typeof LogLine>
+/** A line as it is built: every defaulted field may be left out. */
+export type LogLineInput = z.input<typeof LogLine>
 
 /**
  * What a screen watching a run is sent, one message at a time (ADR 0046).
