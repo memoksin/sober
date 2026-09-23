@@ -168,14 +168,8 @@ h1 span { color: var(--ink-dim); }
 .entry.raw { color: var(--tx-error); }
 .entry.answer { color: var(--tx-human); }
 .working-indicator { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 8px 24px; color: var(--tx-think); font: var(--text-sm)/1.65 var(--font-mono); }
-.graph-pulse { width: 62px; height: 16px; flex-shrink: 0; overflow: visible; }
-.pulse-edge { stroke: var(--ink-faint); stroke-width: 1; }
-.edge-glow { stroke: var(--tx-think); stroke-width: 2; opacity: 0; animation: edge-travel 2.4s linear infinite; }
-.edge-glow.second { animation-delay: -1.2s; }
-.pulse-node { fill: var(--surface); stroke: var(--ink-faint); stroke-width: 1.5; animation: node-arrival 2.4s linear infinite; }
-.pulse-node.middle { animation-delay: -1.2s; }
-.pulse-node.last { animation-delay: -0.24s; }
-.signal { fill: var(--tx-think); animation: signal-travel 2.4s linear infinite; }
+.ekg { width: 90px; height: 18px; flex-shrink: 0; overflow: visible; }
+.ekg-trace { fill: none; stroke: var(--tx-think); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 .entry.started { color: var(--ink-dim); font-size: var(--text-xs); }
 .entry.check, .entry.checked { color: var(--ink-dim); font-size: var(--text-sm); }
 .result-summary { color: var(--ink-dim); }
@@ -203,17 +197,12 @@ textarea::placeholder { color: var(--ink-dim); }
 .design-note { position: fixed; bottom: 18px; left: 24px; right: 24px; color: var(--ink-dim); font-size: var(--text-xs); display: flex; justify-content: space-between; gap: 16px; }
 .reopen { position: fixed; z-index: 2; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 @keyframes pulse { 50% { opacity: .35; } }
-@keyframes signal-travel { 0%, 8% { transform: translateX(0); opacity: 0; } 12% { opacity: 1; } 50% { transform: translateX(25px); } 88% { opacity: 1; } 92%, 100% { transform: translateX(50px); opacity: 0; } }
-@keyframes node-arrival { 0%, 10% { fill: var(--tx-think); stroke: var(--tx-think); } 22%, 88% { fill: var(--surface); stroke: var(--ink-faint); } 100% { fill: var(--tx-think); stroke: var(--tx-think); } }
-@keyframes edge-travel { 0%, 8%, 55%, 100% { opacity: 0; } 25%, 42% { opacity: .45; } }
 @keyframes dot-wave { 0%, 40%, 100% { transform: translateY(0); } 20% { transform: translateY(-4px); } }
-.full:not(.ended) .dots i { animation: dot-wave 1.5s ease-in-out infinite; }
-.full:not(.ended) .dots i:nth-child(2) { animation-delay: .15s; }
-.full:not(.ended) .dots i:nth-child(3) { animation-delay: .3s; }
+.session:not(.ended) .dots i { animation: dot-wave 1.5s ease-in-out infinite; }
+.session:not(.ended) .dots i:nth-child(2) { animation-delay: .15s; }
+.session:not(.ended) .dots i:nth-child(3) { animation-delay: .3s; }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
-  .pulse-node.middle { fill: var(--tx-think); stroke: var(--tx-think); }
-  .signal, .edge-glow { display: none; }
+  html:not(.force-motion) *, html:not(.force-motion) *::before, html:not(.force-motion) *::after { animation: none !important; scroll-behavior: auto !important; }
 }
 @media (max-width: 700px) {
   .review-tools { right: 8px; }
@@ -253,6 +242,11 @@ textarea::placeholder { color: var(--ink-dim); }
   </div>
   <button id="theme" aria-label="Toggle colour theme">Theme: dark</button>
   <button id="cycle-provider">Preview next provider</button>
+  <span>Motion</span>
+  <div class="font-options" role="group" aria-label="Choose motion behaviour">
+    <button id="motion-follow" aria-pressed="true">Follow system</button>
+    <button id="motion-force" aria-pressed="false">Force full motion</button>
+  </div>
   </div>
 </details>
 <button class="reopen" id="reopen" hidden>Open session</button>
@@ -278,14 +272,9 @@ textarea::placeholder { color: var(--ink-dim); }
     </section>
     <button class="jump" id="jump" hidden>0 new lines ↓</button>
   </div>
-  <!-- Graph pulse replaces the former ✻ spinner. -->
+  <!-- ✻ was the first thinking glyph; the EKG trace replaced it. -->
   <div class="working-indicator" id="working-indicator">
-    <svg class="graph-pulse" viewBox="0 0 62 16" aria-hidden="true">
-      <path class="pulse-edge" d="M6 8H31M31 8H56"/>
-      <path class="edge-glow" d="M6 8H31"/><path class="edge-glow second" d="M31 8H56"/>
-      <circle class="signal" cx="6" cy="8" r="2"/>
-      <circle class="pulse-node" cx="6" cy="8" r="3.5"/><circle class="pulse-node middle" cx="31" cy="8" r="3.5"/><circle class="pulse-node last" cx="56" cy="8" r="3.5"/>
-    </svg>
+    <svg class="ekg" viewBox="0 0 90 18" aria-hidden="true"><path class="ekg-trace" id="ekg-trace" d="M0 9H90"/></svg>
     <span class="body">Consulting the graph… (0s)</span>
   </div>
   <form class="answer-area" id="answer-form">
@@ -386,8 +375,38 @@ function showProvider() {
 $('cycle-provider').onclick = () => { providerPreview = (providerPreview + 1) % PROVIDER_PREVIEWS.length; showProvider(); };
 const scroller = $('transcript');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const effectiveReducedMotion = () => reducedMotion.matches && !document.documentElement.classList.contains('force-motion');
+$('motion-follow').onclick = () => setMotionForced(false);
+$('motion-force').onclick = () => setMotionForced(true);
+function setMotionForced(forced) {
+  document.documentElement.classList.toggle('force-motion', forced);
+  $('motion-follow').setAttribute('aria-pressed', String(!forced));
+  $('motion-force').setAttribute('aria-pressed', String(forced));
+  ekgSetup();
+}
 let start, timer, next, ended, following = true, unseen = 0, thinkingSince = 0;
 let rendered = [], transition, stageTransitions = [], backdropTransitions = [];
+let ekgBeats = [], ekgFrame = null;
+function ekgBeatShape(dt, amp) { const w = 90; if (Math.abs(dt) > w) return 0; const t = dt / w; return amp * Math.pow(1 - Math.abs(t), 3); }
+function ekgDraw(now) {
+  const W = 90, H = 18, baseline = H / 2, WINDOW = 3000;
+  let d = `M0 ${baseline}`;
+  for (let x = 0; x <= W; x += 2) {
+    const t = now - (W - x) * (WINDOW / W);
+    let y = baseline;
+    for (let k = Math.floor((t - 200) / 1500); k <= Math.floor((t + 200) / 1500); k++) y -= ekgBeatShape(t - k * 1500, 3);
+    for (const beat of ekgBeats) y -= ekgBeatShape(t - beat, 7);
+    d += ` L${x} ${y.toFixed(1)}`;
+  }
+  $('ekg-trace').setAttribute('d', d);
+}
+function ekgFlat() { $('ekg-trace').setAttribute('d', 'M0 9H90'); }
+function ekgLoop() { ekgDraw(performance.now() - start); ekgFrame = requestAnimationFrame(ekgLoop); }
+function ekgSetup() {
+  cancelAnimationFrame(ekgFrame); ekgFrame = null;
+  if (effectiveReducedMotion()) ekgDraw(0); else if (!ended) ekgFrame = requestAnimationFrame(ekgLoop);
+}
+function ekgSpike(now) { ekgBeats.push(now); ekgBeats = ekgBeats.filter(t => now - t < 3200); }
 const elapsed = ms => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 const atBottom = box => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
 function jumpToBottom() { following = true; unseen = 0; scroller.scrollTop = scroller.scrollHeight; updateJump(); }
@@ -425,6 +444,7 @@ function makeEntry(line) {
 }
 function append(line, now) {
   const row = makeEntry(line); $('lines').append(row); rendered.push({ line, row }); thinkingSince = now;
+  ekgSpike(now);
   if (!following) unseen++;
   applyFilter(); if (following) jumpToBottom(); else updateJump();
 }
@@ -443,7 +463,8 @@ function applyFilter() {
 }
 function finish() {
   ended = true; clearInterval(timer); $('session').classList.add('ended'); $('state').textContent = 'ended';
-  $('working-indicator').hidden = true;
+  cancelAnimationFrame(ekgFrame); ekgFrame = null; ekgFlat();
+  setTimeout(() => { $('working-indicator').hidden = true; }, effectiveReducedMotion() ? 0 : 300);
   $('answer').disabled = true; $('send').disabled = true; $('answer').placeholder = 'Run ended. Replay to answer again.';
   $('answer-hint').textContent = 'Session ended · this transcript stays available to read and search';
   const heading = document.createElement('h3'); heading.textContent = 'Acceptance checks';
@@ -472,6 +493,7 @@ function replay() {
   clearInterval(timer); start = performance.now(); next = 0; ended = false; rendered = []; thinkingSince = 0;
   pickThinkingVerb(0);
   $('working-indicator').hidden = false;
+  ekgBeats = []; ekgSetup();
   following = true; unseen = 0; $('lines').replaceChildren(); $('checklist').replaceChildren(); $('query').value = '';
   $('session').classList.remove('ended'); $('state').textContent = 'running'; $('answer').disabled = false; $('send').disabled = false;
   $('answer').value = ''; $('answer').placeholder = 'Answer the agent…';
@@ -482,7 +504,8 @@ function toggleFull() {
   const box = $('session'), first = box.getBoundingClientRect(), scrollTop = scroller.scrollTop;
   transition?.cancel(); stageTransitions.forEach(animation => animation.cancel());
   $('review-tools').open = false;
-  if (reducedMotion.matches) {
+  const reduced = effectiveReducedMotion();
+  if (reduced) {
     const previous = box.cloneNode(true);
     previous.removeAttribute('id'); previous.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
     previous.querySelector('[aria-live]').removeAttribute('aria-live');
@@ -497,13 +520,13 @@ function toggleFull() {
   $('fullscreen').setAttribute('aria-label', full ? 'Leave full screen (f)' : 'Enter full screen (f)');
   const base = getComputedStyle(box).transform;
   const finalTransform = base === 'none' ? '' : base;
-  const frames = reducedMotion.matches ? [{ opacity: 0 }, { opacity: 1 }] : [
+  const frames = reduced ? [{ opacity: 0 }, { opacity: 1 }] : [
     { transform: `translate(${first.left - last.left}px, ${first.top - last.top}px) ${finalTransform} scale(${first.width / last.width}, ${first.height / last.height})`, opacity: .7 },
     { transform: finalTransform || 'none', opacity: 1 }
   ];
-  const duration = reducedMotion.matches ? 120 : full ? 450 : 330;
-  transition = box.animate(frames, { duration, easing: reducedMotion.matches ? 'linear' : full ? 'linear(0, 0.32 12%, 0.72 27%, 0.95 43%, 1.018 60%, 0.995 80%, 1)' : 'cubic-bezier(.22, 1, .36, 1)' });
-  if (!reducedMotion.matches) {
+  const duration = reduced ? 120 : full ? 450 : 330;
+  transition = box.animate(frames, { duration, easing: reduced ? 'linear' : full ? 'linear(0, 0.32 12%, 0.72 27%, 0.95 43%, 1.018 60%, 0.995 80%, 1)' : 'cubic-bezier(.22, 1, .36, 1)' });
+  if (!reduced) {
     const stages = [box.querySelector('.titlebar'), box.querySelector('.transcript-wrap'), box.querySelector('.statusbar')];
     stageTransitions = stages.map((element, index) => element.animate([
       { opacity: 0, transform: `translateY(${full ? 8 : -5}px)` },
@@ -517,13 +540,14 @@ function animateBackdrop(full, duration) {
   const canvas = document.querySelector('.canvas'), shade = $('shade');
   const fromFilter = getComputedStyle(canvas).filter, fromColour = getComputedStyle(shade).backgroundColor;
   backdropTransitions.forEach(animation => animation.cancel());
-  canvas.style.filter = full && !reducedMotion.matches ? 'blur(5px)' : 'none';
+  canvas.style.filter = full && !effectiveReducedMotion() ? 'blur(5px)' : 'none';
   shade.style.backgroundColor = full ? 'oklch(0 0 0 / .65)' : 'oklch(from var(--bg) l c h / .72)';
   backdropTransitions = [canvas.animate([{ filter: fromFilter }, { filter: canvas.style.filter }], { duration, easing: 'ease-out' }),
     shade.animate([{ backgroundColor: fromColour }, { backgroundColor: shade.style.backgroundColor }], { duration, easing: 'ease-out' })];
 }
-function closeSession() { $('session').hidden = true; $('shade').hidden = true; $('reopen').hidden = false; $('reopen').focus(); animateBackdrop(false, reducedMotion.matches ? 120 : 220); }
-$('reopen').onclick = () => { $('session').hidden = false; $('shade').hidden = false; $('reopen').hidden = true; animateBackdrop($('session').classList.contains('full'), reducedMotion.matches ? 120 : 220); scroller.focus(); if (following) jumpToBottom(); };
+function closeSession() { $('session').hidden = true; $('shade').hidden = true; $('reopen').hidden = false; $('reopen').focus(); animateBackdrop(false, effectiveReducedMotion() ? 120 : 220); }
+$('reopen').onclick = () => { $('session').hidden = false; $('shade').hidden = false; $('reopen').hidden = true; animateBackdrop($('session').classList.contains('full'), effectiveReducedMotion() ? 120 : 220); scroller.focus(); if (following) jumpToBottom(); };
+reducedMotion.addEventListener('change', () => ekgSetup());
 $('close').onclick = closeSession; $('fullscreen').onclick = toggleFull; $('replay').onclick = replay;
 $('query').oninput = () => { applyFilter(); following = atBottom(scroller); updateJump(); };
 function closeFind() { $('find').hidden = true; $('query').value = ''; applyFilter(); scroller.focus(); }
