@@ -44,8 +44,10 @@ import { warn } from './team.js'
 /**
  * A tool call, a sentence and an ending do not read alike, so they do not look
  * alike. A mark rather than the word: the word `tool` beside every tool name is
- * eight columns saying what the colour already said. The dashboard's copy is
- * `MARK` in apps/dashboard/src/logs/data.ts, aligned by hand.
+ * eight columns saying what the colour already said. Blue is the nearest ANSI
+ * colour to the periwinkle ADR 0064 gives the tool tone, `--tx-tool` in the
+ * dashboard's copy, `MARK`/`TONE` in apps/dashboard/src/logs/data.ts, aligned
+ * by hand.
  */
 const TAIL: Record<string, readonly [string, (text: string) => string] | undefined> = {
 	started: ['◌', dim],

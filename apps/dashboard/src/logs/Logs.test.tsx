@@ -298,6 +298,12 @@ test('a tool line shows its glyph, and an unlisted tool falls back', async () =>
 		/>,
 	)
 
-	expect((await screen.findByText('ls')).textContent).toBe('$ls')
-	expect(screen.getByText('zap').textContent).toBe('⚒zap')
+	const bash = (await screen.findByText('ls')).closest('li')?.querySelector('[aria-hidden]')
+	expect(bash?.textContent).toBe('$')
+	expect((bash as HTMLElement | null | undefined)?.style.color).toBe('var(--tx-tool)')
+	expect(screen.getByText('ls').textContent).toBe('ls')
+
+	const frobnicate = screen.getByText('zap').closest('li')?.querySelector('[aria-hidden]')
+	expect(frobnicate?.textContent).toBe('⚒')
+	expect(screen.getByText('zap').textContent).toBe('zap')
 })
