@@ -2,6 +2,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App.js'
 import './theme.css'
+// ADR 0064: the run screen's transcript typeface, bundled so the dashboard
+// keeps working with no network reachable (ADR 0008).
+import '@fontsource-variable/jetbrains-mono'
+import '@fontsource/ibm-plex-sans/400.css'
+import '@fontsource/ibm-plex-sans/500.css'
+import '@fontsource/ibm-plex-sans/600.css'
 import { claimToken } from './wire.js'
 
 const mount = document.getElementById('root')
