@@ -168,7 +168,7 @@ h1 span { color: var(--ink-dim); }
 .entry.raw { color: var(--tx-error); }
 .entry.answer { color: var(--tx-human); }
 .working-indicator { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 8px 24px; color: var(--tx-think); font: var(--text-sm)/1.65 var(--font-mono); }
-.ekg { width: 90px; height: 18px; flex-shrink: 0; overflow: visible; }
+.ekg { width: 90px; height: 18px; flex-shrink: 0; overflow: hidden; }
 .ekg-trace { fill: none; stroke: var(--tx-think); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 .entry.started { color: var(--ink-dim); font-size: var(--text-xs); }
 .entry.check, .entry.checked { color: var(--ink-dim); font-size: var(--text-sm); }
@@ -399,23 +399,23 @@ function scheduleEkgBeats(now) {
   }
   ekgBeatQueue = ekgBeatQueue.filter(b => now - b.time < EKG_WINDOW_MS + 500);
 }
-function ekgDraw(now) {
-  scheduleEkgBeats(now);
+function ekgPoints(now, queue) {
   const msPerPx = EKG_WINDOW_MS / EKG_W;
   const points = [];
-  for (const beat of ekgBeatQueue) {
+  for (const beat of queue) {
     for (const [offset, h] of beat.shape) {
       const x = EKG_W - (now - beat.time) / msPerPx + offset / msPerPx;
-      points.push([x, EKG_BASELINE - beat.amp * h, beat.time, offset]);
+      points.push([x, EKG_BASELINE - beat.amp * h]);
     }
   }
-  points.sort((a, b) => a[2] - b[2] || a[3] - b[3]);
-  let d = `M0 ${EKG_BASELINE}`;
-  for (const [x, y] of points) {
-    if (x < -5 || x > EKG_W + 5) continue;
-    d += ` L${x.toFixed(2)} ${y.toFixed(2)}`;
-  }
-  d += ` L${EKG_W} ${EKG_BASELINE}`;
+  return points.sort((a, b) => a[0] - b[0]);
+}
+function ekgDraw(now) {
+  scheduleEkgBeats(now);
+  const points = ekgPoints(now, ekgBeatQueue);
+  let d = `M${(-EKG_W).toFixed(1)} ${EKG_BASELINE}`;
+  for (const [x, y] of points) d += ` L${x.toFixed(1)} ${y.toFixed(1)}`;
+  d += ` L${(2 * EKG_W).toFixed(1)} ${EKG_BASELINE}`;
   $('ekg-trace').setAttribute('d', d);
 }
 function ekgFlat() { $('ekg-trace').setAttribute('d', 'M0 9H90'); }
@@ -424,7 +424,13 @@ function ekgSetup() {
   cancelAnimationFrame(ekgFrame); ekgFrame = null;
   if (effectiveReducedMotion()) ekgDraw(0); else if (!ended) ekgFrame = requestAnimationFrame(ekgLoop);
 }
-function ekgSpike(now) { ekgBeatQueue.push({ time: now, amp: 10, shape: EKG_SHAPE_LOG }); }
+function ekgSpike(now) {
+  // A spike replaces any beat within 450ms of it and cancels anything scheduled later,
+  // so beats never overlap; the regular rhythm resumes 0.9-1.5s after the spike.
+  ekgBeatQueue = ekgBeatQueue.filter(b => b.time <= now - 450);
+  ekgBeatQueue.push({ time: now, amp: 10, shape: EKG_SHAPE_LOG });
+  ekgNextBeatAt = now + 900 + Math.random() * 600;
+}
 const elapsed = ms => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 const atBottom = box => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
 function jumpToBottom() { following = true; unseen = 0; scroller.scrollTop = scroller.scrollHeight; updateJump(); }
@@ -602,6 +608,15 @@ document.fonts.ready.then(() => { if (following) jumpToBottom(); });
 new ResizeObserver(() => { if (following) jumpToBottom(); }).observe(scroller);
 showProvider(); themeLabel(); replay();
 console.assert(!effectiveReducedMotion(), 'mockup must animate by default');
+(function ekgSelfCheck() {
+  const testQueue = [{ time: 1000, amp: 6, shape: EKG_SHAPE_REGULAR }];
+  const rY = now => {
+    const [, y] = ekgPoints(now, testQueue).reduce((max, p) => p[1] < max[1] ? p : max);
+    return y;
+  };
+  const dy = Math.abs(rY(1200) - rY(1216));
+  console.assert(dy === 0, `ekg R peak must only translate between 16ms frames, saw Δy=${dy}`);
+})();
 </script>
 </body>
 </html>
