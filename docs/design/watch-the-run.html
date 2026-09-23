@@ -392,7 +392,7 @@ const EKG_SHAPE_LOG = [[-220, 0], [-180, .18], [-140, 0], [-40, 0], [-25, -.25],
 function scheduleEkgBeats(now) {
   if (!ekgNextBeatAt) ekgNextBeatAt = now;
   while (ekgNextBeatAt < now + EKG_WINDOW_MS) {
-    const amp = 6 * (0.75 + Math.random() * 0.5); // ±25%
+    const amp = 4.5 * (0.75 + Math.random() * 0.5); // ±25%
     const shape = Math.random() < 1 / 6 ? EKG_SHAPE_DOUBLE : EKG_SHAPE_REGULAR;
     ekgBeatQueue.push({ time: ekgNextBeatAt, amp, shape });
     ekgNextBeatAt += 900 + Math.random() * 600; // 0.9-1.5s
@@ -418,6 +418,20 @@ function ekgDraw(now) {
   d += ` L${(2 * EKG_W).toFixed(1)} ${EKG_BASELINE}`;
   $('ekg-trace').setAttribute('d', d);
 }
+(function ekgSelfCheck() {
+  // Self-check: every point y of all three shapes at maximum amplitude must stay inside [0.5, 17.5].
+  const cases = [
+    { shape: EKG_SHAPE_REGULAR, amp: 4.5 * 1.25 },
+    { shape: EKG_SHAPE_DOUBLE, amp: 4.5 * 1.25 },
+    { shape: EKG_SHAPE_LOG, amp: 5.5 },
+  ];
+  for (const { shape, amp } of cases) {
+    for (const [, h] of shape) {
+      const y = EKG_BASELINE - amp * h;
+      console.assert(y >= 0.5 && y <= 17.5, `EKG point out of bounds: y=${y}`);
+    }
+  }
+})();
 function ekgFlat() { $('ekg-trace').setAttribute('d', 'M0 9H90'); }
 function ekgLoop() { ekgDraw(performance.now() - start); ekgFrame = requestAnimationFrame(ekgLoop); }
 function ekgSetup() {
@@ -427,8 +441,8 @@ function ekgSetup() {
 function ekgSpike(now) {
   // A spike replaces any beat within 450ms of it and cancels anything scheduled later,
   // so beats never overlap; the regular rhythm resumes 0.9-1.5s after the spike.
-  ekgBeatQueue = ekgBeatQueue.filter(b => b.time <= now - 450);
-  ekgBeatQueue.push({ time: now, amp: 10, shape: EKG_SHAPE_LOG });
+  ekgBeatQueue = ekgBeatQueue.filter(b => b.time + b.shape.at(-1)[0] < now + EKG_SHAPE_LOG[0][0]);
+  ekgBeatQueue.push({ time: now, amp: 5.5, shape: EKG_SHAPE_LOG });
   ekgNextBeatAt = now + 900 + Math.random() * 600;
 }
 const elapsed = ms => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
