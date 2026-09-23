@@ -11,6 +11,13 @@ test('a single-quoted command with < and spaces survives the shell', async () =>
 	expect(judged.result).toEqual({ exit: 0 })
 })
 
+test('the shell has the tools an npm sh shim calls', async () => {
+	// Git's `usr/bin/sh.exe` started directly has neither, and `pnpm install`
+	// through it died in the shim before pnpm ran.
+	const cwd = await tmpRoot('sober-audit-')
+	expect((await judge(cwd, 'command -v sed && command -v dirname')).result).toEqual({ exit: 0 })
+})
+
 test('a non-zero exit is kept', async () => {
 	const cwd = await tmpRoot('sober-audit-')
 	const judged = await judge(cwd, 'node -e "process.exit(7)"')

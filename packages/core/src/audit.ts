@@ -68,7 +68,10 @@ export const posixShell = (): string | true | null => {
 		try {
 			const execPath = execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim()
 			const root = dirname(dirname(dirname(execPath)))
-			for (const candidate of [join(root, 'usr', 'bin', 'sh.exe'), join(root, 'bin', 'sh.exe')]) {
+			// `bin/sh.exe` first: it is the wrapper that puts Git's `/usr/bin` on
+			// PATH. `usr/bin/sh.exe` started directly has no `sed` or `dirname`, and
+			// npm's sh shims (`pnpm`) call both.
+			for (const candidate of [join(root, 'bin', 'sh.exe'), join(root, 'usr', 'bin', 'sh.exe')]) {
 				if (existsSync(candidate)) return candidate
 			}
 			return null
