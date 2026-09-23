@@ -20,7 +20,7 @@
 
 	/* ADR 0064: the run screen's transcript reads in bundled fonts, never
 	   fetched — the system stacks above stay the fallback. */
-	--font-transcript-mono: "JetBrains Mono Variable", var(--font-mono);
+	--font-transcript-mono: "JetBrains Mono", var(--font-mono);
 	--font-transcript-sans: "IBM Plex Sans", var(--font-ui);
 
 	/* A tool, not a document. The scale stops at 24 because nothing here is

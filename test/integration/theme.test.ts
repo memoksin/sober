@@ -79,7 +79,15 @@ test('ADR 0064: the transcript and provider tokens exist in the dark root and th
 
 test('ADR 0064: no Google Fonts URL anywhere in the dashboard', () => {
 	const srcDir = fileURLToPath(new URL('../../apps/dashboard/src', import.meta.url))
+	const indexHtml = fileURLToPath(new URL('../../apps/dashboard/index.html', import.meta.url))
 	const offenders: string[] = []
+
+	const check = (path: string): void => {
+		const contents = readFileSync(path, 'utf8')
+		if (/@import|url\(|href=/.test(contents) && contents.includes('fonts.googleapis.com')) {
+			offenders.push(path)
+		}
+	}
 
 	const walk = (dir: string): void => {
 		for (const entry of readdirSync(dir)) {
@@ -88,13 +96,11 @@ test('ADR 0064: no Google Fonts URL anywhere in the dashboard', () => {
 				walk(path)
 				continue
 			}
-			const contents = readFileSync(path, 'utf8')
-			if (/@import|url\(/.test(contents) && contents.includes('fonts.googleapis.com')) {
-				offenders.push(path)
-			}
+			check(path)
 		}
 	}
 	walk(srcDir)
+	check(indexHtml)
 
 	expect(offenders).toEqual([])
 })

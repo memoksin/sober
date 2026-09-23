@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-24
-- **Amends:** [ADR 0039](0039-colour-means-status-and-the-canvas-is-the-application.md)
+- **Amends:** [ADR 0039](0039-colour-means-status.md)
 
 ## Context
 
@@ -98,13 +98,19 @@ defines — stay the fallback in both new tokens
 webfont files still renders. The chrome outside the transcript keeps the
 system UI font; this node does not touch it.
 
+Only the `latin` and `latin-ext` subsets ship (`latin-ext` covers Turkish),
+not the full set of subsets — cyrillic, greek, vietnamese and the rest —
+`@fontsource`'s default import pulls; `@fontsource-variable/jetbrains-mono`
+has no per-subset CSS files to select from, so the static
+`@fontsource/jetbrains-mono` package is used instead, at weight 400.
+
 ## Consequences
 
 - `apps/dashboard/src/theme.css` carries eleven new tokens (six `--tx-*`,
   five `--provider-*`) in all three places the file already repeats its
   values — `:root`, `@media (prefers-color-scheme: light)`, and
   `[data-theme="light"]` — plus two new font tokens in `@theme`.
-- `apps/dashboard/package.json` gains `@fontsource-variable/jetbrains-mono`
+- `apps/dashboard/package.json` gains `@fontsource/jetbrains-mono`
   and `@fontsource/ibm-plex-sans`; `@besober/cli`'s published dependencies
   are untouched, because the dashboard ships inside that bundle rather than
   publishing its own (ADR 0007).

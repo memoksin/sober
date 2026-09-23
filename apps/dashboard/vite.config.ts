@@ -10,7 +10,21 @@ import { defineConfig } from 'vite'
 const SERVER = 'http://127.0.0.1:4173'
 
 export default defineConfig({
-	plugins: [react(), tailwindcss()],
+	plugins: [
+		react(),
+		tailwindcss(),
+		// ADR 0064: fontsource's CSS lists a legacy .woff fallback beside every
+		// .woff2 file. Nothing that can reach a loopback address lacks woff2
+		// support, so the fallback asset ships unused — drop it from the bundle.
+		{
+			name: 'drop-woff-fallback',
+			generateBundle(_, bundle) {
+				for (const key of Object.keys(bundle)) {
+					if (key.endsWith('.woff')) delete bundle[key]
+				}
+			},
+		},
+	],
 	build: {
 		// The server hands these over by path (packages/server/src/client.ts), so
 		// the names have to be stable enough for the bundler to key a map by.

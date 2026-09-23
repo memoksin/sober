@@ -65,10 +65,10 @@ importers:
       '@besober/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@fontsource-variable/jetbrains-mono':
+      '@fontsource/ibm-plex-sans':
         specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource/ibm-plex-sans':
+      '@fontsource/jetbrains-mono':
         specifier: ^5.3.0
         version: 5.3.0
       cytoscape:
@@ -674,11 +674,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fontsource-variable/jetbrains-mono@5.3.0':
-    resolution: {integrity: sha512-F32xpS2NsGYoQi2ADSkKTgpJj7ozajsGgDJ8woTnqjmIB+dxDIqImjl4pXZVEExu8UFZ2ndhmX18EBS/hdz3Lw==}
-
   '@fontsource/ibm-plex-sans@5.3.0':
     resolution: {integrity: sha512-CbE4CbbEEZJX860XyUiRpsksXIQR8Rp2XDva2VO53NJox9tVNtusrysd2x5YkUEY3ErQ66W1IiiQL8/wihhw5w==}
+
+  '@fontsource/jetbrains-mono@5.3.0':
+    resolution: {integrity: sha512-fqDfB5I9f1p1TV486aUgB9t8zP84P0O1FtQR5Ol9vjwPy+S+EIGlVYm1cvj2W5shcZMTg2nZFdVMoH5wFu8a1A==}
 
   '@hono/node-server@2.1.1':
     resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
@@ -3023,9 +3023,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@fontsource-variable/jetbrains-mono@5.3.0': {}
-
   '@fontsource/ibm-plex-sans@5.3.0': {}
+
+  '@fontsource/jetbrains-mono@5.3.0': {}
 
   '@hono/node-server@2.1.1(hono@4.13.5)':
     dependencies:
