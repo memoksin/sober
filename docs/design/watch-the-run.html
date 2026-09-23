@@ -107,7 +107,7 @@ button { cursor: pointer; background: var(--surface); border: 1px solid var(--li
 button:hover { background: var(--raised); }
 button:disabled { cursor: default; opacity: .5; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
-[hidden] { display: none !important; }
+[hidden][hidden] { display: none; }
 .canvas { position: fixed; inset: 0; background-image: radial-gradient(var(--line) 1px, oklch(0 0 0 / 0) 1px); background-size: 24px 24px; }
 .board-bar { height: 56px; padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--surface); display: flex; gap: 28px; color: var(--ink-dim); }
 .board-bar strong { color: var(--ink); font-weight: 600; }
@@ -125,7 +125,7 @@ body:has(.session.full:not([hidden])) .review-tools { bottom: 174px; }
 .review-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: min(540px, calc(100vw - 32px)); margin-bottom: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 8px 32px oklch(0 0 0 / .2); }
 .review-panel > span { width: 100%; color: var(--ink-dim); }
 .review-tools[open] { display: flex; flex-direction: column-reverse; align-items: flex-end; }
-.font-options { display: flex; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
+.font-options { display: flex; margin: 0; padding: 0; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
 .font-options button { border: 0; border-radius: 0; text-align: left; line-height: 1.35; padding: 6px 12px; }
 .font-options button + button { border-left: 1px solid var(--line); }
 .font-options [aria-pressed="true"] { background: var(--raised); box-shadow: inset 0 -2px var(--ink); }
@@ -202,7 +202,7 @@ textarea::placeholder { color: var(--ink-dim); }
 .session:not(.ended) .dots i:nth-child(2) { animation-delay: .15s; }
 .session:not(.ended) .dots i:nth-child(3) { animation-delay: .3s; }
 @media (prefers-reduced-motion: reduce) {
-  html:not(.force-motion) *, html:not(.force-motion) *::before, html:not(.force-motion) *::after { animation: none !important; scroll-behavior: auto !important; }
+  html:not(.force-motion):not(.force-motion):not(.force-motion):not(.force-motion) *, html:not(.force-motion):not(.force-motion):not(.force-motion):not(.force-motion) *::before, html:not(.force-motion):not(.force-motion):not(.force-motion):not(.force-motion) *::after { animation: none; scroll-behavior: auto; }
 }
 @media (max-width: 700px) {
   .review-tools { right: 8px; }
@@ -226,7 +226,7 @@ textarea::placeholder { color: var(--ink-dim); }
 <body data-font="web">
 <div class="canvas" aria-hidden="true">
   <div class="board-bar"><strong>sober</strong><span>Watch the run</span><span>8 nodes · 1 running</span></div>
-  <svg class="graph" viewBox="0 0 1200 640" preserveAspectRatio="xMidYMid slice">
+  <svg class="graph" viewBox="0 0 1200 640" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
     <g><line x1="100" y1="330" x2="340" y2="160"/><line x1="100" y1="330" x2="340" y2="470"/><line x1="340" y1="160" x2="650" y2="310"/><line x1="340" y1="470" x2="650" y2="310"/><line x1="650" y1="310" x2="960" y2="150"/><line x1="650" y1="310" x2="990" y2="470"/><line x1="960" y1="150" x2="1140" y2="300"/></g>
     <g><circle cx="100" cy="330" r="20"/><text x="100" y="374">line-shape</text><circle class="review" cx="340" cy="160" r="23"/><text x="340" y="206">transcript-adr</text><circle class="running" cx="340" cy="470" r="27"/><text x="340" y="520">session-mock</text><circle class="ready" cx="650" cy="310" r="22"/><text x="650" y="354">session-shell</text><circle cx="960" cy="150" r="22"/><text x="960" y="196">tool-blocks</text><circle cx="990" cy="470" r="22"/><text x="990" y="516">session-statusbar</text><circle cx="1140" cy="300" r="20"/></g>
   </svg>
@@ -234,22 +234,22 @@ textarea::placeholder { color: var(--ink-dim); }
 <div class="shade" id="shade"></div>
 <details class="review-tools" id="review-tools">
   <summary>Review controls</summary>
-  <div class="review-panel" aria-label="Design review controls">
+  <div class="review-panel">
   <span>Transcript font</span>
-  <div class="font-options" role="group" aria-label="Choose transcript font">
-    <button id="system-font" aria-pressed="false">System mono<small class="system-sample">⏺ Read(path) · 92 lines</small></button>
-    <button id="web-font" aria-pressed="true">JetBrains Mono + IBM Plex Sans<small class="web-sample">⏺ Read(path) · 92 lines</small></button>
-  </div>
-  <button id="theme" aria-label="Toggle colour theme">Theme: dark</button>
-  <button id="cycle-provider">Preview next provider</button>
+  <fieldset class="font-options" aria-label="Choose transcript font">
+    <button id="system-font" type="button" aria-pressed="false">System mono<small class="system-sample">⏺ Read(path) · 92 lines</small></button>
+    <button id="web-font" type="button" aria-pressed="true">JetBrains Mono + IBM Plex Sans<small class="web-sample">⏺ Read(path) · 92 lines</small></button>
+  </fieldset>
+  <button id="theme" type="button" aria-label="Toggle colour theme">Theme: dark</button>
+  <button id="cycle-provider" type="button">Preview next provider</button>
   <span>Motion</span>
-  <div class="font-options" role="group" aria-label="Choose motion behaviour">
-    <button id="motion-follow" aria-pressed="false">Follow system</button>
-    <button id="motion-force" aria-pressed="true">Force full motion</button>
-  </div>
+  <fieldset class="font-options" aria-label="Choose motion behaviour">
+    <button id="motion-follow" type="button" aria-pressed="false">Follow system</button>
+    <button id="motion-force" type="button" aria-pressed="true">Force full motion</button>
+  </fieldset>
   </div>
 </details>
-<button class="reopen" id="reopen" hidden>Open session</button>
+<button class="reopen" id="reopen" type="button" hidden>Open session</button>
 <main class="session" id="session" aria-labelledby="session-title">
   <header class="titlebar">
     <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -258,11 +258,11 @@ textarea::placeholder { color: var(--ink-dim); }
       <div class="model-identity"><svg class="provider-logo" id="provider-logo" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="provider-name" id="provider-name"></span><span class="model-id" id="model-id"></span></div>
       <span class="host" id="host"></span>
     </div>
-    <div class="header-actions"><button id="replay">↻ Replay</button><button id="fullscreen" aria-label="Enter full screen (f)" aria-pressed="false">⛶ Full screen</button><button id="close" aria-label="Close session">×</button></div>
+    <div class="header-actions"><button id="replay" type="button">↻ Replay</button><button id="fullscreen" type="button" aria-label="Enter full screen (f)" aria-pressed="false">⛶ Full screen</button><button id="close" type="button" aria-label="Close session">×</button></div>
   </header>
-  <div class="find" id="find" hidden><label for="query">Find</label><input id="query" type="search" placeholder="Filter the transcript…"><span id="matches"></span><button id="clear-find" aria-label="Close find">×</button></div>
+  <div class="find" id="find" hidden><label for="query">Find</label><input id="query" type="search" placeholder="Filter the transcript…"><span id="matches"></span><button id="clear-find" type="button" aria-label="Close find">×</button></div>
   <div class="transcript-wrap">
-    <section class="transcript" id="transcript" tabindex="0" aria-label="Run transcript">
+    <section class="transcript" id="transcript" aria-label="Run transcript">
       <div class="transcript-inner">
         <div class="run-heading"><div><h2>Watch the run</h2><p>A live HTML mockup of the session · design only</p></div><time>Replay / 00:40</time></div>
         <ol class="lines" id="lines"></ol>
@@ -270,7 +270,7 @@ textarea::placeholder { color: var(--ink-dim); }
         <p id="empty" hidden>No matching lines.</p>
       </div>
     </section>
-    <button class="jump" id="jump" hidden>0 new lines ↓</button>
+    <button class="jump" id="jump" type="button" hidden>0 new lines ↓</button>
   </div>
   <!-- ✻ was the first thinking glyph; the EKG trace replaced it. -->
   <div class="working-indicator" id="working-indicator">
@@ -549,12 +549,12 @@ function replay() {
 }
 function toggleFull() {
   const box = $('session'), first = box.getBoundingClientRect(), scrollTop = scroller.scrollTop;
-  transition?.cancel(); stageTransitions.forEach(animation => animation.cancel());
+  transition?.cancel(); stageTransitions.forEach(animation => { animation.cancel(); });
   $('review-tools').open = false;
   const reduced = effectiveReducedMotion();
   if (reduced) {
     const previous = box.cloneNode(true);
-    previous.removeAttribute('id'); previous.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+    previous.removeAttribute('id'); previous.querySelectorAll('[id]').forEach(node => { node.removeAttribute('id'); });
     previous.querySelector('[aria-live]').removeAttribute('aria-live');
     previous.inert = true; previous.setAttribute('aria-hidden', 'true');
     Object.assign(previous.style, { left: `${first.left}px`, top: `${first.top}px`, width: `${first.width}px`, height: `${first.height}px`, transform: 'none', zIndex: '4' });
@@ -586,7 +586,7 @@ function toggleFull() {
 function animateBackdrop(full, duration) {
   const canvas = document.querySelector('.canvas'), shade = $('shade');
   const fromFilter = getComputedStyle(canvas).filter, fromColour = getComputedStyle(shade).backgroundColor;
-  backdropTransitions.forEach(animation => animation.cancel());
+  backdropTransitions.forEach(animation => { animation.cancel(); });
   canvas.style.filter = full && !effectiveReducedMotion() ? 'blur(5px)' : 'none';
   shade.style.backgroundColor = full ? 'oklch(0 0 0 / .65)' : 'oklch(from var(--bg) l c h / .72)';
   backdropTransitions = [canvas.animate([{ filter: fromFilter }, { filter: canvas.style.filter }], { duration, easing: 'ease-out' }),
@@ -622,9 +622,9 @@ function currentTheme() { return document.documentElement.dataset.theme || (ligh
 function themeLabel() { $('theme').textContent = `Theme: ${currentTheme()}`; }
 $('theme').onclick = () => { document.documentElement.dataset.theme = currentTheme() === 'dark' ? 'light' : 'dark'; themeLabel(); };
 lightPreference.addEventListener('change', themeLabel);
-for (const name of ['system', 'web']) $(name + '-font').onclick = () => {
+for (const name of ['system', 'web']) $(`${name}-font`).onclick = () => {
   document.body.dataset.font = name;
-  for (const option of ['system', 'web']) $(option + '-font').setAttribute('aria-pressed', String(option === name));
+  for (const option of ['system', 'web']) $(`${option}-font`).setAttribute('aria-pressed', String(option === name));
   if (following) jumpToBottom();
 };
 document.fonts.ready.then(() => { if (following) jumpToBottom(); });
