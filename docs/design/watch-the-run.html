@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- Watch the run: a standalone, scripted session design. Nothing in this file is product code. -->
-<html lang="en">
+<html lang="en" class="force-motion">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -136,7 +136,7 @@ body:has(.session.full:not([hidden])) .review-tools { bottom: 174px; }
 .session.full { width: 100%; height: 100dvh; left: 0; top: 0; transform: none; border-radius: 0; border: 0; }
 .titlebar { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 12px 20px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .dots { display: flex; gap: 6px; }
-.dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); opacity: .5; }
+.dots i { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); opacity: .5; }
 h1 { font: 500 var(--text-base) var(--font-mono); margin: 0; }
 h1 span { color: var(--ink-dim); }
 .model-badge { margin-left: auto; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised); min-width: 0; }
@@ -244,8 +244,8 @@ textarea::placeholder { color: var(--ink-dim); }
   <button id="cycle-provider">Preview next provider</button>
   <span>Motion</span>
   <div class="font-options" role="group" aria-label="Choose motion behaviour">
-    <button id="motion-follow" aria-pressed="true">Follow system</button>
-    <button id="motion-force" aria-pressed="false">Force full motion</button>
+    <button id="motion-follow" aria-pressed="false">Follow system</button>
+    <button id="motion-force" aria-pressed="true">Force full motion</button>
   </div>
   </div>
 </details>
@@ -384,19 +384,25 @@ function setMotionForced(forced) {
   $('motion-force').setAttribute('aria-pressed', String(forced));
   ekgSetup();
 }
-let start, timer, next, ended, following = true, unseen = 0, thinkingSince = 0;
+let start, timer, next, ended = false, following = true, unseen = 0, thinkingSince = 0;
 let rendered = [], transition, stageTransitions = [], backdropTransitions = [];
 let ekgBeats = [], ekgFrame = null;
-function ekgBeatShape(dt, amp) { const w = 90; if (Math.abs(dt) > w) return 0; const t = dt / w; return amp * Math.pow(1 - Math.abs(t), 3); }
+// PQRST: P bump, Q dip, R spike, S dip, T bump — each a gaussian offset from beat centre (ms).
+const EKG_PQRST = [[-260, .15, 60], [-40, -.15, 12], [0, 1, 8], [50, -.35, 14], [220, .25, 70]];
+function ekgBeatShape(dt, amp) {
+  let y = 0;
+  for (const [offset, weight, width] of EKG_PQRST) { const t = dt - offset; y += weight * Math.exp(-(t * t) / (2 * width * width)); }
+  return amp * y;
+}
 function ekgDraw(now) {
-  const W = 90, H = 18, baseline = H / 2, WINDOW = 3000;
+  const W = 90, H = 18, baseline = H / 2, WINDOW = 3000, BEAT_MS = 1200;
   let d = `M0 ${baseline}`;
-  for (let x = 0; x <= W; x += 2) {
+  for (let x = 0; x <= W; x += 1) {
     const t = now - (W - x) * (WINDOW / W);
     let y = baseline;
-    for (let k = Math.floor((t - 200) / 1500); k <= Math.floor((t + 200) / 1500); k++) y -= ekgBeatShape(t - k * 1500, 3);
-    for (const beat of ekgBeats) y -= ekgBeatShape(t - beat, 7);
-    d += ` L${x} ${y.toFixed(1)}`;
+    for (let k = Math.floor((t - 600) / BEAT_MS); k <= Math.floor((t + 600) / BEAT_MS); k++) y -= ekgBeatShape(t - k * BEAT_MS, 6);
+    for (const beat of ekgBeats) y -= ekgBeatShape(t - beat, 10);
+    d += ` L${x} ${y.toFixed(2)}`;
   }
   $('ekg-trace').setAttribute('d', d);
 }
@@ -583,6 +589,7 @@ for (const name of ['system', 'web']) $(name + '-font').onclick = () => {
 document.fonts.ready.then(() => { if (following) jumpToBottom(); });
 new ResizeObserver(() => { if (following) jumpToBottom(); }).observe(scroller);
 showProvider(); themeLabel(); replay();
+console.assert(!effectiveReducedMotion(), 'mockup must animate by default');
 </script>
 </body>
 </html>
