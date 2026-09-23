@@ -53,6 +53,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['brief <node>', 'read the brief an agent will work from'],
 			['approve <node>', 'approve it — nothing runs without this'],
 			['models [--all]', 'what the installed hosts can run, for dispatch.models'],
+			['models --sources', 'what Jev would see at the next dispatch, from dispatch.sources'],
 			['models add <name> "<run>" --complexity 1-3', 'add one entry, with the scores it takes'],
 		],
 	],
@@ -180,6 +181,7 @@ const options = {
 	queue: { type: 'boolean' },
 	anyway: { type: 'boolean' },
 	all: { type: 'boolean' },
+	sources: { type: 'boolean' },
 	watch: { type: 'boolean' },
 	done: { type: 'boolean' },
 	'no-push': { type: 'boolean' },
@@ -321,7 +323,8 @@ const main = async (): Promise<void> => {
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'models': {
-			const { addModel, models } = await import('./models.js')
+			const { addModel, models, modelsFromSources } = await import('./models.js')
+			if (values.sources === true) return modelsFromSources()
 			if (rest[0] !== 'add') return models({ all: values.all === true })
 			const [, name, run] = rest
 			if (name === undefined || run === undefined)

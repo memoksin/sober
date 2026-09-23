@@ -160,7 +160,17 @@ const claude: Adapter = {
 	attendable: true,
 	line: (event) => {
 		if (event.type === 'system' && event.subtype === 'init')
-			return { kind: 'started', text: 'session started', tool: null }
+			return {
+				kind: 'started',
+				// An alias run (ADR 0063) names the host CLI's own id, not the
+				// literal argument SOBER passed — the init event is the only place
+				// that says which model actually answered.
+				text:
+					event.model === undefined || event.model === ''
+						? 'session started'
+						: `session started (${event.model})`,
+				tool: null,
+			}
 
 		// What the human said, echoed back by the host under
 		// `--replay-user-messages` (ADR 0046). It is in the log so the transcript
@@ -435,6 +445,8 @@ export interface Event {
 	readonly is_error?: boolean
 	/** Stamped by a host on its own events, never on an answer SOBER wrote. */
 	readonly session_id?: string
+	/** Claude Code's `system`/`init` event: the id an alias like `opus` resolved to. */
+	readonly model?: string
 	readonly message?: {
 		readonly content?: readonly {
 			readonly type?: string

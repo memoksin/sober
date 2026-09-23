@@ -100,10 +100,15 @@ export { acquire, LockBusyError } from './lock.js'
 export { type Merged, MergeRefusedError, mergeNode } from './merge.js'
 export { type Migrated, migrateBoard, needsMigration } from './migrate.js'
 export {
+	type BuiltModels,
 	type Candidate,
+	candidatesFor,
+	type Catalogues,
 	claudeModels,
 	codexModels,
 	installed,
+	liveModels,
+	type LiveModelsDeps,
 	openRouterModels,
 } from './models.js'
 export { findRoot, type Paths, paths } from './paths.js'

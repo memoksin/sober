@@ -17,6 +17,17 @@ import { writeAtomic } from './write.js'
  * below is the plain one: it is correct for the lock windows and the
  * concurrency limit, and it is not what the review path calls.
  */
+/** Shared by every named `dispatch.sources` entry: a budget, and an optional filter. */
+const sourceRule = z.strictObject({
+	complexity: z
+		.tuple([z.int().min(1).max(10), z.int().min(1).max(10)])
+		.refine(([low, high]) => low <= high, { message: 'low end must not be above high end' }),
+	// `*`-only globs, matched against the whole id a catalogue names — e.g.
+	// "*:free" matches "qwen/qwen3-8b:free".
+	only: z.array(z.string().min(1)).optional(),
+	deny: z.array(z.string().min(1)).optional(),
+})
+
 export const Config = z.strictObject({
 	dispatch: z.strictObject({
 		host: z.string().min(1),
@@ -59,6 +70,14 @@ export const Config = z.strictObject({
 			.refine((models) => new Set(models.map((m) => m.name)).size === models.length, {
 				message: 'model names must be unique',
 			}),
+		sources: z
+			.strictObject({
+				claude: sourceRule.optional(),
+				codex: sourceRule.optional(),
+				openrouter: sourceRule.optional(),
+			})
+			.default({}),
+		catalogueSeconds: z.int().positive().default(3600),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -92,6 +111,8 @@ export const DEFAULT_CONFIG: Config = {
 		jevMode: false,
 		jevSkills: [],
 		models: [],
+		sources: {},
+		catalogueSeconds: 3600,
 	},
 	board: {
 		branch: 'sober-graph',
@@ -197,6 +218,26 @@ export const DEFAULT_CONFIG_TEXT = `{
 		//   { "name": "fable", "run": "claude --model claude-fable-5-1",
 		//     "complexity": [6, 10], "about": "Design work and anything subtle." }
 		"models": [],
+
+		// Built alongside "models" from what the named hosts can reach right
+		// now (ADR 0063): the Claude family, Codex's own cached list, and
+		// OpenRouter's public catalogue. A source not named here contributes
+		// nothing. Each entry takes the complexity range "models" entries do,
+		// plus an optional "only" / "deny" of \`*\`-glob id patterns, for
+		// example:
+		//   "sources": {
+		//     "codex": { "complexity": [4, 10] },
+		//     "openrouter": { "complexity": [1, 3], "only": ["*:free"] }
+		//   }
+		// A "models" pin wins a name clash with a discovered entry, and a pin
+		// on "codex" or "openrouter" whose id has vanished from the live
+		// catalogue is dropped as retired — a "models" pin on "claude", or on
+		// a source that could not be reached this dispatch, is always kept.
+		"sources": {},
+
+		// How long a fetched catalogue is trusted before the next dispatch
+		// asks again, cached at ".sober/local/catalogue.json".
+		"catalogueSeconds": ${DEFAULT_CONFIG.dispatch.catalogueSeconds},
 
 		// Off by default, and the one setting that costs money of its own
 		// (ADR 0060). On, every dispatch asks Jev — TypeSafe's System One

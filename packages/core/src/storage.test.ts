@@ -243,6 +243,41 @@ test('models default to none, parse with about defaulted, and refuse a bad range
 	).toMatchObject({ kind: 'broken', reason: expect.stringContaining('unique') })
 })
 
+test('dispatch.sources defaults to none, parses per-source, and refuses a bad range', () => {
+	expect(parseConfig('c', '{}')).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { sources: {}, catalogueSeconds: 3600 } },
+	})
+	expect(
+		parseConfig(
+			'c',
+			'{ "dispatch": { "sources": { "openrouter": { "complexity": [1, 3], "only": ["*:free"] }, "codex": { "complexity": [4, 10], "deny": ["*astra*"] } } } }',
+		),
+	).toMatchObject({
+		kind: 'ok',
+		value: {
+			dispatch: {
+				sources: {
+					openrouter: { complexity: [1, 3], only: ['*:free'] },
+					codex: { complexity: [4, 10], deny: ['*astra*'] },
+				},
+			},
+		},
+	})
+	expect(
+		parseConfig('c', '{ "dispatch": { "sources": { "claude": { "complexity": [5, 2] } } } }'),
+	).toMatchObject({
+		kind: 'broken',
+		reason: expect.stringContaining('dispatch.sources.claude.complexity'),
+	})
+})
+
+test('dispatch.catalogueSeconds parses and defaults to an hour', () => {
+	expect(
+		parseConfig('c', '{ "dispatch": { "catalogueSeconds": 60 } }'),
+	).toMatchObject({ kind: 'ok', value: { dispatch: { catalogueSeconds: 60 } } })
+})
+
 test('modelsFor keeps the list order where ranges overlap', () => {
 	expect(modelsFor(MODELS, 3).map((m) => m.name)).toEqual(['free', 'codex'])
 	expect(modelsFor(MODELS, 7).map((m) => m.name)).toEqual(['codex'])
