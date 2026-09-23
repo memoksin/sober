@@ -201,6 +201,15 @@ test('one Claude assistant event is a line per part, each tool named, thinking k
 	])
 })
 
+test('a Claude init event names the resolved model, so an alias run still says what ran', () => {
+	expect(renderLine({ type: 'system', subtype: 'init' })).toEqual([
+		{ kind: 'started', text: 'session started', tool: null },
+	])
+	expect(renderLine({ type: 'system', subtype: 'init', model: 'claude-opus-4-6' })).toEqual([
+		{ kind: 'started', text: 'session started (claude-opus-4-6)', tool: null },
+	])
+})
+
 test('every host carries the tool name on the line', () => {
 	expect(
 		renderLine({ type: 'item.completed', item: { type: 'command_execution', command: 'ls -la' } }),

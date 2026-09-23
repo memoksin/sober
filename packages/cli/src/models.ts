@@ -4,6 +4,7 @@ import {
 	claudeModels,
 	codexModels,
 	installed,
+	liveModels,
 	openRouterModels,
 } from '@besober/core'
 import { openBoard, settingsOf } from './board.js'
@@ -15,6 +16,29 @@ import { bold, columns, cyan, dim, fail, say } from './out.js'
  * models print unless asked; the range is left to the person, because it is a
  * budget decision (ADR 0061).
  */
+/** What Jev would see at the next dispatch (ADR 0063): `dispatch.sources`, filtered and pinned. */
+export const modelsFromSources = async (): Promise<void> => {
+	const paths = await openBoard()
+	const config = await settingsOf(paths)
+	const built = await liveModels(paths, config.dispatch)
+	if (built.models.length === 0)
+		return fail('dispatch.sources names nothing, and dispatch.models is empty')
+
+	for (const line of columns(
+		built.models.map((m) => [
+			`  ${cyan(m.name)}`,
+			m.run,
+			dim(`${m.complexity[0]}–${m.complexity[1]}`),
+		]),
+	))
+		say(line)
+	if (built.dropped.length > 0) {
+		say()
+		say(bold('dropped'))
+		for (const reason of built.dropped) say(`  ${dim(reason)}`)
+	}
+}
+
 export const models = async ({ all }: { readonly all: boolean }): Promise<void> => {
 	const found: Candidate[] = []
 	if (installed('claude')) found.push(...claudeModels())

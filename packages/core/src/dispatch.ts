@@ -28,6 +28,7 @@ import {
 	wasStopped,
 	writeRunPid,
 } from './local.js'
+import { liveModels } from './models.js'
 import type { Paths } from './paths.js'
 import { type Published, publish } from './pr.js'
 import { readNode, readNodes } from './records.js'
@@ -111,17 +112,34 @@ export const dispatch = async (
 	// (ADR 0019, ADR 0058): a run must not be able to raise its own model.
 	const record = await readNode(paths, node)
 	if (record.kind !== 'ok') throw new NotOnBoardError('node', node)
+
+	// What Jev and the score-only path both choose among: `dispatch.models`
+	// topped up from whatever `dispatch.sources` names (ADR 0063). Logged once
+	// per dispatch so a retired pin or a clash dropped from the list is not a
+	// silent change in what a node could run on.
+	const built = await liveModels(paths, config.dispatch)
+	await appendEvent(paths, {
+		action: 'models',
+		node,
+		count: built.models.length,
+		dropped: built.dropped,
+	})
+
 	// With jevMode on, the brief's own score is not consulted at all: the whole
 	// point is that nobody has to guess a number (ADR 0059). A Jev that cannot
 	// answer stops the dispatch here, before the worktree and before the spend.
 	const jev = config.dispatch.jevMode
 		? await askJev(await stateFor(paths, node), {
 				skills: config.dispatch.jevSkills,
-				models: config.dispatch.models,
+				models: built.models,
 			})
 		: null
 	const complexity = jev?.complexity ?? record.value.brief?.complexity ?? null
-	const chosen = chooseLine(config.dispatch, complexity, jev?.model ?? null)
+	const chosen = chooseLine(
+		{ ...config.dispatch, models: [...built.models] },
+		complexity,
+		jev?.model ?? null,
+	)
 	const line = chosen.host
 	const named =
 		chosen.chose === null

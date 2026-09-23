@@ -246,7 +246,7 @@ test('a Cursor run renders its start, its tools, what it said and its end', () =
 		),
 	)
 	expect(rendered).toEqual([
-		{ kind: 'started', text: 'session started', tool: null },
+		{ kind: 'started', text: 'session started (Claude 4 Sonnet)', tool: null },
 		{ kind: 'tool', text: 'read README.md', tool: 'read' },
 		{ kind: 'text', text: 'Done!', tool: null },
 		{ kind: 'result', text: 'finished', tool: null },
