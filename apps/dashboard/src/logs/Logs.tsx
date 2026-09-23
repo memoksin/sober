@@ -154,7 +154,7 @@ export const LogScreen = ({
 						<li key={index} className="flex gap-3">
 							<span
 								aria-hidden
-								className={`select-none ${line.kind === 'thinking' ? 'mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--status-running)]' : ''} ${
+								className={`select-none ${line.kind === 'thinking' ? 'mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--tx-think)]' : ''} ${
 									// Running belongs to the last line of a live run, not to the line:
 									// the next line re-renders this one at rest.
 									line.kind === 'thinking' && live === true && index === lines.length - 1
@@ -163,7 +163,11 @@ export const LogScreen = ({
 								}`}
 								style={line.kind === 'thinking' ? undefined : { color: TONE[line.kind] }}
 							>
-								{line.kind === 'thinking' ? null : MARK[line.kind]}
+								{line.kind === 'thinking'
+									? null
+									: line.kind === 'tool'
+										? toolMark(line.tool ?? '')
+										: MARK[line.kind]}
 							</span>
 							{line.kind === 'text' || line.kind === 'answer' ? (
 								<div className="max-w-[68ch] whitespace-pre-wrap break-words rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 font-sans text-[var(--ink)] text-sm">
@@ -171,12 +175,6 @@ export const LogScreen = ({
 								</div>
 							) : (
 								<span className="whitespace-pre-wrap break-words text-[var(--ink-dim)]">
-									{/* The glyph is the TOOL table's, fallback included, via toolMark. */}
-									{line.kind === 'tool' && line.tool !== null && (
-										<span aria-hidden className="mr-2 select-none">
-											{toolMark(line.tool)}
-										</span>
-									)}
 									{line.text}
 								</span>
 							)}

@@ -15,6 +15,10 @@ test('the host’s own stderr does not read like ordinary output', () => {
 	expect(TONE.raw).not.toBe(TONE.text)
 })
 
+test('no tone borrows a status colour', () => {
+	for (const [kind, colour] of Object.entries(TONE)) expect(colour, kind).not.toMatch(/--status-/)
+})
+
 test('a box scrolled to the bottom is following, and one scrolled up is not', () => {
 	expect(atBottom({ scrollTop: 800, clientHeight: 200, scrollHeight: 1000 })).toBe(true)
 	expect(atBottom({ scrollTop: 100, clientHeight: 200, scrollHeight: 1000 })).toBe(false)

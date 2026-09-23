@@ -24,18 +24,20 @@ export const MARK: Readonly<Record<LogLine['kind'], string>> = {
 	answer: '›',
 }
 
+// The transcript's own tones (ADR 0064), not the board's status colours: a
+// log line has no status, so it never borrows one.
 export const TONE: Readonly<Record<LogLine['kind'], string>> = {
 	started: 'var(--ink-faint)',
 	text: 'var(--ink-faint)',
-	thinking: 'var(--ink-faint)',
-	tool: 'var(--status-ready)',
+	thinking: 'var(--tx-think)',
+	tool: 'var(--tx-tool)',
 	result: 'var(--ink)',
 	check: 'var(--ink-dim)',
 	checked: 'var(--ink)',
 	// The host's own stderr. It is the one thing a failing run always has, so
 	// it is the one thing that must not read like ordinary output.
-	raw: 'var(--danger)',
-	answer: 'var(--status-in-review)',
+	raw: 'var(--tx-error)',
+	answer: 'var(--tx-human)',
 }
 
 // A display convenience, not an allowlist: a host naming a tool nobody listed is
