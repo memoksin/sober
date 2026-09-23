@@ -18,10 +18,43 @@
 		"packages/core/src/status.test.ts",
 		"apps/dashboard/src/**/*.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Most of this already exists. The run record carries `host` (the resolved command line, so the model travels inside it, per ADR 0058/0061), plus `tier` and `fallback`. `sober logs <node>` already prints `ran <host> (<tier text>)` (`packages/cli/src/work.ts` `logs()`, ~line 448), and the dashboard logs screen shows the same through `LogWindow.ran` + `ranWith` (`apps/dashboard/src/logs/data.ts`). The gaps: `sober status` never says what ran a node, and the tier wording is copied by hand in two places.\n\n1. One wording. Add `ranLabel({ tier, fallback }): string` to `packages/schema` in a new small module (e.g. `packages/schema/src/ran.ts`, exported from `index.ts`). It returns exactly today's strings:\n   - `unscored`\n   - `no model covers this score, fallback to dispatch.host`\n   - `<tier> named no host, fallback to dispatch.host`\n   - `<tier>`\n   schema is the package both the CLI and the browser may import (ADR 0008). Use it in `work.ts` `logs()` and in `ranWith` in `apps/dashboard/src/logs/data.ts`, deleting both inline copies. Add a test beside it covering the four cases.\n2. `sober status`. In `packages/cli/src/status.ts`, where `waiting()` falls back to `run <id>` for a live run (~line 111), print `run <id> · <host> (<ranLabel>)`, using `lastRun(board, id)`, which is already imported. For a node whose last run finished and which is `in-review`, show the same `<host> (<ranLabel>)` in dim text so a reviewer sees what produced the work. `sober status <node>` gets the line from the same helper. Keep the existing `columns()` layout. If the line is too wide, put it on its own indented second line rather than adding a column.\n3. The node panel (`apps/dashboard/src/panel/`) is out of scope unless the board payload it already receives carries the last run's host. Check `panel/data.ts`. If it does not, leave the panel alone: the logs screen already shows the line and session-shell adds the model badge. Do not add a wire field for this.\n4. No `model` field and no schema change to `run.ts` / `wire.ts`. session-shell derives the model and provider from the host command line (`--model X` / `-m X` / `provider/model`).",
+		"complexity": 3,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/schema",
+				"proves": "ranLabel returns the four existing wordings"
+			},
+			{
+				"run": "! grep -n 'named no host, fallback' packages/cli/src/work.ts apps/dashboard/src/logs/data.ts",
+				"proves": "the wording lives in one place, not copied into the CLI and the dashboard"
+			},
+			{
+				"run": "grep -n 'ranLabel' packages/cli/src/status.ts",
+				"proves": "sober status now says what ran a node"
+			},
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src/logs packages/cli && pnpm --filter @besober/cli typecheck && pnpm --filter @besober/dashboard typecheck",
+				"proves": "existing logs and CLI tests still pass and both packages type-check"
+			},
+			{
+				"run": "npx biome check packages/schema/src packages/cli/src apps/dashboard/src/logs",
+				"proves": "lint and format are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T21:48:59.030Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T22:23:35.224Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-12T17:41:57.651Z"

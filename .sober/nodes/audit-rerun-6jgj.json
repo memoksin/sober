@@ -4,7 +4,8 @@
 	"description": "`sober audit` re-runs the acceptance list (ADR 0049); the review screen only shows the result the run left. Add a route with its test and a button on the review screen (apps/dashboard/src/review/) that runs the list again and replaces the shown result, with a running state while the commands go. Delete audit from KNOWN_GAPS if parity added it.",
 	"notes": "",
 	"dependsOn": [
-		"client-parity-owv8"
+		"client-parity-owv8",
+		"accept-shell-h3a3"
 	],
 	"decisions": [],
 	"files": [

@@ -11,11 +11,46 @@
 		"apps/dashboard/src/logs/Logs.tsx",
 		"apps/dashboard/src/logs/Logs.test.tsx"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "A small change, and it moves the screen toward the approved mockup (`docs/design/watch-the-run.html`), where agent text is a plain `⏺` line with no box.\n\n1. `apps/dashboard/src/logs/Logs.tsx` (line ~172): for `text` and `answer` lines, replace the boxed `<div>` (`rounded border bg-[var(--surface)] px-3 py-2`) with a `<span>` in the same row structure a tool line uses. Keep:\n   - `whitespace-pre-wrap break-words`\n   - `max-w-[68ch]`\n   - `font-sans`\n   - `text-[var(--ink)]` (the other kinds stay `--ink-dim`)\n   The mark column already holds `·` for text and `›` for answer in their `TONE` colours; leave that as it is. Leave the thinking dot exactly as it is. Do not add a markdown renderer: the comment above `LogScreen` explains why this screen shows text as typed.\n2. `apps/dashboard/src/logs/Logs.test.tsx`: rewrite 'prose renders in a box and a tool call does not' as 'prose is a line like any other'. Assert that:\n   - a text line's element has no `border` or `bg-[var(--surface)]` class;\n   - it sits in an `<li>` whose first child is the aria-hidden mark span, the same structure as a tool line;\n   - the answer line's mark is still `›`.\nNothing else changes. tool-blocks rewrites this rendering later, and this node only removes the second vocabulary now.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src/logs",
+				"proves": "text lines render without a box, share the row structure of a tool line, and the answer mark still points back"
+			},
+			{
+				"run": "! grep -n 'bg-\\[var(--surface)\\]' apps/dashboard/src/logs/Logs.tsx",
+				"proves": "no boxed surface is left in the run log"
+			},
+			{
+				"run": "pnpm --filter @besober/dashboard typecheck",
+				"proves": "the dashboard still type-checks"
+			},
+			{
+				"run": "npx biome check apps/dashboard/src/logs",
+				"proves": "lint and format are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T21:48:57.791Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T21:50:02.700Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T22:16:02.885Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-21T13:22:24.585Z"
 }
