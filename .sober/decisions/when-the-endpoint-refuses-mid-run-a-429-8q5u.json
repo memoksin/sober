@@ -1,0 +1,34 @@
+{
+	"category": "error-handling",
+	"question": "When the endpoint refuses mid-run — a 429 on a free OpenRouter model, a 5xx, a context-length error — what does the loop do?",
+	"options": [
+		{
+			"id": "bounded-retry",
+			"label": "Retry 429/5xx a few times, then fail",
+			"reason": "Free OpenRouter models rate-limit often and briefly. A short backoff (3 tries) turns most of those into a finished run instead of a failed one. Anything else — 400, 401, context length — fails at once with the status in the reason.",
+			"costLater": "A run can sit silent for the backoff window; the log has to say 'waiting on 429, try 2 of 3' or it looks stuck (the `pcsz` node's rule). The bound is a number somebody will want to tune."
+		},
+		{
+			"id": "fail-fast",
+			"label": "Fail at once, name the status",
+			"reason": "Smallest loop. The run ends `failed` with the HTTP status and the body's message; the `backup-8erx` node is where a second model gets tried.",
+			"costLater": "On free models a large share of runs fail on the first 429 and the human re-runs by hand until the backup node lands. Every retry is a full worktree prepare."
+		},
+		{
+			"id": "next-model",
+			"label": "Fall through to the next model in `dispatch.models`",
+			"reason": "The loop itself picks the next covering entry on 429/5xx, so a free model's limit never costs a run.",
+			"costLater": "Model choice leaks out of Jev and `dispatch.ts` into the loop, and the run record's model field is no longer what Jev picked. Overlaps the `backup-8erx` node; two mechanisms for one fallback."
+		}
+	],
+	"suggested": "bounded-retry",
+	"derived": null,
+	"answer": {
+		"option": "bounded-retry",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T16:32:05.491Z",
+		"derived": null
+	},
+	"createdAt": "2026-09-21T16:27:14.935Z"
+}

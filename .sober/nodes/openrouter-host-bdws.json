@@ -1,0 +1,79 @@
+{
+	"title": "`openrouter` is a host: `dispatch.models` names it, the probe checks the key, and `sober models` lists for it",
+	"name": "openrouter-host",
+	"description": "Wire agent.ts in as the fifth host, in the shape the `loop-boundary` decision picked: either an `openrouter` entry in `ADAPTERS` (packages/core/src/hosts.ts) whose command is `sober agent --model … --base-url …` and whose `line` parses agent.ts's JSON events, with the `agent` subcommand added to packages/cli/src/index.ts — or a `kind: 'builtin'` branch in host.ts. Either way: `checkHost('openrouter --model x')` reads `OPENROUTER_API_KEY` from process.env (loadEnv already fills it from `.sober/.env`) and GETs `${base}/models` with the key; missing key → `openrouter needs OPENROUTER_API_KEY in .sober/.env`; 401 → the same sentence as the other hosts' 'not logged in'. `hostCommand`'s model flag strip (`withoutModel`) already covers the probe. models.ts: `openRouterModels` emits `openrouter --model <id>` instead of `opencode --model openrouter/<id>`, and `Candidate.host` gains `'openrouter'`; the OpenCode lines are gone from `sober models` — OpenCode's other providers were never listed there. `.sober/config.jsonc`: the five OpenRouter entries switch to the new run line, and the comment above `models` names the key. README per-host install section gets an `openrouter` block (key in `.sober/.env`, no CLI to install), DESIGN §5.1's host list names it. Tests: hosts.test.ts (argv, line rendering), host.test.ts (probe with a fake fetch), models.test.ts snapshot. The run record's `model`/`host` fields (node c9n8) carry `openrouter` and the model id like any other host.",
+	"notes": "",
+	"dependsOn": [
+		"tool-loop-iya6"
+	],
+	"decisions": [
+		"where-does-sober-s-own-tool-loop-run-in-i1nr"
+	],
+	"files": [
+		"packages/core/src/hosts.ts",
+		"packages/core/src/hosts.test.ts",
+		"packages/core/src/host.ts",
+		"packages/core/src/host.test.ts",
+		"packages/core/src/models.ts",
+		"packages/core/src/models.test.ts",
+		"packages/cli/src/index.ts",
+		"packages/cli/src/models.ts",
+		".sober/config.jsonc",
+		"README.md",
+		"docs/DESIGN.md"
+	],
+	"brief": {
+		"approach": "The `openrouter` host is a row in `hosts.ts` whose process is `sober agent`, per decision `subprocess`. Run line in config: `openrouter --model <id>` (optionally `--base-url <url>` on the same line). Seven touches.\n\n1. `packages/core/src/hosts.ts` — `Adapter` gains one optional field, `command?: string`: the program to spawn when it is not the host's own name. New row `openrouter`: `id: 'openrouter'`, `command: 'sober'`, `probe: ['agent', '--check']`, `signIn: () => 'set OPENROUTER_API_KEY in .sober/.env'`, `loggedIn: (stdout) => /^ok\\b/m.test(stdout) ? true : /no key|401|unauthori[sz]ed/i.test(stdout) ? false : null`, `argv: (prompt) => ['agent', brief(prompt)]`, `attendable: false`, `line: (event) => event.type === 'sober' && typeof event.kind === 'string' ? { kind: event.kind, text: event.text ?? '', tool: event.tool ?? null } : null` — validate `kind` against the `LogLine` enum from `@besober/schema` (`LogLine.shape.kind.safeParse`) so a stray line is null, not a crash. Add `kind?`, `text?`, `tool?` to `Event`. `ADAPTERS` becomes five. The run line's own args come first, so the spawn is `sober --model <id> [--base-url <u>] agent <prompt>` and the probe is `sober [--base-url <u>] agent --check` (`withoutModel` already strips the model flag). Update the UnknownHostError text only if it hardcodes \"four\".\n\n2. `packages/core/src/host.ts` — two one-line changes: `spawn(adapter.command ?? command, …)` in `startAgent`, and `run(adapter.command ?? command, …)` in `checkHost`. Nothing else: exit reading, line splitting and `describe` stay.\n\n3. `packages/cli/src/index.ts` — `options` gains `model: { type: 'string' }` and `'base-url': { type: 'string' }`; new `case 'agent'` in the switch and a help line. `sober agent --check`: reads `process.env.OPENROUTER_API_KEY` (the dispatcher already ran `loadEnv`, and `spawn` inherits `process.env`, so the worktree needs no `.env` of its own — say this in a comment); no key → print `no key: set OPENROUTER_API_KEY in .sober/.env`, exit 1; else `GET ${base}/models` with the bearer; 200 → print `ok`, exit 0; 401 → print `401: the key was refused`, exit 1; anything else → print `<status>` and exit 1. `sober agent <prompt>`: `--model` is required (`fail` without it); calls `runAgent` from `@besober/core` with `cwd: process.cwd()`, `onLine: (line) => process.stdout.write(JSON.stringify({ type: 'sober', ...line }) + '\\n')`, and a signal from `SIGTERM`/`SIGINT` (an `AbortController`), so `sober stop` reaches the loop; exit 0 on `finished`, write the reason to stderr and exit 1 on `failed`, exit 0 on `stopped` (host.ts already reads the SIGTERM). Put the command body in a new `packages/cli/src/agent.ts` like the other commands, not inline in `index.ts`.\n\n4. `packages/core/src/models.ts` — `Candidate.host` union gains `'openrouter'`; `openRouterModels` emits `run: \\`openrouter --model ${m.id}\\``, `host: 'openrouter'`. `packages/cli/src/models.ts` — OpenRouter's catalogue no longer waits on `installed('opencode')`: always fetched (it is public), heading `openrouter · OpenRouter, free` / `openrouter · OpenRouter`; the `for … of ['claude','codex','opencode']` loop and the \"none of claude, codex or opencode\" message become four names with `openrouter` last; the `--all` hint drops its `installed('opencode')` gate. Update `models.test.ts` (and its snapshot if it has one) to the new run line and host.\n\n5. `.sober/config.jsonc` — the five `dispatch.models` entries whose run is `opencode --model openrouter/<id>` become `openrouter --model <id>`; the comment above `models` gets one line: `openrouter` runs SOBER's own loop and needs `OPENROUTER_API_KEY` in `.sober/.env` (ADR 0062).\n\n6. Docs. `README.md`: under \"Install the plugin for your host\", no new subsection — `openrouter` has no plugin; instead a short `### OpenRouter` block under **Hosts** saying: no CLI to install, put `OPENROUTER_API_KEY=…` in `.sober/.env`, run line `openrouter --model <id>`, `sober models` lists the catalogue; add a row to the Hosts table (Plugin: —, Decisions in session: no, Attended: no). `docs/DESIGN.md` §5.1: fifth column in the adapter table (`ready`: `agent --check`, `run`: `agent <brief>`, permissions: none — the loop has no approval step, system prompt: in front of the brief, attendable: no), \"There are four of them\" → five with ADR 0062. Also fix the one sentence in `docs/adr/0062-*.md`'s Consequences that says the probe is only \"is the key set\": it is the key plus `GET /models`, so a refused key fails before a worktree is cut.\n\n7. Tests. `hosts.test.ts`: `adapterFor('openrouter --model x')` is the new row and its `command` is `sober`; `argv` shape; `line` renders `{type:'sober',kind:'tool',text:'bash ls',tool:'bash'}` and returns null for `{type:'sober',kind:'nope'}`; `renderLine` still renders a Claude Code event. `host.test.ts`: whatever pattern it uses to fake `execFile`/`spawn`, one case that `checkHost('openrouter --model x')` spawns `sober` not `openrouter`. `packages/cli/src/agent.test.ts`: `--check` with no key prints `no key` and exits 1; with a fake fetch answering 200 prints `ok` — structure the command so `fetch` is injectable like `openRouterModels`. Keep `exports.test.ts`'s snapshot in step if a core export is added (none is planned).",
+		"complexity": 7,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/hosts.test.ts packages/core/src/host.test.ts packages/core/src/models.test.ts packages/cli/src/agent.test.ts",
+				"proves": "The openrouter row is found from its run line, spawns `sober`, renders its own JSON events and nothing else, `sober models` emits `openrouter --model` lines, and `sober agent --check` says no-key / ok correctly"
+			},
+			{
+				"run": "rg -q \"id: 'openrouter'\" packages/core/src/hosts.ts && rg -q \"command: 'sober'\" packages/core/src/hosts.ts && rg -q 'adapter.command \\?\\? command' packages/core/src/host.ts",
+				"proves": "The adapter is a table row with a command override, and host.ts honours it in both spawn and probe"
+			},
+			{
+				"run": "! rg -q 'opencode --model openrouter/' .sober/config.jsonc && rg -c 'openrouter --model' .sober/config.jsonc | rg -q '^5$'",
+				"proves": "All five OpenRouter entries in the board's config switched to the new host"
+			},
+			{
+				"run": "! rg -q 'opencode --model openrouter/' packages/core/src/models.ts && rg -q \"'openrouter'\" packages/core/src/models.ts",
+				"proves": "`sober models` writes lines for the new host, not for OpenCode"
+			},
+			{
+				"run": "rg -q '### OpenRouter' README.md && rg -q 'OPENROUTER_API_KEY' README.md && rg -q 'agent --check' docs/DESIGN.md && rg -q '/models' docs/adr/0062-sober-reaches-an-openai-compatible-endpoint-itself.md",
+				"proves": "README, DESIGN §5.1 and ADR 0062 describe the host and its real probe"
+			},
+			{
+				"run": "cd /tmp && OPENROUTER_API_KEY= node \"$(cd - >/dev/null && pwd)/packages/cli/dist/index.js\" agent --check; test $? -eq 1",
+				"proves": "The probe subcommand exists on the built CLI and refuses without a key (run after `pnpm typecheck`, which builds)"
+			},
+			{
+				"run": "pnpm lint && pnpm typecheck",
+				"proves": "The repo's gate is green"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-21T17:02:33.555Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T17:02:40.951Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T17:15:42.852Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-21T16:27:14.935Z"
+}

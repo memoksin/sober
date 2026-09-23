@@ -1,0 +1,34 @@
+{
+	"category": "module-boundaries",
+	"question": "sober:auto için brief onayı ve work kabulü yetkisi nerede uygulanmalı?",
+	"options": [
+		{
+			"id": "core-mode",
+			"label": "Core auto modu",
+			"reason": "Yetki, board koşulları ve kayıtlar core içinde her yüzeyde aynı kuralla uygulanır; skill yalnızca akışı yönetir.",
+			"costLater": "Schema ve core API genişler; insan akışıyla otomatik akışın ortak kodunu dikkatle ayırmak gerekir."
+		},
+		{
+			"id": "skill-only",
+			"label": "Yalnız skill",
+			"reason": "Yeni bir auto skill mevcut MCP araçlarını sırayla çağırır; daha az altyapı değişir.",
+			"costLater": "`confirmed: true` çağrısının insandan mı agent’dan mı geldiği kayıtta ayırt edilemez; board koşulları başka yüzeylerden atlanabilir."
+		},
+		{
+			"id": "mcp-mode",
+			"label": "MCP auto aracı",
+			"reason": "Auto yetkisi tek bir MCP aracında toplanır ve host skill’i ince kalır.",
+			"costLater": "CLI ve dashboard aynı davranışı isterse ikinci bir uygulama veya daha sonra core’a taşıma gerekir."
+		}
+	],
+	"suggested": null,
+	"derived": null,
+	"answer": {
+		"option": "core-mode",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T09:51:11.667Z",
+		"derived": null
+	},
+	"createdAt": "2026-09-23T09:45:20.142Z"
+}

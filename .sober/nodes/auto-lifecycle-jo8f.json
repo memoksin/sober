@@ -1,0 +1,35 @@
+{
+	"title": "Run one auto node through brief, verification and review",
+	"name": "auto-lifecycle",
+	"description": "Build the opt-in single-node lifecycle over the core-authorized path: choose an actionable node, draft a concrete brief and runnable acceptance checks, approve with auto provenance, dispatch, review scan/verification/acceptance/CI/files, then accept only a conclusively green result or reject with actionable feedback. Search answered decisions before resolving a cross-node question; if the catalog lacks an answer for a choice that changes multiple nodes, stop and request human input. Stop and surface inconclusive evidence, overlap, failure or changed board state; never retry automatically. Land on development, never main. Keep the node's code and tests together.",
+	"notes": "",
+	"dependsOn": [
+		"decision-catalog-mn4d",
+		"auto-eligibility-jd7h",
+		"backup-8erx",
+		"loop-guard-edg2",
+		"two-tiers-on-two-hosts-run-at-the-same-t-5i4k"
+	],
+	"decisions": [
+		"sober-auto-icin-brief-onayi-ve-work-kabu-nj0i",
+		"headless-agent-kendi-node-una-baglanmami-snvp"
+	],
+	"files": [
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/review.ts",
+		"packages/core/src/queue.ts",
+		"packages/mcp/src/tools/build.ts",
+		"packages/mcp/src/tools/review.ts",
+		"packages/cli/src/review.ts",
+		"packages/core/src/*.test.ts",
+		"test/integration/review.test.ts",
+		"test/integration/dispatch.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-23T09:45:20.142Z"
+}

@@ -1,10 +1,11 @@
 {
 	"title": "A host whose limit is spent is not on Jev's list, and the dispatch says why",
 	"name": "host-avail",
-	"description": "`checkHost` in packages/core/src/host.ts answers installed and logged in; it does not answer “can this host take a request right now”, so an account at 100% of its usage window is offered to Jev like any other. Per the `limit-detect` decision, add availability to the host adapter: for `probe`/`probe-and-fall`, a `probe` step that runs one minimal prompt through the host (`claude -p`, `codex exec`, `opencode run`, with the cheapest model the list names for that host) and classifies the exit — ready, limit spent (per-host patterns from captured real output, kept in one table per adapter with the text they were captured from in the test), not logged in, unknown — cached in `.sober/local/hosts.json` under a `dispatch.probeSeconds` TTL (config.ts, default 900). `dispatch()` runs it over the hosts the candidate list names before `askJev` and removes every entry of a host that is not ready; the dispatch log carries one line per removed host with the reason. If nothing is left, refuse before the worktree with all the reasons in one sentence. For `fall` alone, this node ships only the classification (`limitSpent(host, output)`) the fallback node needs, no probe. Tests: host.test.ts per host and per class from captured text; dispatch.test.ts for the filter, the cache TTL and the empty-list refusal.",
+	"description": "`checkHost` in packages/core/src/host.ts answers installed and logged in; it does not answer “can this host take a request right now”, so an account at 100% of its usage window is offered to Jev like any other. Per the `limit-detect` decision (probe, and still fall to the backup), add availability to the host adapter: a `probe` step that runs one minimal request through the host (`claude -p`, `codex exec`, and for `openrouter` SOBER's own loop via `sober agent --check` plus one minimal chat-completions call on the cheapest model the list names) and classifies the result — ready, limit spent, not logged in, unknown. The limit patterns are per host, kept in one table per adapter (`limitSpent(host, output)`), each with the real output it was captured from in the test; for `openrouter` the class is a 429 from the endpoint, and the body's `limit_source` (e.g. `upstream_provider_shared_pool`) is carried into the reason — the 429 text from brief-toggle-2ubj's failed run is the captured sample. Results are cached in `.sober/local/hosts.json` under a `dispatch.probeSeconds` TTL (config.ts, default 900). `dispatch()` runs it over the hosts the candidate list names before `askJev` and removes every entry of a host that is not ready; the dispatch log carries one line per removed host with the reason. If nothing is left, refuse before the worktree with all the reasons in one sentence. The backup node uses the same `limitSpent`. Tests: host.test.ts per host and per class from captured text; dispatch.test.ts for the filter, the cache TTL and the empty-list refusal.",
 	"notes": "",
 	"dependsOn": [
-		"live-list-dtr8"
+		"live-list-dtr8",
+		"run-foreground-xdwu"
 	],
 	"decisions": [
 		"how-does-sober-learn-that-a-host-s-usage-naze"
@@ -17,10 +18,43 @@
 		"packages/core/src/config.ts",
 		"packages/core/src/paths.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "A host's limit is account-wide (Claude's five-hour/seven-day windows, ChatGPT's usage limit, OpenRouter's free-request quota), so availability is asked once per host, not per model, and cached.\n\n1. **One classifier per adapter** — `packages/core/src/hosts.ts`: the `Adapter` gains `availability: { argv: readonly string[]; spent: (output: string) => string | null }` — `spent` returns the reason when the output says the limit is gone, null otherwise. Export `limitSpent(host, output)` over it; the backup node reuses it on a run's output. Patterns come from real output, and each test quotes the text it was captured from:\n   - **codex**: argv `exec --json --skip-git-repo-check \"Reply with ok.\"` (Codex's default model — the limit is the account's). Spent when the output contains `You've hit your usage limit` — captured verbatim in `~/.codex/sessions/2026/09/15/…` as `{\"error\":{\"message\":\"You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 2:59 PM.\"}}`. The reason carries the `try again at …` tail when present.\n   - **claude**: argv `-p \"Reply with ok.\" --model haiku --output-format stream-json --verbose`. Claude Code emits a `rate_limit_event` line — captured in `.sober/local/runs/*.log`: `{\"type\":\"rate_limit_event\",\"rate_limit_info\":{\"status\":\"allowed\",\"resetsAt\":1789471200,\"rateLimitType\":\"five_hour\",…,\"unifiedWindows\":{\"five_hour\":{\"utilization\":0.07,…},\"seven_day\":{\"utilization\":0.23,…}}}}`. Spent when `status` is neither `allowed` nor `allowed_warning`, or any `unifiedWindows.*.utilization` is ≥ 1; the reason names the window and `resetsAt` as a time. Only `allowed` has ever been captured here, so the rejected case is built from that shape — mark it `ponytail:` with \"replace with a captured rejected event when one is seen\".\n   - **openrouter**: no chat call — a 429 on a free model is that model's upstream pool, not the host, and belongs to the backup node. Extend `sober agent --check` (`packages/cli/src/agent.ts`) to read the `/auth/key` body it already fetches and print `spent: <reason>` instead of `ok` when `data.free_model_daily_requests.remaining` is 0 or `data.limit_remaining` is 0 (captured today: `{\"data\":{\"limit\":null,\"limit_remaining\":null,…,\"is_free_tier\":false,\"free_model_daily_requests\":{\"used\":0,\"limit\":50,\"remaining\":50},…}}`). The adapter's `availability.argv` is `agent --check` and `spent` reads that line.\n   - **opencode / cursor**: no `availability` — they are never filtered, and the log says \"not probed\".\n\n2. **Probe and cache** — `packages/core/src/host.ts`: `hostAvailability(paths, hosts, deps)` runs each adapter's `availability.argv` through the existing `run` helper (with `adapter.command`), classifies with `spent`, and keeps `{ at, hosts: { [id]: { state: 'ready' | 'spent' | 'unknown', reason } } }` in `.sober/local/hosts.json` (`paths.hosts` in `packages/core/src/paths.ts`), fresh for `dispatch.probeSeconds` (new in `packages/core/src/config.ts`, int, default 900, documented in the `init` template next to `catalogueSeconds`). A probe that errors, times out (30 s) or prints nothing readable is `unknown` — kept on the list, logged; the fallback catches it. `deps` injects `run` and `now` so tests spawn nothing.\n\n3. **Filter before Jev** — `packages/core/src/dispatch.ts`, right after `const built = await liveModels(...)` (~line 120): group `built.models` by `adapterFor(run).id`, probe those hosts, drop every entry of a `spent` host, and `appendEvent(paths, { action: 'hosts', node, removed: [{ host, reason }], unknown: [...] })`. Jev and `chooseLine` get what is left. Nothing left → throw `HostError` before the worktree: `<node> was not started: every host is out — claude: five-hour limit, resets 14:59; codex: usage limit, try again at 2:59 PM`.\n\n4. **Tests** — `packages/core/src/hosts.test.ts`: per host, ready and spent from the captured text above (codex error, claude `allowed` event + the constructed rejected one + utilization 1.0, openrouter `ok` / `spent:` lines). `packages/core/src/host.test.ts`: cache hit (no spawn), stale (spawn), probe failure → `unknown`. `packages/cli/src/agent.test.ts`: `--check` prints `spent:` for `remaining: 0` and `ok` for the captured body. `packages/core/src/dispatch.test.ts`: a spent host's entries never reach Jev, the log event names it, all-spent refuses before the worktree with every reason. Config test beside the `sources` one in `packages/core/src/storage.test.ts`. Keep the coverage baseline at or above development's.\n\nDeviation from the node text, on purpose: no minimal chat call for `openrouter` (it would test one free model's pool, not the host), and no `opencode run` probe (OpenRouter is its own host now, ADR 0062).",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/hosts.test.ts packages/core/src/host.test.ts packages/core/src/dispatch.test.ts packages/core/src/storage.test.ts packages/cli/src/agent.test.ts",
+				"proves": "Each host's ready/spent classification holds on captured text, the cache and probe-failure paths work, dispatch keeps spent hosts away from Jev and refuses with every reason when none is left"
+			},
+			{
+				"run": "rg -q \"You've hit your usage limit\" packages/core/src/hosts.test.ts && rg -q 'rate_limit_event' packages/core/src/hosts.test.ts && rg -q 'free_model_daily_requests' packages/cli/src/agent.test.ts",
+				"proves": "The patterns are tested against the real captured output, not invented strings"
+			},
+			{
+				"run": "rg -q 'probeSeconds' packages/core/src/config.ts && rg -q 'hosts.json' packages/core/src/paths.ts && rg -q 'export const limitSpent' packages/core/src/hosts.ts",
+				"proves": "The TTL is a setting, the cache lives under .sober/local, and the classifier the backup node needs is exported"
+			},
+			{
+				"run": "pnpm lint && pnpm typecheck && pnpm test",
+				"proves": "The repo's gate is green"
+			},
+			{
+				"run": "pnpm coverage && pnpm coverage:check",
+				"proves": "Coverage did not drop below the baseline"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T09:57:01.646Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T09:58:56.112Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-21T13:30:00.197Z"

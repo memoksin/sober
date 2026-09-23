@@ -1,0 +1,28 @@
+{
+	"category": "module-boundaries",
+	"question": "Where does SOBER's own tool loop run — in the core process, or as a `sober agent` subprocess that the adapter table spawns like every other host?",
+	"options": [
+		{
+			"id": "subprocess",
+			"label": "`sober agent` subprocess",
+			"reason": "The `openrouter` adapter is an ordinary `Adapter` entry: its command is `sober agent --model …`, it prints one JSON event per line, and `startAgent`, `checkHost`, `stop` (by pid), `sober logs` and the run panel work unchanged. The loop is one new file in core plus one CLI subcommand.",
+			"costLater": "The spawned `sober` has to be on the PATH the MCP server sees — the same failure `sober mcp` already has, now on the run path too. One more process per run, and the events cross a pipe as JSON that both sides must agree on."
+		},
+		{
+			"id": "in-process",
+			"label": "In-process in core",
+			"reason": "No second process, no serialised events: the loop calls `onLine` directly. `Adapter` gains a `kind: 'builtin'` and `startAgent` branches on it.",
+			"costLater": "Two launch paths in `host.ts` instead of one — every later change to how a run is stopped, timed out or logged is made twice. A hung fetch hangs the dispatcher's own process rather than a child it can kill."
+		}
+	],
+	"suggested": "subprocess",
+	"derived": "packages/core/src/host.ts — `startAgent` spawns a process, splits its lines and reads its exit, and the comment says the file is 'thin by contract'; ADR 0061 §Decision: 'a provider is a command line'",
+	"answer": {
+		"option": "subprocess",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T16:28:31.494Z",
+		"derived": "packages/core/src/host.ts — `startAgent` spawns a process, splits its lines and reads its exit, and the comment says the file is 'thin by contract'; ADR 0061 §Decision: 'a provider is a command line'"
+	},
+	"createdAt": "2026-09-21T16:27:14.935Z"
+}

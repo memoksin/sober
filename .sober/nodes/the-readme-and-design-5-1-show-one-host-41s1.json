@@ -4,7 +4,8 @@
 	"description": "docs/DESIGN.md §5.1 says SOBER \"never chooses the model\" and describes `dispatch.host` as the one host (lines ~579 and ~613); the config comment in `DEFAULT_CONFIG_TEXT` says the same. After the ADR that lets SOBER choose the model and the tier table, both are wrong.\n\nRewrite §5.1's two sentences and the `dispatch` block's comments to say: one host per tier, `dispatch.host` is the fallback (or not, per `unnamed-tier`), the model rides where `tier-host-shape` put it. Add the worked example to packages/cli/README.md's host section: low → OpenCode (`minimax/m3-free`), mid → Codex, high → Claude Code, in the shape the decision chose. The install-docs drift check on the board (`a-check-that-keeps-the-install-docs-from-8ojr`) is the test if it has landed; otherwise the README example is copied from a config the integration test in `two-hosts-at-once` actually runs.",
 	"notes": "",
 	"dependsOn": [
-		"two-tiers-on-two-hosts-run-at-the-same-t-5i4k"
+		"two-tiers-on-two-hosts-run-at-the-same-t-5i4k",
+		"openrouter-host-bdws"
 	],
 	"decisions": [
 		"where-do-a-tier-s-host-and-model-live-in-nn4v",
