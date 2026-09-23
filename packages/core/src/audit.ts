@@ -1,4 +1,6 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { CommandResult, Run } from '@besober/schema'
 import { readConfigFromBase } from './config.js'
 import { NotOnBoardError } from './errors.js'
@@ -49,6 +51,34 @@ export interface Failure {
 	readonly stderr?: string
 }
 
+/**
+ * Off Windows, `true` keeps Node's default (`/bin/sh`). On Windows, `cmd.exe`
+ * does not treat single quotes as quotes, so acceptance commands written in
+ * POSIX shell syntax must go through one — Git for Windows ships `sh.exe`,
+ * and Git is already a hard dependency of SOBER. `sh`/`bash` off the PATH is
+ * never used: on Windows, `bash.exe` on PATH can be WSL's
+ * `WindowsApps\bash.exe`, a different filesystem than the worktree's.
+ */
+let cachedShell: string | true | null | undefined
+export const posixShell = (): string | true | null => {
+	if (process.platform !== 'win32') return true
+	if (cachedShell !== undefined) return cachedShell
+
+	cachedShell = (() => {
+		try {
+			const execPath = execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim()
+			const root = dirname(dirname(dirname(execPath)))
+			for (const candidate of [join(root, 'usr', 'bin', 'sh.exe'), join(root, 'bin', 'sh.exe')]) {
+				if (existsSync(candidate)) return candidate
+			}
+			return null
+		} catch {
+			return null
+		}
+	})()
+	return cachedShell
+}
+
 export const notInstalled = (failure: Failure): boolean =>
 	failure.code === 127 ||
 	failure.code === 9009 ||
@@ -65,30 +95,36 @@ export const notInstalled = (failure: Failure): boolean =>
  * a human wrote, either into their config on the base ref or into an acceptance
  * list they approved.
  */
-export const judge = (cwd: string, command: string | null): Promise<Judged> =>
-	command === null
-		? Promise.resolve({ result: null, output: '' })
-		: new Promise((resolve) => {
-				execFile(
-					command,
-					{ cwd, shell: true, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
-					(error, stdout, stderr) => {
-						const output = `${stdout}${stderr}`
-						if (error === null) return resolve({ result: { exit: 0 }, output })
-						// The text goes in from the callback, not off the error:
-						// `execFile` hands stdout and stderr to the callback and never
-						// attaches them to what it rejects with. Read off the error,
-						// the message half of `notInstalled` tested two empty strings
-						// on every platform, and only `sh`'s exit 127 was doing the
-						// work — so a shell that answers differently, `cmd.exe` among
-						// them, read a tool nobody installed as a criterion that
-						// failed.
-						const code = (error as Failure).code
-						if (notInstalled({ code, stdout, stderr })) return resolve({ result: null, output })
-						resolve({ result: { exit: typeof code === 'number' ? code : 1 }, output })
-					},
-				)
-			})
+export const judge = (cwd: string, command: string | null): Promise<Judged> => {
+	if (command === null) return Promise.resolve({ result: null, output: '' })
+	const shell = posixShell()
+	if (shell === null)
+		return Promise.resolve({
+			result: null,
+			output: 'no POSIX shell found: install Git for Windows',
+		})
+	return new Promise((resolve) => {
+		execFile(
+			command,
+			{ cwd, shell, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+			(error, stdout, stderr) => {
+				const output = `${stdout}${stderr}`
+				if (error === null) return resolve({ result: { exit: 0 }, output })
+				// The text goes in from the callback, not off the error:
+				// `execFile` hands stdout and stderr to the callback and never
+				// attaches them to what it rejects with. Read off the error,
+				// the message half of `notInstalled` tested two empty strings
+				// on every platform, and only `sh`'s exit 127 was doing the
+				// work — so a shell that answers differently, `cmd.exe` among
+				// them, read a tool nobody installed as a criterion that
+				// failed.
+				const code = (error as Failure).code
+				if (notInstalled({ code, stdout, stderr })) return resolve({ result: null, output })
+				resolve({ result: { exit: typeof code === 'number' ? code : 1 }, output })
+			},
+		)
+	})
+}
 
 /**
  * The run is judged where it worked (§6.0): `dispatch.verify` first, then every
