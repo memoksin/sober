@@ -47,6 +47,7 @@ const board = (nodes: BoardRead['nodes'], decisions: BoardRead['decisions'] = []
 	nodes,
 	decisions,
 	broken: [],
+	thinkingVerbs: null,
 })
 
 test('a wait is resolved to what a person reads, not to the id they were given', () => {

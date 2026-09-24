@@ -15,6 +15,7 @@ import { Digest } from './digest/Digest.js'
 import { worthShowing } from './digest/data.js'
 import { DistributionScreen } from './distribute/Distribution.js'
 import { readPlan, waiting } from './distribute/data.js'
+import { mergeThinkingVerbs, THINKING_VERBS } from './logs/data.js'
 import { LogScreen } from './logs/Logs.js'
 import { DecisionScreen } from './panel/Decision.js'
 import type { Action, BoardRead, FlagAction } from './panel/data.js'
@@ -492,7 +493,12 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				)}
 
 				{watching !== null && surface !== null && (
-					<LogScreen node={watching} surface={surface} onClose={() => setWatching(null)} />
+					<LogScreen
+						node={watching}
+						surface={surface}
+						onClose={() => setWatching(null)}
+						verbs={mergeThinkingVerbs(THINKING_VERBS, board?.thinkingVerbs ?? null)}
+					/>
 				)}
 
 				{decisionsOpen && board !== null && (

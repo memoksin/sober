@@ -138,3 +138,39 @@ test('sync run with no branch lands on the configured board branch, never the ch
 	expect(await currentBranch(dir)).toBe('main')
 	expect(run('log', 'sober-graph', '-1', '--format=%s')).toContain('sober: board from')
 })
+
+test('the board read carries thinkingVerbs — the default pool absent, the configured one set, null when the config is broken', async () => {
+	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
+	const run = (...args: string[]) =>
+		execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim()
+	run('init', '--initial-branch=main')
+	run('config', 'user.name', 'SOBER Test')
+	run('config', 'user.email', 'test@besober.dev')
+	run('config', 'commit.gpgsign', 'false')
+	writeFileSync(join(dir, 'README.md'), '# acme\n')
+	run('add', '-A')
+	run('commit', '-m', 'chore: first')
+
+	const p = paths(dir)
+	await OPS.init.run(p, { project: { title: 'acme', intent: '', constraints: [] } })
+
+	const withoutConfig = await READS.board.run(p, {})
+	expect((withoutConfig as { thinkingVerbs: unknown }).thinkingVerbs).toEqual({
+		mode: 'extend',
+		words: [],
+	})
+
+	writeFileSync(
+		p.config,
+		JSON.stringify({ dashboard: { thinkingVerbs: { mode: 'extend', words: ['Vibing'] } } }),
+	)
+	const withConfig = await READS.board.run(p, {})
+	expect((withConfig as { thinkingVerbs: unknown }).thinkingVerbs).toEqual({
+		mode: 'extend',
+		words: ['Vibing'],
+	})
+
+	writeFileSync(p.config, '{ not valid json')
+	const withBrokenConfig = await READS.board.run(p, {})
+	expect((withBrokenConfig as { thinkingVerbs: unknown }).thinkingVerbs).toBeNull()
+})

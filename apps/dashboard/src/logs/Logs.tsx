@@ -47,10 +47,12 @@ export const LogScreen = ({
 	node,
 	surface,
 	onClose,
+	verbs = THINKING_VERBS,
 }: {
 	readonly node: string
 	readonly surface: Wire
 	readonly onClose: () => void
+	readonly verbs?: readonly string[]
 }): React.JSX.Element => {
 	const [reply, setReply] = useState('')
 	const [sending, setSending] = useState(false)
@@ -86,13 +88,13 @@ export const LogScreen = ({
 
 	// The working indicator's verb: it changes only where a new line lands
 	// (never on a timer), and never repeats the previous one.
-	const [verbIndex, setVerbIndex] = useState(() => nextVerb(-1, Math.random))
+	const [verbIndex, setVerbIndex] = useState(() => nextVerb(-1, Math.random, verbs.length))
 	const seenLineCount = useRef(0)
 	useEffect(() => {
 		if (lines.length === seenLineCount.current) return
 		seenLineCount.current = lines.length
-		setVerbIndex((previous) => nextVerb(previous, Math.random))
-	}, [lines.length])
+		setVerbIndex((previous) => nextVerb(previous, Math.random, verbs.length))
+	}, [lines.length, verbs.length])
 
 	// A tick that forces the elapsed clock and the working indicator's seconds
 	// to advance even when no new line has arrived.
@@ -491,7 +493,7 @@ export const LogScreen = ({
 				<div className="flex shrink-0 items-center gap-2.5 px-6 py-2 font-mono text-[var(--tx-think)] text-sm">
 					<Ekg live={live === true} lineCount={lines.length} />
 					<span>
-						{THINKING_VERBS[verbIndex]}… ({workingSeconds}s)
+						{verbs[verbIndex]}… ({workingSeconds}s)
 					</span>
 				</div>
 			)}

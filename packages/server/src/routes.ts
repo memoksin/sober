@@ -417,6 +417,7 @@ export const READS: Readonly<Record<string, Route>> = {
 
 	board: route(nothing, async (paths) => {
 		const board = await loadBoard(paths)
+		const config = await readConfig(paths)
 		return {
 			project: board.project,
 			nodes: [...board.nodes].map(([id, record]) => ({
@@ -435,6 +436,10 @@ export const READS: Readonly<Record<string, Route>> = {
 			// One bad file does not take down the board (§8.4), and a surface
 			// that drops the fact renders a board that is quietly incomplete.
 			broken: board.broken,
+			// null for an old server the dashboard still talks to — the client
+			// falls back to the built-in verb pool exactly as it would for a
+			// config with no key set.
+			thinkingVerbs: config.kind === 'ok' ? config.value.dashboard.thinkingVerbs : null,
 		}
 	}),
 

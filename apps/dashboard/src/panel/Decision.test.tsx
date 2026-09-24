@@ -30,6 +30,7 @@ const board = (answered: boolean): BoardRead => ({
 		},
 	],
 	broken: [],
+	thinkingVerbs: null,
 })
 
 const impact: Impact = {
