@@ -18,7 +18,7 @@ import {
 	writeNode,
 } from '@besober/core'
 import { afterEach, expect, test } from 'vitest'
-import { createTempRepo, type TempRepo } from './fixture.js'
+import { createTempRepo, NODE_SH, type TempRepo } from './fixture.js'
 
 /**
  * The auditor: the acceptance list runs, and the review says what each command
@@ -29,13 +29,13 @@ import { createTempRepo, type TempRepo } from './fixture.js'
 const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
 
 /** Portable, and exits with what it is told to: no shell builtin is. */
-const exits = (code: number): string => `${process.execPath} -e "process.exit(${code})"`
+const exits = (code: number): string => `${NODE_SH} -e "process.exit(${code})"`
 
 /**
  * A missing tool the way a shell that is not `sh` reports one: the sentence
  * every shell says, and an exit code that is not `sh`'s 127.
  */
-const missing = `${process.execPath} -e "process.stderr.write('nosuchtool: command not found');process.exit(1)"`
+const missing = `${NODE_SH} -e "process.stderr.write('nosuchtool: command not found');process.exit(1)"`
 
 const aNode = (title: string) => ({
 	title,
@@ -153,7 +153,7 @@ test('the commands run in the node’s worktree, not in the project root', async
 	const paths = await board()
 	const marker = 'audit-ran-here.txt'
 	await criteria(paths, {
-		run: `${process.execPath} -e "require('fs').writeFileSync('${marker}','')"`,
+		run: `${NODE_SH} -e "require('fs').writeFileSync('${marker}','')"`,
 		proves: 'the worktree is the working directory',
 	})
 
@@ -205,7 +205,7 @@ test('a run that did not finish leaves every criterion unrun rather than guessin
 test('the output of a criterion is in the run log, where the reason lives', async () => {
 	const paths = await board()
 	await criteria(paths, {
-		run: `${process.execPath} -e "console.log('expected 200, got 401'); process.exit(1)"`,
+		run: `${NODE_SH} -e "console.log('expected 200, got 401'); process.exit(1)"`,
 		proves: 'the session cookie is httpOnly',
 	})
 

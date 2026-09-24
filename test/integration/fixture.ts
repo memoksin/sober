@@ -13,6 +13,13 @@ const stat = (event: string, since: number) => {
 		writeSync(2, `sober-fixture ${event} ${Math.round(performance.now() - since)}ms\n`)
 }
 
+/**
+ * Node binary as a POSIX-shell word, for acceptance/scanner commands that
+ * run through posixShell(). Forward slashes, quoted, so `sh` doesn't read
+ * the Windows path's backslashes as escapes (docs/WINDOWS-CI-2026-09.md).
+ */
+export const NODE_SH = JSON.stringify(process.execPath.replaceAll('\\', '/'))
+
 export type TempRepo = {
 	/** Working repository with `origin` pointing at `remote`. */
 	dir: string

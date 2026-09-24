@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { addWorktree, initBoard, type Paths, scanNode, setSetting, writeNode } from '@besober/core'
 import { afterEach, expect, test } from 'vitest'
-import { createTempRepo, type TempRepo } from './fixture.js'
+import { createTempRepo, NODE_SH, type TempRepo } from './fixture.js'
 
 /**
  * The scan against a real repository, a real branch and the real `secretlint`
@@ -152,7 +152,7 @@ test('an extra scanner that is not installed did not run, and is never read as c
 
 test('an extra scanner that exits non-zero is a finding carrying its first line', async () => {
 	const paths = await board({
-		extra: [`${process.execPath} -e "console.log('two issues found'); process.exit(2)"`],
+		extra: [`${NODE_SH} -e "console.log('two issues found'); process.exit(2)"`],
 	})
 	await work(paths, { 'src/auth/token.ts': 'export const sign = () => "ok"\n' })
 
