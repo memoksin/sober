@@ -26,7 +26,7 @@ If a proposed feature does not make one of these seven steps possible or correct
 | 2 | Decision records: own records, nodes bind them, gate on any bound-and-open | 3 | The one hard block. Cutting it makes SOBER accelerated vibe coding — the exact failure the charter names. Gating on the _binding_ rather than on one flagged node is ADR 0006. |
 | 3 | Node brief, required before dispatch | 4 | An agent that has to ask a second question has not been briefed. This is what makes automation safe. |
 | 4 | Parallel dispatch: N isolated agent sessions, one branch each | 5 | The automation pillar is _parallel_ agents. One-at-a-time is a different product. |
-| 5 | Human review before anything lands | 6 | The human owns intent. An agent that merges its own work owns intent. Review means check results against approved acceptance criteria; reading the diff is available, never required (ADR 0022). |
+| 5 | Human review before anything lands | 6 | The human owns intent. An agent that merges its own work owns intent. Review means check results against approved acceptance criteria; reading the diff is available, never required (ADR 0022). Except under an explicit auto invocation, ADR 0065. |
 | 6 | Dashboard: graph canvas, node panel, decision screen, review screen | 1–7 | The charter names the dashboard the primary surface for the board. A dashboard-shaped gap is a product gap. |
 | 7 | CLI mirroring every state-changing operation | 1–7 | The scriptable surface. Also the contract test: anything the dashboard can change, the CLI can change headless. |
 | 8 | Team sync: the board travels over git | 2, 7 | "A small team, human and agent, working one project in parallel" needs a shared board. |

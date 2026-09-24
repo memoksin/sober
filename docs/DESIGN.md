@@ -503,6 +503,8 @@ There are two approval actions (ADR 0017):
 
 What "approve and queue" trades is that the approach is approved before the upstream node's outcome exists. The approach is written against the decisions and the node's description rather than an upstream diff, so this is usually harmless — and sometimes it is not. D26 is untouched: approval is still human, still per node, still with no batch. §5.3 holds the rules that make an unattended chain safe.
 
+The one exception is an explicit `sober:auto` invocation, under ADR 0065's board-wide gate and with every approval it makes recorded as autonomous rather than attributed to a human who did not see it. Outside that named invocation, decisions stay human, exactly as above.
+
 Which of the two a surface offers when the caller does not say is `dispatch.queueByDefault`, off by default (ADR 0056). It moves the starting position, not the trade: the human still approves one node at a time, and the prompt is labelled from the resolved value, so they see which of the two actions they are confirming. It is read normally rather than from the base ref (§5.2) — it governs a default in a prompt a human answers on their own checkout, not how a run is prepared or judged.
 
 The unattended path is narrower than `ready`, and deliberately: it takes only a node whose approval carries `queue: true` and that has never run (ADR 0056). `ready` already means approved — a node with no brief is `needs-brief` and an unapproved brief is `needs-approval` — so the flag is not a second permission. It is the difference between "start now", which a human is watching, and "start later without asking", which nobody is. A node approved with `queue: false` that never started stays the human's to run.
@@ -661,11 +663,44 @@ In `.sober/local/runs/<runid>.json`, not in git: which node, which host, which b
 
 A run that finishes writes the node's `outcome` summary (§3.7), which is board state and does sync.
 
+### 5.6 Auto — opt-in
+
+`sober:auto` is an explicit invocation, never a setting and never a default
+(ADR 0065). Without it, every surface behaves exactly as the rest of this
+document describes.
+
+Under that invocation, core rechecks a board-wide gate before each
+consequential transition — approve, dispatch, accept: zero open,
+non-archived decisions anywhere on the board (wider than the one-hard-block
+rule, which only holds the nodes a decision binds), a board that loads clean
+and is still a DAG, a node with no foreign claim or files overlap and not
+flagged by a changed decision, and a brief carrying a non-empty acceptance
+list. Any failure hands the node back to the human; nothing is worked around.
+
+Forbidden under auto: work targeting `main` or a release branch, opening or
+merging into `main`, writing a changeset, and retrying a failed, stopped or
+rejected run (ADR 0056 decision 3 applies the same way here). Auto lands only
+on the project's configured base.
+
+If the gate breaks mid-run — a decision opens, the graph breaks, the node is
+claimed elsewhere — the run itself is not killed (§5.4 stop is a human act),
+but auto takes no further transition on it; the result waits in review.
+
+When a run meets a choice its brief does not bind, it searches the board's
+answered-decision catalog over MCP. Found, it follows the answer; not found
+and node-local, it decides and records why in `outcome`; not found and it
+would reshape more than one node in `state`, `module-boundaries`, `data-flow`
+or `error-handling`, it stops and asks the human to open and answer a
+decision — auto never opens and answers one itself.
+
+See ADR 0065 for the full gate, the accept threshold and provenance
+requirements, and the argument for keeping authority in `core`.
+
 ---
 
 ## 6. Review
 
-Nothing lands without a human (`SCOPE.md` MUST #5). An agent can neither merge its own branch nor mark its own result accepted (`PR-09-05`).
+Nothing lands without a human (`SCOPE.md` MUST #5). An agent can neither merge its own branch nor mark its own result accepted (`PR-09-05`) — except under an explicit `sober:auto` invocation, which may accept against ADR 0065's conclusively-green threshold and records that the accept was autonomous.
 
 Review is available on all three surfaces (§4). In M1 that means the session and the CLI; the dashboard's single review screen is M3.
 
