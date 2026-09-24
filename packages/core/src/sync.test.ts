@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
+import { SoberError } from './errors.js'
 import { git } from './git.js'
 import { paths } from './paths.js'
-import { boardDistance } from './sync.js'
+import { boardDistance, resolveConflict, sync } from './sync.js'
 import { tmpRoot } from './tmp.fixture.js'
 
 const BRANCH = 'sober/board'
@@ -94,6 +95,23 @@ test('an unreachable remote answers offline instead of throwing', async () => {
 	expect(await boardDistance(paths(w.work), BRANCH, { timeoutMs: 2000 })).toEqual({
 		kind: 'offline',
 	})
+})
+
+test('sync refuses the branch checked out here, and leaves it untouched', async () => {
+	const w = await world()
+	const before = await git(w.work, 'rev-parse', 'main')
+	const tree = await git(w.work, 'rev-parse', 'main^{tree}')
+	await expect(sync(paths(w.work), 'main')).rejects.toThrow(SoberError)
+	expect(await git(w.work, 'rev-parse', 'main')).toBe(before)
+	expect(await git(w.work, 'rev-parse', 'main^{tree}')).toBe(tree)
+	expect(await git(w.work, 'log', '--all', '--grep', 'sober: board from')).toBe('')
+})
+
+test('resolveConflict refuses the branch checked out here', async () => {
+	const w = await world()
+	const before = await git(w.work, 'rev-parse', 'main')
+	await expect(resolveConflict(paths(w.work), 'main', 'a', {})).rejects.toThrow(SoberError)
+	expect(await git(w.work, 'rev-parse', 'main')).toBe(before)
 })
 
 test('local work under .sober/ refuses the fast-forward but keeps the counts', async () => {
