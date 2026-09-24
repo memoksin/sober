@@ -90,6 +90,18 @@ const route = <I>(
 const baseOf = async (paths: Paths, given: string | undefined): Promise<string> =>
 	given ?? (await currentBranch(paths.root))
 
+/**
+ * The board branch from `.sober/config.jsonc` — never the checked-out branch,
+ * which is what `f2592f9` landed on when `sync` took none of its own and fell
+ * back to `baseOf` like every code-branch operation does.
+ */
+const boardBranch = async (paths: Paths): Promise<string> => {
+	const config = await readConfig(paths)
+	if (config.kind !== 'ok')
+		throw new SoberError('no-board', `${config.file} cannot be read: ${config.reason}`)
+	return config.value.board.branch
+}
+
 const node = z.strictObject({ node: Id })
 const nothing = z.strictObject({})
 
@@ -254,19 +266,17 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 	}),
 
 	sync: route(
-		z.strictObject({ branch: z.string().optional(), push: z.boolean().optional() }),
-		async (paths, { branch, push }) =>
-			sync(paths, await baseOf(paths, branch), { push: push ?? true }),
+		z.strictObject({ push: z.boolean().optional() }),
+		async (paths, { push }) => sync(paths, await boardBranch(paths), { push: push ?? true }),
 	),
 
 	resolve: route(
 		z.strictObject({
-			branch: z.string().optional(),
 			record: Id,
 			choices: z.record(z.string(), z.enum(['ours', 'theirs', 'keep', 'restore'])),
 		}),
-		async (paths, { branch, record, choices }) =>
-			resolveConflict(paths, await baseOf(paths, branch), record, choices),
+		async (paths, { record, choices }) =>
+			resolveConflict(paths, await boardBranch(paths), record, choices),
 	),
 
 	contributors_add: route(
@@ -376,11 +386,7 @@ export const READS: Readonly<Record<string, Route>> = {
 	distance: route(
 		z.strictObject({ branch: z.string().min(1).optional() }),
 		async (paths, { branch }) => {
-			if (branch !== undefined) return boardDistance(paths, branch, { pull: true })
-			const config = await readConfig(paths)
-			if (config.kind !== 'ok')
-				throw new SoberError('no-board', `${config.file} cannot be read: ${config.reason}`)
-			return boardDistance(paths, config.value.board.branch, { pull: true })
+			return boardDistance(paths, branch ?? (await boardBranch(paths)), { pull: true })
 		},
 	),
 
