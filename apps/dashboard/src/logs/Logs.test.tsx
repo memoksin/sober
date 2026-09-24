@@ -378,7 +378,13 @@ test('the model badge names the provider from the model id, not the host', async
 		<LogScreen
 			node="n-k7f2"
 			surface={surfaceOf([
-				window({ ran: { host: 'openrouter --model anthropic/claude-opus-5-5', tier: null, fallback: false } }),
+				window({
+					ran: {
+						host: 'openrouter --model anthropic/claude-opus-5-5',
+						tier: null,
+						fallback: false,
+					},
+				}),
 			])}
 			onClose={() => {}}
 		/>,

@@ -5,13 +5,13 @@ import type { Wire } from '../wire.js'
 import {
 	atBottom,
 	MARK,
-	matchesLine,
-	modelOf,
 	MORPH_GROW_EASING,
 	MORPH_GROW_MS,
 	MORPH_REDUCED_MS,
 	MORPH_SHRINK_EASING,
 	MORPH_SHRINK_MS,
+	matchesLine,
+	modelOf,
 	PROVIDER_COLOUR,
 	PROVIDER_NAME,
 	type Provider,
@@ -456,10 +456,7 @@ export const LogScreen = ({
 			</div>
 
 			{live === true && (
-				<footer
-					ref={statusBar}
-					className="shrink-0 border-[var(--line)] border-t px-6 py-3"
-				>
+				<footer ref={statusBar} className="shrink-0 border-[var(--line)] border-t px-6 py-3">
 					{refused !== null && (
 						<p className="mb-2 text-[var(--danger)] text-xs" role="alert">
 							{refused}
@@ -529,7 +526,12 @@ const Dots = ({ live }: { readonly live: boolean | null }): React.JSX.Element =>
 // these are brand marks and not a colour: ADR 0064 keeps colour off the
 // canvas and on this badge alone).
 const PROVIDER_MARK: Readonly<Record<Provider, React.JSX.Element>> = {
-	anthropic: <path fill="currentColor" d="M2 20 9 4h3l7 16h-3l-1.5-4h-8L5 20Zm5.5-7h6L10.5 6ZM16 4h3l4 16h-3Z" />,
+	anthropic: (
+		<path
+			fill="currentColor"
+			d="M2 20 9 4h3l7 16h-3l-1.5-4h-8L5 20Zm5.5-7h6L10.5 6ZM16 4h3l4 16h-3Z"
+		/>
+	),
 	openai: (
 		<>
 			{[0, 1, 2, 3, 4, 5].map((index) => (
@@ -568,7 +570,11 @@ const PROVIDER_MARK: Readonly<Record<Provider, React.JSX.Element>> = {
  * openrouter host still shows Anthropic's mark for `anthropic/claude-…`.
  * With no model in the host line, only the fallback mark and the host show.
  */
-const ModelBadge = ({ ran }: { readonly ran: NonNullable<LogWindow['ran']> }): React.JSX.Element => {
+const ModelBadge = ({
+	ran,
+}: {
+	readonly ran: NonNullable<LogWindow['ran']>
+}): React.JSX.Element => {
 	const model = modelOf(ran.host)
 	const provider = model !== null ? providerForModel(model) : 'other'
 	return (
