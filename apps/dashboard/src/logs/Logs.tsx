@@ -1,8 +1,26 @@
 import type { LogLine, LogWindow } from '@besober/schema'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Overlay } from '../Overlay.js'
 import type { Wire } from '../wire.js'
-import { atBottom, MARK, ranWith, TONE, toolMark } from './data.js'
+import {
+	atBottom,
+	MARK,
+	MORPH_GROW_EASING,
+	MORPH_GROW_MS,
+	MORPH_REDUCED_MS,
+	MORPH_SHRINK_EASING,
+	MORPH_SHRINK_MS,
+	matchesLine,
+	modelOf,
+	PROVIDER_COLOUR,
+	PROVIDER_NAME,
+	type Provider,
+	providerForModel,
+	ranWith,
+	STAGE_STAGGER_MS,
+	TONE,
+	toolMark,
+} from './data.js'
 
 /**
  * The run on the screen (ADR 0046). A dispatch is the longest and most
@@ -37,12 +55,23 @@ export const LogScreen = ({
 	const [failure, setFailure] = useState<string | null>(null)
 	const [ended, setEnded] = useState(false)
 	const [ran, setRan] = useState<LogWindow['ran']>(undefined)
+	const [full, setFull] = useState(false)
+	const [findOpen, setFindOpen] = useState(false)
+	const [query, setQuery] = useState('')
+	const [unseen, setUnseen] = useState(0)
 
 	const scroller = useRef<HTMLDivElement>(null)
+	const dialog = useRef<HTMLDivElement>(null)
+	const titleBar = useRef<HTMLElement>(null)
+	const transcriptWrap = useRef<HTMLDivElement>(null)
+	const statusBar = useRef<HTMLElement>(null)
+	const findInput = useRef<HTMLInputElement>(null)
+
 	// Whether to keep following the bottom. A person who has scrolled up is
 	// reading something, and yanking them back down on the next line is the
 	// fastest way to make a live tail unreadable.
 	const following = useRef(true)
+	const seenCount = useRef(0)
 
 	useEffect(() => {
 		const leaving = new AbortController()
@@ -80,14 +109,102 @@ export const LogScreen = ({
 		return () => leaving.abort()
 	}, [node, surface])
 
-	// Stick to the bottom while the reader is at the bottom, and nowhere else. A
-	// person who has scrolled up is reading something, and yanking them back
-	// down on the next line is the fastest way to make a live tail unreadable.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: the new lines are the event, not a value read here
+	// Stick to the bottom while the reader is at the bottom, and count what
+	// they haven't seen while they aren't. A person who has scrolled up is
+	// reading something, and yanking them back down on the next line is the
+	// fastest way to make a live tail unreadable.
 	useEffect(() => {
 		const box = scroller.current
-		if (box !== null && following.current) box.scrollTop = box.scrollHeight
+		if (following.current) {
+			seenCount.current = lines.length
+			setUnseen(0)
+			if (box !== null) box.scrollTop = box.scrollHeight
+		} else {
+			setUnseen(lines.length - seenCount.current)
+		}
 	}, [lines])
+
+	const jumpToBottom = (): void => {
+		following.current = true
+		seenCount.current = lines.length
+		setUnseen(0)
+		const box = scroller.current
+		if (box !== null) box.scrollTop = box.scrollHeight
+	}
+
+	// The morph (ADR 0064): a FLIP transform between the card and the full
+	// viewport, cancelled the moment it's superseded or this unmounts. Reduced
+	// motion drops straight to a crossfade — the product follows the OS
+	// setting, the mockup's force switch was review-only.
+	const firstRect = useRef<DOMRect | null>(null)
+	const scrollBeforeMorph = useRef(0)
+
+	const toggleFull = (): void => {
+		const box = dialog.current
+		if (box !== null) firstRect.current = box.getBoundingClientRect()
+		scrollBeforeMorph.current = scroller.current?.scrollTop ?? 0
+		setFull((value) => !value)
+	}
+
+	useLayoutEffect(() => {
+		const box = dialog.current
+		const first = firstRect.current
+		firstRect.current = null
+		if (box === null || first === null) return
+
+		const last = box.getBoundingClientRect()
+		const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+		const duration = reduced ? MORPH_REDUCED_MS : full ? MORPH_GROW_MS : MORPH_SHRINK_MS
+		const easing = reduced ? 'linear' : full ? MORPH_GROW_EASING : MORPH_SHRINK_EASING
+		const frames: Keyframe[] = reduced
+			? [{ opacity: 0 }, { opacity: 1 }]
+			: [
+					{
+						transform: `translate(${first.left - last.left}px, ${first.top - last.top}px) scale(${last.width === 0 ? 1 : first.width / last.width}, ${last.height === 0 ? 1 : first.height / last.height})`,
+						opacity: 0.7,
+					},
+					{ transform: 'none', opacity: 1 },
+				]
+
+		// `finished` rejects with AbortError on `cancel()` (a quick re-toggle, or
+		// this unmounting mid-morph); nothing here awaits it, so it needs a catch
+		// of its own or it surfaces as an unhandled rejection.
+		const animations = [box.animate(frames, { duration, easing })]
+		animations[0]?.finished.catch(() => {})
+
+		if (!reduced) {
+			const stages: (HTMLElement | null)[] = [
+				titleBar.current,
+				transcriptWrap.current,
+				statusBar.current,
+			]
+			stages.forEach((element, index) => {
+				if (element === null) return
+				const stage = element.animate(
+					[
+						{ opacity: 0, transform: `translateY(${full ? 8 : -5}px)` },
+						{ opacity: 1, transform: 'translateY(0)' },
+					],
+					{
+						duration: full ? 220 : 170,
+						delay: full ? 110 + index * STAGE_STAGGER_MS : 40 + (2 - index) * 45,
+						easing: 'ease-out',
+						fill: 'backwards',
+					},
+				)
+				stage.finished.catch(() => {})
+				animations.push(stage)
+			})
+		}
+
+		const scrollBox = scroller.current
+		if (scrollBox !== null)
+			scrollBox.scrollTop = following.current ? scrollBox.scrollHeight : scrollBeforeMorph.current
+
+		return () => {
+			for (const animation of animations) animation.cancel()
+		}
+	}, [full])
 
 	/**
 	 * The other half of watching (`SCOPE.md`: "watching a dispatched agent,
@@ -110,81 +227,236 @@ export const LogScreen = ({
 		}
 	}
 
+	const onDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+		const target = event.target as HTMLElement
+		if (target.closest('textarea, input') !== null) return
+		if (event.ctrlKey || event.metaKey || event.altKey) return
+
+		switch (event.key) {
+			case 'f':
+				event.preventDefault()
+				toggleFull()
+				return
+			case 'Escape':
+				// Leave full screen first, then close — and never let App.tsx's own
+				// Escape handler fire a second time for the same keypress.
+				event.stopPropagation()
+				if (full) toggleFull()
+				else onClose()
+				return
+			case 'j':
+				event.preventDefault()
+				scroller.current?.scrollBy(0, 80)
+				return
+			case 'k':
+				event.preventDefault()
+				scroller.current?.scrollBy(0, -80)
+				return
+			case 'g':
+				event.preventDefault()
+				if (scroller.current !== null) scroller.current.scrollTop = 0
+				return
+			case 'G':
+				event.preventDefault()
+				jumpToBottom()
+				return
+			case '/':
+				event.preventDefault()
+				setFindOpen(true)
+				return
+			default:
+				return
+		}
+	}
+
+	// Find opens with the box focused, the one time a state change should steal
+	// focus inside the trap.
+	useEffect(() => {
+		if (findOpen) findInput.current?.focus()
+	}, [findOpen])
+
+	// A small hand-written Tab trap: focus never leaves the dialog while it's open.
+	useEffect(() => {
+		const box = dialog.current
+		if (box === null) return
+		box.focus()
+		const trap = (event: KeyboardEvent): void => {
+			if (event.key !== 'Tab') return
+			const focusables = box.querySelectorAll<HTMLElement>(
+				'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+			)
+			if (focusables.length === 0) return
+			const first = focusables[0] as HTMLElement
+			const last = focusables[focusables.length - 1] as HTMLElement
+			if (event.shiftKey && document.activeElement === first) {
+				event.preventDefault()
+				last.focus()
+			} else if (!event.shiftKey && document.activeElement === last) {
+				event.preventDefault()
+				first.focus()
+			}
+		}
+		box.addEventListener('keydown', trap)
+		return () => box.removeEventListener('keydown', trap)
+	}, [])
+
+	const shown = findOpen ? lines.filter((line) => matchesLine(line, query)) : lines
+
 	return (
-		<Overlay label={`The run of ${node}`} width={980} onClose={onClose}>
-			<header className="flex items-center justify-between border-[var(--line)] border-b px-6 py-4">
-				<div>
-					<h2 className="font-medium text-[var(--ink)] text-base">{node}</h2>
-					<p className="mt-0.5 text-[var(--ink-faint)] text-xs">
-						What the agent said, as it said it.
-					</p>
+		<Overlay
+			label={`The run of ${node}`}
+			width={980}
+			full={full}
+			onClose={onClose}
+			dialogRef={dialog}
+			onKeyDown={onDialogKeyDown}
+		>
+			<header
+				ref={titleBar}
+				className="flex shrink-0 items-center gap-4 border-[var(--line)] border-b px-6 py-4"
+			>
+				<Dots live={live} />
+				<div className="min-w-0">
+					<h2 className="font-medium text-[var(--ink)] text-base">
+						<span className="text-[var(--ink-dim)]">sober ›</span> {node}
+					</h2>
 					{ran !== undefined && (
 						<p className="mt-0.5 text-[var(--ink-faint)] text-xs">{ranWith(ran)}</p>
 					)}
 				</div>
-				<Status live={live} ended={ended} failure={failure} />
+				{ran !== undefined && <ModelBadge ran={ran} />}
+				<div className="flex shrink-0 items-center gap-1">
+					<Status live={live} ended={ended} failure={failure} />
+					<button
+						type="button"
+						onClick={toggleFull}
+						aria-pressed={full}
+						aria-label={full ? 'Leave full screen (f)' : 'Enter full screen (f)'}
+						className="rounded-[var(--radius-sm)] px-2 py-1.5 text-[var(--ink-dim)] text-xs hover:text-[var(--ink)]"
+					>
+						{full ? '↙ Restore' : '⛶ Full screen'}
+					</button>
+				</div>
 			</header>
 
-			<div
-				ref={scroller}
-				onScroll={(event) => {
-					following.current = atBottom(event.currentTarget)
-				}}
-				className="min-h-[320px] flex-1 overflow-y-auto px-6 py-4 font-mono text-[13px] leading-relaxed"
-			>
-				{failure !== null && (
-					<p className="text-[var(--danger)]" role="alert">
-						{failure}
-					</p>
-				)}
+			{findOpen && (
+				<div className="flex shrink-0 items-center gap-3 border-[var(--line-soft)] border-b px-6 py-2">
+					<label htmlFor={`find-${node}`} className="text-[var(--ink-dim)] text-xs">
+						Find
+					</label>
+					<input
+						id={`find-${node}`}
+						ref={findInput}
+						type="search"
+						value={query}
+						onChange={(event) => setQuery(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key !== 'Escape') return
+							event.stopPropagation()
+							setFindOpen(false)
+							setQuery('')
+						}}
+						placeholder="Filter the transcript…"
+						className="w-[min(360px,60%)] rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-[var(--ink)] text-sm outline-none focus:border-[var(--ink-faint)]"
+					/>
+					<span className="text-[var(--ink-dim)] text-xs">
+						{query.trim() === '' ? 'All lines' : `${shown.length} lines`}
+					</span>
+					<button
+						type="button"
+						aria-label="Close find"
+						onClick={() => {
+							setFindOpen(false)
+							setQuery('')
+						}}
+						className="ml-auto text-[var(--ink-dim)] text-base hover:text-[var(--ink)]"
+					>
+						×
+					</button>
+				</div>
+			)}
 
-				{failure === null && lines.length === 0 && (
-					<p className="text-[var(--ink-faint)]">
-						{live === false
-							? 'This run wrote nothing before it ended.'
-							: 'Waiting for the agent’s first line…'}
-					</p>
-				)}
+			<div ref={transcriptWrap} className="relative min-h-[320px] flex-1">
+				<div
+					ref={scroller}
+					onScroll={(event) => {
+						const atBottomNow = atBottom(event.currentTarget)
+						following.current = atBottomNow
+						if (atBottomNow) {
+							seenCount.current = lines.length
+							setUnseen(0)
+						}
+					}}
+					className="h-full overflow-y-auto px-6 py-4 font-mono text-[13px] leading-relaxed"
+				>
+					{failure !== null && (
+						<p className="text-[var(--danger)]" role="alert">
+							{failure}
+						</p>
+					)}
 
-				<ol className="space-y-1">
-					{lines.map((line, index) => (
-						// The index is the identity: a log is append-only and a line has
-						// no id of its own, so its position is what it is.
-						// biome-ignore lint/suspicious/noArrayIndexKey: an append-only log has no other key
-						<li key={index} className="flex gap-3">
-							<span
-								aria-hidden
-								className={`select-none ${line.kind === 'thinking' ? 'mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--tx-think)]' : ''} ${
-									// Running belongs to the last line of a live run, not to the line:
-									// the next line re-renders this one at rest.
-									line.kind === 'thinking' && live === true && index === lines.length - 1
-										? 'animate-pulse'
-										: ''
-								}`}
-								style={line.kind === 'thinking' ? undefined : { color: TONE[line.kind] }}
-							>
-								{line.kind === 'thinking'
-									? null
-									: line.kind === 'tool'
-										? toolMark(line.tool ?? '')
-										: MARK[line.kind]}
-							</span>
-							{line.kind === 'text' || line.kind === 'answer' ? (
-								<span className="max-w-[68ch] whitespace-pre-wrap break-words font-sans text-[var(--ink)]">
-									{line.text}
+					{failure === null && lines.length === 0 && (
+						<p className="text-[var(--ink-faint)]">
+							{live === false
+								? 'This run wrote nothing before it ended.'
+								: 'Waiting for the agent’s first line…'}
+						</p>
+					)}
+
+					{failure === null && lines.length > 0 && shown.length === 0 && (
+						<p className="text-[var(--ink-faint)]">No matching lines.</p>
+					)}
+
+					<ol className="space-y-1">
+						{shown.map((line, index) => (
+							// The index is the identity: a log is append-only and a line has
+							// no id of its own, so its position is what it is.
+							// biome-ignore lint/suspicious/noArrayIndexKey: an append-only log has no other key
+							<li key={index} className="flex gap-3">
+								<span
+									aria-hidden
+									className={`select-none ${line.kind === 'thinking' ? 'mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--tx-think)]' : ''} ${
+										// Running belongs to the last line of a live run, not to the line:
+										// the next line re-renders this one at rest.
+										line.kind === 'thinking' && live === true && index === shown.length - 1
+											? 'animate-pulse'
+											: ''
+									}`}
+									style={line.kind === 'thinking' ? undefined : { color: TONE[line.kind] }}
+								>
+									{line.kind === 'thinking'
+										? null
+										: line.kind === 'tool'
+											? toolMark(line.tool ?? '')
+											: MARK[line.kind]}
 								</span>
-							) : (
-								<span className="whitespace-pre-wrap break-words text-[var(--ink-dim)]">
-									{line.text}
-								</span>
-							)}
-						</li>
-					))}
-				</ol>
+								{line.kind === 'text' || line.kind === 'answer' ? (
+									<span className="max-w-[68ch] whitespace-pre-wrap break-words font-sans text-[var(--ink)]">
+										{line.text}
+									</span>
+								) : (
+									<span className="whitespace-pre-wrap break-words text-[var(--ink-dim)]">
+										{line.text}
+									</span>
+								)}
+							</li>
+						))}
+					</ol>
+				</div>
+
+				{unseen > 0 && (
+					<button
+						type="button"
+						onClick={jumpToBottom}
+						className="-translate-x-1/2 absolute bottom-3 left-1/2 rounded-full border border-[var(--line)] bg-[var(--raised)] px-3 py-1.5 text-[var(--ink)] text-xs shadow-lg"
+					>
+						{unseen} new {unseen === 1 ? 'line' : 'lines'} ↓
+					</button>
+				)}
 			</div>
 
 			{live === true && (
-				<footer className="shrink-0 border-[var(--line)] border-t px-6 py-3">
+				<footer ref={statusBar} className="shrink-0 border-[var(--line)] border-t px-6 py-3">
 					{refused !== null && (
 						<p className="mb-2 text-[var(--danger)] text-xs" role="alert">
 							{refused}
@@ -197,6 +469,10 @@ export const LogScreen = ({
 							onKeyDown={(event) => {
 								// Enter sends and Shift+Enter breaks the line, which is what
 								// every chat box does and therefore what fingers expect.
+								if (event.key === 'Escape') {
+									event.stopPropagation()
+									return
+								}
 								if (event.key !== 'Enter' || event.shiftKey) return
 								event.preventDefault()
 								void answer(false)
@@ -230,6 +506,101 @@ export const LogScreen = ({
 				</footer>
 			)}
 		</Overlay>
+	)
+}
+
+/** Three dots that wave while the run is live, still while it isn't (ADR 0064). */
+const Dots = ({ live }: { readonly live: boolean | null }): React.JSX.Element => (
+	<div className="flex shrink-0 gap-1.5" aria-hidden="true">
+		{[0, 1, 2].map((key) => (
+			<span
+				key={key}
+				className={`block h-[7px] w-[7px] rounded-full bg-[var(--ink-faint)] opacity-50 ${live === true ? 'sober-dot-wave' : ''}`}
+			/>
+		))}
+	</div>
+)
+
+// Simplified provider marks, ported from `docs/design/watch-the-run.html`
+// (CC0, in the spirit of simple-icons — vendored rather than fetched, since
+// these are brand marks and not a colour: ADR 0064 keeps colour off the
+// canvas and on this badge alone).
+const PROVIDER_MARK: Readonly<Record<Provider, React.JSX.Element>> = {
+	anthropic: (
+		<path
+			fill="currentColor"
+			d="M2 20 9 4h3l7 16h-3l-1.5-4h-8L5 20Zm5.5-7h6L10.5 6ZM16 4h3l4 16h-3Z"
+		/>
+	),
+	openai: (
+		<>
+			{[0, 1, 2, 3, 4, 5].map((index) => (
+				<path
+					key={index}
+					transform={`rotate(${index * 60} 12 12)`}
+					d="M12 12 7 9V5a4 4 0 0 1 7-2l3 5"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth={1.6}
+					strokeLinejoin="round"
+				/>
+			))}
+		</>
+	),
+	google: (
+		<path
+			fill="currentColor"
+			d="M22 12c0-.7-.1-1.4-.2-2H12v4h5.6a6 6 0 1 1-1.4-6.3L19 4.9A10 10 0 1 0 22 12Z"
+		/>
+	),
+	mistral: <path fill="currentColor" d="M2 3h4v4h4v4h4V7h4V3h4v18h-4v-6h-4v4h-4v-4H6v6H2Z" />,
+	other: (
+		<path
+			d="m12 3 9 5v8l-9 5-9-5V8Zm0 0v18M3 8l9 5 9-5"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={1.5}
+		/>
+	),
+}
+
+/**
+ * The model badge (ADR 0064): the provider mark and name, the model id, and
+ * `via <host>`. The provider comes from the model id, never the host — an
+ * openrouter host still shows Anthropic's mark for `anthropic/claude-…`.
+ * With no model in the host line, only the fallback mark and the host show.
+ */
+const ModelBadge = ({
+	ran,
+}: {
+	readonly ran: NonNullable<LogWindow['ran']>
+}): React.JSX.Element => {
+	const model = modelOf(ran.host)
+	const provider = model !== null ? providerForModel(model) : 'other'
+	return (
+		<div className="ml-auto min-w-0 shrink-0 rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--raised)] px-2.5 py-1.5">
+			<div className="flex flex-wrap items-center gap-1.5 leading-snug">
+				<svg
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+					className="h-5 w-5 shrink-0"
+					style={{ color: PROVIDER_COLOUR[provider] }}
+				>
+					{PROVIDER_MARK[provider]}
+				</svg>
+				{model !== null && (
+					<>
+						<span className="font-semibold text-[var(--ink)] text-xs">
+							{PROVIDER_NAME[provider]}
+						</span>
+						<span className="break-words font-mono text-[var(--ink)] text-xs">{model}</span>
+					</>
+				)}
+			</div>
+			<span className="mt-0.5 block pl-[27px] font-mono text-[var(--ink-dim)] text-xs">
+				via {ran.host}
+			</span>
+		</div>
 	)
 }
 

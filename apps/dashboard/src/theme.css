@@ -197,6 +197,32 @@
 	--provider-other: var(--ink-dim);
 }
 
+/* ADR 0064: the run screen title bar's Mexican wave, live runs only. */
+@keyframes sober-dot-wave {
+	0%,
+	40%,
+	100% {
+		transform: translateY(0);
+	}
+	20% {
+		transform: translateY(-4px);
+	}
+}
+.sober-dot-wave {
+	animation: sober-dot-wave 1.5s ease-in-out infinite;
+}
+.sober-dot-wave:nth-child(2) {
+	animation-delay: 0.15s;
+}
+.sober-dot-wave:nth-child(3) {
+	animation-delay: 0.3s;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sober-dot-wave {
+		animation: none;
+	}
+}
+
 html,
 body,
 #root {

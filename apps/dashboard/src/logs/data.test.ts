@@ -1,6 +1,16 @@
 import { LogLine } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { atBottom, MARK, TONE, TOOL, TOOL_FALLBACK, toolMark } from './data.js'
+import {
+	atBottom,
+	MARK,
+	matchesLine,
+	modelOf,
+	providerForModel,
+	TONE,
+	TOOL,
+	TOOL_FALLBACK,
+	toolMark,
+} from './data.js'
 
 test('every kind a log line can be has a mark and a colour', () => {
 	// The shape is the wire's, so a host adding an event type that `tail` learns
@@ -42,4 +52,35 @@ test('every listed tool has its own glyph, and none of them is a colour', () => 
 test('a tool is found whatever its case, and one nobody listed still gets a mark', () => {
 	expect(toolMark(' Bash ')).toBe(toolMark('bash'))
 	expect(toolMark('command')).toBe(TOOL_FALLBACK)
+})
+
+test('the model is read out of a host command line', () => {
+	expect(modelOf('claude --model claude-opus-5-5 --resume')).toBe('claude-opus-5-5')
+	expect(modelOf('claude --model=claude-opus-5-5')).toBe('claude-opus-5-5')
+	expect(modelOf('some-cli -m gpt-5.4')).toBe('gpt-5.4')
+	expect(modelOf('claude --resume')).toBeNull()
+})
+
+test('the provider comes from the model id, not the host', () => {
+	expect(providerForModel('claude-opus-5-5')).toBe('anthropic')
+	// openrouter routes through a host that names neither Anthropic nor Claude —
+	// only the model id does, and it must still resolve to Anthropic.
+	expect(providerForModel('anthropic/claude-opus-5-5')).toBe('anthropic')
+	expect(providerForModel('openai/gpt-5.4')).toBe('openai')
+	expect(providerForModel('o3-mini')).toBe('openai')
+	expect(providerForModel('google/gemini-2.5-pro')).toBe('google')
+	expect(providerForModel('mistralai/mistral-large')).toBe('mistral')
+	expect(providerForModel('codestral-latest')).toBe('mistral')
+	expect(providerForModel('local/custom-model')).toBe('other')
+})
+
+test('a find query checks text, detail and tool, and an empty query matches everything', () => {
+	const line = { text: 'wrote the middleware', tool: 'Write', detail: null }
+	expect(matchesLine(line, '')).toBe(true)
+	expect(matchesLine(line, 'middleware')).toBe(true)
+	expect(matchesLine(line, 'WRITE')).toBe(true)
+	expect(matchesLine(line, 'nope')).toBe(false)
+	// A line-detail hasn't reached yet still searches on text and tool alone.
+	expect(matchesLine({ text: 'plain', tool: null }, 'plain')).toBe(true)
+	expect(matchesLine({ text: 'plain', tool: null, detail: 'the extra bit' }, 'extra')).toBe(true)
 })
