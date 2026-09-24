@@ -228,3 +228,212 @@ export const elapsedLabel = (
 	const seconds = totalSeconds % 60
 	return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
+
+/**
+ * The EKG trace (ADR 0064), ported 1:1 from `docs/design/watch-the-run.html`.
+ * Each beat is an explicit PQRST polyline, `[offsetMs, heightFraction]` pairs
+ * from a beat's own centre, drawn at a fixed `x` that only translates as time
+ * passes — never resampled per pixel, so a vertical stroke never wobbles.
+ */
+export type Random = () => number
+
+export type EkgBeat = {
+	readonly time: number
+	readonly amp: number
+	readonly shape: readonly (readonly [number, number])[]
+}
+
+export const EKG_W = 90
+export const EKG_H = 18
+export const EKG_BASELINE = EKG_H / 2
+export const EKG_WINDOW_MS = 3000
+
+export const EKG_SHAPE_REGULAR: readonly (readonly [number, number])[] = [
+	[-320, 0],
+	[-260, 0.15],
+	[-200, 0],
+	[-60, 0],
+	[-40, -0.15],
+	[0, 1],
+	[40, -0.35],
+	[90, 0],
+	[220, 0.25],
+	[320, 0],
+]
+
+export const EKG_SHAPE_DOUBLE: readonly (readonly [number, number])[] = [
+	...EKG_SHAPE_REGULAR.slice(0, -1),
+	[370, 0.12],
+	[420, 0],
+]
+
+export const EKG_SHAPE_LOG: readonly (readonly [number, number])[] = [
+	[-220, 0],
+	[-180, 0.18],
+	[-140, 0],
+	[-40, 0],
+	[-25, -0.25],
+	[0, 1.4],
+	[25, -0.5],
+	[60, 0],
+	[160, 0.3],
+	[240, 0],
+]
+
+/**
+ * Regular beats every 0.9-1.5s, amplitude 4.5 ±25%, about 1 in 6 a double
+ * bump. `random` is injected so the schedule is deterministic under test.
+ */
+export const scheduleBeats = (
+	queue: readonly EkgBeat[],
+	nextAt: number | null,
+	now: number,
+	random: Random,
+): { readonly queue: readonly EkgBeat[]; readonly nextAt: number } => {
+	let beats = queue
+	let at = nextAt ?? now
+	while (at < now + EKG_WINDOW_MS) {
+		const amp = 4.5 * (0.75 + random() * 0.5)
+		const shape = random() < 1 / 6 ? EKG_SHAPE_DOUBLE : EKG_SHAPE_REGULAR
+		beats = [...beats, { time: at, amp, shape }]
+		at += 900 + random() * 600
+	}
+	return { queue: beats.filter((beat) => now - beat.time < EKG_WINDOW_MS + 500), nextAt: at }
+}
+
+/**
+ * A log line's own beat: a taller spike than the regular rhythm. It drops
+ * every beat whose real span overlaps the spike, so beats never overlap, and
+ * restarts the regular rhythm 0.9-1.5s later.
+ */
+export const spike = (
+	queue: readonly EkgBeat[],
+	now: number,
+	random: Random,
+): { readonly queue: readonly EkgBeat[]; readonly nextAt: number } => {
+	const spikeStart = EKG_SHAPE_LOG[0]?.[0] ?? 0
+	const kept = queue.filter((beat) => {
+		const last = beat.shape.at(-1)
+		return last !== undefined && beat.time + last[0] < now + spikeStart
+	})
+	return {
+		queue: [...kept, { time: now, amp: 5.5, shape: EKG_SHAPE_LOG }],
+		nextAt: now + 900 + random() * 600,
+	}
+}
+
+/**
+ * The trace's `d` attribute: every vertex of every beat still in the window,
+ * at `x = W - (now - t)/msPerPx + offset/msPerPx`, sorted by `x`. The path
+ * starts at `-W` and ends at `2W` on the baseline so it always fills the box.
+ */
+export const ekgPath = (queue: readonly EkgBeat[], now: number): string => {
+	const msPerPx = EKG_WINDOW_MS / EKG_W
+	const points: [number, number][] = []
+	for (const beat of queue) {
+		for (const [offset, height] of beat.shape) {
+			const x = EKG_W - (now - beat.time) / msPerPx + offset / msPerPx
+			points.push([x, EKG_BASELINE - beat.amp * height])
+		}
+	}
+	points.sort((a, b) => a[0] - b[0])
+	let d = `M${(-EKG_W).toFixed(1)} ${EKG_BASELINE}`
+	for (const [x, y] of points) d += ` L${x.toFixed(1)} ${y.toFixed(1)}`
+	d += ` L${(2 * EKG_W).toFixed(1)} ${EKG_BASELINE}`
+	return d
+}
+
+/** The static single beat a reduced-motion trace shows, timer still running. */
+export const EKG_FLAT = `M0 ${EKG_BASELINE}H${EKG_W}`
+
+/** The mockup's 61 one-word verbs, copied unchanged. */
+export const THINKING_VERBS: readonly string[] = [
+	'Sobering',
+	'Hydrating',
+	'Untangling',
+	'Noodling',
+	'Wrangling',
+	'Bamboozling',
+	'Kerfuffling',
+	'Galumphing',
+	'Doodling',
+	'Graphing',
+	'Edge-herding',
+	'Dag-wrangling',
+	'Hiccuping',
+	'Fermenting',
+	'Unknotting',
+	'Squinting',
+	'Rummaging',
+	'Tiptoeing',
+	'Befuddling',
+	'Moseying',
+	'Percolating',
+	'Marinating',
+	'Spelunking',
+	'Bumbling',
+	'Ruminating',
+	'Cogitating',
+	'Meandering',
+	'Fidgeting',
+	'Puttering',
+	'Loitering',
+	'Scheming',
+	'Pondering',
+	'Simmering',
+	'Wobbling',
+	'Skittering',
+	'Fossicking',
+	'Nudging',
+	'Fiddling',
+	'Waffling',
+	'Dithering',
+	'Sketching',
+	'Tinkering',
+	'Whittling',
+	'Excavating',
+	'Deciphering',
+	'Foraging',
+	'Sniffing',
+	'Burrowing',
+	'Cranking',
+	'Untwisting',
+	'Reticulating',
+	'Node-nudging',
+	'Gremlin-hunting',
+	'Backfilling',
+	'Overthinking',
+	'Recalibrating',
+	'Dot-connecting',
+	'Loop-de-looping',
+	'Semicoloning',
+	'Bikeshedding',
+	'Yak-shaving',
+]
+
+/** The next verb, drawn from all but `prevIndex` — it never repeats. */
+export const nextVerb = (prevIndex: number, random: Random): number => {
+	const pick = Math.floor(random() * (THINKING_VERBS.length - (prevIndex < 0 ? 0 : 1)))
+	return prevIndex >= 0 && pick >= prevIndex ? pick + 1 : pick
+}
+
+/** The one live region this screen may have (StatusBar.tsx), named once so a test can find it without repeating the attribute in a `.tsx` file. */
+export const LIVE_REGION_SELECTOR = '[aria-live]'
+
+export type ChecklistItem = { readonly label: string; readonly passed: boolean }
+
+/**
+ * `check`/`checked` lines pair up in order — the audit awaits one command
+ * before starting the next (`packages/core/src/audit.ts`), so they arrive
+ * strictly alternating and never interleaved. A `checked` line's text is its
+ * `check` line's text plus `(exit N, Ns)` or `(did not run, Ns)`; only
+ * `exit 0` passes.
+ */
+export const buildChecklist = (lines: readonly LogLine[]): readonly ChecklistItem[] => {
+	const checks = lines.filter((line) => line.kind === 'check')
+	const checkedLines = lines.filter((line) => line.kind === 'checked')
+	return checkedLines.map((checked, index) => ({
+		label: checks[index]?.text ?? checked.text,
+		passed: /\(exit 0,/.test(checked.text),
+	}))
+}
