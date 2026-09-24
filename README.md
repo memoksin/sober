@@ -48,8 +48,8 @@ default and a comment explaining each, and cuts the orphan board branch
 
 Every host talks to the same binary: `sober` must be on your `PATH`, because
 each host's MCP declaration names that command, and Claude Code's `hooks.json`
-names it too. With that in place, the four host CLIs follow; `openrouter` has
-no plugin and is described under **Hosts** below.
+names it too. With that in place, the four host CLIs follow; `openrouter` and
+`cline` have no plugin and are described under **Hosts** below.
 
 ### Claude Code
 
@@ -192,12 +192,25 @@ differs between them.
 | Cursor | [`packages/cursor-plugin`](packages/cursor-plugin/README.md) | yes | no |
 | Codex | [`packages/codex-plugin`](packages/codex-plugin/README.md) | no | no |
 | OpenCode | [`packages/opencode-plugin`](packages/opencode-plugin/README.md) | no | no |
+| Cline | — | no | no |
 | OpenRouter | — | no | no |
 
 Claude Code is the only host whose plugin can *enforce* the block from inside a
 session, with a hook that denies a spawn onto a held node. Everywhere SOBER owns
 the code path — CLI, dashboard, MCP server — the block is the same on every
 host.
+
+### Cline
+
+No plugin: dispatch-only, through the npm `cline` CLI. Install it and put
+`cline` (or `cline --model <id>`) on `dispatch.host`.
+
+**Cline cannot pass SOBER's preflight yet.** Its published CLI reference
+documents no non-interactive way to read whether it is signed in — `auth` and
+`config` are both interactive — so `sober` always reports "cline reported an
+authentication status SOBER cannot read" before a worktree is cut, rather
+than guess. See [ADR 0066](docs/adr/0066-cline-gets-an-adapter-from-a-published-reference.md).
+A node cannot be dispatched to it alone until that changes.
 
 ### OpenRouter
 

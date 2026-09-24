@@ -587,6 +587,75 @@ const cursor: Adapter = {
 }
 
 /**
+ * Cline. Read off the published npm `cline` CLI reference
+ * (https://docs.cline.bot/cli/cli-reference and
+ * https://docs.cline.bot/usage/cli-overview, both fetched 2026-09-24) and the
+ * upstream `apps/cli` README — never from memory (BUILD-PLAN §6). Recordings
+ * are in `docs/testing/v1x-4-other-hosts.tdd.md`.
+ *
+ * - `--json` — "Output messages as JSON instead of styled text" (cli-reference).
+ * - `--auto-approve <boolean>` — "Set tool auto-approval for all tools" (default
+ *   `true`); passed explicitly rather than relied on, since the reference notes
+ *   the default flips to `false` under `--acp`.
+ * - The reference also documents `-s, --system <system-prompt>` — "Override the
+ *   default system prompt" — but that is a replacement, not an addition: passing
+ *   `NO_HUMAN` there would erase Cline's own system prompt rather than sit in
+ *   front of it. `cline auth`, `config` and `doctor` take a positional prompt
+ *   nowhere, so — like Codex, OpenCode and Cursor — `NO_HUMAN` goes in front of
+ *   the brief instead, and no such flag omission is claimed.
+ *
+ * `probe`/`loggedIn`: the reference documents no non-interactive, no-task way
+ * to read whether the CLI is signed in. `auth` and `config` are both
+ * interactive ("Authenticate a provider and configure what model is used";
+ * "Show current configuration", with no `--json` shown for either), `doctor`'s
+ * output shape is undocumented, and `--version` proves only that the binary
+ * runs, not that it is logged in. Rather than fake readiness off an
+ * installation check, `probe` runs `version` (the one documented
+ * no-task, non-interactive command) and `loggedIn` always answers `null` —
+ * "cannot be read" — so `checkHost` refuses honestly instead of silently
+ * treating installation as login. See ADR 0066.
+ *
+ * `line`: the reference's only documented event shape is
+ * `{"type": "say"|"ask", "text", "ts", "say"|"ask": <subtype>, "partial"}`
+ * (example: `{"type": "say", "text": "I'll create the file now.", "ts":
+ * 1760501486669, "say": "text"}`). The upstream README additionally pipes
+ * `--json` output through `jq 'select(.type == "agent_event" and
+ * .event.text)'`, which would mean a different, wrapped envelope — but that
+ * line is a jq filter fragment, not a shown event, and the dedicated CLI
+ * reference's own worked example is flat. The flat shape is what is rendered;
+ * an `agent_event` wrapper is a documented gap noted in ADR 0066, not guessed
+ * at. No subtype other than `"text"` is shown for `say`/`ask`, so every
+ * complete (non-`partial`) line renders as `text` rather than inventing a
+ * `tool`/`result` mapping the reference never shows — the defensive half of
+ * this adapter is not rendering a shape it cannot cite.
+ *
+ * Like OpenCode, there is no documented event for the end of a run — only
+ * message lines — so the outcome is read from how the process exited.
+ */
+const cline: Adapter = {
+	id: 'cline',
+	probe: ['version'],
+	signIn: (host) => `${host} auth`,
+	loggedIn: () => null,
+	argv: (prompt) => ['--json', '--auto-approve', 'true', brief(prompt)],
+	attendable: false,
+	line: (event) => {
+		if (event.type !== 'say' && event.type !== 'ask') return null
+		// Streaming leaves a `partial: true` line for every token; only the
+		// completed line is one thing a person reads once.
+		if (event.partial === true) return null
+		const text = event.text?.trim()
+		if (text === undefined || text.length === 0) return null
+		return {
+			kind: 'text',
+			text,
+			tool: null,
+			at: typeof event.ts === 'number' ? new Date(event.ts).toISOString() : null,
+		}
+	},
+}
+
+/**
  * The brief, for a host with nowhere else to put the system prompt. The
  * sentence goes first and is separated by a rule, so a model reading the two as
  * one document still reads them as two things.
@@ -635,7 +704,7 @@ const openrouter: Adapter = {
 	},
 }
 
-export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode, cursor, openrouter]
+export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode, cursor, cline, openrouter]
 
 /**
  * `dispatch.host` is a command line rather than a program name, so the adapter
@@ -744,4 +813,9 @@ export interface Event {
 			readonly output?: string
 		}
 	}
+	/** Cline: Unix ms on a `say`/`ask` line, and `true` while it is still streaming. */
+	readonly ts?: number
+	readonly partial?: boolean
+	readonly say?: string
+	readonly ask?: string
 }

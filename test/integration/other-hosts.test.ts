@@ -79,6 +79,33 @@ const board = async (host: string): Promise<Paths> => {
 	return paths
 }
 
+// Cline is not in `OTHER_HOSTS`: the published reference documents no
+// non-interactive, no-task way to read whether the CLI is signed in
+// (`hosts.ts`, ADR 0063), so `cline`'s `loggedIn` always answers `null` and
+// `checkHost` refuses it on every run — real or fake, logged in or not. A
+// dispatch therefore never reaches the worktree, and the tests below prove
+// exactly that refusal rather than a login toggle nothing in the reference
+// backs. `line` rendering against the reference's own event shapes is proven
+// at the unit level, in `hosts.test.ts`.
+test('a Cline preflight reports the documented gap, never a faked login', async () => {
+	expect(await checkHost(fake('cline'))).toMatchObject({
+		ok: false,
+		reason: expect.stringContaining('cannot read'),
+	})
+})
+
+test('a Cline dispatch is refused before a worktree exists, headless or attended', async () => {
+	const paths = await board('cline')
+	await expect(
+		dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing' }),
+	).rejects.toThrow(HostError)
+	await expect(
+		dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'do the thing', attended: true }),
+	).rejects.toThrow(HostError)
+	// Refused before the worktree, so there is no half-started run to explain.
+	expect((await readRuns(paths)).records.size).toBe(0)
+})
+
 for (const host of OTHER_HOSTS) {
 	test(`a node dispatched to ${host} runs in its worktree and records how it exited`, async () => {
 		const paths = await board(host)

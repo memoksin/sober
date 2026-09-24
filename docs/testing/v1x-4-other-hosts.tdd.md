@@ -211,3 +211,64 @@ exit=0
 - **No hook enforcement and no attended dispatch on the new hosts.** Deliberate, and both stay in `SCOPE.md`'s SHOULD list with the reason attached (ADR 0048).
 - **Cursor was not built.** Its headless invocation has no released shape to read flags off here, and writing one from memory is what BUILD-PLAN §6 forbids.
 - **`opencode providers list` is parsed by counting credentials.** It is the only readiness surface the CLI offers and it is prose, not JSON. A release that reworded the box would read as "cannot report its status", which is a refusal rather than a silent pass — the failure mode this was chosen for.
+
+## Addendum — Cline gets an adapter (2026-09-24)
+
+- Date: 2026-09-24
+- Decision: ADR 0066
+- Branch: `cline-host-pq8z`
+
+Cline has no CLI installed in this environment, so — like Cursor above — this was read from its published documentation rather than an installed binary: https://docs.cline.bot/cli/cli-reference and https://docs.cline.bot/usage/cli-overview (both fetched 2026-09-24, npm `cline` package), plus the upstream `apps/cli` README on GitHub for a second source to cross-check event shapes against.
+
+### The recordings
+
+The reference's own worked example for `--json` output, verbatim:
+
+```json
+{"type": "say", "text": "I'll create the file now.", "ts": 1760501486669, "say": "text"}
+```
+
+Fields documented alongside it: `type` (`"ask"` or `"say"`), `text`, `ts` (Unix ms), the `say`/`ask` subtype key, `reasoning` (optional), and `partial` (boolean, true mid-stream). No other event type, and no subtype other than `"text"`, is shown anywhere in the reference.
+
+Flags cited in `hosts.ts`:
+
+```
+--json                        Output messages as JSON instead of styled text
+--auto-approve <boolean>      Set tool auto-approval for all tools (default: true;
+                               in ACP mode the default is false)
+-s, --system <system-prompt>  Override the default system prompt
+-V, --version / cline version Show Cline CLI version number
+```
+
+Subcommands relevant to sign-in, all documented as producing interactive UI, none with a `--json` flag shown: `auth` ("Authenticate a provider and configure what model is used"), `config` ("Show current configuration"), `doctor` ("Diagnose and fix configuration issues"). No subcommand or flag anywhere in the reference reports login state without one of these three, and none of the three documents machine-readable output.
+
+### The conflict: two documents, two shapes
+
+The upstream `apps/cli` README pipes `--json` output through `jq 'select(.type == "agent_event" and .event.text)'` — implying a wrapped envelope, `{type: "agent_event", event: {...}}`, rather than the flat `{type: "say"|"ask", ...}` the dedicated CLI reference shows worked in full. The README's line is a jq filter fragment in a usage example, not a shown event; the CLI reference is the dedicated, more specific document and its example is complete. `hosts.ts`'s `cline.line` renders the flat shape the reference actually shows and does not guess at the wrapped one — this is the version/event-shape conflict the node asked to have resolved before implementing, not guessed at.
+
+### The prerequisite: no non-interactive auth probe exists
+
+The node's method requires "a genuinely non-interactive no-task authentication probe." None is documented. `auth` and `config` are both interactive; `doctor`'s output shape is not documented at all; `--version`/`version` proves only that the binary is on the PATH, which the node explicitly says is not an auth check. Rather than treat installation as login, `hosts.ts`'s `cline.loggedIn` always answers `null`, and `checkHost` reports "cline reported an authentication status SOBER cannot read" on every run. This is written up as a documented prerequisite in ADR 0066: **Cline dispatch through SOBER cannot pass preflight until the published CLI adds a non-interactive way to read sign-in state.** `probe: ['version']` still runs, so a Cline that is not installed at all is still told apart from one that is.
+
+### No model catalogue
+
+The reference documents no command that lists Cline's available models in a machine-readable form. `packages/core/src/models.ts` is unchanged; ADR 0066 says so.
+
+### Test specification (addendum)
+
+| # | What is guaranteed | Test | Type | Result |
+| --- | --- | --- | --- | --- |
+| 1 | Cline's probe is the one documented no-task, non-interactive command | `hosts.test.ts:each adapter asks its own host whether it is ready` | unit | PASS |
+| 2 | `loggedIn` never fakes a login the reference cannot back | `hosts.test.ts:cline never claims to read a login state the reference does not document` | unit | PASS |
+| 3 | Cline's argv is one-shot JSON with auto-approve, and `NO_HUMAN` sits in front of the brief, never on `--system` | `hosts.test.ts:cline argv is one-shot JSON with auto-approve` | unit | PASS |
+| 4 | A `say`/`ask` line renders as text, a `partial` one does not, and an unrecognised envelope renders nothing | `hosts.test.ts:a Cline say/ask line renders as text` | unit | PASS |
+| 5 | Cline is refused by name like every other unknown-host case, and answers to no alias | `hosts.test.ts:a host SOBER has no adapter for is refused by name` | unit | PASS |
+| 6 | Cline is never attendable, and never offers a spent-account probe | `hosts.test.ts:only Claude Code can be attended`, `opencode, cursor and cline have no availability table` | unit | PASS |
+| 7 | A real preflight against the fake CLI reports the documented gap, never a faked login | `test/integration/other-hosts.test.ts:a Cline preflight reports the documented gap` | integration | PASS |
+| 8 | A Cline dispatch is refused before a worktree exists, headless or attended | `other-hosts.test.ts:a Cline dispatch is refused before a worktree exists` | integration | PASS |
+
+### Known gaps (addendum)
+
+- **No live Cline CLI was installed or run.** Every flag and shape came from the published reference and the upstream README, cross-checked against each other, never from an installed binary — unlike Codex and OpenCode above.
+- **Cline is never in `OTHER_HOSTS`'s "a node dispatched to … runs in its worktree" loop.** Its preflight always fails by design (the prerequisite above), so a live dispatch and its log rendering cannot be exercised end-to-end the way Codex/OpenCode/Cursor are. Log rendering is proven at the unit level against the reference's own worked example instead.
+- **`--acp` and `--zen` are unused.** Both are documented headless-adjacent modes with their own protocols (editor integration, background hub) that are not the one-shot dispatch SOBER needs.

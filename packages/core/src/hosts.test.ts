@@ -35,7 +35,7 @@ test('a host SOBER has no adapter for is refused by name, with the ones it has',
 	// `--permission-mode` to a CLI that has no such flag, and the failure would
 	// arrive three minutes later as an unreadable exit code.
 	expect(() => adapterFor('aider')).toThrow(UnknownHostError)
-	expect(() => adapterFor('aider')).toThrow(/claude, codex, opencode, cursor, openrouter/)
+	expect(() => adapterFor('aider')).toThrow(/claude, codex, opencode, cursor, cline, openrouter/)
 })
 
 test('every adapter tells a headless run that nobody can answer it', () => {
@@ -43,7 +43,7 @@ test('every adapter tells a headless run that nobody can answer it', () => {
 	// operator's own rules file, and a rule there stopped two of five
 	// dispatches dead. Claude Code has a flag for it; the other two do not, so
 	// the same sentence goes in front of the brief.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'cline', 'openrouter']) {
 		const argv = adapterFor(host).argv('build the node', false)
 		expect(argv.join('\n'), host).toContain(NO_HUMAN)
 	}
@@ -52,7 +52,7 @@ test('every adapter tells a headless run that nobody can answer it', () => {
 test('the brief is an argument, never a shell string, in every adapter', () => {
 	// A brief carrying a backtick is text. `startAgent` never uses a shell, and
 	// the adapters must not hand one a single joined string either.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'cline', 'openrouter']) {
 		const argv = adapterFor(host).argv('rm -rf `pwd`', false)
 		expect(
 			argv.some((arg) => arg.includes('rm -rf `pwd`')),
@@ -69,6 +69,7 @@ test('only Claude Code can be attended, and the other two say so rather than pre
 	expect(adapterFor('codex').attendable).toBe(false)
 	expect(adapterFor('opencode').attendable).toBe(false)
 	expect(adapterFor('cursor').attendable).toBe(false)
+	expect(adapterFor('cline').attendable).toBe(false)
 })
 
 test('each adapter asks its own host whether it is ready, in that host’s words', () => {
@@ -82,6 +83,20 @@ test('each adapter asks its own host whether it is ready, in that host’s words
 	// are not in the reference, and guessing one is what BUILD-PLAN §6 forbids.
 	// The sentence it prints is documented; the JSON's shape is not.
 	expect(adapterFor('cursor').probe).toEqual(['status'])
+	// Cline's reference documents no non-interactive, no-task auth check at
+	// all — `auth` and `config` are both interactive, and `--version` proves
+	// only that the binary runs. `version` is the one documented no-task,
+	// non-interactive command, run only to prove the CLI is there (ADR 0066).
+	expect(adapterFor('cline').probe).toEqual(['version'])
+})
+
+test('cline never claims to read a login state the reference does not document', () => {
+	// Rather than fake readiness off an installation check, `loggedIn` always
+	// answers null — "cannot be read" — so a real dispatch is refused honestly
+	// instead of treated as logged in because the CLI happened to run.
+	expect(adapterFor('cline').loggedIn('cline 1.2.3')).toBeNull()
+	expect(adapterFor('cline').loggedIn('')).toBeNull()
+	expect(adapterFor('cline').signIn('cline')).toBe('cline auth')
 })
 
 test('a logged-in host reads as ready, and a logged-out one as not', () => {
@@ -106,9 +121,35 @@ test('a logged-in host reads as ready, and a logged-out one as not', () => {
 test('a status no adapter can read is a refusal, never a silent pass', () => {
 	// §2.8's rule, applied to the login check: not knowing is not the same as
 	// being fine, and a run started on a logged-out host dies three minutes in.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'cline', 'openrouter']) {
 		expect(adapterFor(host).loggedIn('<html>504 Gateway Timeout</html>'), host).toBeNull()
 	}
+})
+
+test('cline argv is one-shot JSON with auto-approve, and the brief carries NO_HUMAN', () => {
+	// The reference documents `--system` as a *replacement* for Cline's own
+	// system prompt, not an addition — so, like Codex/OpenCode/Cursor,
+	// `NO_HUMAN` goes in front of the brief instead of onto that flag.
+	const argv = adapterFor('cline').argv('build the node', false)
+	expect(argv).toEqual(['--json', '--auto-approve', 'true', `${NO_HUMAN}\n\n---\n\nbuild the node`])
+})
+
+test('a Cline say/ask line renders as text, a partial one does not, and ts becomes an ISO time', () => {
+	// Captured verbatim from the CLI reference's own worked example.
+	expect(
+		renderLine({
+			type: 'say',
+			text: "I'll create the file now.",
+			ts: 1_760_501_486_669,
+			say: 'text',
+		}),
+	).toMatchObject([{ kind: 'text', text: "I'll create the file now.", tool: null }])
+	expect(renderLine({ type: 'say', text: 'typ', ts: 1, say: 'text', partial: true })).toEqual([])
+	expect(renderLine({ type: 'ask', text: 'Proceed?', ts: 1, ask: 'followup' })).toMatchObject([
+		{ kind: 'text', text: 'Proceed?' },
+	])
+	// Not Cline's shape: nothing renders it.
+	expect(renderLine({ type: 'agent_event', text: 'unrecognised envelope' })).toEqual([])
 })
 
 test('a Cursor tool call renders, and the four events it shares with Claude Code still do', () => {
@@ -250,13 +291,16 @@ test('openrouter is found from its run line and spawns `sober`, not a CLI called
 	expect(adapter.signIn('openrouter')).toContain('OPENROUTER_API_KEY')
 })
 
-test('opencode and cursor have no availability table, so they are never spent', () => {
+test('opencode, cursor and cline have no availability table, so they are never spent', () => {
 	// There is nothing here that answers "is the account out of runway" —
-	// offering them unconditionally is what "not probed" means.
+	// offering them unconditionally is what "not probed" means. Cline's
+	// reference documents no usage-limit surface at all (ADR 0066).
 	expect(adapterFor('opencode').availability).toBeUndefined()
 	expect(adapterFor('cursor').availability).toBeUndefined()
+	expect(adapterFor('cline').availability).toBeUndefined()
 	expect(limitSpent('opencode', 'anything at all')).toBeNull()
 	expect(limitSpent('cursor', 'anything at all')).toBeNull()
+	expect(limitSpent('cline', 'anything at all')).toBeNull()
 })
 
 test('codex names its own probe, and reads its own words for a spent account', () => {
