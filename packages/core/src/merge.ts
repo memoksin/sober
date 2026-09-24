@@ -1,5 +1,5 @@
 import { SoberError } from './errors.js'
-import { git, hasUncommitted } from './git.js'
+import { git, hasUncommitted, isAncestor } from './git.js'
 import type { Paths } from './paths.js'
 import { branchOf } from './worktree.js'
 
@@ -55,14 +55,18 @@ export const mergeNode = async (paths: Paths, id: string, base: string): Promise
 
 /**
  * After an accepted merge the branch has no job left; a rejection keeps
- * everything (§6.4). `force` is the pull-request landing: the merge happened on
- * the host, so the branch is not an ancestor of anything here and `-d` would
- * refuse to delete work that is already landed.
+ * everything (§6.4). `-d` checks an upstream instead of HEAD when one exists,
+ * so check ancestry against the local base before deleting. `force` is the
+ * pull-request landing: the merge happened on the host, not locally.
  */
 export const deleteBranch = async (
 	paths: Paths,
 	id: string,
 	options: { readonly force?: boolean } = {},
 ): Promise<void> => {
-	await git(paths.root, 'branch', options.force === true ? '-D' : '-d', branchOf(id))
+	const branch = branchOf(id)
+	if (options.force !== true && !(await isAncestor(paths.root, branch, 'HEAD'))) {
+		throw new MergeRefusedError(`${branch} holds commits the base does not have, so it is kept`)
+	}
+	await git(paths.root, 'branch', '-D', branch)
 }

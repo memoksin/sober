@@ -244,6 +244,25 @@ test('accept lands locally by default, and never touches the git host', async ()
 	expect(landed.kind === 'merged' && landed.openPr?.number).toBe(1)
 })
 
+test('accept deletes a branch ahead of its pushed copy', async () => {
+	const paths = await board()
+	await publish(paths, 'auth-api-k7f2', 'main')
+	const worktree = await addWorktree(paths, 'auth-api-k7f2', 'main')
+	writeFileSync(join(worktree.path, 'src/auth/token.ts'), 'export const token = true\n')
+	execFileSync('git', ['add', '-A'], { cwd: worktree.path })
+	execFileSync('git', ['commit', '-m', 'feat: add token'], { cwd: worktree.path })
+
+	const landed = await acceptWork(paths, 'auth-api-k7f2', {
+		by: 'alice',
+		base: 'main',
+		scan: 'clean',
+	})
+
+	expect(landed.kind).toBe('merged')
+	expect(repo?.git('log', '--oneline', 'main')).toContain('sober: auth-api-k7f2')
+	expect(repo?.git('branch', '--list', 'sober/auth-api-k7f2')).toBe('')
+})
+
 test('a project set to the pull request marks it ready and merges it there', async () => {
 	const paths = await board()
 	writeFileSync(
