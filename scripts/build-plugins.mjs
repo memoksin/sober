@@ -55,7 +55,10 @@ const withNotice = (text, skill) => {
 export const buildSkills = (host) => {
 	const values = JSON.parse(readFileSync(join(source, 'hosts', `${host}.json`), 'utf8'))
 	const built = new Map()
-	for (const skill of readdirSync(join(source, 'skills')).sort()) {
+	for (const skill of readdirSync(join(source, 'skills'), { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.sort()) {
 		const text = readFileSync(join(source, 'skills', skill, 'SKILL.md'), 'utf8')
 		built.set(skill, withNotice(render(text, values.slots, `${host}/${skill}`), skill))
 	}

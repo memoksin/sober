@@ -189,13 +189,18 @@ test('codex names its own question tool and falls back when the mode has none', 
 	expect(opencodeDecide).not.toContain('AskUserQuestion')
 })
 
-test('every skill that leads to a question carries the paste rule word for word', () => {
-	// Seven copies of one rule stay in step only if rewording one fails here.
+test('decision questions keep the paste rule, while brief approvals use plain language', () => {
 	const rule =
 		'Before you ask, paste the block the tool returned into this conversation, whole — never a pointer to the board, the dashboard or the CLI.'
-	for (const skill of ['decide', 'brief', 'next', 'plan', 'loop']) {
+	for (const skill of ['decide', 'plan', 'loop']) {
 		expect(readFileSync(join(root, `plugins/skills/${skill}/SKILL.md`), 'utf8'), skill).toContain(
 			rule,
 		)
+	}
+	for (const skill of ['brief', 'next']) {
+		const text = readFileSync(join(root, `plugins/skills/${skill}/SKILL.md`), 'utf8')
+		expect(text, skill).toContain('in plain language')
+		expect(text, skill).toContain('dashboard')
+		expect(text.split('3. **Run.**')[0], skill).not.toContain(rule)
 	}
 })
