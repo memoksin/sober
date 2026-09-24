@@ -43,6 +43,51 @@ test('the probe with an accepted key prints ok, and a refused one says 401', asy
 	expect(out.join('')).toBe('401: the key was refused\n')
 })
 
+test('an account whose free quota or key limit is used up prints spent, not ok', async () => {
+	process.env.OPENROUTER_API_KEY = 'sk-test'
+	// Captured today: `/auth/key`'s body on an accepted key.
+	const body = {
+		data: {
+			limit: null,
+			limit_remaining: null,
+			is_free_tier: false,
+			free_model_daily_requests: { used: 0, limit: 50, remaining: 50 },
+		},
+	}
+	expect(
+		await agent({
+			check: true,
+			fetch: (async () =>
+				new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch,
+		}),
+	).toBe(0)
+	expect(out.join('')).toBe('ok\n')
+
+	out = []
+	const freeSpent = {
+		data: { ...body.data, free_model_daily_requests: { used: 50, limit: 50, remaining: 0 } },
+	}
+	expect(
+		await agent({
+			check: true,
+			fetch: (async () =>
+				new Response(JSON.stringify(freeSpent), { status: 200 })) as unknown as typeof fetch,
+		}),
+	).toBe(0)
+	expect(out.join('')).toBe('spent: the free-model daily quota is used up\n')
+
+	out = []
+	const keySpent = { data: { ...body.data, limit_remaining: 0 } }
+	expect(
+		await agent({
+			check: true,
+			fetch: (async () =>
+				new Response(JSON.stringify(keySpent), { status: 200 })) as unknown as typeof fetch,
+		}),
+	).toBe(0)
+	expect(out.join('')).toBe('spent: the account request quota is used up\n')
+})
+
 test('an endpoint without /auth/key is probed at /models instead', async () => {
 	process.env.OPENROUTER_API_KEY = 'sk-test'
 	const fetchFn = vi.fn(async (url: string | URL | Request) =>

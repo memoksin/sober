@@ -1,7 +1,10 @@
 import { execFile, spawn } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { SoberError } from './errors.js'
-import { adapterFor, hostCommand } from './hosts.js'
+import { adapterFor, hostCommand, limitSpent } from './hosts.js'
+import type { Paths } from './paths.js'
+import { writeAtomic } from './write.js'
 
 export {
 	A_HUMAN_IS_WATCHING,
@@ -12,6 +15,7 @@ export {
 } from './hosts.js'
 
 const run = promisify(execFile)
+const PROBE_TIMEOUT_MS = 30_000
 
 /**
  * Launching an adapter (DESIGN §5.1): SOBER shells out to the host CLI the user
@@ -77,6 +81,110 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 		ok: false,
 		reason: `${host} is installed but not logged in — run \`${adapter.signIn(host)}\``,
 	}
+}
+
+export interface HostAvailability {
+	readonly state: 'ready' | 'spent' | 'unknown'
+	/** What is out, in the words the user has to act on (§8.7) — null when ready or unknown. */
+	readonly reason: string | null
+}
+
+interface HostsCache {
+	readonly at: number
+	readonly hosts: Readonly<Record<string, HostAvailability>>
+}
+
+const readHostsCache = async (file: string): Promise<HostsCache> => {
+	try {
+		return JSON.parse(await readFile(file, 'utf8')) as HostsCache
+	} catch {
+		return { at: 0, hosts: {} }
+	}
+}
+
+export interface HostAvailabilityDeps {
+	readonly run?: typeof run
+	readonly now?: () => number
+}
+
+/**
+ * Whether each host's *account* — not any one model — still has runway, per
+ * the `limit-detect` decision: probe, and still fall to the backup. One probe
+ * per host id, never per model, since the limit is the account's; cached at
+ * `paths.hosts`, fresh for `probeSeconds`.
+ *
+ * A host with no `availability` table (`opencode`, `cursor`) is left out of
+ * the result entirely — the caller keeps whatever it has no answer for.
+ * A probe that errors, times out, or prints nothing readable is `unknown`,
+ * never a silent `spent` or `ready` — the fallback is what catches it.
+ */
+export const hostAvailability = async (
+	paths: Paths,
+	hosts: readonly string[],
+	probeSeconds: number,
+	deps: HostAvailabilityDeps = {},
+): Promise<Record<string, HostAvailability>> => {
+	const runFn = deps.run ?? run
+	const now = deps.now?.() ?? Date.now()
+	const cache = await readHostsCache(paths.hosts)
+	const fresh = now < cache.at + probeSeconds * 1000
+
+	// One entry per adapter id — the first host line naming it is what says
+	// which binary to spawn, and the probe itself is fixed from there.
+	const byId = new Map<string, string>()
+	for (const host of hosts) {
+		try {
+			const id = adapterFor(host).id
+			if (!byId.has(id)) byId.set(id, host)
+		} catch {
+			// An unknown host is refused elsewhere, at `checkHost` time.
+		}
+	}
+
+	const result: Record<string, HostAvailability> = {}
+	let changed = false
+	for (const [id, host] of byId) {
+		const adapter = adapterFor(host)
+		if (adapter.availability === undefined) continue
+
+		if (fresh && cache.hosts[id] !== undefined) {
+			result[id] = cache.hosts[id]
+			continue
+		}
+
+		changed = true
+		const [command] = hostCommand(host)
+		try {
+			const { stdout } = await runFn(adapter.command ?? command, [...adapter.availability.argv], {
+				encoding: 'utf8',
+				timeout: PROBE_TIMEOUT_MS,
+			})
+			if (stdout.trim().length === 0) {
+				result[id] = { state: 'unknown', reason: null }
+				continue
+			}
+			const reason = limitSpent(id, stdout)
+			result[id] = reason === null ? { state: 'ready', reason: null } : { state: 'spent', reason }
+		} catch (error) {
+			// execFile rejects on a nonzero exit, including when the host prints
+			// its limit message and exits. Classify that output before falling back.
+			const failed = error as Error & { stdout?: string; stderr?: string }
+			const reason = limitSpent(id, `${failed.stdout ?? ''}\n${failed.stderr ?? ''}`)
+			if (reason !== null) result[id] = { state: 'spent', reason }
+			else {
+				console.error(`sober: ${id}'s availability could not be probed: ${failed.message}`)
+				result[id] = { state: 'unknown', reason: null }
+			}
+		}
+	}
+
+	if (changed) {
+		// The timestamp belongs to this set of probes. Carrying an older
+		// unrequested host forward would make its stale answer look fresh.
+		await writeAtomic(paths.hosts, JSON.stringify({ at: now, hosts: result }))
+	}
+
+	return result
 }
 
 export type AgentExit =

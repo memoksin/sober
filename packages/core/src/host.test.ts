@@ -1,8 +1,18 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, expect, test } from 'vitest'
-import { checkHost, HOST_ARGS, hostCommand, NO_HUMAN, startAgent } from './host.js'
+import { afterAll, expect, test, vi } from 'vitest'
+import {
+	checkHost,
+	HOST_ARGS,
+	hostAvailability,
+	hostCommand,
+	NO_HUMAN,
+	startAgent,
+} from './host.js'
+import { paths } from './paths.js'
+import { tmpRoot } from './tmp.fixture.js'
 
 const scripts = mkdtempSync(join(tmpdir(), 'sober-host-'))
 afterAll(() => rmSync(scripts, { recursive: true, force: true }))
@@ -124,6 +134,94 @@ test('a last line with no newline still reaches the log', async () => {
 		onLine: (line) => lines.push(line),
 	})
 	expect(lines).toEqual(['first', 'no trailing newline'])
+})
+
+test('a probe is cached, reused while fresh, and run again once stale', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	let now = 1_000_000
+	const runFn = vi.fn(async () => ({ stdout: 'ok\n', stderr: '' }))
+
+	const first = await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
+	expect(first).toEqual({ claude: { state: 'ready', reason: null } })
+	expect(runFn).toHaveBeenCalledTimes(1)
+
+	now += 100_000
+	const second = await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
+	expect(second).toEqual({ claude: { state: 'ready', reason: null } })
+	expect(runFn).toHaveBeenCalledTimes(1)
+
+	now += 1_000_000
+	const third = await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
+	expect(third).toEqual({ claude: { state: 'ready', reason: null } })
+	expect(runFn).toHaveBeenCalledTimes(2)
+
+	const written = JSON.parse(await readFile(p.hosts, 'utf8')) as { at: number }
+	expect(written.at).toBe(now)
+})
+
+test('a probe that errors or times out is unknown, kept, never a silent ready or spent', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	const runFn = vi.fn(async () => {
+		throw Object.assign(new Error('killed'), { code: 'ETIMEDOUT' })
+	})
+
+	const result = await hostAvailability(p, ['codex'], 900, { run: runFn as never, now: () => 1 })
+	expect(result).toEqual({ codex: { state: 'unknown', reason: null } })
+})
+
+test('a host with no availability table is left out of the result entirely', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	const runFn = vi.fn()
+
+	const result = await hostAvailability(p, ['opencode', 'cursor'], 900, {
+		run: runFn as never,
+		now: () => 1,
+	})
+	expect(result).toEqual({})
+	expect(runFn).not.toHaveBeenCalled()
+})
+
+test('a limit-spent probe is classified from the same table `limitSpent` reads', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	const runFn = vi.fn(async () => ({
+		stdout: '{"error":{"message":"You\'ve hit your usage limit. try again at 2:59 PM."}}\n',
+		stderr: '',
+	}))
+
+	const result = await hostAvailability(p, ['codex'], 900, { run: runFn as never, now: () => 1 })
+	expect(result).toEqual({
+		codex: { state: 'spent', reason: 'usage limit, try again at 2:59 PM' },
+	})
+})
+
+test('a nonzero probe exit still classifies a printed limit', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	const runFn = vi.fn(async () => {
+		throw Object.assign(new Error('exit 1'), {
+			stdout: '{"error":{"message":"You\'ve hit your usage limit. try again at 2:59 PM."}}',
+		})
+	})
+
+	expect(await hostAvailability(p, ['codex'], 900, { run: runFn as never, now: () => 1 })).toEqual({
+		codex: { state: 'spent', reason: 'usage limit, try again at 2:59 PM' },
+	})
+})
+
+test('a host that answers with no readable output is unknown', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	const runFn = vi.fn(async () => ({ stdout: '   \n', stderr: '' }))
+
+	const result = await hostAvailability(p, ['openrouter'], 900, {
+		run: runFn as never,
+		now: () => 1,
+	})
+	expect(result).toEqual({ openrouter: { state: 'unknown', reason: null } })
 })
 
 test('a host that exits non-zero reports its own last words', async () => {

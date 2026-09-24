@@ -12,7 +12,14 @@ import {
 } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
-import { type AgentInput, checkHost, HostError, type HostReady, startAgent } from './host.js'
+import {
+	type AgentInput,
+	checkHost,
+	HostError,
+	type HostReady,
+	hostAvailability,
+	startAgent,
+} from './host.js'
 import { adapterFor, UnknownHostError } from './hosts.js'
 import { askJev } from './jev.js'
 import {
@@ -125,18 +132,63 @@ export const dispatch = async (
 		dropped: built.dropped,
 	})
 
+	// A host's limit is account-wide, so it is asked once per host, not once
+	// per model (`limit-detect`). A host with no `availability` table
+	// (`opencode`, `cursor`) never appears in `spent`, so it is never removed.
+	const hostLines = new Map<string, string>()
+	for (const model of built.models) {
+		try {
+			const id = adapterFor(model.run).id
+			if (!hostLines.has(id)) hostLines.set(id, model.run)
+		} catch {
+			// An unknown host is refused later, at `checkHost` time.
+		}
+	}
+	const spent =
+		hostLines.size > 0
+			? await hostAvailability(paths, [...hostLines.values()], config.dispatch.probeSeconds)
+			: {}
+
+	const removed: { host: string; reason: string }[] = []
+	const unknown: string[] = []
+	const available = built.models.filter((model) => {
+		let id: string
+		try {
+			id = adapterFor(model.run).id
+		} catch {
+			return true
+		}
+		const state = spent[id]
+		if (state === undefined || state.state === 'ready') return true
+		if (state.state === 'unknown') {
+			if (!unknown.includes(id)) unknown.push(id)
+			return true
+		}
+		if (!removed.some((entry) => entry.host === id))
+			removed.push({ host: id, reason: state.reason ?? 'the usage limit is spent' })
+		return false
+	})
+	if (removed.length > 0 || unknown.length > 0)
+		await appendEvent(paths, { action: 'hosts', node, removed, unknown })
+	if (built.models.length > 0 && available.length === 0)
+		throw new HostError(
+			`${node} was not started: every host is out — ${removed
+				.map((r) => `${r.host}: ${r.reason}`)
+				.join('; ')}`,
+		)
+
 	// With jevMode on, the brief's own score is not consulted at all: the whole
 	// point is that nobody has to guess a number (ADR 0059). A Jev that cannot
 	// answer stops the dispatch here, before the worktree and before the spend.
 	const jev = config.dispatch.jevMode
 		? await askJev(await stateFor(paths, node), {
 				skills: config.dispatch.jevSkills,
-				models: built.models,
+				models: available,
 			})
 		: null
 	const complexity = jev?.complexity ?? record.value.brief?.complexity ?? null
 	const chosen = chooseLine(
-		{ ...config.dispatch, models: [...built.models] },
+		{ ...config.dispatch, models: [...available] },
 		complexity,
 		jev?.model ?? null,
 	)

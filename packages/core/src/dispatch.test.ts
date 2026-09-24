@@ -24,6 +24,9 @@ vi.mock('./config.js', async (original) => ({
 vi.mock('./host.js', async (original) => ({
 	...(await original<typeof import('./host.js')>()),
 	checkHost: vi.fn(async () => ({ ok: true, reason: null })),
+	// Never spawn a real host CLI from a unit test: every host here answers
+	// ready unless a test overrides it.
+	hostAvailability: vi.fn(async () => ({})),
 	startAgent: vi.fn(async ({ onStart }: { onStart: (pid: number) => void }) => {
 		onStart(1)
 		return { kind: 'finished' }
@@ -128,5 +131,98 @@ test('with jevMode on, Jev is asked among the list liveModels built, and its pic
 	expect(vi.mocked(askJev)).toHaveBeenCalledWith(expect.any(String), { skills: [], models: built })
 	expect(vi.mocked(startAgent)).toHaveBeenCalledWith(
 		expect.objectContaining({ host: 'codex --model built-only' }),
+	)
+})
+
+test('a spent host’s models never reach Jev, and the log names it', async () => {
+	const { readConfigFromBase } = await import('./config.js')
+	const { liveModels } = await import('./models.js')
+	const { askJev } = await import('./jev.js')
+	const { hostAvailability } = await import('./host.js')
+	const built = [
+		{ name: 'out', run: 'claude --model opus', complexity: [1, 10] as [number, number], about: '' },
+		{ name: 'in', run: 'codex --model x', complexity: [1, 10] as [number, number], about: '' },
+	]
+	const config: Config = {
+		...DEFAULT_CONFIG,
+		dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false, jevMode: true, models: [] },
+	}
+	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: config })
+	vi.mocked(liveModels).mockResolvedValue({ models: built, dropped: [] })
+	vi.mocked(hostAvailability).mockResolvedValue({
+		claude: { state: 'spent', reason: 'five-hour limit, resets 14:59' },
+	})
+	vi.mocked(askJev).mockResolvedValue({ complexity: 5, skills: [], model: 'in' })
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(vi.mocked(askJev)).toHaveBeenCalledWith(expect.any(String), {
+		skills: [],
+		models: [built[1]],
+	})
+	const { events } = await readLog(paths)
+	expect(events).toContainEqual(
+		expect.objectContaining({
+			action: 'hosts',
+			node: 'auth-api-k7f2',
+			removed: [{ host: 'claude', reason: 'five-hour limit, resets 14:59' }],
+			unknown: [],
+		}),
+	)
+})
+
+test('when every host is spent, dispatch refuses before the worktree, naming every reason', async () => {
+	const { readConfigFromBase } = await import('./config.js')
+	const { liveModels } = await import('./models.js')
+	const { hostAvailability } = await import('./host.js')
+	const { addWorktree } = await import('./worktree.js')
+	const built = [
+		{ name: 'a', run: 'claude --model opus', complexity: [1, 10] as [number, number], about: '' },
+		{ name: 'b', run: 'codex --model x', complexity: [1, 10] as [number, number], about: '' },
+	]
+	const config: Config = {
+		...DEFAULT_CONFIG,
+		dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false, models: [] },
+	}
+	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: config })
+	vi.mocked(liveModels).mockResolvedValue({ models: built, dropped: [] })
+	vi.mocked(hostAvailability).mockResolvedValue({
+		claude: { state: 'spent', reason: 'five-hour limit, resets 14:59' },
+		codex: { state: 'spent', reason: 'usage limit, try again at 2:59 PM' },
+	})
+
+	await expect(dispatch(paths, 'auth-api-k7f2', { base: 'main' })).rejects.toThrow(
+		/every host is out — claude: five-hour limit, resets 14:59; codex: usage limit, try again at 2:59 PM/,
+	)
+	expect(vi.mocked(addWorktree)).not.toHaveBeenCalled()
+})
+
+test('a host whose state cannot be read is kept — the fallback catches what the probe missed', async () => {
+	const { readConfigFromBase } = await import('./config.js')
+	const { liveModels } = await import('./models.js')
+	const { hostAvailability } = await import('./host.js')
+	const { startAgent } = await import('./host.js')
+	const built = [
+		{ name: 'a', run: 'claude --model opus', complexity: [1, 10] as [number, number], about: '' },
+	]
+	const config: Config = {
+		...DEFAULT_CONFIG,
+		dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false, models: [] },
+	}
+	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: config })
+	vi.mocked(liveModels).mockResolvedValue({ models: built, dropped: [] })
+	vi.mocked(hostAvailability).mockResolvedValue({ claude: { state: 'unknown', reason: null } })
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(vi.mocked(startAgent)).toHaveBeenCalled()
+	const { events } = await readLog(paths)
+	expect(events).toContainEqual(
+		expect.objectContaining({
+			action: 'hosts',
+			node: 'auth-api-k7f2',
+			removed: [],
+			unknown: ['claude'],
+		}),
 	)
 })
