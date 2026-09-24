@@ -58,27 +58,40 @@ export interface Failure {
  * and Git is already a hard dependency of SOBER. `sh`/`bash` off the PATH is
  * never used: on Windows, `bash.exe` on PATH can be WSL's
  * `WindowsApps\bash.exe`, a different filesystem than the worktree's.
+ *
+ * Pulled apart from the cached `posixShell` below so every outcome — non-win32,
+ * each candidate found, neither found, `git --exec-path` throwing — is testable
+ * on any platform, not just the one that takes the win32 branch.
  */
+export const posixShellFor = (
+	platform: NodeJS.Platform,
+	gitExecPath: () => string,
+	exists: (path: string) => boolean,
+): string | true | null => {
+	if (platform !== 'win32') return true
+	try {
+		const execPath = gitExecPath().trim()
+		const root = dirname(dirname(dirname(execPath)))
+		// `bin/sh.exe` first: it is the wrapper that puts Git's `/usr/bin` on
+		// PATH. `usr/bin/sh.exe` started directly has no `sed` or `dirname`, and
+		// npm's sh shims (`pnpm`) call both.
+		for (const candidate of [join(root, 'bin', 'sh.exe'), join(root, 'usr', 'bin', 'sh.exe')]) {
+			if (exists(candidate)) return candidate
+		}
+		return null
+	} catch {
+		return null
+	}
+}
+
 let cachedShell: string | true | null | undefined
 export const posixShell = (): string | true | null => {
-	if (process.platform !== 'win32') return true
 	if (cachedShell !== undefined) return cachedShell
-
-	cachedShell = (() => {
-		try {
-			const execPath = execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim()
-			const root = dirname(dirname(dirname(execPath)))
-			// `bin/sh.exe` first: it is the wrapper that puts Git's `/usr/bin` on
-			// PATH. `usr/bin/sh.exe` started directly has no `sed` or `dirname`, and
-			// npm's sh shims (`pnpm`) call both.
-			for (const candidate of [join(root, 'bin', 'sh.exe'), join(root, 'usr', 'bin', 'sh.exe')]) {
-				if (existsSync(candidate)) return candidate
-			}
-			return null
-		} catch {
-			return null
-		}
-	})()
+	cachedShell = posixShellFor(
+		process.platform,
+		() => execFileSync('git', ['--exec-path'], { encoding: 'utf8' }),
+		existsSync,
+	)
 	return cachedShell
 }
 
@@ -98,9 +111,12 @@ export const notInstalled = (failure: Failure): boolean =>
  * a human wrote, either into their config on the base ref or into an acceptance
  * list they approved.
  */
-export const judge = (cwd: string, command: string | null): Promise<Judged> => {
+export const judge = (
+	cwd: string,
+	command: string | null,
+	shell: string | true | null = posixShell(),
+): Promise<Judged> => {
 	if (command === null) return Promise.resolve({ result: null, output: '' })
-	const shell = posixShell()
 	if (shell === null)
 		return Promise.resolve({
 			result: null,
