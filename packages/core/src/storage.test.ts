@@ -209,6 +209,43 @@ test('the snake_case spelling of jevMode is broken, not silently ignored', () =>
 	expect(parseConfig('c', '{ "dispatch": { "jev_mode": true } }')).toMatchObject({ kind: 'broken' })
 })
 
+test('thinkingVerbs is absent means the built-in pool, extend by default', () => {
+	expect(parseConfig('c', '{}')).toMatchObject({
+		kind: 'ok',
+		value: { dashboard: { thinkingVerbs: { mode: 'extend', words: [] } } },
+	})
+})
+
+test('thinkingVerbs extends or replaces the built-in pool', () => {
+	expect(
+		parseConfig(
+			'c',
+			'{ "dashboard": { "thinkingVerbs": { "mode": "extend", "words": ["Vibing"] } } }',
+		),
+	).toMatchObject({
+		kind: 'ok',
+		value: { dashboard: { thinkingVerbs: { mode: 'extend', words: ['Vibing'] } } },
+	})
+	expect(
+		parseConfig(
+			'c',
+			'{ "dashboard": { "thinkingVerbs": { "mode": "replace", "words": ["Vibing"] } } }',
+		),
+	).toMatchObject({
+		kind: 'ok',
+		value: { dashboard: { thinkingVerbs: { mode: 'replace', words: ['Vibing'] } } },
+	})
+})
+
+test('a thinkingVerbs word with a space is broken, naming the key', () => {
+	expect(
+		parseConfig('c', '{ "dashboard": { "thinkingVerbs": { "words": ["two words"] } } }'),
+	).toMatchObject({
+		kind: 'broken',
+		reason: expect.stringContaining('dashboard.thinkingVerbs.words'),
+	})
+})
+
 const MODELS = [
 	{ name: 'free', run: 'opencode --model free', complexity: [1, 3] as [number, number], about: '' },
 	{ name: 'codex', run: 'codex --model x', complexity: [3, 7] as [number, number], about: 'Fast.' },

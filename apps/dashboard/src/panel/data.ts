@@ -1,5 +1,6 @@
 import type { Decision, Node, Option, Project, Status, Waiting } from '@besober/schema'
 import { decisionState } from '@besober/schema'
+import type { ThinkingVerbsConfig } from '../logs/data.js'
 
 /**
  * `GET /read/board`. The whole board in one answer — the panel needs a node's
@@ -21,6 +22,7 @@ export interface BoardRead {
 		readonly archived: boolean
 	})[]
 	readonly broken: readonly string[]
+	readonly thinkingVerbs: ThinkingVerbsConfig | null
 }
 
 export interface Held {

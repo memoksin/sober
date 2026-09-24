@@ -14,6 +14,7 @@ import {
 	groupLines,
 	MARK,
 	matchesLine,
+	mergeThinkingVerbs,
 	modelOf,
 	nextVerb,
 	providerForModel,
@@ -213,6 +214,26 @@ test('nextVerb never repeats the previous verb', () => {
 		index = nextVerb(index, seqRandom([Math.random()]))
 		expect(index).not.toBe(previous)
 	}
+})
+
+test('mergeThinkingVerbs falls back to the built-in pool with no config', () => {
+	expect(mergeThinkingVerbs(['Sobering', 'Doodling'], null)).toEqual(['Sobering', 'Doodling'])
+})
+
+test('mergeThinkingVerbs extend appends new words, deduped case-insensitively', () => {
+	expect(
+		mergeThinkingVerbs(['Sobering', 'Doodling'], {
+			mode: 'extend',
+			words: ['doodling', 'Vibing'],
+		}),
+	).toEqual(['Sobering', 'Doodling', 'Vibing'])
+})
+
+test('mergeThinkingVerbs replace uses words only when non-empty', () => {
+	expect(mergeThinkingVerbs(['Sobering'], { mode: 'replace', words: ['Vibing'] })).toEqual([
+		'Vibing',
+	])
+	expect(mergeThinkingVerbs(['Sobering'], { mode: 'replace', words: [] })).toEqual(['Sobering'])
 })
 
 test('buildChecklist pairs each checked with its check, in order', () => {

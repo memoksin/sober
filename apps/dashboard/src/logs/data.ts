@@ -412,9 +412,37 @@ export const THINKING_VERBS: readonly string[] = [
 ]
 
 /** The next verb, drawn from all but `prevIndex` — it never repeats. */
-export const nextVerb = (prevIndex: number, random: Random): number => {
-	const pick = Math.floor(random() * (THINKING_VERBS.length - (prevIndex < 0 ? 0 : 1)))
+export const nextVerb = (
+	prevIndex: number,
+	random: Random,
+	count: number = THINKING_VERBS.length,
+): number => {
+	const pick = Math.floor(random() * (count - (prevIndex < 0 ? 0 : 1)))
 	return prevIndex >= 0 && pick >= prevIndex ? pick + 1 : pick
+}
+
+/** The board's `dashboard.thinkingVerbs` config, as the server hands it over (ADR 0058's null-is-default shape). */
+export interface ThinkingVerbsConfig {
+	readonly mode: 'extend' | 'replace'
+	readonly words: readonly string[]
+}
+
+/**
+ * The pool the run screen's verb picker draws from. `null` (no key set, or an
+ * old server) is the built-in pool unchanged. "replace" with an empty `words`
+ * is treated the same as absent — an empty override is not a request to leave
+ * the indicator with nothing to say. "extend" appends `words` not already in
+ * `base`, compared case-insensitively so "Doodling" and "doodling" don't both land.
+ */
+export const mergeThinkingVerbs = (
+	base: readonly string[],
+	config: ThinkingVerbsConfig | null,
+): readonly string[] => {
+	if (config === null || config.words.length === 0) return base
+	if (config.mode === 'replace') return config.words
+	const seen = new Set(base.map((word) => word.toLowerCase()))
+	const extra = config.words.filter((word) => !seen.has(word.toLowerCase()))
+	return [...base, ...extra]
 }
 
 /** The one live region this screen may have (StatusBar.tsx), named once so a test can find it without repeating the attribute in a `.tsx` file. */

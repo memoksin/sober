@@ -86,6 +86,26 @@ export const Config = z.strictObject({
 	board: z.strictObject({
 		branch: z.string().min(1),
 	}),
+	dashboard: z
+		.strictObject({
+			thinkingVerbs: z
+				.strictObject({
+					mode: z.enum(['extend', 'replace']).default('extend'),
+					words: z
+						.array(
+							z
+								.string()
+								.trim()
+								.min(1, 'dashboard.thinkingVerbs.words must not be empty')
+								.refine((word) => !word.includes(' '), {
+									message: 'dashboard.thinkingVerbs.words must not contain a space',
+								}),
+						)
+						.default([]),
+				})
+				.default({ mode: 'extend', words: [] }),
+		})
+		.default({ thinkingVerbs: { mode: 'extend', words: [] } }),
 	scan: z.strictObject({
 		extra: z.array(z.string()),
 	}),
@@ -121,6 +141,9 @@ export const DEFAULT_CONFIG: Config = {
 	},
 	board: {
 		branch: 'sober-graph',
+	},
+	dashboard: {
+		thinkingVerbs: { mode: 'extend', words: [] },
 	},
 	scan: {
 		extra: [],
@@ -282,6 +305,18 @@ export const DEFAULT_CONFIG_TEXT = `{
 		"branch": "${DEFAULT_CONFIG.board.branch}"
 	},
 
+	"dashboard": {
+		// The run screen's thinking pulse cycles through a built-in pool of
+		// one-word verbs. "extend" adds "words" to that pool (deduped, case-
+		// insensitively); "replace" uses "words" instead of it, unless "words"
+		// is empty, which keeps the built-in pool either way. Each word is
+		// trimmed and must not contain a space — hyphenated compounds are fine.
+		"thinkingVerbs": {
+			"mode": "extend",
+			"words": []
+		}
+	},
+
 	"scan": {
 		// Extra scanners run in the worktree beside the bundled secretlint,
 		// as commands — for example ["semgrep scan --error --quiet"]. A
@@ -391,6 +426,7 @@ export const parseConfig = (file: string, text: string): ReadConfig => {
 		...(parsed as Partial<Config>),
 		dispatch: { ...DEFAULT_CONFIG.dispatch, ...(parsed as Partial<Config>)?.dispatch },
 		board: { ...DEFAULT_CONFIG.board, ...(parsed as Partial<Config>)?.board },
+		dashboard: { ...DEFAULT_CONFIG.dashboard, ...(parsed as Partial<Config>)?.dashboard },
 		scan: { ...DEFAULT_CONFIG.scan, ...(parsed as Partial<Config>)?.scan },
 		lock: { ...DEFAULT_CONFIG.lock, ...(parsed as Partial<Config>)?.lock },
 	}

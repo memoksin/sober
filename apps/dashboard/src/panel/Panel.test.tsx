@@ -31,7 +31,7 @@ const node = (over: Partial<BoardRead['nodes'][number]> = {}) =>
 const panel = (one: BoardRead['nodes'][number]) =>
 	render(
 		<Panel
-			board={{ project: null, nodes: [one], decisions: [], broken: [] }}
+			board={{ project: null, nodes: [one], decisions: [], broken: [], thinkingVerbs: null }}
 			id={one.id}
 			flagged={false}
 			onClose={() => {}}
