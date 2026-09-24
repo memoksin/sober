@@ -160,6 +160,23 @@ test('a probe is cached, reused while fresh, and run again once stale', async ()
 	expect(written.at).toBe(now)
 })
 
+test('probing a new host does not renew another host’s cached result', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	let now = 1_000_000
+	const runFn = vi.fn(async () => ({ stdout: 'ok\n', stderr: '' }))
+
+	await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
+	now += 100_000
+	await hostAvailability(p, ['claude', 'codex'], 900, { run: runFn as never, now: () => now })
+	const written = JSON.parse(await readFile(p.hosts, 'utf8')) as { hosts: Record<string, unknown> }
+	expect(written.hosts).toHaveProperty('codex')
+	expect(written.hosts).not.toHaveProperty('claude')
+
+	await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
+	expect(runFn).toHaveBeenCalledTimes(3)
+})
+
 test('a probe that errors or times out is unknown, kept, never a silent ready or spent', async () => {
 	const root = await tmpRoot('sober-hosts-')
 	const p = paths(root)

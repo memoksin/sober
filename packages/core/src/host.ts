@@ -142,6 +142,7 @@ export const hostAvailability = async (
 	}
 
 	const result: Record<string, HostAvailability> = {}
+	const probed: Record<string, HostAvailability> = {}
 	let changed = false
 	for (const [id, host] of byId) {
 		const adapter = adapterFor(host)
@@ -161,6 +162,7 @@ export const hostAvailability = async (
 			})
 			if (stdout.trim().length === 0) {
 				result[id] = { state: 'unknown', reason: null }
+				probed[id] = result[id]
 				continue
 			}
 			const reason = limitSpent(id, stdout)
@@ -176,12 +178,13 @@ export const hostAvailability = async (
 				result[id] = { state: 'unknown', reason: null }
 			}
 		}
+		probed[id] = result[id]
 	}
 
 	if (changed) {
 		// The timestamp belongs to this set of probes. Carrying an older
 		// unrequested host forward would make its stale answer look fresh.
-		await writeAtomic(paths.hosts, JSON.stringify({ at: now, hosts: result }))
+		await writeAtomic(paths.hosts, JSON.stringify({ at: now, hosts: probed }))
 	}
 
 	return result
