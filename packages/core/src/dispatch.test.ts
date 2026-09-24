@@ -147,7 +147,7 @@ test('with jevMode on, Jev is asked among the list liveModels built, and its pic
 	}
 	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: config })
 	vi.mocked(liveModels).mockResolvedValue({ models: built, dropped: [] })
-	vi.mocked(askJev).mockResolvedValue({ complexity: 5, skills: [], model: 'free' })
+	vi.mocked(askJev).mockResolvedValue({ complexity: 5, skills: [], model: 'free', backup: null })
 
 	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
 
@@ -175,7 +175,7 @@ test('a spent host’s models never reach Jev, and the log names it', async () =
 	vi.mocked(hostAvailability).mockResolvedValue({
 		claude: { state: 'spent', reason: 'five-hour limit, resets 14:59' },
 	})
-	vi.mocked(askJev).mockResolvedValue({ complexity: 5, skills: [], model: 'in' })
+	vi.mocked(askJev).mockResolvedValue({ complexity: 5, skills: [], model: 'in', backup: null })
 
 	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
 
@@ -248,4 +248,137 @@ test('a host whose state cannot be read is kept — the fallback catches what th
 			unknown: ['claude'],
 		}),
 	)
+})
+
+// Codex's own words for a spent account, as `hosts.ts` captured them.
+const CODEX_SPENT =
+	'{"type":"error","message":"You\'ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 2:59 PM."}'
+const CODEX_TOOL = JSON.stringify({
+	type: 'item.completed',
+	item: { type: 'command_execution', command: 'ls', status: 'completed' },
+})
+
+const withBackup = async (
+	models = [
+		{ name: 'gpt', run: 'codex --model gpt', complexity: [1, 10] as [number, number], about: '' },
+		{
+			name: 'opus',
+			run: 'claude --model opus',
+			complexity: [1, 10] as [number, number],
+			about: '',
+		},
+	],
+) => {
+	const { readConfigFromBase } = await import('./config.js')
+	const { liveModels } = await import('./models.js')
+	// The node is unscored, so `dispatch.host` is the primary.
+	const config: Config = {
+		...DEFAULT_CONFIG,
+		dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false, models: [], host: 'codex --model gpt' },
+	}
+	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: config })
+	vi.mocked(liveModels).mockResolvedValue({ models, dropped: [] })
+	const { hostAvailability, checkHost, startAgent } = await import('./host.js')
+	vi.mocked(hostAvailability).mockResolvedValue({})
+	return { checkHost: vi.mocked(checkHost), startAgent: vi.mocked(startAgent) }
+}
+
+const onlyRun = async () => {
+	const runs = (await readLog(paths)).events.filter((e) => e.action === 'run.started')
+	const run = await readRun(paths, String(runs[0]?.run))
+	if (run.kind !== 'ok') throw new Error('no run record')
+	return run.value
+}
+
+test('a primary whose checkHost refuses runs on the backup, and the record says so', async () => {
+	const { checkHost, startAgent } = await withBackup()
+	checkHost.mockImplementation(async (line) =>
+		line.startsWith('codex')
+			? { ok: false, reason: 'codex is installed but not logged in' }
+			: { ok: true, reason: null },
+	)
+	startAgent.mockImplementation(async ({ onStart }) => {
+		onStart?.(1)
+		return { kind: 'finished' }
+	})
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(startAgent).toHaveBeenCalledTimes(1)
+	expect(startAgent).toHaveBeenCalledWith(expect.objectContaining({ host: 'claude --model opus' }))
+	expect(await onlyRun()).toMatchObject({
+		host: 'claude --model opus',
+		backup: 'claude --model opus',
+		ran: 'backup',
+		fellBack: 'codex is installed but not logged in',
+	})
+})
+
+test('a limit-classified exit before any tool line re-runs once on the backup, in the same worktree', async () => {
+	const { checkHost, startAgent } = await withBackup()
+	checkHost.mockResolvedValue({ ok: true, reason: null })
+	startAgent
+		.mockImplementationOnce(async ({ onStart, onLine }) => {
+			onStart?.(1)
+			onLine(CODEX_SPENT)
+			return { kind: 'failed', reason: 'codex --model gpt exited with code 1' }
+		})
+		.mockImplementationOnce(async ({ onStart }) => {
+			onStart?.(2)
+			return { kind: 'finished' }
+		})
+
+	const done = await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(done.exit).toBe('finished')
+	expect(startAgent).toHaveBeenCalledTimes(2)
+	const [first, second] = startAgent.mock.calls.map(([options]) => options)
+	expect(first).toMatchObject({ host: 'codex --model gpt' })
+	expect(second).toMatchObject({ host: 'claude --model opus', cwd: first?.cwd })
+	expect(await onlyRun()).toMatchObject({
+		host: 'claude --model opus',
+		backup: 'claude --model opus',
+		ran: 'backup',
+		fellBack: 'usage limit, try again at 2:59 PM',
+		exit: 'finished',
+	})
+	const { readRunOutput } = await import('./local.js')
+	expect(await readRunOutput(paths, done.run)).toContain(
+		'primary codex --model gpt stopped: usage limit, try again at 2:59 PM — running on claude --model opus',
+	)
+})
+
+test('the same exit after a tool line is not re-run', async () => {
+	const { checkHost, startAgent } = await withBackup()
+	checkHost.mockResolvedValue({ ok: true, reason: null })
+	startAgent.mockImplementationOnce(async ({ onStart, onLine }) => {
+		onStart?.(1)
+		onLine(CODEX_TOOL)
+		onLine(CODEX_SPENT)
+		return { kind: 'failed', reason: 'codex --model gpt exited with code 1' }
+	})
+
+	const done = await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(done.exit).toBe('failed')
+	expect(startAgent).toHaveBeenCalledTimes(1)
+	expect(await onlyRun()).toMatchObject({
+		host: 'codex --model gpt',
+		backup: 'claude --model opus',
+		ran: 'primary',
+		fellBack: null,
+	})
+})
+
+test('with no backup, a refused primary is today’s refusal, word for word', async () => {
+	const { checkHost } = await withBackup([
+		{ name: 'gpt', run: 'codex --model gpt', complexity: [1, 10], about: '' },
+	])
+	checkHost.mockResolvedValue({ ok: false, reason: 'codex is installed but not logged in' })
+	const { addWorktree } = await import('./worktree.js')
+
+	await expect(dispatch(paths, 'auth-api-k7f2', { base: 'main' })).rejects.toThrow(
+		'auth-api-k7f2 was not started: codex is installed but not logged in — or change `dispatch.host`',
+	)
+	expect(vi.mocked(addWorktree)).not.toHaveBeenCalled()
 })

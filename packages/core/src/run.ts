@@ -26,7 +26,17 @@ export const startRun = (
 		attended = false,
 		tier = null,
 		fallback = false,
-	}: { readonly attended?: boolean; readonly tier?: Run['tier']; readonly fallback?: boolean } = {},
+		backup = null,
+		ran = 'primary',
+		fellBack = null,
+	}: {
+		readonly attended?: boolean
+		readonly tier?: Run['tier']
+		readonly fallback?: boolean
+		readonly backup?: Run['backup']
+		readonly ran?: Run['ran']
+		readonly fellBack?: Run['fellBack']
+	} = {},
 ): Promise<StartedRun> =>
 	withLock(paths, 'run', async () => {
 		const record = await readNode(paths, node)
@@ -58,6 +68,9 @@ export const startRun = (
 			attended,
 			tier,
 			fallback,
+			backup,
+			ran,
+			fellBack,
 		}
 		await writeRun(paths, id, run)
 		await appendEvent(paths, { action: 'run.started', node, run: id, host })
@@ -71,6 +84,10 @@ export interface RunResult {
 	readonly verify?: CommandResult | null
 	/** Parallel to the brief's criteria, by index (ADR 0027). */
 	readonly acceptance?: readonly (CommandResult | null)[]
+	/** Set when the run fell to its backup after it started, so `host` names what ran. */
+	readonly host?: string
+	readonly ran?: Run['ran']
+	readonly fellBack?: string
 }
 
 export const finishRun = (paths: Paths, id: string, result: RunResult): Promise<Run> =>
@@ -80,6 +97,9 @@ export const finishRun = (paths: Paths, id: string, result: RunResult): Promise<
 
 		const run: Run = {
 			...record.value,
+			host: result.host ?? record.value.host,
+			ran: result.ran ?? record.value.ran,
+			fellBack: result.fellBack ?? record.value.fellBack,
 			endedAt: new Date().toISOString(),
 			exit: result.exit,
 			error: result.error ?? null,
