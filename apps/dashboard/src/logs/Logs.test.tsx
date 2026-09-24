@@ -1,7 +1,8 @@
 import { type LogLineInput, LogWindow } from '@besober/schema'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Wire } from '../wire.js'
+import { LIVE_REGION_SELECTOR } from './data.js'
 import { LogScreen } from './Logs.js'
 
 afterEach(cleanup)
@@ -78,7 +79,8 @@ test('a run still going says so, and one that ended says that instead', async ()
 			onClose={() => {}}
 		/>,
 	)
-	expect(await screen.findByText('running')).toBeTruthy()
+	const header = (await screen.findByRole('dialog')).querySelector('header') as HTMLElement
+	expect(within(header).getByText('running')).toBeTruthy()
 	unmount()
 
 	render(
@@ -364,7 +366,7 @@ test('the dots wave only while the run is live', async () => {
 			onClose={() => {}}
 		/>,
 	)
-	await screen.findByText('running')
+	expect(await screen.findAllByText('running')).toHaveLength(2)
 	expect(container.querySelectorAll('.sober-dot-wave').length).toBe(3)
 	unmount()
 
@@ -563,4 +565,102 @@ test('an old-style tool line with no detail or call still renders the bare tool 
 	)
 
 	expect(await screen.findByText('Write')).toBeTruthy()
+})
+
+const indicatorText = (): string | null =>
+	(document.querySelector('.text-\\[var\\(--tx-think\\)\\]') as HTMLElement | null)?.textContent ??
+	null
+
+test('the working indicator’s verb stays fixed within a step and changes when a line lands', async () => {
+	let deliver: ((window: LogWindow) => void) | undefined
+	const surface: Wire = {
+		read: () => Promise.reject(new Error('unused')),
+		op: (() => Promise.resolve({})) as Wire['op'],
+		watch: (async (_name, _params, onMessage: (message: unknown) => void) => {
+			deliver = onMessage as (window: LogWindow) => void
+			onMessage(window({ lines: [{ kind: 'thinking', text: 'first', tool: null }], live: true }))
+			await new Promise(() => {})
+		}) as Wire['watch'],
+	}
+	render(<LogScreen node="n-k7f2" surface={surface} onClose={() => {}} />)
+	await screen.findByText('first')
+
+	const verbBefore = indicatorText()?.split('…')[0]
+	// No new line yet: re-rendering (a fresh read of the same indicator) must
+	// not have moved the verb on its own.
+	expect(indicatorText()?.split('…')[0]).toBe(verbBefore)
+
+	act(() => {
+		deliver?.(window({ lines: [{ kind: 'thinking', text: 'second', tool: null }], live: true }))
+	})
+	await screen.findByText('second')
+	expect(indicatorText()?.split('…')[0]).not.toBe(verbBefore)
+})
+
+test('the status bar counts tools and checks', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({
+					lines: [
+						{ kind: 'tool', text: 'Read', tool: 'Read' },
+						{ kind: 'tool', text: 'Write', tool: 'Write' },
+						{ kind: 'check', text: 'pnpm test' },
+						{ kind: 'checked', text: 'pnpm test (exit 0, 1.0s)' },
+						{ kind: 'check', text: 'pnpm lint' },
+						{ kind: 'checked', text: 'pnpm lint (exit 1, 0.5s)' },
+					],
+					live: false,
+				}),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	expect(await screen.findByText('⚒ 2 tools')).toBeTruthy()
+	expect(screen.getByText('◌ 1/2 checks')).toBeTruthy()
+})
+
+test('only one live region announces to a screen reader', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([window({ lines: [{ kind: 'text', text: 'hi', tool: null }] })])}
+			onClose={() => {}}
+		/>,
+	)
+	await screen.findByText('hi')
+	expect(document.querySelectorAll(LIVE_REGION_SELECTOR)).toHaveLength(1)
+})
+
+test('the checklist card appears when the run ends, and hides the raw check rows', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({
+					lines: [
+						{ kind: 'check', text: 'pnpm test' },
+						{ kind: 'checked', text: 'pnpm test (exit 0, 1.0s)' },
+					],
+					live: false,
+				}),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	expect(await screen.findByText('Acceptance checks')).toBeTruthy()
+	expect(screen.getByText('pnpm test')).toBeTruthy()
+	expect(screen.getByText('1/1 passed')).toBeTruthy()
+	expect(screen.queryByText('pnpm test (exit 0, 1.0s)')).toBeNull()
+})
+
+test('there is no working indicator once the run has ended', async () => {
+	render(
+		<LogScreen node="n-k7f2" surface={surfaceOf([window({ live: false })])} onClose={() => {}} />,
+	)
+	await screen.findByText('the run has ended')
+	expect(indicatorText()).toBeNull()
 })

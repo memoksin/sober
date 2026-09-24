@@ -4,6 +4,9 @@ import { Overlay } from '../Overlay.js'
 import type { Wire } from '../wire.js'
 import {
 	atBottom,
+	buildChecklist,
+	type ChecklistItem,
+	elapsedLabel,
 	MORPH_GROW_EASING,
 	MORPH_GROW_MS,
 	MORPH_REDUCED_MS,
@@ -11,13 +14,17 @@ import {
 	MORPH_SHRINK_MS,
 	matchesLine,
 	modelOf,
+	nextVerb,
 	PROVIDER_COLOUR,
 	PROVIDER_NAME,
 	type Provider,
 	providerForModel,
 	ranWith,
 	STAGE_STAGGER_MS,
+	THINKING_VERBS,
 } from './data.js'
+import { Ekg } from './Ekg.js'
+import { StatusBar } from './StatusBar.js'
 import { Transcript } from './Transcript.js'
 
 /**
@@ -76,6 +83,25 @@ export const LogScreen = ({
 	// does not) — `at` on the line itself is always preferred where it exists.
 	const arrivals = useRef<(string | null)[]>([])
 	const [startAt, setStartAt] = useState<string | null>(null)
+
+	// The working indicator's verb: it changes only where a new line lands
+	// (never on a timer), and never repeats the previous one.
+	const [verbIndex, setVerbIndex] = useState(() => nextVerb(-1, Math.random))
+	const seenLineCount = useRef(0)
+	useEffect(() => {
+		if (lines.length === seenLineCount.current) return
+		seenLineCount.current = lines.length
+		setVerbIndex((previous) => nextVerb(previous, Math.random))
+	}, [lines.length])
+
+	// A tick that forces the elapsed clock and the working indicator's seconds
+	// to advance even when no new line has arrived.
+	const [, forceTick] = useState(0)
+	useEffect(() => {
+		if (live !== true) return
+		const id = setInterval(() => forceTick((value) => value + 1), 1000)
+		return () => clearInterval(id)
+	}, [live])
 
 	useEffect(() => {
 		const leaving = new AbortController()
@@ -314,9 +340,26 @@ export const LogScreen = ({
 	// Filtered together so a line's arrival stays paired with it once the find
 	// box drops lines the query doesn't match.
 	const paired = lines.map((line, index) => [line, arrivals.current[index] ?? null] as const)
-	const shownPaired = findOpen ? paired.filter(([line]) => matchesLine(line, query)) : paired
+	// Once the run has ended, its raw check/checked rows give way to the
+	// checklist card below the transcript — the same acceptance facts, read once.
+	const withoutChecklistRows = ended
+		? paired.filter(([line]) => line.kind !== 'check' && line.kind !== 'checked')
+		: paired
+	const shownPaired = findOpen
+		? withoutChecklistRows.filter(([line]) => matchesLine(line, query))
+		: withoutChecklistRows
 	const shown = shownPaired.map(([line]) => line)
 	const shownArrivals = shownPaired.map(([, at]) => at)
+
+	const checklist = buildChecklist(lines)
+	const toolCount = lines.filter((line) => line.kind === 'tool').length
+	const checksPassed = checklist.filter((item) => item.passed).length
+	const totalElapsed = startAt !== null ? elapsedLabel(new Date().toISOString(), startAt) : '00:00'
+	const lastLineAt = arrivals.current[arrivals.current.length - 1] ?? startAt
+	const workingSeconds =
+		lastLineAt !== null
+			? Math.max(0, Math.floor((Date.now() - new Date(lastLineAt).getTime()) / 1000))
+			: 0
 
 	return (
 		<Overlay
@@ -429,6 +472,8 @@ export const LogScreen = ({
 						startAt={startAt ?? new Date().toISOString()}
 						live={live}
 					/>
+
+					{ended && checklist.length > 0 && <ChecklistCard items={checklist} />}
 				</div>
 
 				{unseen > 0 && (
@@ -441,6 +486,15 @@ export const LogScreen = ({
 					</button>
 				)}
 			</div>
+
+			{live === true && (
+				<div className="flex shrink-0 items-center gap-2.5 px-6 py-2 font-mono text-[var(--tx-think)] text-sm">
+					<Ekg live={live === true} lineCount={lines.length} />
+					<span>
+						{THINKING_VERBS[verbIndex]}… ({workingSeconds}s)
+					</span>
+				</div>
+			)}
 
 			{live === true && (
 				<footer ref={statusBar} className="shrink-0 border-[var(--line)] border-t px-6 py-3">
@@ -492,7 +546,45 @@ export const LogScreen = ({
 					</div>
 				</footer>
 			)}
+
+			<StatusBar
+				live={live}
+				ended={ended}
+				failure={failure}
+				elapsed={totalElapsed}
+				tools={toolCount}
+				checksPassed={checksPassed}
+				checksTotal={checklist.length}
+			/>
 		</Overlay>
+	)
+}
+
+/** ✓/✗ against each acceptance check, once the run that ran them has ended. */
+const ChecklistCard = ({
+	items,
+}: {
+	readonly items: readonly ChecklistItem[]
+}): React.JSX.Element => {
+	const passed = items.filter((item) => item.passed).length
+	return (
+		<div className="mt-4 rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--bg)] px-4 py-3">
+			<h3 className="mb-2 font-medium text-[var(--ink)] text-sm">Acceptance checks</h3>
+			<ul className="space-y-1.5">
+				{items.map((item, index) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: an append-only checklist has no other key
+					<li key={index} className="flex gap-2.5 text-[var(--ink-dim)] text-sm">
+						<span aria-hidden style={{ color: item.passed ? 'var(--tx-pass)' : 'var(--tx-error)' }}>
+							{item.passed ? '✓' : '✗'}
+						</span>
+						{item.label}
+					</li>
+				))}
+			</ul>
+			<p className="mt-3 text-[var(--ink-faint)] text-xs">
+				{passed}/{items.length} passed
+			</p>
+		</div>
 	)
 }
 

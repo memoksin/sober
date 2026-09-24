@@ -2,13 +2,23 @@ import { LogLine, type LogLineInput } from '@besober/schema'
 import { expect, test } from 'vitest'
 import {
 	atBottom,
+	buildChecklist,
+	EKG_BASELINE,
+	EKG_SHAPE_DOUBLE,
+	EKG_SHAPE_LOG,
+	EKG_SHAPE_REGULAR,
+	type EkgBeat,
+	ekgPath,
 	elapsedLabel,
 	foldBody,
 	groupLines,
 	MARK,
 	matchesLine,
 	modelOf,
+	nextVerb,
 	providerForModel,
+	spike,
+	THINKING_VERBS,
 	TONE,
 	TOOL,
 	TOOL_FALLBACK,
@@ -150,4 +160,71 @@ test('a find query checks text, detail and tool, and an empty query matches ever
 	// A line-detail hasn't reached yet still searches on text and tool alone.
 	expect(matchesLine({ text: 'plain', tool: null }, 'plain')).toBe(true)
 	expect(matchesLine({ text: 'plain', tool: null, detail: 'the extra bit' }, 'extra')).toBe(true)
+})
+
+/** A deterministic `Random`, cycling through fixed values instead of `Math.random`. */
+const seqRandom = (values: readonly number[]) => {
+	let index = 0
+	return () => values[index++ % values.length] ?? 0
+}
+
+test('every EKG vertex stays inside the box at maximum amplitude', () => {
+	const cases: readonly {
+		readonly shape: readonly (readonly [number, number])[]
+		readonly amp: number
+	}[] = [
+		{ shape: EKG_SHAPE_REGULAR, amp: 4.5 * 1.25 },
+		{ shape: EKG_SHAPE_DOUBLE, amp: 4.5 * 1.25 },
+		{ shape: EKG_SHAPE_LOG, amp: 5.5 },
+	]
+	for (const { shape, amp } of cases) {
+		for (const [, height] of shape) {
+			const y = EKG_BASELINE - amp * height
+			expect(y).toBeGreaterThanOrEqual(0.5)
+			expect(y).toBeLessThanOrEqual(17.5)
+		}
+	}
+})
+
+test('a spike drops every beat it overlaps, so beats never overlap', () => {
+	const now = 1000
+	// A regular beat sitting right where the spike lands.
+	const overlapping: EkgBeat = { time: now - 50, amp: 4.5, shape: EKG_SHAPE_REGULAR }
+	const { queue } = spike([overlapping], now, seqRandom([0.5]))
+	expect(queue).toHaveLength(1)
+	expect(queue[0]?.shape).toBe(EKG_SHAPE_LOG)
+})
+
+test('a beat’s R-peak y is identical across two frames 16ms apart', () => {
+	const queue: readonly EkgBeat[] = [{ time: 1000, amp: 6, shape: EKG_SHAPE_REGULAR }]
+	const rPeakY = (now: number): number => {
+		const ys = [...ekgPath(queue, now).matchAll(/[ML]-?[\d.]+ (-?[\d.]+)/g)].map((match) =>
+			Number(match[1]),
+		)
+		return Math.min(...ys)
+	}
+	expect(rPeakY(1200)).toBe(rPeakY(1216))
+})
+
+test('nextVerb never repeats the previous verb', () => {
+	let index = nextVerb(-1, seqRandom([0]))
+	for (let i = 0; i < THINKING_VERBS.length * 3; i += 1) {
+		const previous = index
+		index = nextVerb(index, seqRandom([Math.random()]))
+		expect(index).not.toBe(previous)
+	}
+})
+
+test('buildChecklist pairs each checked with its check, in order', () => {
+	const lines = [
+		LogLine.parse({ kind: 'check', text: 'pnpm test' }),
+		LogLine.parse({ kind: 'raw', text: 'ok' }),
+		LogLine.parse({ kind: 'checked', text: 'pnpm test (exit 0, 1.2s)' }),
+		LogLine.parse({ kind: 'check', text: 'pnpm lint' }),
+		LogLine.parse({ kind: 'checked', text: 'pnpm lint (exit 1, 0.4s)' }),
+	]
+	expect(buildChecklist(lines)).toEqual([
+		{ label: 'pnpm test', passed: true },
+		{ label: 'pnpm lint', passed: false },
+	])
 })
