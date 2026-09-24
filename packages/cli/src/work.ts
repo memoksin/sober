@@ -20,7 +20,7 @@ import {
 	whoami,
 	writeBrief,
 } from '@besober/core'
-import { Brief, decisionState, ranLabel, type LogLine } from '@besober/schema'
+import { Brief, decisionState, type LogLine, ranLabel } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
 import { source } from './input.js'
 import {
