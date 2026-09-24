@@ -27,6 +27,7 @@ export {
 	type Operation,
 } from './operation.js'
 export { Project, SCHEMA_VERSION } from './project.js'
+export { ranLabel } from './ran.js'
 export {
 	type Checks,
 	type CriterionResult,
