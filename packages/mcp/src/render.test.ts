@@ -24,6 +24,88 @@ test('a decision renders every option with its reason and later cost, then the p
 	expect(out.endsWith(PASTE)).toBe(true)
 })
 
+test('by default, an answered decision is left out even with `all` unset', () => {
+	const open = {
+		category: 'data',
+		question: 'Which open?',
+		options: null,
+		answer: null,
+		suggested: null,
+		createdAt: '2026-01-01T00:00:00.000Z',
+	}
+	const answered = {
+		category: 'data',
+		question: 'Which answered?',
+		options: [
+			{ id: 'a', label: 'A', reason: 'ra', costLater: 'ca' },
+			{ id: 'b', label: 'B', reason: 'rb', costLater: 'cb' },
+		],
+		answer: { option: 'a', by: 'me', at: '2026-01-02T00:00:00.000Z', rationale: '', derived: null },
+		suggested: null,
+		createdAt: '2026-01-02T00:00:00.000Z',
+	}
+	const board = {
+		decisions: new Map([
+			['open1', open as unknown as Decision],
+			['answered1', answered as unknown as Decision],
+		]),
+		archivedDecisions: new Set(),
+	} as unknown as Board
+	const out = renderDecisions(board)
+	expect(out).toContain('Which open?')
+	expect(out).not.toContain('Which answered?')
+})
+
+test('`all` includes answered decisions with provenance, alternatives, and open/unopened before answered ordering, excluding archived ones', () => {
+	const open = {
+		category: 'data',
+		question: 'Which open?',
+		options: null,
+		answer: null,
+		suggested: null,
+		createdAt: '2026-01-03T00:00:00.000Z',
+	}
+	const answered = {
+		category: 'security',
+		question: 'Which answered?',
+		options: [
+			{ id: 'a', label: 'Chosen A', reason: 'ra', costLater: 'ca' },
+			{ id: 'b', label: 'Other B', reason: 'rb', costLater: 'cb' },
+		],
+		answer: {
+			option: 'a',
+			by: 'me',
+			at: '2026-01-02T00:00:00.000Z',
+			rationale: '',
+			derived: 'the import graph',
+		},
+		suggested: null,
+		createdAt: '2026-01-01T00:00:00.000Z',
+	}
+	const archived = {
+		category: 'data',
+		question: 'Archived question',
+		options: null,
+		answer: null,
+		suggested: null,
+		createdAt: '2026-01-01T00:00:00.000Z',
+	}
+	const board = {
+		decisions: new Map([
+			['answered1', answered as unknown as Decision],
+			['open1', open as unknown as Decision],
+			['archived1', archived as unknown as Decision],
+		]),
+		archivedDecisions: new Set(['archived1']),
+	} as unknown as Board
+	const out = renderDecisions(board, true)
+	expect(out).not.toContain('Archived question')
+	expect(out).toContain('- a: Chosen A (answered)')
+	expect(out).toContain('derived: the import graph')
+	expect(out).toContain('- b: Other B')
+	expect(out.indexOf('Which open?')).toBeLessThan(out.indexOf('Which answered?'))
+})
+
 test('a review renders its findings and criteria, then the paste line', () => {
 	const review = {
 		node: 'n1',
