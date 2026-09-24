@@ -13,7 +13,29 @@
 		"packages/*-plugin/skills/plan/SKILL.md",
 		"packages/opencode-plugin/**/plan*"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Extend packages/mcp/src/tools/plan.ts `decisions` tool input with optional `all` (default false) and pass it to `renderDecisions` in packages/mcp/src/render.ts. Preserve the present open-only output by default; for `all`, follow packages/cli/src/work.ts `decisions(true)`: omit archived records, order open/unopened/answered by creation time, and show each answered decision's category, question, chosen option/label, answer provenance (`answer.derived`), and alternatives with their reason and later cost. Add render tests in packages/mcp/src/render.test.ts for default versus all, ordering, archived exclusion, and an answered derived decision. Update step 5 of plugins/skills/plan/SKILL.md to call `decisions` with `all` before proposing: reuse an existing open or answered decision id in relevant nodes' `decisions` lists when it covers the same question, and derive a new decision only if none matches. Run `pnpm plugins` to regenerate all host skill copies. Complexity 5/10: the tool and renderer are small, but compatibility of default output and generated plugin copies require careful verification. This implements ADR 0055 without changing core or adding an ADR.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/mcp/src/render.test.ts",
+				"proves": "Default and all-decision rendering preserve the open view and correctly expose answered decisions, provenance, ordering, and archive filtering."
+			},
+			{
+				"run": "pnpm --filter @besober/mcp typecheck",
+				"proves": "The new MCP tool input and renderer compile against the existing board and schema types."
+			},
+			{
+				"run": "pnpm plugins",
+				"proves": "The edited plan skill regenerates successfully for each shipped host plugin."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T07:37:16.645Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,

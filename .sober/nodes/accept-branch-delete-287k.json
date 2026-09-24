@@ -1,0 +1,19 @@
+{
+	"title": "An accept deletes the merged branch even when it is ahead of its pushed copy",
+	"name": "accept-branch-delete",
+	"description": "Seen on 2026-09-24 in backup-attend-osc2. `deleteBranch` in packages/core/src/merge.ts:67 runs `git branch -d`. When a branch has an upstream, `-d` checks that the branch is merged into that upstream, not into HEAD. A node branch that was pushed for its draft PR and then got local commits (a merge from the base, a fix-up) is merged into the base but is ahead of `origin/sober/<node>`. So `-d` refuses, the `accept` tool returns `git branch -d … failed`, and the merge, the worktree removal and the done mark have already happened. The user sees an error for an accept that succeeded. Fix: after the merge, check `git merge-base --is-ancestor <branch> HEAD` and then delete with `-D`. Only a branch that is not in HEAD is refused, with a clear sentence. Test in packages/core/src/merge.test.ts (or the file that holds the accept tests): a branch with an upstream it is ahead of, merged into the base, is deleted with no error.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/core/src/merge.ts",
+		"packages/core/src/merge.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-24T07:38:53.239Z"
+}

@@ -1,0 +1,56 @@
+{
+	"title": "The dashboard's sync writes to the board branch, never to the branch you are standing on",
+	"name": "sync-branch",
+	"description": "Root cause of f2592f9, which wiped development and was pushed to origin on 2026-09-24. The server's `sync` and `resolve` routes (packages/server/src/routes.ts:259 and :269) pass `baseOf(paths, branch)` as the board branch, and when no branch is given that is `currentBranch(paths.root)`. The dashboard's Sync button gives none. So `sync()` in packages/core/src/sync.ts runs `snapshot()` against `development`: it builds a tree that holds only `.sober/` records, commits it as a child of development's HEAD, and pushes it. The MCP `sync` tool (packages/mcp/src/tools/sync.ts) reads `config.value.board.branch` and is correct. Fix: both routes read the board branch from the config the same way the MCP tool does, and the request's `branch` field is dropped, or refused when it is not the configured board branch. Defense in depth in core: `sync()` and `resolveConflict()` refuse a branch that is the current HEAD's branch, or that is not the configured board branch, before any commit. Plumbing that commits a board-only tree must never be able to land on a code branch. Tests: a server route test where the working checkout sits on a code branch, sync is called with no branch, the code branch's HEAD and tree are unchanged, and the board branch gets the commit. A core test where `sync(paths, <current branch>)` throws and writes nothing.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/server/src/routes.ts",
+		"packages/server/src/*.test.ts",
+		"packages/core/src/sync.ts",
+		"packages/core/src/sync.test.ts"
+	],
+	"brief": {
+		"approach": "**Where it goes wrong.** In `packages/server/src/routes.ts`, the `sync` route (line 256) and the `resolve` route (line 262) pass `await baseOf(paths, branch)` as the board branch. With no `branch` in the body, which is exactly what the dashboard sends (`App.tsx:196` `op('sync', {})`, `App.tsx:506` `op('resolve', { record, choices })`), that becomes `currentBranch(paths.root)`, the code branch. `sync()` in `packages/core/src/sync.ts` then runs `snapshot()`. It commits a tree that holds only `.sober/` records as a child of that branch and pushes it. Every other caller already reads the configured branch: the MCP tool (`packages/mcp/src/tools/sync.ts:55`), the CLI (`packages/cli/src/resolve.ts:63,317`, `packages/cli/src/board.ts:72`, `hook.ts:175`) and the server's own `distance` route (routes.ts:376).\n\n**1. Server: read the board branch from config, like `distance`.** In routes.ts, lift the body of `distance` that reads the config into one small local helper, `boardBranch(paths)`. It calls `readConfig(paths)`. If the config does not read, it throws the same `SoberError('no-board', …)` that `distance` throws. Otherwise it returns `config.value.board.branch`. `distance` uses the helper for its fallback. `sync` and `resolve` call it and drop the `branch` field from their `z.strictObject` bodies. No client sends that field, and a body that names a branch is exactly the hole, so the strict schema now refuses it. `baseOf` stays for the routes that really mean the code branch (accept, reject, review and the like).\n\n**2. Core: the plumbing cannot land on a checked-out branch.** In `packages/core/src/sync.ts`, `sync()` and `resolveConflict()` compare `branch` with `await currentBranch(root)` (`packages/core/src/git.ts:83`) first, inside their `withLock` and before `createBoardBranch`/`snapshot`. If they are equal, they throw a `SoberError` that says: `<branch> is the branch checked out here, not a board branch — the board lives on <branch> named by board.branch in .sober/config.jsonc`. This guard catches any future caller that makes the same mistake, before anything is committed or pushed. It does not read the config itself: core's `sync` takes the branch as a parameter, and \"never the checked-out branch\" is the invariant the doc comment above `sync` already promises (\"a sync in the middle of a code branch leaves that branch, its index and its HEAD exactly where they were\"). A detached HEAD reads as `HEAD` from `currentBranch` and never equals a board branch name, so it passes.\n\n**Tests.**\n- `packages/core/src/sync.test.ts`: build a temp repo the way the file's existing tests do. Check out `main` with one code file committed and a board on disk. `sync(paths, 'main')` rejects. `main`'s HEAD sha and `git ls-tree main` are unchanged, and no `sober: board from` commit exists anywhere. The same holds for `resolveConflict(paths, 'main', …)`.\n- `packages/server/src/routes.test.ts` (or `serve.test.ts` if the repo fixture is there): with the checkout on a code branch, `OPS.sync.run(paths, {})` leaves the code branch's HEAD unchanged, and the configured board branch (`sober-graph`) gains the `sober: board from …` commit. Also, `OPS.sync.accepts` refuses `{ branch: 'main' }`.\n- The existing integration suites that call `sync(paths, BRANCH)` with `BRANCH = 'sober-graph'` (`test/integration/conflict.test.ts`, `board.test.ts`, `digest.test.ts`, `mcp.test.ts`) pass unchanged. They never sync the checked-out branch.\n\n**Out of scope.** Repairing history (development was already restored in e246e39). The `accept` branch-delete bug is its own node (accept-branch-delete-287k).",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm --filter @besober/core build && pnpm vitest run packages/core/src/sync.test.ts",
+				"proves": "core's sync and resolveConflict refuse the checked-out branch and leave its HEAD and tree untouched"
+			},
+			{
+				"run": "pnpm --filter @besober/core build && pnpm --filter @besober/server build && pnpm vitest run packages/server/src",
+				"proves": "the server's sync route commits to the configured board branch, never the checked-out one, and refuses a body that names a branch"
+			},
+			{
+				"run": "pnpm build && pnpm vitest run --project integration test/integration/conflict.test.ts test/integration/board.test.ts",
+				"proves": "real syncs and conflict resolution against sober-graph still work end to end"
+			},
+			{
+				"run": "pnpm typecheck && pnpm lint",
+				"proves": "the changed route shapes typecheck against the dashboard's calls and pass biome"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T07:41:39.428Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T07:41:45.463Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T07:56:31.234Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-24T07:34:23.198Z"
+}

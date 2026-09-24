@@ -11,11 +11,42 @@
 		"packages/core/src/run.ts",
 		"test/integration/review.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "In packages/core/src/review.ts `acceptWork`, keep the pull-request path's existing order and change only local `dispatch.accept === 'merge'`: validate the branch and collect acceptance metadata, merge onto the requested base, then write `acceptNode` only after a successful merge. Preserve the branch/worktree until both steps succeed. In packages/core/src/merge.ts `mergeNode`, capture the clean base checkout's HEAD before `git merge --no-ff`; on a conflict, run `git merge --abort` and verify the checkout has returned to that HEAD with no MERGE_HEAD or tracked changes. If abort fails, return an explicit recovery error that names the unresolved merge state rather than claiming it was restored. Handle a failed post-merge acceptance write by safely reverting only the merge just created when the checkout still matches its expected commit; otherwise report the partial state clearly for manual recovery. Preserve successful local merge cleanup and retry semantics, and do not alter main release behavior. In test/integration/review.test.ts create genuinely conflicting commits on the base and node branch, then assert refusal leaves accepted null, status not done, original base HEAD and clean checkout, and permits a later retry after resolving the branch conflict. Retain existing success and PR-path coverage. Complexity 7/10: this crosses Git state and board-record ordering, and the failure paths need real-repository tests.\n\nThe same ordering also closes accept-dirty-done-9s6z. `mergeNode`'s other refusals (uncommitted changes in the main checkout, merge.ts:31, and \"not on <base>\", merge.ts:36) now fire before any `accepted` record exists. Add one more test in test/integration/review.test.ts: with a modified tracked file in the main checkout, `acceptWork` rejects with the uncommitted-changes refusal, the node's record has no `accepted`, its status is not done, and the base HEAD is unchanged. After the file is restored, the same accept succeeds.",
+		"complexity": 7,
+		"acceptance": [
+			{
+				"run": "pnpm build && pnpm exec vitest run --project integration test/integration/review.test.ts",
+				"proves": "A real conflicting merge, or an accept into a dirty checkout, leaves no acceptance record and no half-merged checkout; successful and retry paths still work."
+			},
+			{
+				"run": "pnpm --filter @besober/core typecheck",
+				"proves": "The revised local accept and merge error paths compile against core's public types."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "The change passes biome, so CI's lint job stays green."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T08:06:29.259Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T08:06:32.400Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T08:10:56.052Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T22:43:21.893Z"
 }

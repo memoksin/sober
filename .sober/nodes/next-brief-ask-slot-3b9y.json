@@ -12,7 +12,25 @@
 		"packages/opencode-plugin/.opencode/skills/**",
 		"test/integration/plugin.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "In plugins/skills/next/SKILL.md, replace the generic 'this host's own question tool' sentence at steps 2 (approve) and 5 (accept) with the existing `{{ask}}` slot, keeping the explicit-yes and paste-before-ask requirements once each. Do the same at the approval step in plugins/skills/brief/SKILL.md. Keep plugins/hosts/*.json unchanged: those files already supply the host-specific text, including Codex's request_user_input fallback and Claude's AskUserQuestion. Extend test/integration/plugin.test.ts so the existing Codex question-tool assertion covers decide, loop, next and brief, and assert Claude's next and brief output names AskUserQuestion; retain the existing paste-rule test. Run pnpm plugins and inspect the generated Claude next/brief sentences so the tool name appears at the actual yes/no request. Complexity 2/10: this is a focused template change and one integration test, with no runtime behavior or schema change.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm plugins",
+				"proves": "All four host plugin skill copies regenerate from the updated source templates."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/plugin.test.ts",
+				"proves": "Generated Codex and Claude next/brief skills name the correct question tool and retain the paste rule."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T07:38:42.750Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,

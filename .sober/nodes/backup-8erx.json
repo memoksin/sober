@@ -20,11 +20,50 @@
 		"packages/schema/src/**/*.test.ts",
 		"packages/core/src/host.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "**1. Jev picks two names — `packages/core/src/jev.ts`.** `JevDecision` gains `backup: string | null`. `askJev` asks for the primary as it does today (`modelQuestion` → `jevChoice` among `modelsFor(ask.models, complexity)`). Then a pure `backupCandidates(models, primary, complexity)` builds the backup set out of `ask.models` (the whole available list, not only the entries that cover the score). It drops the primary. It keeps only entries on a different host (`adapterFor(m.run).id`) when there are any. When the primary is on `openrouter`, it keeps only `claude`/`codex` entries, because free models share one upstream pool. Entries that cover the score go first. If none of them cover it, the other hosts' entries are used. A new `backupQuestion(candidates)` asks for one `backup` choice. Its text says it is the fallback when the primary cannot start, on a different host. The existing `jevChoice` checks the answer against that set, so a backup equal to the primary or a second `openrouter` is off the list and is a `JevError`. The existing rule holds: shown only allowed options, Jev cannot pick a wrong one. Zero candidates means `backup: null` and no call. One candidate means that one, no call. So this is three round trips at most.\n\n**2. The score-only path gets the same backup.** In `packages/core/src/dispatch.ts`, when `jevMode` is off, `chooseLine` stays as it is and the backup is `backupCandidates(available, primary, complexity)[0]`. Both paths use one rule.\n\n**3. Switch before start — `dispatch()`.** `checkHost(line)` for the primary as today. If it refuses (`!host.ok`), or the availability probe already marked the primary's host spent, and a backup exists, `checkHost(backup)` runs. If that one is ready, the backup becomes the line before `addWorktree`/`startRun`. The record gets `ran: 'backup'` and `fellBack: <the primary's reason>`. No backup, or a backup that is also not ready: the same `refused(...)` error as today, word for word. `UnknownHostError` does not fall back (a typo is a config error, not an outage).\n\n**4. Fall after start — also `dispatch()`.** `onLine` already sees every raw line. A flag `sawTool` is set when `renderLine(JSON.parse(line))` yields a `kind: 'tool'` line (the parse is in a try/catch, and a line that is not JSON is ignored). The raw output is also kept in a bounded buffer. When `startAgent` returns `failed`, and `!sawTool`, and `limitSpent(adapterFor(line).id, buffer + exit.reason)` is non-null, and a backup exists and `checkHost(backup)` is ok: `startAgent` runs **once** more with `host: backup` in the **same** worktree and the same run id and log, after one `raw` separator line (`primary <line> stopped: <reason> — running on <backup>`). The second exit is final: no third try. A stop or a timeout never falls back.\n\n**5. OpenRouter's 429 uses the same one pattern.** `packages/cli/src/agent.ts` (`sober agent`): when the loop's failure is a 429 left after `MAX_RETRIES` (`packages/core/src/agent.ts` returns `answered 429: …`), it writes `spent: <reason>` on stderr, next to the plain reason. Then `openrouterSpent` in `packages/core/src/hosts.ts` reads the probe and a run with one regex, and the limit text still lives in one place per adapter.\n\n**6. The run record — `packages/schema/src/run.ts`.** Three defaulted fields, like `attended`/`tier`: `backup: z.string().nullable().default(null)`, `ran: z.enum(['primary','backup']).default('primary')`, `fellBack: z.string().nullable().default(null)`. The run record is local and read, not migrated (§5.5, and the file's own comment). `SCHEMA_VERSION` versions board records only, so it is **not** bumped, and \"migration\" here means an old record parses with `ran: 'primary'`. The node text asks for a version bump, but the schema's own rules say otherwise, so I follow the rules. `packages/core/src/run.ts`: `startRun` takes `backup`/`ran`/`fellBack`. `finishRun`'s `RunResult` may set `host`, `ran` and `fellBack`, so a fall after start rewrites `host` to the line that really ran. The run record's `host` stays what it is documented as: \"the exact line that ran\".\n\n**7. Out of scope.** `sober status`, the `sober logs` header and the dashboard run line render nothing new here. That is node sober-status-sober-logs-and-the-run-pane-0o4s. This node only makes the fields exist and fills them in.\n\n**Tests.**\n- `packages/core/src/jev.test.ts`: the backup question shows only entries on another host. It never shows the primary. An `openrouter` primary gets only claude/codex candidates. A backup choice off that set is a `JevError`. 0 and 1 candidates cost no extra call.\n- `packages/core/src/dispatch.test.ts`, with the fake hosts the file already uses:\n  - (a) a primary whose `checkHost` refuses runs on the backup, and the record has `ran: 'backup'` and `fellBack`.\n  - (b) a primary that prints the captured Codex \"You've hit your usage limit.\" text and exits before any tool line is re-run on the backup in the same worktree. The record's `host` is the backup's line.\n  - (c) the same exit after a tool line is **not** re-run.\n  - (d) no backup gives today's refusal message, unchanged.\n- `packages/schema/src/run.test.ts`: a record with none of the three fields parses to `backup: null, ran: 'primary', fellBack: null`. An unknown `ran` value is refused.",
+		"complexity": 7,
+		"acceptance": [
+			{
+				"run": "pnpm --filter @besober/schema build && pnpm vitest run packages/schema/src/run.test.ts",
+				"proves": "an old run record still parses, as ran: 'primary' with no backup, and the three new fields are checked"
+			},
+			{
+				"run": "pnpm --filter @besober/core build && pnpm vitest run packages/core/src/jev.test.ts",
+				"proves": "Jev is asked for a backup only among entries on another host, never the primary, and never another openrouter entry when the primary is openrouter; an answer off that list fails"
+			},
+			{
+				"run": "pnpm --filter @besober/core build && pnpm vitest run packages/core/src/dispatch.test.ts",
+				"proves": "a refused primary switches to the backup before the worktree; a limit-classified exit before the first tool line re-runs once on the backup in the same worktree; an exit after a tool line does not; with no backup the refusal is today's"
+			},
+			{
+				"run": "pnpm --filter @besober/core build && pnpm vitest run packages/core/src/hosts.test.ts packages/cli/src/agent.test.ts",
+				"proves": "a 429 left after the loop's retries is written as `spent:` and read by the same openrouterSpent pattern the probe uses"
+			},
+			{
+				"run": "pnpm typecheck && pnpm lint",
+				"proves": "the new fields and signatures typecheck everywhere they are read, and the change passes biome"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T07:09:19.306Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T07:09:28.650Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T07:19:31.681Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-21T13:30:00.197Z"
 }

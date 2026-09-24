@@ -1,0 +1,20 @@
+{
+	"title": "An accept refused for a dirty tree leaves the node open, not done",
+	"name": "accept-dirty-done",
+	"description": "Seen on 2026-09-24 with sync-branch-dx8l. In `packages/core/src/review.ts`, the direct-merge path calls `acceptNode(...)`, which writes `accepted` and makes the node done, before `mergeNode(...)` in `packages/core/src/merge.ts`. `mergeNode` then refuses an unclean checkout (`the working tree has uncommitted changes — accept would merge into them`, merge.ts:33). The tool returns that error, but the node is already done and its work never landed. `review` then says \"already done, nothing to accept\", so the only way out was a hand merge. The comment above `acceptNode` names exactly this state (\"a done node whose work never landed\") as the one the order exists to prevent, but it guards only the pull-request path. Fix: on the direct path, merge first and write `accepted` only after `mergeNode` returns. Or run `mergeNode`'s refusals (dirty tree, and a non-clean merge via `git merge-tree`) before `acceptNode`. Either way a refused accept leaves no `accepted` record. accept-merge-state-mzvt covers the conflicting-merge case through the same ordering. Whichever lands first should fix the ordering once for both. Test: with a modified tracked file in the main checkout, `acceptWork` rejects, the node's record has no `accepted`, and development's HEAD is unchanged.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/core/src/review.ts",
+		"packages/core/src/merge.ts",
+		"packages/core/src/review.test.ts"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-24T08:04:51.266Z"
+}

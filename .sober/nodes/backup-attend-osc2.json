@@ -1,0 +1,46 @@
+{
+	"title": "An attended run never falls to a backup that cannot hear the human",
+	"name": "backup-attend",
+	"description": "Gap left by backup-8erx. In `dispatch()` (packages/core/src/dispatch.ts) the fall after start re-launches `startAgent` on the backup with `attended: true` without asking `adapterFor(backup.run).attendable`. An attended Claude run that hits its limit before the first tool call starts Codex, which is launched attended and takes one message and exits. The human watching can no longer answer it. The switch before start has the same root: the backup is chosen without knowing the run is attended, so the refusal then names the backup's line (`codex takes one message and exits`), not the primary's reason. Fix it once, where the backup is resolved. When `options.attended === true`, a backup whose adapter is not `attendable` counts as no backup. That gives today's refusal before start and no re-run after start. The dispatch log names why the backup was skipped. Tests in packages/core/src/dispatch.test.ts: (a) attended plus a limit exit before the first tool line plus a non-attendable backup: no second launch, and the run fails with the primary's reason. (b) attended plus a refused primary plus a non-attendable backup: the refusal is the primary's. (c) attended plus an attendable backup still falls as before.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/dispatch.test.ts"
+	],
+	"brief": {
+		"approach": "**One guard, where the backup is resolved: `packages/core/src/dispatch.ts`.** Right after `const backup = …` (the Jev pick or `backupCandidates(...)[0]`), add the attended rule. When `options.attended === true` and `adapterFor(backup.run).attendable` is false, the backup is dropped: `backup` becomes `null`. An `appendEvent(paths, { action: 'backup', node, host: backup.run, reason: 'skipped: <line> cannot be answered while it runs, and this run is attended' })` records why. The `adapterFor` call goes in the same try/catch shape `available` already uses, so an unknown line is also \"no backup\", never a crash. Both paths below already treat `backup === null` as \"no fallback\", so this one line fixes them both:\n- **Before start:** a refused attended primary gives today's `refused(host.reason …)` with the **primary's** reason. It no longer switches and then hits the attendable refusal with the backup's line in the message.\n- **After start:** the `spentReason` branch needs `backup !== null`, so an attended run whose primary hits its limit before the first tool line fails with the primary's reason and is not launched a second time.\n\nNothing else changes. A headless run keeps any backup. An attended run with an attendable backup (today only another `claude` entry, `hosts.ts` has `attendable: true` only on claude) still falls as before. The record's `backup` field is `null` when the guard dropped it, so the record does not name a backup that could never run. No new abstraction, and `backupCandidates` in `jev.ts` stays host-agnostic: attended is a fact about this dispatch, not about the model list.\n\n**Tests: `packages/core/src/dispatch.test.ts`**, next to the three backup tests that use `withBackup()`. `withBackup` today puts codex as the primary and claude as the backup. Give it a way to swap the order, so a `claude` primary gets a `codex` backup (a parameter or a second small helper, whichever reads shorter next to the existing one). Then:\n- (a) attended + claude primary + `startAgent` prints the captured Claude limit line (the `rate_limit_event` text `limitSpent('claude', …)` already reads) before any tool line and fails → `startAgent` called **once**, `exit: 'failed'`, record `ran: 'primary'`, `backup: null`, `fellBack: null`.\n- (b) attended + claude primary refused by `checkHost` + codex backup → the dispatch rejects with a `HostError` whose message holds the primary's reason and not `takes one message and exits`. `startAgent` is never called.\n- (c) attended + claude primary + an attendable (claude) backup → still re-runs once on the backup (the fall is not switched off for attended runs, only restricted).\n- The three existing backup tests pass unchanged (headless is untouched).",
+		"complexity": 3,
+		"acceptance": [
+			{
+				"run": "pnpm --filter @besober/core build && pnpm vitest run packages/core/src/dispatch.test.ts",
+				"proves": "an attended run never falls to a non-attendable backup, before or after start, and says the primary's reason; an attendable backup still catches it; the headless backup tests are unchanged"
+			},
+			{
+				"run": "pnpm typecheck && pnpm lint",
+				"proves": "the guard typechecks and passes biome"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T07:28:03.809Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T07:28:06.837Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T07:38:12.788Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-24T07:25:05.338Z"
+}

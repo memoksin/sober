@@ -1,7 +1,7 @@
 {
 	"title": "Windows audit entegrasyon testlerindeki CI hatasını gider",
 	"name": "windows-audit-suite",
-	"description": "Windows matrix integration işinde test/integration/audit.test.ts hatasını yeniden üret veya CI çıktısıyla kesinleştir. Platforma bağlı yol, shell, git ve zamanlama varsayımlarını incele; audit davranışını ve testi birlikte düzelt. Ubuntu/macOS davranışını koruyarak Windows geçişini kanıtla. Audit CI işinin ayrı, ubuntu-latest üzerinde çalışan pnpm audit adımı olduğunu dikkate al.",
+	"description": "Önce güncel development CI sonucunda Windows matrix integration işindeki test/integration/audit.test.ts hatasının sürüp sürmediğini doğrula. accept-shell-h3a3 node’u Windows kabul komutlarında POSIX shell ve tek tırnak sorununu zaten giderdi; bu düzeltmeyi ve mevcut testleri dikkate al. Sorun sürüyorsa başarısız testi yeniden üret, platforma bağlı yol/shell/git/zamanlama nedenini audit kodu ve testini birlikte düzelterek gider; geçtiyse kanıtla ve gereksiz kod değişikliği yapma. Ayrı ubuntu-latest pnpm audit işini Windows audit testiyle karıştırma.",
 	"notes": "",
 	"dependsOn": [],
 	"decisions": [],

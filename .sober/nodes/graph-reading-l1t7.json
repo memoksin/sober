@@ -1,0 +1,21 @@
+{
+	"title": "Dashboard grafiğinde node yerleşimini ve edge okunabilirliğini iyileştir",
+	"name": "graph-reading",
+	"description": "Mevcut Cytoscape canvas'ını gerçek board örnekleriyle incele; yoğun bağımlılık kümelerinde çapraz/uzun edge'leri ve ilişkisiz node'ların dağılımını azaltan, tekrar açıldığında kararlı ve çakışmasız bir yerleşim tasarla ve uygula. apps/dashboard/src/canvas/graph.ts içindeki pack/order ile Canvas.tsx ve paint.ts sunumunu birlikte değerlendir; gerekirse ADR 0040'taki halka yerleşimi kararının değişen gerekçesini yeni ADR'de kaydet. UI/UX incelemesinde hiyerarşi, taranabilirlik, edge yönü ve seçili node'un komşularının kolay izlenmesini; dar ekran, klavye erişimi ve reduced-motion davranışını ele al. Mevcut node seçimi, sürükleme/tow, filtreler ve panel akışını koru. Yerleşim ve görünür ilişki davranışını mevcut canvas testlerinde doğrula; demo/yoğun board üzerinde gözle incele.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/canvas/**",
+		"apps/dashboard/src/theme.css",
+		"apps/dashboard/src/App.tsx",
+		"docs/adr/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-24T07:08:31.919Z"
+}
