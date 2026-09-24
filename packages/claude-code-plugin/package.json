@@ -1,0 +1,10 @@
+{
+	"name": "@besober/claude-code-plugin",
+	"version": "0.0.0",
+	"private": true,
+	"description": "SOBER as a Claude Code plugin: the MCP server, three commands and the skill that teaches the loop.",
+	"type": "module",
+	"engines": {
+		"node": ">=22"
+	}
+}

@@ -1,0 +1,11 @@
+{
+	"hooks": {
+		"PreToolUse": [
+			{
+				"matcher": "Task",
+				"hooks": [{ "type": "command", "command": "sober hook spawn" }]
+			}
+		],
+		"SessionStart": [{ "hooks": [{ "type": "command", "command": "sober hook session" }] }]
+	}
+}

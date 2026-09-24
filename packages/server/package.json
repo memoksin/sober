@@ -1,0 +1,28 @@
+{
+	"name": "@besober/server",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Route handlers over core, on loopback. What the dashboard talks to.",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"build": "tsc -b",
+		"typecheck": "tsc --noEmit -p tsconfig.json"
+	},
+	"dependencies": {
+		"@besober/core": "workspace:*",
+		"@besober/schema": "workspace:*",
+		"zod": "^4.5.4"
+	}
+}

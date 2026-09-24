@@ -1,0 +1,169 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - name: commit messages
+        if: github.event_name == 'pull_request'
+        run: pnpm exec commitlint --from origin/${{ github.base_ref }} --to HEAD --verbose
+      # Only on the way into `main`, because only that merge releases. A pull
+      # request into `development` publishes nothing, so demanding a changeset
+      # there makes every node's agent name a bump — patch, minor or major —
+      # that is the human's to choose at the release, not the node's to guess.
+      #
+      # A dependency bump ships no behaviour, and the bot writes no changesets.
+      #
+      # Neither does the version pull request, and for it that is the point:
+      # consuming every pending changeset is the whole of what it does. On the
+      # branch changesets owns, "packages changed and nothing is pending" is the
+      # correct state rather than the mistake this step exists to catch — so
+      # without the exclusion no release could ever go green.
+      - name: a changeset, or nothing to release
+        if: >-
+          github.event_name == 'pull_request'
+          && github.base_ref == 'main'
+          && github.actor != 'renovate[bot]'
+          && !startsWith(github.head_ref, 'changeset-release/')
+        run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
+      # `changeset status` also passes on a changeset already sitting on `main`,
+      # so it cannot tell a bump named for this release from a leftover (ADR 0059).
+      - name: the release names its bump
+        if: >-
+          github.event_name == 'pull_request'
+          && github.base_ref == 'main'
+          && github.actor != 'renovate[bot]'
+          && !startsWith(github.head_ref, 'changeset-release/')
+        run: |
+          added=$(git diff --name-only --diff-filter=A origin/main...HEAD -- '.changeset/*.md')
+          if [ -z "$added" ]; then
+            echo "::error::No changeset was added in this pull request."
+            exit 1
+          fi
+          if ! grep -lq '"@besober/cli": \(patch\|minor\|major\)' $added; then
+            echo "::error::The added changeset does not bump @besober/cli, the only published package (ADR 0007), so it is not a release."
+            exit 1
+          fi
+      - name: how to name the bump
+        if: failure() && github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: |
+          echo "::error::This pull request targets main, which is a release. Name the bump with 'pnpm exec changeset', choose patch, minor or major for @besober/cli, and commit the file it writes."
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    # Without this a hung suite holds a runner for GitHub's default six hours
+    # and the log only arrives when it is killed, which is the one thing a
+    # hang needs to be diagnosed.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test --coverage
+      - name: coverage did not drop
+        run: pnpm coverage:check
+
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: git identity
+        run: |
+          git config --global init.defaultBranch main
+          git config --global user.name "SOBER CI"
+          git config --global user.email "ci@besober.dev"
+      # `pnpm integration`, split so GitHub times build and suite separately
+      # (docs/WINDOWS-CI-2026-09.md).
+      - run: pnpm build
+      - run: pnpm vitest run --project integration
+        env:
+          SOBER_FIXTURE_STATS: '1'
+
+  boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm boundaries
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: publish shape
+        run: pnpm --filter @besober/cli publint
+
+  # Not a required check: a CVE published tomorrow would block every merge for a
+  # reason no pull request caused. It reports; it does not gate.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high

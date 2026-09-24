@@ -1,0 +1,303 @@
+import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { type Paths, SoberError } from '@besober/core'
+import { z } from 'zod'
+import type { Client } from './client.js'
+import { OPS, READS, type Route, WATCHES, type Watch } from './routes.js'
+
+/**
+ * Loopback only, and never a name that resolves anywhere else. ADR 0008 sets
+ * the rule; this is the whole of the surface it applies to.
+ */
+const HOST = '127.0.0.1'
+
+/** The names a browser may legitimately have used to reach a loopback server. */
+const LOOPBACK = new Set([HOST, 'localhost', '[::1]', '::1'])
+
+/**
+ * Large enough for any board record and small enough that a request cannot be
+ * used to fill memory. A board is JSON written by this machine's own tools; if
+ * one ever needs more than this, the record shape is the thing to look at.
+ */
+const MAX_BODY = 1_000_000
+
+/**
+ * What a browser gets at `/` when no dashboard was built into this binary —
+ * `pnpm dev`, or a test. It names the server and carries no board.
+ */
+const GREETING = [
+	'SOBER — the board is served here.',
+	'',
+	'No dashboard was built into this binary, so there is nothing to look at.',
+	'Everything under /read and /op wants the token that `sober dashboard`',
+	'printed, as `Authorization: Bearer <token>`.',
+	'',
+	'A new token is minted every time the command starts.',
+	'',
+].join('\n')
+
+export interface Served {
+	readonly url: string
+	readonly port: number
+	readonly token: string
+	readonly close: () => Promise<void>
+}
+
+export interface ServeOptions {
+	readonly paths: Paths
+	/** Fixed port, for a caller that wants one. The default is whatever is free. */
+	readonly port?: number
+	/** The built dashboard. Without one, `/` explains itself in plain text. */
+	readonly client?: Client
+}
+
+const json = (response: ServerResponse, status: number, body: unknown): void => {
+	const text = JSON.stringify(body)
+	response.writeHead(status, {
+		// The charset is not decoration. Without it a client is free to read the
+		// bytes as latin-1, and the first person to see this read an em dash as
+		// `â€”` in a message that was trying to help them.
+		'content-type': 'application/json; charset=utf-8',
+		'content-length': Buffer.byteLength(text),
+		// Nothing here is for a browser to reuse, and a stale board is worse
+		// than a second request.
+		'cache-control': 'no-store',
+	})
+	response.end(text)
+}
+
+const fail = (response: ServerResponse, status: number, error: string): void =>
+	json(response, status, { error })
+
+/**
+ * Constant-time, and length-safe. `timingSafeEqual` throws on a length
+ * mismatch, so the lengths are compared first — which leaks the token's length
+ * and nothing else, and the length is in every response header anyway.
+ */
+const isToken = (given: string, expected: string): boolean => {
+	const a = Buffer.from(given)
+	const b = Buffer.from(expected)
+	return a.length === b.length && timingSafeEqual(a, b)
+}
+
+const bearer = (request: IncomingMessage): string | null => {
+	const header = request.headers.authorization
+	if (header === undefined) return null
+	const [scheme, value] = header.split(' ')
+	return scheme?.toLowerCase() === 'bearer' && value !== undefined ? value : null
+}
+
+/**
+ * The DNS-rebinding guard. A token stops a page that cannot read the response;
+ * it does not stop a page that has tricked a browser into believing
+ * `evil.example.com` is `127.0.0.1`, because the browser will then attach
+ * nothing and the request still arrives. What that request cannot forge is the
+ * `Host` header, so that is what is checked.
+ */
+const isLoopbackHost = (request: IncomingMessage): boolean => {
+	const host = request.headers.host
+	if (host === undefined) return false
+	const name = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0]
+	return name !== undefined && LOOPBACK.has(name)
+}
+
+const read = async (request: IncomingMessage): Promise<unknown> => {
+	let size = 0
+	const chunks: Buffer[] = []
+	for await (const chunk of request) {
+		size += chunk.length
+		if (size > MAX_BODY) throw new TooLargeError()
+		chunks.push(chunk as Buffer)
+	}
+	if (chunks.length === 0) return {}
+	return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+class TooLargeError extends Error {}
+
+/**
+ * What a failure becomes on the wire. `SoberError` is a refusal the product
+ * meant — "it is not ready", "someone holds the lock" — so it is a 409 rather
+ * than a 500: the request was understood and the state said no. A parse failure
+ * is a 400. Anything else is ours, and says so with a 500 rather than dressing
+ * a defect up as the user's mistake.
+ */
+const status = (error: unknown): number => {
+	if (error instanceof TooLargeError) return 413
+	if (error instanceof z.ZodError || error instanceof SyntaxError) return 400
+	if (error instanceof SoberError) return 409
+	return 500
+}
+
+const message = (error: unknown): string => {
+	if (error instanceof TooLargeError) return `the request body is over ${MAX_BODY} bytes`
+	if (error instanceof z.ZodError) return z.prettifyError(error)
+	return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * The dashboard, or a sentence saying why there is none. Unauthenticated
+ * because it has to be: a browser handed a printed address sends no
+ * `Authorization` header, and neither does a `<script src>`. Nothing here is
+ * worth a token — the same bytes for everyone, no board, and no credential.
+ * The token reaches the page in the URL fragment, which a browser keeps to
+ * itself.
+ *
+ * A missing asset is a 404 rather than the page again. Serving index.html for
+ * every path is the usual single-page-app move, and it turns a mistyped script
+ * URL into HTML with a 200 and a syntax error in a file that does not exist.
+ */
+const page = (response: ServerResponse, pathname: string, client: Client | undefined): void => {
+	const asset = client?.[pathname === '/' ? '/index.html' : pathname]
+
+	if (asset !== undefined) {
+		response.writeHead(200, {
+			'content-type': asset.type,
+			'content-length': Buffer.byteLength(asset.body),
+			// The port changes on every start, so nothing here outlives its
+			// origin anyway — and a stale canvas is worse than a second request.
+			'cache-control': 'no-store',
+		})
+		response.end(asset.body)
+		return
+	}
+
+	if (client !== undefined || pathname !== '/') {
+		fail(response, 404, `nothing is routed at ${pathname}`)
+		return
+	}
+
+	response.writeHead(200, {
+		'content-type': 'text/plain; charset=utf-8',
+		'cache-control': 'no-store',
+	})
+	response.end(GREETING)
+}
+
+/**
+ * `/op/<name>`, `/read/<name>` or `/watch/<name>` — the path is the operation
+ * (ADR 0036), and the prefix is what shape of answer it has: one JSON object,
+ * or a channel that stays open (ADR 0046).
+ */
+const routed = (
+	pathname: string,
+):
+	| { readonly kind: 'op' | 'read'; readonly route: Route | undefined }
+	| { readonly kind: 'watch'; readonly route: Watch | undefined }
+	| null => {
+	const [, kind, name, ...rest] = pathname.split('/')
+	if (rest.length > 0 || name === undefined || name === '') return null
+	if (kind === 'op') return { kind: 'op', route: OPS[name as keyof typeof OPS] }
+	if (kind === 'read') return { kind: 'read', route: READS[name] }
+	if (kind === 'watch') return { kind: 'watch', route: WATCHES[name] }
+	return null
+}
+
+/**
+ * A channel, as newline-delimited JSON (ADR 0046). Not `text/event-stream`:
+ * `EventSource` is the only client that needs SSE's framing, and it is the one
+ * client that cannot send an `Authorization` header — so using it would spend
+ * ADR 0008's token exception to buy a format nothing here reads. A streaming
+ * `fetch` keeps the header and parses a line.
+ *
+ * The headers go out before the first window, so a screen knows it is connected
+ * while the run is still thinking. `no-transform` is the one that matters on a
+ * channel: a proxy that buffers to be helpful turns a live tail into a file
+ * that arrives at the end.
+ */
+const stream = async (response: ServerResponse, windows: AsyncIterable<unknown>): Promise<void> => {
+	response.writeHead(200, {
+		'content-type': 'application/x-ndjson; charset=utf-8',
+		'cache-control': 'no-store, no-transform',
+		connection: 'keep-alive',
+	})
+
+	for await (const window of windows) {
+		// Backpressure, and the reason the loop can be this plain: a screen that
+		// has stopped reading stops the reads behind it rather than queueing
+		// windows in this process's memory.
+		if (!response.write(`${JSON.stringify(window)}\n`))
+			await new Promise((resolve) => response.once('drain', resolve))
+	}
+	response.end()
+}
+
+export const serve = async ({ paths, port = 0, client }: ServeOptions): Promise<Served> => {
+	const token = randomBytes(32).toString('hex')
+
+	const server: Server = createServer((request, response) => {
+		void handle(request, response).catch((error: unknown) =>
+			fail(response, status(error), message(error)),
+		)
+	})
+
+	const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+		if (!isLoopbackHost(request)) return fail(response, 403, 'this server answers on loopback only')
+
+		const url = new URL(request.url ?? '/', `http://${HOST}`)
+		const method = request.method ?? 'GET'
+		const match = routed(url.pathname)
+
+		// Everything the wire answers is settled before the client is consulted,
+		// so an asset map cannot shadow a route whatever it happens to be keyed
+		// by — and the page below stays unauthenticated without widening what is
+		// reachable without a token.
+		if (match === null) {
+			if (method !== 'GET') return fail(response, 404, `nothing is routed at ${url.pathname}`)
+			return page(response, url.pathname, client)
+		}
+
+		// Two refusals, not one. "Missing or wrong" is true and useless: the two
+		// causes have different fixes, and the second one — a token from a
+		// previous `sober dashboard` — is invisible unless the message says so.
+		const given = bearer(request)
+		if (given === null)
+			return fail(response, 401, 'no dashboard token was sent — Authorization: Bearer <token>')
+		if (!isToken(given, token))
+			return fail(
+				response,
+				401,
+				'that is not this server’s token — a new one is minted every time `sober dashboard` starts',
+			)
+
+		if (match.route === undefined)
+			return fail(response, 404, `nothing is routed at ${url.pathname}`)
+
+		const wanted = match.kind === 'op' ? 'POST' : 'GET'
+		if (method !== wanted)
+			return fail(response, 405, `${url.pathname} is a ${wanted}, and this was a ${method}`)
+
+		if (match.kind === 'watch') {
+			// The subject is resolved before a byte goes out, so a node that has
+			// never run is still a status code rather than an empty stream. Once
+			// `stream` has written the head there is no status left to send, which
+			// is why `open` does its refusing first.
+			const leaving = new AbortController()
+			// A closed tab is how a watch ordinarily ends (ADR 0037: closing the
+			// browser stops nothing else, and this is the one thing it should stop).
+			request.on('close', () => leaving.abort())
+			return stream(
+				response,
+				await match.route.open(paths, Object.fromEntries(url.searchParams), leaving.signal),
+			)
+		}
+
+		const input = match.kind === 'op' ? await read(request) : Object.fromEntries(url.searchParams)
+		json(response, 200, (await match.route.run(paths, input)) ?? null)
+	}
+
+	await new Promise<void>((resolve) => server.listen(port, HOST, resolve))
+	const address = server.address() as AddressInfo
+
+	return {
+		url: `http://${HOST}:${address.port}/`,
+		port: address.port,
+		token,
+		close: () =>
+			new Promise<void>((resolve, reject) => {
+				server.closeAllConnections()
+				server.close((error) => (error ? reject(error) : resolve()))
+			}),
+	}
+}
