@@ -1,5 +1,5 @@
 import { SoberError } from './errors.js'
-import { git, hasUncommitted } from './git.js'
+import { git, hasUncommitted, refExists } from './git.js'
 import type { Paths } from './paths.js'
 import { branchOf } from './worktree.js'
 
@@ -40,17 +40,47 @@ export const mergeNode = async (paths: Paths, id: string, base: string): Promise
 		)
 	}
 
+	const before = await git(paths.root, 'rev-parse', 'HEAD')
 	try {
 		await git(paths.root, 'merge', '--no-ff', '-m', `sober: ${id}`, branch)
 	} catch {
-		// A conflicted merge is left for the user to finish or abort: aborting it
-		// here would throw away a resolution they may already have started.
+		// The merge is ours, started a moment ago on a clean checkout, so aborting
+		// it throws away nothing a human did. Leaving it half-done would leave the
+		// main checkout conflicted over work nobody accepted.
+		if (!(await restored(paths.root, before)))
+			throw new MergeRefusedError(
+				`${branch} does not merge into ${base} cleanly, and ${base} could not be put back at ${before} — the repository may still be mid-merge: run \`git merge --abort\` there and check that ${base} is back at ${before}, then resolve ${branch} or reject the node`,
+			)
 		throw new MergeRefusedError(
-			`${branch} does not merge into ${base} cleanly — resolve it in the repository, or reject the node`,
+			`${branch} does not merge into ${base} cleanly — ${base} is left as it was; resolve the conflict on ${branch}, or reject the node`,
 		)
 	}
 
 	return { branch, base, commit: await git(paths.root, 'rev-parse', 'HEAD') }
+}
+
+/** Aborts a merge in progress, and says whether the checkout is back at `head` and clean. */
+const restored = async (root: string, head: string): Promise<boolean> => {
+	// A merge git refused to start (an untracked file in the way) leaves no
+	// MERGE_HEAD, and `--abort` on it is an error of its own.
+	if (await refExists(root, 'MERGE_HEAD')) await git(root, 'merge', '--abort').catch(() => '')
+	return (
+		!(await refExists(root, 'MERGE_HEAD')) &&
+		(await git(root, 'rev-parse', 'HEAD')) === head &&
+		!(await hasUncommitted(root))
+	)
+}
+
+/**
+ * Takes back the merge `mergeNode` just made, when the checkout still stands
+ * exactly on it. Anything else means someone moved on from it, and resetting
+ * then would throw their work away — so it says no rather than guessing.
+ */
+export const unmergeNode = async (paths: Paths, merged: Merged): Promise<boolean> => {
+	const head = await git(paths.root, 'rev-parse', 'HEAD').catch(() => '')
+	if (head !== merged.commit || (await hasUncommitted(paths.root))) return false
+	await git(paths.root, 'reset', '--keep', `${merged.commit}^1`)
+	return true
 }
 
 /**

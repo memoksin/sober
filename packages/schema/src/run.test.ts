@@ -17,7 +17,15 @@ const run = {
 test('parses a run still in flight', () => {
 	// `attended` defaults rather than being required, so a run record written
 	// before it existed still parses (ADR 0046).
-	expect(Run.parse(run)).toEqual({ ...run, attended: false, tier: null, fallback: false })
+	expect(Run.parse(run)).toEqual({
+		...run,
+		attended: false,
+		tier: null,
+		fallback: false,
+		backup: null,
+		ran: 'primary',
+		fellBack: null,
+	})
 })
 
 test('a run record from before watching existed reads as unattended', () => {
@@ -54,4 +62,17 @@ test('a run record from before tiers existed reads as unscored, with no fallback
 		tier: 'high',
 		fallback: true,
 	})
+})
+
+test('a run record from before backups existed reads as the primary, with no backup', () => {
+	expect(Run.parse(run)).toMatchObject({ backup: null, ran: 'primary', fellBack: null })
+	expect(
+		Run.parse({ ...run, backup: 'codex', ran: 'backup', fellBack: 'claude: usage limit' }),
+	).toMatchObject({ backup: 'codex', ran: 'backup', fellBack: 'claude: usage limit' })
+})
+
+test('ran names the primary or the backup, and nothing else', () => {
+	expect(Run.safeParse({ ...run, ran: 'third' }).success).toBe(false)
+	expect(Run.safeParse({ ...run, backup: 3 }).success).toBe(false)
+	expect(Run.safeParse({ ...run, fellBack: false }).success).toBe(false)
 })

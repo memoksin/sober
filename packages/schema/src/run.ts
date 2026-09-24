@@ -53,6 +53,17 @@ export const Run = z.strictObject({
 	 */
 	tier: z.string().nullable().default(null),
 	fallback: z.boolean().default(false),
+	/**
+	 * The line that stands in when the primary cannot start or stops on a spent
+	 * limit before its first tool call, null when none qualified. `ran` says
+	 * which of the two did the work, so `host` above is still the exact line
+	 * that ran; `fellBack` is the primary's reason when it was the backup.
+	 * Defaulted like `attended`: this file is read, not migrated (§5.5), so a
+	 * record from before them reads as the primary with no backup.
+	 */
+	backup: z.string().nullable().default(null),
+	ran: z.enum(['primary', 'backup']).default('primary'),
+	fellBack: z.string().nullable().default(null),
 })
 
 export type Run = z.infer<typeof Run>

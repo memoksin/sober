@@ -1,5 +1,14 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { askJev, JevError, jevChoice, jevDecision, jevQuestions, modelQuestion } from './jev.js'
+import {
+	askJev,
+	backupCandidates,
+	backupQuestion,
+	JevError,
+	jevChoice,
+	jevDecision,
+	jevQuestions,
+	modelQuestion,
+} from './jev.js'
 
 const env = { ...process.env }
 afterEach(() => {
@@ -76,7 +85,7 @@ test('the request names the router, the model and the key', async () => {
 
 	const decision = await askJev('the brief', { skills: ['ponytail'], models: [] })
 
-	expect(decision).toEqual({ complexity: 8, skills: ['ponytail'], model: null })
+	expect(decision).toEqual({ complexity: 8, skills: ['ponytail'], model: null, backup: null })
 	const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
 	expect(url).toBe('https://openrouter.ai/api/v1/systemone')
 	expect(init.headers).toMatchObject({ authorization: 'Bearer sk-test' })
@@ -166,9 +175,127 @@ test('two covering entries is a second call, and Jev picks among those alone', a
 		models: [model('free', 1, 5, 'Free.'), model('codex', 3, 7, 'Plumbing.'), model('big', 8, 10)],
 	})
 
-	expect(decision).toEqual({ complexity: 5, skills: [], model: 'codex' })
+	// One host only, so the backup is the one other covering entry: no third call.
+	expect(decision).toEqual({ complexity: 5, skills: [], model: 'codex', backup: 'free' })
+	expect(fetch).toHaveBeenCalledTimes(2)
 	const second = JSON.parse(
 		(fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body as string,
 	)
 	expect(Object.keys(second.questions.model.criteria)).toEqual(['free', 'codex'])
+})
+
+const on = (run: string, name: string, low = 1, high = 10) => ({
+	name,
+	run,
+	complexity: [low, high] as [number, number],
+	about: '',
+})
+
+const OPUS = on('claude --model opus', 'opus')
+const SONNET = on('claude --model sonnet', 'sonnet')
+const GPT = on('codex --model gpt', 'gpt')
+const FREE = on('openrouter --model a:free', 'free')
+const FREE_TOO = on('openrouter --model b:free', 'free-too')
+
+test('the backup candidates are on another host and never the primary', () => {
+	const names = backupCandidates([OPUS, SONNET, GPT, FREE], OPUS.run, 5).map((m) => m.name)
+	expect(names).toEqual(['gpt', 'free'])
+})
+
+test('with no other host, the backup is another entry on the same one — never the primary', () => {
+	expect(backupCandidates([OPUS, SONNET], OPUS.run, 5).map((m) => m.name)).toEqual(['sonnet'])
+	expect(backupCandidates([OPUS], OPUS.run, 5)).toEqual([])
+})
+
+test('an openrouter primary gets only claude or codex, never another free model', () => {
+	const models = [FREE, FREE_TOO, on('opencode --model x', 'oc'), GPT, OPUS]
+	expect(backupCandidates(models, FREE.run, 5).map((m) => m.name)).toEqual(['gpt', 'opus'])
+	expect(backupCandidates([FREE, FREE_TOO], FREE.run, 5)).toEqual([])
+})
+
+test('covering entries go first; with none covering, the other hosts are used as they are', () => {
+	const small = on('codex --model small', 'small', 1, 3)
+	const big = on('openrouter --model big:free', 'big', 8, 10)
+	expect(backupCandidates([OPUS, small, big], OPUS.run, 9).map((m) => m.name)).toEqual(['big'])
+	expect(backupCandidates([OPUS, small, big], OPUS.run, 5).map((m) => m.name)).toEqual([
+		'small',
+		'big',
+	])
+})
+
+test('the backup question says it is the fallback on another host, and an answer off it fails', () => {
+	const question = backupQuestion([GPT, FREE])
+	expect(question.backup).toMatchObject({
+		type: 'choice',
+		instructions: expect.stringMatching(/cannot start.*different host/),
+		criteria: { gpt: GPT.run, free: FREE.run },
+	})
+	const names = backupCandidates([FREE, FREE_TOO, GPT, OPUS], FREE.run, 5).map((m) => m.name)
+	const answer = (choice: string) => ({ answers: { backup: { type: 'choice', choice } } })
+	expect(jevChoice(answer('gpt'), names, 'backup')).toBe('gpt')
+	expect(() => jevChoice(answer('free'), names, 'backup')).toThrow(JevError)
+	expect(() => jevChoice(answer('free-too'), names, 'backup')).toThrow(JevError)
+})
+
+test('two backup candidates is a third call, shown only those, and Jev picks among them', async () => {
+	process.env.JEV_API_KEY = 'sk-test'
+	const fetch = vi
+		.fn()
+		.mockResolvedValueOnce(new Response(JSON.stringify(answers(4))))
+		.mockResolvedValueOnce(
+			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'free' } } })),
+		)
+		.mockResolvedValueOnce(
+			new Response(JSON.stringify({ answers: { backup: { type: 'choice', choice: 'opus' } } })),
+		)
+	vi.stubGlobal('fetch', fetch)
+
+	const decision = await askJev('the brief', { skills: [], models: [FREE, FREE_TOO, GPT, OPUS] })
+
+	expect(decision).toMatchObject({ model: 'free', backup: 'opus' })
+	const third = JSON.parse(
+		(fetch.mock.calls[2] as unknown as [string, RequestInit])[1].body as string,
+	)
+	expect(Object.keys(third.questions.backup.criteria)).toEqual(['gpt', 'opus'])
+})
+
+test('a backup Jev picks off the list is a failure', async () => {
+	process.env.JEV_API_KEY = 'sk-test'
+	vi.stubGlobal(
+		'fetch',
+		vi
+			.fn()
+			.mockResolvedValueOnce(new Response(JSON.stringify(answers(4))))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'free' } } })),
+			)
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({ answers: { backup: { type: 'choice', choice: 'free-too' } } }),
+				),
+			),
+	)
+	await expect(
+		askJev('the brief', { skills: [], models: [FREE, FREE_TOO, GPT, OPUS] }),
+	).rejects.toThrow(JevError)
+})
+
+test('zero or one backup candidate costs no extra call', async () => {
+	process.env.JEV_API_KEY = 'sk-test'
+	const fetch = vi.fn(async () => new Response(JSON.stringify(answers(4))))
+	vi.stubGlobal('fetch', fetch)
+
+	expect(await askJev('the brief', { skills: [], models: [OPUS] })).toMatchObject({
+		model: 'opus',
+		backup: null,
+	})
+	expect(fetch).toHaveBeenCalledTimes(1)
+
+	// `gpt` does not cover the score, and is still the backup: the one other host.
+	const models = [FREE_TOO, on('codex --model gpt', 'gpt', 8, 10)]
+	expect(await askJev('the brief', { skills: [], models })).toMatchObject({
+		model: 'free-too',
+		backup: 'gpt',
+	})
+	expect(fetch).toHaveBeenCalledTimes(2)
 })
