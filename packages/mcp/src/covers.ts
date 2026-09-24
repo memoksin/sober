@@ -18,7 +18,7 @@ import type { Operation } from '@besober/schema'
  * - **`release` is `claim`.** Giving a node back is the same statement as
  *   taking it, negated, and a claim is a signal rather than a lock (§3.3).
  */
-export const COVERS: Readonly<Record<Operation, string>> = {
+export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, string>> = {
 	init: 'init',
 	bind: 'bind',
 	decide: 'decide',
@@ -50,4 +50,15 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	// the two operations here are the human's and are on every surface.
 	accept_distribution: 'distribute',
 	drop_distribution: 'distribute',
+	correct_node: 'correct_node',
 }
+
+/**
+ * What no tool performs yet. The model list and the dispatcher are the command
+ * line's for now: both are set up once per machine, not once per session.
+ */
+export const GAPS = [
+	'add_model',
+	'start_dispatcher',
+	'stop_dispatcher',
+] as const satisfies readonly Operation[]

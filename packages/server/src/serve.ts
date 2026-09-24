@@ -188,7 +188,11 @@ const routed = (
 	| null => {
 	const [, kind, name, ...rest] = pathname.split('/')
 	if (rest.length > 0 || name === undefined || name === '') return null
-	if (kind === 'op') return { kind: 'op', route: OPS[name as keyof typeof OPS] }
+	if (kind === 'op')
+		return {
+			kind: 'op',
+			route: Object.hasOwn(OPS, name) ? OPS[name as keyof typeof OPS] : undefined,
+		}
 	if (kind === 'read') return { kind: 'read', route: READS[name] }
 	if (kind === 'watch') return { kind: 'watch', route: WATCHES[name] }
 	return null

@@ -1,3 +1,5 @@
+import type { Operation } from '@besober/schema'
+
 /** Where the token is kept between loads. `sessionStorage` in a browser. */
 export interface TokenStore {
 	getItem(key: string): string | null
@@ -29,7 +31,7 @@ export const claimToken = (hash: string, store: TokenStore): string | null => {
 
 export interface Wire {
 	read<T>(name: string, params?: Readonly<Record<string, string>>): Promise<T>
-	op<T>(name: string, body: unknown): Promise<T>
+	op<T>(name: Operation, body: unknown): Promise<T>
 	/**
 	 * A channel that stays open, one message at a time (ADR 0046). Resolves when
 	 * the server hangs up — which it does the moment the thing being watched
@@ -77,7 +79,7 @@ export const wire = (token: string, fetcher: typeof fetch = fetch): Wire => {
 			return send<T>(`/read/${name}${query === '' ? '' : `?${query}`}`, {})
 		},
 
-		op: <T>(name: string, body: unknown): Promise<T> =>
+		op: <T>(name: Operation, body: unknown): Promise<T> =>
 			send<T>(`/op/${name}`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },

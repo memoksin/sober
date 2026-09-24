@@ -169,7 +169,7 @@ export const flagOp = (
 	node: string,
 	does: FlagAction['does'],
 	words: string,
-): readonly [string, Record<string, unknown>] => {
+): readonly ['dismiss' | 'reopen' | 'create_node', Record<string, unknown>] => {
 	if (does === 'dismiss') return ['dismiss', { node, reason: words }]
 	if (does === 'reopen') return ['reopen', { node }]
 	return ['create_node', { title: words, dependsOn: [node] }]
