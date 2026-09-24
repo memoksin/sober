@@ -20,7 +20,7 @@ export const repoRoot = fileURLToPath(new URL('../', import.meta.url))
 const source = join(repoRoot, 'plugins')
 
 /** `{{name}}`, and nothing else — a slot is a word, never an expression. */
-const SLOT = /\{\{([a-z-]+)\}\}/g
+const SLOT = /\{\{([a-zA-Z-]+)\}\}/g
 
 /**
  * The line that stops somebody editing the wrong file. It goes after the

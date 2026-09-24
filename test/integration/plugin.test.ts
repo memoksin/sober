@@ -172,9 +172,9 @@ test('every host’s decision skill asks with the host’s own question, and rel
 test('codex names its own question tool and falls back when the mode has none', () => {
 	// The `ask` slot names `request_user_input` and says what to do when the
 	// current mode does not offer it (`codex exec`, or any turn without it).
-	// Only `decide` and `loop` render the `{{ask}}` slot — `next` and `brief`
-	// ask a plain yes/no through the host's question tool without naming it.
-	for (const skill of ['decide', 'loop']) {
+	// `decide`, `loop`, `next` and `brief` all render `{{ask}}` or `{{askYes}}`
+	// at the point where they ask their yes/no or pick.
+	for (const skill of ['decide', 'loop', 'next', 'brief']) {
 		const text = buildSkills('codex').get(skill) ?? ''
 		expect(text, `codex/${skill}`).toContain('request_user_input')
 		expect(text, `codex/${skill}`).toContain('When it is not listed')
@@ -184,9 +184,40 @@ test('codex names its own question tool and falls back when the mode has none', 
 	expect(claudeDecide).toContain('AskUserQuestion')
 	expect(claudeDecide).not.toContain('request_user_input')
 
+	const claudeNext = buildSkills('claude').get('next') ?? ''
+	expect(claudeNext).toContain('AskUserQuestion')
+
+	const claudeBrief = buildSkills('claude').get('brief') ?? ''
+	expect(claudeBrief).toContain('AskUserQuestion')
+
 	const opencodeDecide = buildSkills('opencode').get('decide') ?? ''
 	expect(opencodeDecide).not.toContain('request_user_input')
 	expect(opencodeDecide).not.toContain('AskUserQuestion')
+
+	const opencodeNext = buildSkills('opencode').get('next') ?? ''
+	const opencodeBrief = buildSkills('opencode').get('brief') ?? ''
+	expect(opencodeNext).not.toContain('request_user_input')
+	expect(opencodeNext).not.toContain('AskUserQuestion')
+	expect(opencodeBrief).not.toContain('request_user_input')
+	expect(opencodeBrief).not.toContain('AskUserQuestion')
+})
+
+test('next and brief carry no `decide` instruction at the approve/accept ask, and state the explicit-yes rule once per step', () => {
+	// The first run put the `{{ask}}` slot — written for `decide` — into next
+	// and brief, so those steps told the agent to "pass `decide` exactly the
+	// option they picked" where no `decide` is called, and repeated the
+	// explicit-yes and on-their-behalf rules that the slot itself states.
+	// `{{askYes}}` is the yes/no form that never mentions `decide`.
+	for (const host of Object.keys(SKILL_DIRS)) {
+		const next = buildSkills(host).get('next') ?? ''
+		const brief = buildSkills(host).get('brief') ?? ''
+		expect(next, `${host}/next`).not.toContain('exactly the option')
+		expect(brief, `${host}/brief`).not.toContain('exactly the option')
+
+		const countOccurrences = (text: string, needle: string) => text.split(needle).length - 1
+		expect(countOccurrences(next, 'only on an explicit yes'), `${host}/next`).toBe(2)
+		expect(countOccurrences(brief, 'only on an explicit yes'), `${host}/brief`).toBe(1)
+	}
 })
 
 test('decision questions keep the paste rule, while brief approvals use plain language', () => {
