@@ -251,11 +251,13 @@ test('prose is a line like any other', async () => {
 	expect(prose.className).not.toContain('border')
 	expect(prose.className).not.toContain('bg-[var(--surface)]')
 	for (const text of ['a paragraph', 'Read']) {
-		const row = screen.getByText(text).parentElement
+		const row = screen.getByText(text).closest('li')
 		expect(row?.tagName).toBe('LI')
-		expect(row?.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
+		expect(row?.querySelector('[aria-hidden]')?.getAttribute('aria-hidden')).toBe('true')
 	}
-	expect(screen.getByText('the answer').closest('li')?.firstElementChild?.textContent).toBe('›')
+	expect(
+		screen.getByText('the answer').closest('li')?.querySelector('[aria-hidden]')?.textContent,
+	).toBe('›')
 })
 
 test('f toggles full screen, and the button reflects it', async () => {
@@ -410,7 +412,7 @@ test('a scroll away from the bottom, then a new line, shows a pill that a click 
 	render(<LogScreen node="n-k7f2" surface={surface} onClose={() => {}} />)
 	await screen.findByText('first')
 
-	const scroller = screen.getByText('first').closest('div') as HTMLDivElement
+	const scroller = screen.getByText('first').closest('.overflow-y-auto') as HTMLDivElement
 	Object.defineProperty(scroller, 'scrollHeight', { value: 1000, configurable: true })
 	Object.defineProperty(scroller, 'clientHeight', { value: 200, configurable: true })
 	Object.defineProperty(scroller, 'scrollTop', { value: 0, configurable: true, writable: true })
@@ -482,4 +484,83 @@ test('a tool line shows its glyph, and an unlisted tool falls back', async () =>
 	const frobnicate = screen.getByText('zap').closest('li')?.querySelector('[aria-hidden]')
 	expect(frobnicate?.textContent).toBe('⚒')
 	expect(screen.getByText('zap').textContent).toBe('zap')
+})
+
+test('a tool call and its result are one block', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({
+					lines: [
+						{
+							kind: 'tool',
+							text: 'Read',
+							tool: 'Read',
+							call: 'c1',
+							detail: 'Read(apps/x.ts)',
+						},
+						{ kind: 'output', text: '92 lines', call: 'c1' },
+					],
+				}),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	await screen.findByText('Read(apps/x.ts)')
+	expect(screen.getByText('92 lines')).toBeTruthy()
+})
+
+test('a long body folds and expands on click', async () => {
+	const body = ['a', 'b', 'c', 'd', 'e', 'f'].join('\n')
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({
+					lines: [
+						{ kind: 'tool', text: 'Bash', tool: 'Bash', call: 'c1', detail: 'Bash(ls)' },
+						{ kind: 'output', text: '6 lines', call: 'c1', body },
+					],
+				}),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	await screen.findByText('Bash(ls)')
+	const fold = await screen.findByText(/\+3 lines \(click to expand\)/)
+	expect(fold.getAttribute('aria-expanded')).toBe('false')
+	fireEvent.click(fold)
+	expect(await screen.findByText(/Collapse output/)).toBeTruthy()
+})
+
+test('raw stderr reads in the error tone', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({ lines: [{ kind: 'raw', text: 'stderr: something broke', tool: null }] }),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	const raw = (await screen.findByText('stderr: something broke')).closest('li')
+	expect((raw?.querySelector('[aria-hidden]') as HTMLElement | null)?.style.color).toBe(
+		'var(--tx-error)',
+	)
+})
+
+test('an old-style tool line with no detail or call still renders the bare tool text', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([window({ lines: [{ kind: 'tool', text: 'Write', tool: 'Write' }] })])}
+			onClose={() => {}}
+		/>,
+	)
+
+	expect(await screen.findByText('Write')).toBeTruthy()
 })
