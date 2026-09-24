@@ -265,9 +265,8 @@ export const OPS: Readonly<Record<Operation, Route>> = {
 		return { archived: id }
 	}),
 
-	sync: route(
-		z.strictObject({ push: z.boolean().optional() }),
-		async (paths, { push }) => sync(paths, await boardBranch(paths), { push: push ?? true }),
+	sync: route(z.strictObject({ push: z.boolean().optional() }), async (paths, { push }) =>
+		sync(paths, await boardBranch(paths), { push: push ?? true }),
 	),
 
 	resolve: route(
