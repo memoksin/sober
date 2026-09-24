@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { initBoard } from './board.js'
 import { applySetting, type Config, DEFAULT_CONFIG } from './config.js'
 import { dispatch, stopRun } from './dispatch.js'
+import { NotOnBoardError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { HostError } from './host.js'
 import { readLog, readRun, writeRunPid } from './local.js'
@@ -99,6 +100,28 @@ test('closing instructions keep the foreground rule before the commit instructio
 	expect(prompt).toContain('Commit your work on this branch')
 	expect(prompt?.indexOf('Commit your work on this branch')).toBeGreaterThan(
 		prompt?.indexOf('Run every command in the foreground') ?? -1,
+	)
+})
+
+test('dispatching a node that is not on the board is refused before any host is touched', async () => {
+	const { readConfigFromBase } = await import('./config.js')
+	vi.mocked(readConfigFromBase).mockResolvedValue({ kind: 'ok', value: DEFAULT_CONFIG })
+
+	await expect(dispatch(paths, 'no-such-node-zzzz', { base: 'main' })).rejects.toBeInstanceOf(
+		NotOnBoardError,
+	)
+})
+
+test('dispatch refuses when config.jsonc on the base cannot be read', async () => {
+	const { readConfigFromBase } = await import('./config.js')
+	vi.mocked(readConfigFromBase).mockResolvedValue({
+		kind: 'broken',
+		file: 'main:.sober/config.jsonc',
+		reason: 'not valid JSONC',
+	})
+
+	await expect(dispatch(paths, 'auth-api-k7f2', { base: 'main' })).rejects.toThrow(
+		'config.jsonc on main cannot be read: not valid JSONC',
 	)
 })
 

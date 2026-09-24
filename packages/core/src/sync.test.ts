@@ -125,3 +125,44 @@ test('local work under .sober/ refuses the fast-forward but keeps the counts', a
 	})
 	expect(await readFile(join(w.work, '.sober', 'nodes', 'a.json'), 'utf8')).toContain('edited')
 })
+
+test('boardDistance for a repository that never fetched the board counts against the remote alone', async () => {
+	const bare = await tmpRoot('sober-dist-bare-')
+	const seed = await tmpRoot('sober-dist-seed-')
+	const work = await tmpRoot('sober-dist-work-')
+	await git(bare, 'init', '--bare')
+	for (const dir of [seed, work]) {
+		await git(dir, 'init', '-b', 'main')
+		await git(dir, 'config', 'user.name', 't')
+		await git(dir, 'config', 'user.email', 't@t')
+		await git(dir, 'remote', 'add', 'origin', bare)
+	}
+	await git(seed, 'checkout', '-b', BRANCH)
+	await mkdir(join(seed, '.sober', 'nodes'), { recursive: true })
+	await writeFile(join(seed, '.sober', 'nodes', 'a.json'), '{"id":"a"}\n')
+	await git(seed, 'add', '.')
+	await git(seed, 'commit', '-m', 'a')
+	await git(seed, 'push', 'origin', BRANCH)
+
+	// `work` never fetched or created the branch: `boardDistance` has to fetch
+	// it itself and count against the remote ref alone, with no local `ours`.
+	expect(await boardDistance(paths(work), BRANCH)).toMatchObject({
+		kind: 'ok',
+		ahead: 0,
+		behind: 1,
+		remote: 'origin',
+		pulled: null,
+	})
+})
+
+test('boardDistance says no-remote for a board neither side ever made', async () => {
+	const bare = await tmpRoot('sober-dist-bare-')
+	const work = await tmpRoot('sober-dist-work-')
+	await git(bare, 'init', '--bare')
+	await git(work, 'init', '-b', 'main')
+	await git(work, 'config', 'user.name', 't')
+	await git(work, 'config', 'user.email', 't@t')
+	await git(work, 'remote', 'add', 'origin', bare)
+
+	expect(await boardDistance(paths(work), BRANCH)).toEqual({ kind: 'no-remote' })
+})
