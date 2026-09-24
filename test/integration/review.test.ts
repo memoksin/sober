@@ -353,7 +353,10 @@ test('a conflicting merge records nothing, leaves the base clean where it was, a
 })
 
 // A permission bit does not stop root, so there the write would not fail.
-test.skipIf(process.getuid?.() === 0)(
+// Windows ignores POSIX mode bits on directories too, so the write succeeds
+// and the merge stands; not emulated with ACLs, the other two platforms
+// keep the coverage.
+test.skipIf(process.getuid?.() === 0 || process.platform === 'win32')(
 	'a record that cannot be written after the merge takes the merge back',
 	async () => {
 		const paths = await board()
