@@ -18,6 +18,7 @@ export interface AgentCommand {
 	readonly model?: string
 	readonly baseUrl?: string
 	readonly fetch?: typeof fetch
+	readonly backoffMs?: readonly number[]
 }
 
 /**
@@ -98,9 +99,14 @@ export const agent = async (options: AgentCommand): Promise<number> => {
 		prompt,
 		signal: controller.signal,
 		fetch: fetchFn,
+		...(options.backoffMs === undefined ? {} : { backoffMs: options.backoffMs }),
 		onLine: (line) => process.stdout.write(`${JSON.stringify({ type: 'sober', ...line })}\n`),
 	})
 	if (exit.kind === 'failed') {
+		// The loop gives up on a 429 only after its retries, so what is left is
+		// the pool out of runway: said as `spent:`, the line `openrouterSpent`
+		// reads off the probe, so a run falls to its backup on the same pattern.
+		if (/ answered 429: /.test(exit.reason)) process.stderr.write(`spent: ${exit.reason}\n`)
 		process.stderr.write(`${exit.reason}\n`)
 		return 1
 	}

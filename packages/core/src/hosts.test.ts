@@ -340,6 +340,19 @@ test('openrouter reads the spent line `sober agent --check` already classified',
 	)
 })
 
+test('openrouter reads a run’s 429 left after the retries with the same pattern', () => {
+	// What `sober agent` writes on stderr, and `startAgent` appends to the output.
+	const run = [
+		'{"type":"sober","kind":"raw","text":"waiting on 429, try 3 of 3","tool":null}',
+		'spent: https://openrouter.ai/api/v1 answered 429: rate limited upstream',
+		'https://openrouter.ai/api/v1 answered 429: rate limited upstream',
+	].join('\n')
+	expect(limitSpent('openrouter', run)).toBe(
+		'https://openrouter.ai/api/v1 answered 429: rate limited upstream',
+	)
+	expect(limitSpent('openrouter', 'https://openrouter.ai/api/v1 answered 400: bad')).toBeNull()
+})
+
 test('the loop’s own JSON events render, and a kind it does not know is dropped', () => {
 	expect(renderLine({ type: 'sober', kind: 'tool', text: 'bash ls', tool: 'bash' })).toMatchObject([
 		{ kind: 'tool', text: 'bash ls', tool: 'bash' },

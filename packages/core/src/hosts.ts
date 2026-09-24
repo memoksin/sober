@@ -603,9 +603,9 @@ const brief = (prompt: string): string => `${NO_HUMAN}\n\n---\n\n${prompt}`
 /**
  * `sober agent --check` prints `spent: <reason>` itself, from the same
  * `/auth/key` body it already fetches (`data.free_model_daily_requests` and
- * `data.limit_remaining`, captured today). A 429 on one free model is that
- * model's own upstream pool, not the host — this only reads the line the CLI
- * already classified.
+ * `data.limit_remaining`, captured today), and a run prints it on stderr for a
+ * 429 left after the loop's retries. This only reads the line the CLI already
+ * classified, so the probe and a run's fall to its backup share one pattern.
  */
 const openrouterSpent = (output: string): string | null => {
 	const found = /^spent: (.+)$/m.exec(output)

@@ -50,5 +50,8 @@ export const aRun = (node: string, overrides: Partial<Run> = {}): Run => ({
 	attended: false,
 	tier: null,
 	fallback: false,
+	backup: null,
+	ran: 'primary',
+	fellBack: null,
 	...overrides,
 })
