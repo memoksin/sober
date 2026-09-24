@@ -42,11 +42,14 @@ export const npmShimTarget = (command: string, path = process.env.PATH ?? ''): s
  * multi-line brief. So the shim's script runs under this node instead. When
  * this process is sober itself, `sober` is its own entry: the same version.
  */
-const program = (command: string): readonly [string, string[]] => {
+export const program = (
+	command: string,
+	platform: NodeJS.Platform = process.platform,
+): readonly [string, string[]] => {
 	const self = process.argv[1]
 	if (command === 'sober' && self !== undefined && /^sober(\.js)?$/.test(basename(self)))
 		return [process.execPath, [self]]
-	const script = process.platform === 'win32' ? npmShimTarget(command) : null
+	const script = platform === 'win32' ? npmShimTarget(command) : null
 	return script === null ? [command, []] : [process.execPath, [script]]
 }
 

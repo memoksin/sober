@@ -10,6 +10,7 @@ import {
 	hostCommand,
 	NO_HUMAN,
 	npmShimTarget,
+	program,
 	startAgent,
 } from './host.js'
 import { paths } from './paths.js'
@@ -91,6 +92,38 @@ test.skipIf(process.platform === 'win32')(
 		}
 	},
 )
+
+test('on win32, an npm-shimmed host runs through its resolved script, whatever the real platform is', () => {
+	const dir = join(scripts, 'program-win32-shim')
+	mkdirSync(dir)
+	writeFileSync(
+		join(dir, 'codex.cmd'),
+		`endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`,
+	)
+	const path = process.env.PATH
+	process.env.PATH = dir
+	try {
+		expect(program('codex', 'win32')).toEqual([
+			process.execPath,
+			[join(dir, 'node_modules\\@openai\\codex\\bin\\codex.js')],
+		])
+	} finally {
+		process.env.PATH = path
+	}
+})
+
+test('off win32, program never looks for an npm shim, and runs the command as-is', () => {
+	const dir = join(scripts, 'program-non-win32-shim')
+	mkdirSync(dir)
+	writeFileSync(join(dir, 'codex.cmd'), 'whatever a shim looks like\r\n')
+	const path = process.env.PATH
+	process.env.PATH = dir
+	try {
+		expect(program('codex', 'linux')).toEqual(['codex', []])
+	} finally {
+		process.env.PATH = path
+	}
+})
 
 test('a sober process runs its own entry for openrouter, never the PATH shim', async () => {
 	// On Windows the PATH `sober` is a `.cmd` shim a shell-less spawn cannot

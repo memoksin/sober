@@ -22,6 +22,9 @@ const RISE_TOLERANCE = 1
 
 const percentages = (summary) => {
 	const totals = new Map()
+	// Per-file uncovered-line counts, by package, so a drop can name where it
+	// came from instead of only how much.
+	const files = new Map()
 	for (const [file, data] of Object.entries(summary)) {
 		// `apps/` as well as `packages/`: the dashboard is source like any other,
 		// and a group this misses is a group with no floor that still reads green.
@@ -31,8 +34,15 @@ const percentages = (summary) => {
 		running.covered += data.lines.covered
 		running.total += data.lines.total
 		totals.set(name, running)
+
+		const uncovered = data.lines.total - data.lines.covered
+		if (uncovered > 0) {
+			const list = files.get(name) ?? []
+			list.push({ file, uncovered })
+			files.set(name, list)
+		}
 	}
-	return Object.fromEntries(
+	const pct = Object.fromEntries(
 		[...totals]
 			.sort(([a], [b]) => a.localeCompare(b))
 			.map(([name, { covered, total }]) => [
@@ -40,6 +50,7 @@ const percentages = (summary) => {
 				total === 0 ? 100 : Number(((covered / total) * 100).toFixed(2)),
 			]),
 	)
+	return { pct, files }
 }
 
 let summary
@@ -50,7 +61,15 @@ try {
 	process.exit(1)
 }
 
-const current = percentages(summary)
+const { pct: current, files: uncoveredByPackage } = percentages(summary)
+
+/** The five files with the most uncovered lines in a package, for a drop's failure line. */
+const worstFiles = (name) =>
+	(uncoveredByPackage.get(name) ?? [])
+		.sort((a, b) => b.uncovered - a.uncovered)
+		.slice(0, 5)
+		.map(({ file, uncovered }) => `    ${file}: ${uncovered} uncovered lines`)
+		.join('\n')
 
 if (process.argv.includes('--update')) {
 	writeFileSync(BASELINE, `${JSON.stringify(current, null, '\t')}\n`)
@@ -72,7 +91,8 @@ for (const [name, pct] of Object.entries(current)) {
 	if (was === undefined) {
 		failures.push(`${name}: new package at ${pct}% — run pnpm coverage:update`)
 	} else if (was - pct > DROP_TOLERANCE + Number.EPSILON) {
-		failures.push(`${name}: ${was}% -> ${pct}% — coverage dropped`)
+		const worst = worstFiles(name)
+		failures.push(`${name}: ${was}% -> ${pct}% — coverage dropped${worst ? `\n${worst}` : ''}`)
 	} else if (pct > was + RISE_TOLERANCE) {
 		failures.push(`${name}: ${was}% -> ${pct}% — run pnpm coverage:update and commit it`)
 	} else {
