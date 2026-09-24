@@ -1,6 +1,13 @@
 import { expect, test } from 'vitest'
 import { NO_HUMAN } from './host.js'
-import { adapterFor, capBody, renderLine, summarize, UnknownHostError } from './hosts.js'
+import {
+	adapterFor,
+	capBody,
+	limitSpent,
+	renderLine,
+	summarize,
+	UnknownHostError,
+} from './hosts.js'
 
 test('the adapter is chosen from the host command, whatever else is on the line', () => {
 	// `dispatch.host` is a command line, not a program name (host.ts), so the
@@ -241,6 +248,109 @@ test('openrouter is found from its run line and spawns `sober`, not a CLI called
 	expect(adapter.loggedIn('no key: set OPENROUTER_API_KEY in .sober/.env\n')).toBe(false)
 	expect(adapter.loggedIn('401: the key was refused\n')).toBe(false)
 	expect(adapter.signIn('openrouter')).toContain('OPENROUTER_API_KEY')
+})
+
+test('opencode and cursor have no availability table, so they are never spent', () => {
+	// There is nothing here that answers "is the account out of runway" —
+	// offering them unconditionally is what "not probed" means.
+	expect(adapterFor('opencode').availability).toBeUndefined()
+	expect(adapterFor('cursor').availability).toBeUndefined()
+	expect(limitSpent('opencode', 'anything at all')).toBeNull()
+	expect(limitSpent('cursor', 'anything at all')).toBeNull()
+})
+
+test('codex names its own probe, and reads its own words for a spent account', () => {
+	expect(adapterFor('codex').availability?.argv).toEqual([
+		'exec',
+		'--json',
+		'--skip-git-repo-check',
+		'Reply with ok.',
+	])
+	// Captured verbatim in `~/.codex/sessions/2026/09/15/…`.
+	const spent = `{"error":{"message":"You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 2:59 PM."}}`
+	expect(limitSpent('codex', spent)).toBe('usage limit, try again at 2:59 PM')
+	expect(
+		limitSpent('codex', '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}'),
+	).toBeNull()
+})
+
+test('claude reads its own rate_limit_event, and a window at 100% is spent even under allowed', () => {
+	expect(adapterFor('claude').availability?.argv).toEqual([
+		'-p',
+		'Reply with ok.',
+		'--model',
+		'haiku',
+		'--output-format',
+		'stream-json',
+		'--verbose',
+	])
+
+	// Captured in `.sober/local/runs/*.log`.
+	const allowed = JSON.stringify({
+		type: 'rate_limit_event',
+		rate_limit_info: {
+			status: 'allowed',
+			resetsAt: 1_789_471_200,
+			rateLimitType: 'five_hour',
+			unifiedWindows: {
+				five_hour: { utilization: 0.07 },
+				seven_day: { utilization: 0.23 },
+			},
+		},
+	})
+	expect(limitSpent('claude', allowed)).toBeNull()
+
+	// ponytail: only `allowed` has ever been captured here — this is the shape
+	// built from it, not a real one. Replace with a captured rejected event
+	// when one is seen.
+	const rejected = JSON.stringify({
+		type: 'rate_limit_event',
+		rate_limit_info: {
+			status: 'rejected',
+			resetsAt: 1_789_471_200,
+			rateLimitType: 'five_hour',
+			unifiedWindows: {
+				five_hour: { utilization: 0.07 },
+				seven_day: { utilization: 0.23 },
+			},
+		},
+	})
+	expect(limitSpent('claude', rejected)).toBe('five-hour limit, resets 11:20')
+
+	const utilizationFull = JSON.stringify({
+		type: 'rate_limit_event',
+		rate_limit_info: {
+			status: 'allowed',
+			resetsAt: 1_789_471_200,
+			rateLimitType: 'seven_day',
+			unifiedWindows: {
+				five_hour: { utilization: 0.2 },
+				seven_day: { utilization: 1 },
+			},
+		},
+	})
+	expect(limitSpent('claude', utilizationFull)).toBe('seven-day limit, resets 11:20')
+})
+
+test('openrouter reads the spent line `sober agent --check` already classified', () => {
+	expect(adapterFor('openrouter').availability?.argv).toEqual(['agent', '--check'])
+	expect(limitSpent('openrouter', 'ok\n')).toBeNull()
+	expect(limitSpent('openrouter', 'spent: the free-model daily quota is used up\n')).toBe(
+		'the free-model daily quota is used up',
+	)
+})
+
+test('openrouter reads a run’s 429 left after the retries with the same pattern', () => {
+	// What `sober agent` writes on stderr, and `startAgent` appends to the output.
+	const run = [
+		'{"type":"sober","kind":"raw","text":"waiting on 429, try 3 of 3","tool":null}',
+		'spent: https://openrouter.ai/api/v1 answered 429: rate limited upstream',
+		'https://openrouter.ai/api/v1 answered 429: rate limited upstream',
+	].join('\n')
+	expect(limitSpent('openrouter', run)).toBe(
+		'https://openrouter.ai/api/v1 answered 429: rate limited upstream',
+	)
+	expect(limitSpent('openrouter', 'https://openrouter.ai/api/v1 answered 400: bad')).toBeNull()
 })
 
 test('the loop’s own JSON events render, and a kind it does not know is dropped', () => {

@@ -25,6 +25,8 @@ export interface Paths {
 	readonly cache: string
 	/** What the named `dispatch.sources` catalogues looked like last, and when (ADR 0063). */
 	readonly catalogue: string
+	/** Each host's ready/spent classification, last probed and when (limit-detect). */
+	readonly hosts: string
 	readonly lock: string
 	readonly merge: string
 }
@@ -59,6 +61,7 @@ export const paths = (root: string): Paths => {
 		log: join(local, 'log.jsonl'),
 		cache: join(local, 'cache.json'),
 		catalogue: join(local, 'catalogue.json'),
+		hosts: join(local, 'hosts.json'),
 		lock: join(local, 'lock'),
 		// The choices a human made in a merge that is not finished yet. Losing
 		// it loses no record — the questions are simply asked again (§1.4).

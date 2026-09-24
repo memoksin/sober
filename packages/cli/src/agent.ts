@@ -18,6 +18,32 @@ export interface AgentCommand {
 	readonly model?: string
 	readonly baseUrl?: string
 	readonly fetch?: typeof fetch
+	readonly backoffMs?: readonly number[]
+}
+
+/**
+ * `/auth/key`'s body, captured today:
+ * `{"data":{"limit":null,"limit_remaining":null,…,"is_free_tier":false,
+ * "free_model_daily_requests":{"used":0,"limit":50,"remaining":50},…}}`.
+ * Zero of either remaining is the account out of runway, not a bad key — the
+ * 200 already said the key was accepted.
+ */
+const spentReason = async (response: Response): Promise<string | null> => {
+	let body: {
+		data?: {
+			limit_remaining?: number | null
+			free_model_daily_requests?: { remaining?: number }
+		}
+	}
+	try {
+		body = (await response.json()) as typeof body
+	} catch {
+		return null
+	}
+	if (body.data?.free_model_daily_requests?.remaining === 0)
+		return 'the free-model daily quota is used up'
+	if (body.data?.limit_remaining === 0) return 'the account request quota is used up'
+	return null
 }
 
 /** Exit code; the caller decides what to do with the process. */
@@ -36,9 +62,16 @@ export const agent = async (options: AgentCommand): Promise<number> => {
 		// `/auth/key`, and its `/models` does want the bearer.
 		const headers = { authorization: `Bearer ${key}` }
 		let response = await fetchFn(`${base}/auth/key`, { headers })
-		if (response.status === 404) response = await fetchFn(`${base}/models`, { headers })
+		let viaModels = false
+		if (response.status === 404) {
+			viaModels = true
+			response = await fetchFn(`${base}/models`, { headers })
+		}
 		if (response.status === 200) {
-			process.stdout.write('ok\n')
+			// `/models` has no usage fields, so a fallback endpoint is read as
+			// `ok` — there is nothing here to classify from (`limit-detect`).
+			const spent = viaModels ? null : await spentReason(response)
+			process.stdout.write(spent === null ? 'ok\n' : `spent: ${spent}\n`)
 			return 0
 		}
 		process.stdout.write(
@@ -66,9 +99,14 @@ export const agent = async (options: AgentCommand): Promise<number> => {
 		prompt,
 		signal: controller.signal,
 		fetch: fetchFn,
+		...(options.backoffMs === undefined ? {} : { backoffMs: options.backoffMs }),
 		onLine: (line) => process.stdout.write(`${JSON.stringify({ type: 'sober', ...line })}\n`),
 	})
 	if (exit.kind === 'failed') {
+		// The loop gives up on a 429 only after its retries, so what is left is
+		// the pool out of runway: said as `spent:`, the line `openrouterSpent`
+		// reads off the probe, so a run falls to its backup on the same pattern.
+		if (/ answered 429: /.test(exit.reason)) process.stderr.write(`spent: ${exit.reason}\n`)
 		process.stderr.write(`${exit.reason}\n`)
 		return 1
 	}

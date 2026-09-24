@@ -1,5 +1,6 @@
 import { type Model, modelsFor } from './config.js'
 import { SoberError } from './errors.js'
+import { adapterFor, UnknownHostError } from './hosts.js'
 
 /**
  * Jev (TypeSafe's System One model) is the optional second opinion on how hard
@@ -29,6 +30,8 @@ export interface JevDecision {
 	readonly skills: readonly string[]
 	/** The `dispatch.models` entry Jev chose, or null when none covers the score. */
 	readonly model: string | null
+	/** The entry that runs the node when `model` cannot start, or null when none qualifies. */
+	readonly backup: string | null
 }
 
 export interface JevAsk {
@@ -114,7 +117,7 @@ export const jevDecision = (body: unknown, skills: readonly string[]): JevDecisi
 		return probability > 0.5
 	})
 
-	return { complexity: Math.round(score) + 1, skills: chosen, model: null }
+	return { complexity: Math.round(score) + 1, skills: chosen, model: null, backup: null }
 }
 
 /**
@@ -130,16 +133,71 @@ export const modelQuestion = (eligible: readonly Model[]): Record<string, JevQue
 	},
 })
 
+/**
+ * Asked only among `backupCandidates`, so a backup equal to the primary, or a
+ * second `openrouter` entry behind an `openrouter` primary, is off the list and
+ * `jevChoice` refuses it.
+ */
+export const backupQuestion = (candidates: readonly Model[]): Record<string, JevQuestion> => ({
+	backup: {
+		type: 'choice',
+		instructions:
+			'Which of these models should run this node if the primary cannot start? Each is on a different host from the primary, so one outage does not stop both.',
+		criteria: Object.fromEntries(candidates.map((m) => [m.name, m.about === '' ? m.run : m.about])),
+	},
+})
+
+const hostOf = (run: string): string | null => {
+	try {
+		return adapterFor(run).id
+	} catch (error) {
+		if (error instanceof UnknownHostError) return null
+		throw error
+	}
+}
+
+/**
+ * What may stand in for `primary` (a run line), out of the whole available
+ * list rather than only the entries covering the score: never the primary,
+ * another host whenever there is one, and for an `openrouter` primary only
+ * `claude`/`codex` — free models share one upstream pool and rate-limit
+ * together. Covering entries are preferred; with none, the rest are used.
+ */
+export const backupCandidates = (
+	models: readonly Model[],
+	primary: string,
+	complexity: number | null,
+): Model[] => {
+	const primaryHost = hostOf(primary)
+	const others = models.filter((m) => m.run !== primary)
+	const elsewhere = others.filter((m) => {
+		const host = hostOf(m.run)
+		return host !== null && host !== primaryHost
+	})
+	const pool =
+		primaryHost === 'openrouter'
+			? elsewhere.filter((m) => ['claude', 'codex'].includes(hostOf(m.run) ?? ''))
+			: elsewhere.length > 0
+				? elsewhere
+				: others
+	const covering = complexity === null ? [] : modelsFor(pool, complexity)
+	return covering.length > 0 ? covering : pool
+}
+
 /** Pure, like `jevDecision`: a name off the list is a failure, not a guess. */
-export const jevChoice = (body: unknown, names: readonly string[]): string => {
+export const jevChoice = (
+	body: unknown,
+	names: readonly string[],
+	key: 'model' | 'backup' = 'model',
+): string => {
 	if (typeof body !== 'object' || body === null)
 		throw new JevError('Jev returned a body that is not an object')
 	const answers = (body as { answers?: unknown }).answers
 	if (typeof answers !== 'object' || answers === null)
 		throw new JevError('Jev returned no `answers`')
-	const choice = answerFor(answers as Record<string, unknown>, 'model').choice
+	const choice = answerFor(answers as Record<string, unknown>, key).choice
 	if (typeof choice !== 'string' || !names.includes(choice))
-		throw new JevError(`Jev chose a model that is not on the list: ${String(choice)}`)
+		throw new JevError(`Jev chose a ${key} that is not on the list: ${String(choice)}`)
 	return choice
 }
 
@@ -166,15 +224,32 @@ const post = async (state: string, questions: Record<string, JevQuestion>): Prom
 }
 
 /**
- * Two round trips at most: the score first, then — only when more than one
- * entry covers it — the choice among those. One entry needs no question, and
- * none leaves the model null for dispatch to fall back on `dispatch.host`.
+ * Three round trips at most: the score, then — only when more than one entry
+ * covers it — the choice among those, then — only when more than one entry
+ * qualifies — the backup. One entry needs no question, and none leaves the
+ * model null for dispatch to fall back on `dispatch.host`.
  */
 export const askJev = async (state: string, ask: JevAsk): Promise<JevDecision> => {
 	const decision = jevDecision(await post(state, jevQuestions(ask.skills)), ask.skills)
 	const eligible = modelsFor(ask.models, decision.complexity)
-	if (eligible.length === 0) return decision
-	if (eligible.length === 1) return { ...decision, model: eligible[0]?.name ?? null }
-	const names = eligible.map((m) => m.name)
-	return { ...decision, model: jevChoice(await post(state, modelQuestion(eligible)), names) }
+	const name =
+		eligible.length > 1
+			? jevChoice(
+					await post(state, modelQuestion(eligible)),
+					eligible.map((m) => m.name),
+				)
+			: eligible[0]?.name
+	const primary = eligible.find((m) => m.name === name)
+	if (primary === undefined) return decision
+
+	const candidates = backupCandidates(ask.models, primary.run, decision.complexity)
+	const backup =
+		candidates.length > 1
+			? jevChoice(
+					await post(state, backupQuestion(candidates)),
+					candidates.map((m) => m.name),
+					'backup',
+				)
+			: (candidates[0]?.name ?? null)
+	return { ...decision, model: primary.name, backup }
 }

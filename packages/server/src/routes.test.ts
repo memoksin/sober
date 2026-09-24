@@ -1,5 +1,10 @@
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { currentBranch, paths } from '@besober/core'
 import { AGENT_OPERATIONS, OPERATIONS } from '@besober/schema'
-import { expect, test } from 'vitest'
+import { afterEach, expect, test } from 'vitest'
 import { COVERS, OPS, READS, WATCHES } from './routes.js'
 
 test('every operation PR-09-08 binds has a route', () => {
@@ -92,4 +97,44 @@ test('a watch is never spelled like an operation or a read', () => {
 		expect(OPERATIONS, watched).not.toContain(watched)
 		expect(Object.keys(READS), watched).not.toContain(watched)
 	}
+})
+
+// The dashboard's `sync` and `resolve` never take a branch — a body that
+// names one is exactly the hole that let f2592f9 land a board-only tree on
+// `development`, so the schema now refuses it outright.
+test('sync and resolve refuse a body that names a branch', () => {
+	expect(() => OPS.sync.accepts.parse({ branch: 'main' })).toThrow()
+	expect(() =>
+		OPS.resolve.accepts.parse({ branch: 'main', record: 'some-node', choices: {} }),
+	).toThrow()
+})
+
+let dir: string | undefined
+
+afterEach(() => {
+	if (dir !== undefined) rmSync(dir, { recursive: true, force: true, maxRetries: 10 })
+	dir = undefined
+})
+
+test('sync run with no branch lands on the configured board branch, never the checked-out one', async () => {
+	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
+	const run = (...args: string[]) =>
+		execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim()
+	run('init', '--initial-branch=main')
+	run('config', 'user.name', 'SOBER Test')
+	run('config', 'user.email', 'test@besober.dev')
+	run('config', 'commit.gpgsign', 'false')
+	writeFileSync(join(dir, 'README.md'), '# acme\n')
+	run('add', '-A')
+	run('commit', '-m', 'chore: first')
+
+	const p = paths(dir)
+	await OPS.init.run(p, { project: { title: 'acme', intent: '', constraints: [] } })
+	const before = run('rev-parse', 'main')
+
+	await OPS.sync.run(p, {})
+
+	expect(run('rev-parse', 'main')).toBe(before)
+	expect(await currentBranch(dir)).toBe('main')
+	expect(run('log', 'sober-graph', '-1', '--format=%s')).toContain('sober: board from')
 })

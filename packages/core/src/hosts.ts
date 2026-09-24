@@ -166,6 +166,19 @@ export interface Adapter {
 	readonly command?: string
 	/** Args that ask the host whether it can run at all, before a worktree exists. */
 	readonly probe: readonly string[]
+	/**
+	 * How to ask whether the host's own *account* is out of runway — Claude's
+	 * five-hour/seven-day windows, Codex's usage limit, OpenRouter's free-request
+	 * quota — as opposed to `probe`, which only asks whether the CLI is
+	 * installed and signed in (`limit-detect`). Absent on `opencode` and
+	 * `cursor`: there is nothing here that answers the question, so those two
+	 * hosts are never filtered on it.
+	 */
+	readonly availability?: {
+		readonly argv: readonly string[]
+		/** The reason the limit is gone, read from the probe's output — or null when it isn't. */
+		readonly spent: (output: string) => string | null
+	}
 	/** How the user signs in, in the words they have to type (§8.7). */
 	readonly signIn: (host: string) => string
 	/** True, false, or null when the answer cannot be read — never a silent pass. */
@@ -189,6 +202,62 @@ export class UnknownHostError extends SoberError {
 	}
 }
 
+/** Claude's own name for a window, in the words a person reads (`limit-detect`). */
+const CLAUDE_WINDOWS: Readonly<Record<string, string>> = {
+	five_hour: 'five-hour',
+	seven_day: 'seven-day',
+}
+
+/** An epoch-seconds `resetsAt` as a clock time, in UTC so a test is never timezone-dependent. */
+const resetTime = (epochSeconds: unknown): string => {
+	if (typeof epochSeconds !== 'number') return 'an unknown time'
+	const at = new Date(epochSeconds * 1000)
+	return `${String(at.getUTCHours()).padStart(2, '0')}:${String(at.getUTCMinutes()).padStart(2, '0')}`
+}
+
+interface RateLimitInfo {
+	readonly status?: string
+	readonly resetsAt?: number
+	readonly rateLimitType?: string
+	readonly unifiedWindows?: Readonly<Record<string, { readonly utilization?: number }>>
+}
+
+/**
+ * Claude Code emits `rate_limit_event` on every run (captured in
+ * `.sober/local/runs/*.log`). `status` is `allowed` or `allowed_warning` on a
+ * window with runway left; anything else, or a window at 100% utilization
+ * even under `allowed`, is the account out of runway.
+ *
+ * ponytail: only `allowed` has ever been captured — the rejected shape is
+ * built from it rather than seen, and is the one to replace when a real
+ * rejected event turns up.
+ */
+const claudeSpent = (output: string): string | null => {
+	for (const rawLine of output.split('\n')) {
+		const line = rawLine.trim()
+		if (line.length === 0) continue
+		let event: { type?: string; rate_limit_info?: RateLimitInfo }
+		try {
+			event = JSON.parse(line) as typeof event
+		} catch {
+			continue
+		}
+		if (event.type !== 'rate_limit_event' || event.rate_limit_info === undefined) continue
+
+		const info = event.rate_limit_info
+		const windows = info.unifiedWindows ?? {}
+		const full = Object.entries(windows).find(([, window]) => (window?.utilization ?? 0) >= 1)
+		const ready =
+			(info.status === 'allowed' || info.status === 'allowed_warning') && full === undefined
+		if (ready) return null
+
+		const key = full?.[0] ?? info.rateLimitType
+		const name = key === undefined ? 'usage' : (CLAUDE_WINDOWS[key] ?? key.replace(/_/g, '-'))
+		return `${name} limit, resets ${resetTime(info.resetsAt)}`
+	}
+	return null
+}
+
 /**
  * Claude Code. The only host with a flag for the system prompt and the only one
  * that reads stdin while it runs, which is why it is the only attendable one.
@@ -206,6 +275,18 @@ const claude: Adapter = {
 		}
 	},
 	argv: (prompt, attended) => ['-p', prompt, ...(attended ? ATTENDED_ARGS : HOST_ARGS)],
+	availability: {
+		argv: [
+			'-p',
+			'Reply with ok.',
+			'--model',
+			'haiku',
+			'--output-format',
+			'stream-json',
+			'--verbose',
+		],
+		spent: claudeSpent,
+	},
 	attendable: true,
 	line: (event) => {
 		if (event.type === 'system' && event.subtype === 'init')
@@ -294,6 +375,22 @@ const claude: Adapter = {
 }
 
 /**
+ * Codex's own words for a spent account, captured verbatim in
+ * `~/.codex/sessions/2026/09/15/…`:
+ * `{"error":{"message":"You've hit your usage limit. Upgrade to Pro
+ * (https://chatgpt.com/explore/pro), visit
+ * https://chatgpt.com/codex/settings/usage to purchase more credits or try
+ * again at 2:59 PM."}}`. The `try again at …` tail is carried into the reason
+ * when the message has one.
+ */
+const codexSpent = (output: string): string | null => {
+	const found = /You've hit your usage limit\.[^"]*/.exec(output)
+	if (found === null) return null
+	const tail = /try again at [^".]+/i.exec(found[0])
+	return tail === null ? 'usage limit' : `usage limit, ${tail[0]}`
+}
+
+/**
  * Codex. `codex exec` takes the prompt as its last argument and has no flag for
  * the system prompt, so `NO_HUMAN` goes in front of the brief instead — the M2
  * gate's finding 1 is a fact about hosts, not about Claude Code.
@@ -316,6 +413,12 @@ const codex: Adapter = {
 		return null
 	},
 	argv: (prompt) => ['exec', '--json', '--dangerously-bypass-approvals-and-sandbox', brief(prompt)],
+	// A minimal call on Codex's default model — the limit is the account's,
+	// not any one model's, so which model answers does not matter here.
+	availability: {
+		argv: ['exec', '--json', '--skip-git-repo-check', 'Reply with ok.'],
+		spent: codexSpent,
+	},
 	attendable: false,
 	line: (event) => {
 		if (event.type === 'thread.started')
@@ -497,6 +600,18 @@ const brief = (prompt: string): string => `${NO_HUMAN}\n\n---\n\n${prompt}`
  * which reads `OPENROUTER_API_KEY` off the environment the dispatcher loaded
  * and asks the endpoint whether the key is accepted.
  */
+/**
+ * `sober agent --check` prints `spent: <reason>` itself, from the same
+ * `/auth/key` body it already fetches (`data.free_model_daily_requests` and
+ * `data.limit_remaining`, captured today), and a run prints it on stderr for a
+ * 429 left after the loop's retries. This only reads the line the CLI already
+ * classified, so the probe and a run's fall to its backup share one pattern.
+ */
+const openrouterSpent = (output: string): string | null => {
+	const found = /^spent: (.+)$/m.exec(output)
+	return found === null ? null : (found[1]?.trim() ?? null)
+}
+
 const openrouter: Adapter = {
 	id: 'openrouter',
 	command: 'sober',
@@ -505,6 +620,10 @@ const openrouter: Adapter = {
 	loggedIn: (stdout) =>
 		/^ok\b/m.test(stdout) ? true : /no key|401|unauthori[sz]ed/i.test(stdout) ? false : null,
 	argv: (prompt) => ['agent', brief(prompt)],
+	availability: {
+		argv: ['agent', '--check'],
+		spent: openrouterSpent,
+	},
 	attendable: false,
 	line: (event) => {
 		if (event.type !== 'sober') return null
@@ -540,6 +659,15 @@ export const adapterFor = (host: string): Adapter => {
 	}
 	throw new UnknownHostError(host)
 }
+
+/**
+ * The reason a host's account is out of runway, read from its `availability`
+ * probe's output — or null when it is ready, or when the host has no
+ * `availability` table at all (`opencode`, `cursor`), which is what keeps
+ * those two from ever being filtered on it.
+ */
+export const limitSpent = (host: string, output: string): string | null =>
+	adapterFor(host).availability?.spent(output) ?? null
 
 /**
  * One raw event, whatever host wrote it. Read in order, and the first adapter
