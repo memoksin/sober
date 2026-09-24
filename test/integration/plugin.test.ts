@@ -172,9 +172,9 @@ test('every host’s decision skill asks with the host’s own question, and rel
 test('codex names its own question tool and falls back when the mode has none', () => {
 	// The `ask` slot names `request_user_input` and says what to do when the
 	// current mode does not offer it (`codex exec`, or any turn without it).
-	// Only `decide` and `loop` render the `{{ask}}` slot — `next` and `brief`
-	// ask a plain yes/no through the host's question tool without naming it.
-	for (const skill of ['decide', 'loop']) {
+	// `decide`, `loop`, `next` and `brief` all render the `{{ask}}` slot at the
+	// point where they ask their yes/no or pick.
+	for (const skill of ['decide', 'loop', 'next', 'brief']) {
 		const text = buildSkills('codex').get(skill) ?? ''
 		expect(text, `codex/${skill}`).toContain('request_user_input')
 		expect(text, `codex/${skill}`).toContain('When it is not listed')
@@ -183,6 +183,12 @@ test('codex names its own question tool and falls back when the mode has none', 
 	const claudeDecide = buildSkills('claude').get('decide') ?? ''
 	expect(claudeDecide).toContain('AskUserQuestion')
 	expect(claudeDecide).not.toContain('request_user_input')
+
+	const claudeNext = buildSkills('claude').get('next') ?? ''
+	expect(claudeNext).toContain('AskUserQuestion')
+
+	const claudeBrief = buildSkills('claude').get('brief') ?? ''
+	expect(claudeBrief).toContain('AskUserQuestion')
 
 	const opencodeDecide = buildSkills('opencode').get('decide') ?? ''
 	expect(opencodeDecide).not.toContain('request_user_input')
