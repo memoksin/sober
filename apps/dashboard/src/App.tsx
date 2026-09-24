@@ -337,6 +337,19 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		[token, reviewing, refresh],
 	)
 
+	/**
+	 * ADR 0049: the acceptance list re-run on demand, against the worktree a run
+	 * already left. The screen stays open — this replaces the shown results with
+	 * the fresh review rather than closing, the way accept and reject do.
+	 */
+	const onAudit = useCallback(async (): Promise<void> => {
+		if (token === null || reviewing === null) return
+		const surface = wire(token)
+		await surface.op('audit', { node: reviewing.node })
+		setReviewing(await surface.read<Review>('review', { node: reviewing.node }))
+		await refresh()
+	}, [token, reviewing, refresh])
+
 	// `done` is off by default: a board keeps its finished work, and after a few
 	// weeks that is most of what is on it (ADR 0039 §1 — done is the one status
 	// whose colour inverts between themes, because it is the one that recedes).
@@ -535,6 +548,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 						onClose={() => setReviewing(null)}
 						onAccept={() => settle('accept')}
 						onReject={(text) => settle('reject', text)}
+						onAudit={onAudit}
 					/>
 				)}
 			</main>

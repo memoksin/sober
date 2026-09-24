@@ -26,30 +26,35 @@ export const ReviewScreen = ({
 	onClose,
 	onAccept,
 	onReject,
+	onAudit,
 }: {
 	readonly review: Review
 	readonly onClose: () => void
 	readonly onAccept: () => Promise<void>
 	readonly onReject: (text: string) => Promise<void>
+	readonly onAudit: () => Promise<void>
 }): React.JSX.Element => {
 	const said = verdict(review)
 	const ci = ciLine(review.ci)
 
 	const [note, setNote] = useState('')
 	const [turning, setTurning] = useState(false)
-	const [busy, setBusy] = useState(false)
+	const [busy, setBusy] = useState<'accept' | 'reject' | 'audit' | null>(null)
 	const [refused, setRefused] = useState<string | null>(null)
 	const [showDiff, setShowDiff] = useState(false)
 
-	const act = async (what: () => Promise<void>): Promise<void> => {
-		setBusy(true)
+	const act = async (
+		does: 'accept' | 'reject' | 'audit',
+		what: () => Promise<void>,
+	): Promise<void> => {
+		setBusy(does)
 		setRefused(null)
 		try {
 			await what()
 		} catch (error) {
 			setRefused(error instanceof Error ? error.message : String(error))
 		} finally {
-			setBusy(false)
+			setBusy(null)
 		}
 	}
 
@@ -226,11 +231,22 @@ export const ReviewScreen = ({
 					Close
 				</button>
 
+				{review.run !== null && review.accepted === null && !turning && (
+					<button
+						type="button"
+						onClick={() => void act('audit', onAudit)}
+						disabled={busy !== null}
+						className="rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--ink-dim)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						{busy === 'audit' ? pending('audit') : 'Run the checks again'}
+					</button>
+				)}
 				{said.decidable && !turning && (
 					<button
 						type="button"
 						onClick={() => setTurning(true)}
-						className="rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--ink-dim)] hover:text-[var(--ink)]"
+						disabled={busy !== null}
+						className="rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--ink-dim)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40"
 					>
 						Turn it down
 					</button>
@@ -238,21 +254,21 @@ export const ReviewScreen = ({
 				{said.decidable && turning && (
 					<button
 						type="button"
-						onClick={() => void act(() => onReject(note))}
-						disabled={note.trim() === '' || busy}
+						onClick={() => void act('reject', () => onReject(note))}
+						disabled={note.trim() === '' || busy !== null}
 						className="rounded-[var(--radius-sm)] border border-[var(--danger)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
 					>
-						{busy ? pending('reject') : 'Send it back'}
+						{busy === 'reject' ? pending('reject') : 'Send it back'}
 					</button>
 				)}
 				{said.decidable && !turning && (
 					<button
 						type="button"
-						onClick={() => void act(onAccept)}
-						disabled={busy}
+						onClick={() => void act('accept', onAccept)}
+						disabled={busy !== null}
 						className="rounded-[var(--radius-sm)] bg-[var(--ink)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--bg)] disabled:opacity-40"
 					>
-						{busy ? pending('accept') : 'Accept'}
+						{busy === 'accept' ? pending('accept') : 'Accept'}
 					</button>
 				)}
 			</footer>

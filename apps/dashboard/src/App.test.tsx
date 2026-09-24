@@ -5,7 +5,13 @@ import { afterEach, expect, test, vi } from 'vitest'
 // not have. What is under test here is the board's wiring — the poll, the plan
 // and what the two buttons send — so the drawing is stood in for.
 vi.mock('./canvas/Canvas.js', () => ({
-	Canvas: () => <div data-testid="canvas" />,
+	Canvas: ({ onPick }: { readonly onPick?: (id: string | null) => void }) => (
+		<div data-testid="canvas">
+			<button type="button" onClick={() => onPick?.('auth-api-k7f2')}>
+				auth-api-k7f2
+			</button>
+		</div>
+	),
 }))
 
 const { App } = await import('./App.js')
@@ -96,6 +102,102 @@ test('a plan that cannot be read is its own line, and the canvas keeps drawing',
 	await waitFor(() => expect(screen.getByText(/cannot be read/)).toBeTruthy())
 	expect(screen.getByTestId('canvas')).toBeTruthy()
 	expect(screen.getByText('1 nodes')).toBeTruthy()
+})
+
+const aNode = (status: string) => ({
+	id: 'auth-api-k7f2',
+	title: 'The auth API',
+	name: 'The auth API',
+	description: '',
+	notes: '',
+	dependsOn: [],
+	decisions: [],
+	files: [],
+	brief: null,
+	outcome: null,
+	assignee: null,
+	claim: null,
+	accepted: null,
+	dismissal: null,
+	createdAt: '2026-09-04T00:00:00.000Z',
+	status,
+	waitingOn: [],
+})
+
+const inReviewProjection = {
+	nodes: [
+		{
+			id: 'auth-api-k7f2',
+			title: 'The auth API',
+			status: 'in-review',
+			dependsOn: [],
+			flagged: false,
+		},
+	],
+}
+
+const inReviewBoard = { project: null, nodes: [aNode('in-review')], decisions: [], broken: [] }
+
+const reviewOf = (result: 'failed' | 'passed') => ({
+	node: 'auth-api-k7f2',
+	scan: { result: 'clean', ruleSet: 'default', findings: [], didNotRun: [], files: [] },
+	diff: '',
+	files: [],
+	run: 'run-1',
+	exit: null,
+	acceptance: [
+		{
+			run: 'pnpm test',
+			proves: 'the login form validates',
+			result: result === 'passed' ? { exit: 0 } : { exit: 1 },
+		},
+	],
+	verify: null,
+	ci: { kind: 'none' },
+	pr: null,
+	uncommitted: [],
+	accepted: null,
+	flagged: false,
+})
+
+test('re-running the checks from the review screen sends `audit` and replaces what it shows', async () => {
+	let audited = false
+	const sent: string[] = []
+	vi.stubGlobal('fetch', (url: string, init?: { method?: string }) => {
+		const address = String(url)
+		if (init?.method === 'POST') {
+			const name = address.replace('/op/', '')
+			sent.push(name)
+			if (name === 'audit') audited = true
+			return Promise.resolve(new Response('{}', { status: 200 }))
+		}
+		const name = address.replace('/read/', '').split('?')[0] ?? ''
+		const reads: Record<string, unknown> = {
+			projection: inReviewProjection,
+			distribution: null,
+			digest: null,
+			board: inReviewBoard,
+			review: reviewOf(audited ? 'passed' : 'failed'),
+		}
+		return name in reads
+			? Promise.resolve(new Response(JSON.stringify(reads[name]), { status: 200 }))
+			: Promise.resolve(new Response('{"error":"that record is not here"}', { status: 409 }))
+	})
+
+	render(<App token="t" />)
+
+	await waitFor(() => expect(screen.getByTestId('canvas')).toBeTruthy())
+	fireEvent.click(screen.getByText('auth-api-k7f2'))
+	await waitFor(() => expect(screen.getByText('Review')).toBeTruthy())
+	fireEvent.click(screen.getByText('Review'))
+
+	await waitFor(() => expect(screen.getByText('failed · exit 1')).toBeTruthy())
+
+	fireEvent.click(screen.getByText('Run the checks again'))
+	expect(screen.getByText('Running the acceptance list…')).toBeTruthy()
+
+	await waitFor(() => expect(screen.getByText('passed')).toBeTruthy())
+	expect(sent).toContain('audit')
 })
 
 test('the plan opens as a screen, and taking it sends the operation that assigns', async () => {
