@@ -78,6 +78,10 @@ export const Config = z.strictObject({
 			})
 			.default({}),
 		catalogueSeconds: z.int().positive().default(3600),
+		// How long a host's ready/spent classification is trusted before the
+		// next dispatch probes it again: too long and a spent host is still
+		// offered to Jev, too short and every dispatch pays for a probe.
+		probeSeconds: z.int().positive().default(900),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -113,6 +117,7 @@ export const DEFAULT_CONFIG: Config = {
 		models: [],
 		sources: {},
 		catalogueSeconds: 3600,
+		probeSeconds: 900,
 	},
 	board: {
 		branch: 'sober-graph',
@@ -238,6 +243,13 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// How long a fetched catalogue is trusted before the next dispatch
 		// asks again, cached at ".sober/local/catalogue.json".
 		"catalogueSeconds": ${DEFAULT_CONFIG.dispatch.catalogueSeconds},
+
+		// How long a host's ready/spent classification is trusted before the
+		// next dispatch probes it again, cached at ".sober/local/hosts.json".
+		// A spent host (a five-hour or seven-day limit, a usage cap, a free-tier
+		// quota) is kept off Jev's list until this expires and the probe is run
+		// again.
+		"probeSeconds": ${DEFAULT_CONFIG.dispatch.probeSeconds},
 
 		// Off by default, and the one setting that costs money of its own
 		// (ADR 0060). On, every dispatch asks Jev — TypeSafe's System One
