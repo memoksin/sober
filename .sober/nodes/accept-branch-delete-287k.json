@@ -9,11 +9,46 @@
 		"packages/core/src/merge.ts",
 		"packages/core/src/merge.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "The bug is in `deleteBranch` (packages/core/src/merge.ts:62). It runs `git branch -d`. When the branch has an upstream (set by `publish` in packages/core/src/pr.ts:108 with `push -u`), `-d` checks the branch against that upstream, not HEAD. A node branch pushed for its draft PR and then given a local commit is ahead of `origin/sober/<node>`, so `-d` refuses — after `acceptWork` (packages/core/src/review.ts:141) has already merged, recorded the node as done and removed the worktree.\n\nFix, in packages/core/src/merge.ts only:\n1. In `deleteBranch`, when `force` is not set, run `git merge-base --is-ancestor <branch> HEAD` in `paths.root`. The local-merge path in review.ts:214 calls it right after `mergeNode`, while `paths.root` is on the base, so HEAD is the base.\n2. If it is an ancestor, delete with `git branch -D`. The ancestry check is the safety `-d` gave; `-D` only skips the upstream comparison.\n3. If it is not an ancestor, throw `MergeRefusedError` with a clear sentence: the branch holds commits the base does not have, so it is kept.\n4. `force: true` (the pull-request landing, review.ts:204) keeps its current behaviour: `-D` with no check.\n5. Update the doc comment on `deleteBranch` to say why `-d` is not used.\n\nNo change to review.ts is needed: the call sites stay the same.\n\nTest: add one case to test/integration/pr.test.ts, next to \"accept lands locally by default\". That file already has a real bare remote, `board()` and `publish()` (which pushes with `-u`). The case: `board()`, `publish(paths, 'auth-api-k7f2', 'main')`, then add a second commit in the node's worktree (so the branch is ahead of its pushed copy), then `acceptWork(... base: 'main', scan: 'clean')`. It must resolve with `kind: 'merged'`, main's log contains `sober: auth-api-k7f2`, and `git branch --list sober/auth-api-k7f2` is empty. The declared file packages/core/src/merge.test.ts does not exist; the integration file is where the accept tests with a remote live, so the test goes there instead.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration pr.test.ts",
+				"proves": "The new case passes: a branch pushed with an upstream, then committed to locally, is accepted with no error and its branch is gone; the existing accept and pull-request cases still pass."
+			},
+			{
+				"run": "pnpm vitest run --project integration loop.test.ts cli.test.ts mcp.test.ts",
+				"proves": "The other accept paths (plain local merge with no upstream, CLI and MCP accept) still merge and delete the branch."
+			},
+			{
+				"run": "pnpm --filter @besober/core build",
+				"proves": "merge.ts still type-checks and builds."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "The change passes biome and secretlint."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T08:27:06.552Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T08:27:55.395Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T09:03:05.472Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-24T07:38:53.239Z"
 }

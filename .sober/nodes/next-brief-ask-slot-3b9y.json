@@ -13,28 +13,41 @@
 		"test/integration/plugin.test.ts"
 	],
 	"brief": {
-		"approach": "In plugins/skills/next/SKILL.md, replace the generic 'this host's own question tool' sentence at steps 2 (approve) and 5 (accept) with the existing `{{ask}}` slot, keeping the explicit-yes and paste-before-ask requirements once each. Do the same at the approval step in plugins/skills/brief/SKILL.md. Keep plugins/hosts/*.json unchanged: those files already supply the host-specific text, including Codex's request_user_input fallback and Claude's AskUserQuestion. Extend test/integration/plugin.test.ts so the existing Codex question-tool assertion covers decide, loop, next and brief, and assert Claude's next and brief output names AskUserQuestion; retain the existing paste-rule test. Run pnpm plugins and inspect the generated Claude next/brief sentences so the tool name appears at the actual yes/no request. Complexity 2/10: this is a focused template change and one integration test, with no runtime behavior or schema change.",
-		"complexity": 2,
+		"approach": "The first run put the existing `{{ask}}` slot into next and brief. That slot is written for `decide`: it says \"pass `decide` exactly the option they picked\" and repeats the explicit-yes and on-their-behalf rules, so next step 2, next step 5 and brief step 3 now state those rules twice and carry a `decide` instruction where no `decide` is called. The work on the branch is kept and corrected.\n\n1. Add a second slot, `askYes`, to each of plugins/hosts/claude.json, codex.json, cursor.json and opencode.json. It is the yes/no form of that host's `ask` text and never mentions `decide`:\n   - claude: ask with AskUserQuestion, this host's own question tool — one question, a yes and a no.\n   - codex: ask with `request_user_input`; keep the existing fallback wording (\"When it is not listed\", ask in the conversation) and the note that Codex's own prompt keeps `request_user_input` away from permission requests, so the yes may come in the chat.\n   - cursor: this host's own question tool, a yes and a no.\n   - opencode: no question tool — ask in the conversation and wait for a reply.\n   Each ends with the rule once: a yes in the chat is a yes, silence is not, never answer on their behalf.\n2. In plugins/skills/next/SKILL.md (steps 2 and 5) and plugins/skills/brief/SKILL.md (step 3), replace the `{{ask}}` slot the first run added with `{{askYes}}`, and cut the sentences it duplicates, so each step says once: ask the yes/no (the slot), call `approve` / `accept` with `confirmed: true` only on an explicit yes, and what happens on a no. Keep the paste-before-ask sentence in step 5 of next exactly as it is, and keep the plain-language explanation wording of step 2 and brief step 3 as development has it now.\n3. `{{ask}}` in decide and loop is unchanged.\n4. Run `pnpm plugins` and commit the four hosts' generated copies with the source.\n5. Extend test/integration/plugin.test.ts:\n   - the codex test covers next and brief too: both contain `request_user_input` and `When it is not listed`;\n   - claude next and brief contain `AskUserQuestion`; opencode next and brief contain neither tool name;\n   - for every host, the generated next and brief contain no \"exactly the option\" (no `decide` instruction), and \"only on an explicit yes\" appears once in brief and twice in next (step 2 and step 5);\n   - update the comment that says next and brief do not name the tool.\n6. Check packages/claude-code-plugin/skills/next/SKILL.md and .../brief/SKILL.md by eye once: each step reads as one ask, one rule.",
+		"complexity": 3,
 		"acceptance": [
 			{
-				"run": "pnpm plugins",
-				"proves": "All four host plugin skill copies regenerate from the updated source templates."
+				"run": "pnpm plugins && git diff --exit-code -- packages plugins",
+				"proves": "The generated skills for all four hosts are regenerated from the source and committed; nothing is left out of date."
 			},
 			{
 				"run": "pnpm exec vitest run --project integration test/integration/plugin.test.ts",
-				"proves": "Generated Codex and Claude next/brief skills name the correct question tool and retain the paste rule."
+				"proves": "next and brief name each host's question tool, carry no `decide` instruction, state the explicit-yes rule once per step, and decide/loop plus the paste rule are unchanged."
+			},
+			{
+				"run": "npx biome check test/integration/plugin.test.ts plugins/hosts",
+				"proves": "The test and the host files pass lint and format."
 			}
 		],
 		"approval": {
 			"by": "Mehmet Yiğit Keskin",
-			"at": "2026-09-24T07:38:42.750Z",
+			"at": "2026-09-24T10:55:06.820Z",
 			"queue": false
 		}
 	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T10:55:12.649Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T11:01:07.221Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-21T13:25:54.176Z"
 }
