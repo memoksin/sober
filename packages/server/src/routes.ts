@@ -129,7 +129,7 @@ const target = z
  * started from this surface the same run the command line starts (`PR-09-08`),
  * and what ADR 0035 was reading when it kept `core` one entry point.
  */
-export const OPS: Readonly<Record<Operation, Route>> = {
+export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Route>> = {
 	init: route(
 		z.strictObject({ project: Project.omit({ schemaVersion: true }) }),
 		async (paths, { project }) => {
@@ -365,6 +365,18 @@ export const OPS: Readonly<Record<Operation, Route>> = {
  * once, so it is given no room to claim an ability it does not have.
  */
 export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
+
+/**
+ * What has no route yet. Rewording a node, the model list and the dispatcher
+ * came to the command line first; each gets its route with the screen that
+ * sends it.
+ */
+export const GAPS = [
+	'correct_node',
+	'add_model',
+	'start_dispatcher',
+	'stop_dispatcher',
+] as const satisfies readonly Operation[]
 
 /**
  * Reads. Four now: what the canvas draws, what `sober status` says, what a

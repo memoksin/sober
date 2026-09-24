@@ -11,7 +11,7 @@ import type { Operation } from '@besober/schema'
  * text fails the check. `PR-00-03` wants the help complete anyway; this is what
  * makes that a test rather than a habit.
  */
-export const COVERS: Readonly<Record<Operation, string>> = {
+export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, string>> = {
 	init: 'init',
 	bind: 'bind',
 	decide: 'decide',
@@ -48,4 +48,13 @@ export const COVERS: Readonly<Record<Operation, string>> = {
 	// (ADR 0051, and ADR 0009's line before it).
 	accept_distribution: 'distribute',
 	drop_distribution: 'distribute',
+	correct_node: 'correct',
+	add_model: 'models',
+	start_dispatcher: 'dispatch',
+	// Ctrl-C on the process `sober dispatch` holds is the stop, which its help
+	// line already says.
+	stop_dispatcher: 'dispatch',
 }
+
+/** The operations no command performs yet. None: the command line has them all. */
+export const GAPS = [] as const satisfies readonly Operation[]

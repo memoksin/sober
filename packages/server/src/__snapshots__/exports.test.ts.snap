@@ -3,6 +3,7 @@
 exports[`server exports nothing new without a reviewer seeing it 1`] = `
 [
   "COVERS",
+  "GAPS",
   "OPS",
   "READS",
   "WATCHES",

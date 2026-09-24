@@ -5,10 +5,12 @@ import { join } from 'node:path'
 import { currentBranch, paths } from '@besober/core'
 import { AGENT_OPERATIONS, OPERATIONS } from '@besober/schema'
 import { afterEach, expect, test } from 'vitest'
-import { COVERS, OPS, READS, WATCHES } from './routes.js'
+import { COVERS, GAPS, OPS, READS, WATCHES } from './routes.js'
 
-test('every operation PR-09-08 binds has a route', () => {
-	for (const operation of OPERATIONS) expect(Object.keys(OPS), operation).toContain(operation)
+const ROUTED = OPERATIONS.filter((operation) => !(GAPS as readonly string[]).includes(operation))
+
+test('every operation PR-09-08 binds has a route, unless it is a declared gap', () => {
+	for (const operation of ROUTED) expect(Object.keys(OPS), operation).toContain(operation)
 })
 
 test('the server routes nothing the catalogue does not name', () => {
@@ -16,7 +18,7 @@ test('the server routes nothing the catalogue does not name', () => {
 })
 
 test('what the server covers is the route table itself, so its manifest cannot drift', () => {
-	expect([...COVERS].sort()).toEqual([...OPERATIONS].sort())
+	expect([...COVERS].sort()).toEqual([...ROUTED].sort())
 })
 
 test('every route says what it accepts, so a body is parsed before core sees it', () => {

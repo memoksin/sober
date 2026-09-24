@@ -65,6 +65,16 @@ export const OPERATIONS = [
 	// exit from a bad plan is applying it.
 	'accept_distribution',
 	'drop_distribution',
+	// Rewording a node already on the board: its title, its description or its
+	// name. Its place in the graph does not move.
+	'correct_node',
+	// One entry in `dispatch.models`, with the scores the router reads it by.
+	'add_model',
+	// The dispatcher that starts queued nodes as they become ready. Two entries,
+	// like the plan's two: a surface that can start it and not stop it is a
+	// surface with no way out of it.
+	'start_dispatcher',
+	'stop_dispatcher',
 ] as const
 
 export type Operation = (typeof OPERATIONS)[number]
@@ -91,6 +101,10 @@ export type Operation = (typeof OPERATIONS)[number]
  * edges between them and the decisions each one introduces, against the code as
  * it is now. The first needs a person who knows what they want, the second
  * needs a model — which is the line ADR 0009 drew.
+ *
+ * `open_decision` stays here although the question it opens is a human's: it
+ * generates the options with a model (§2.6, ADR 0009), and a surface without
+ * one could only open a decision with nothing to pick from.
  */
 export const AGENT_OPERATIONS = ['propose', 'open_decision', 'distribute'] as const
 
