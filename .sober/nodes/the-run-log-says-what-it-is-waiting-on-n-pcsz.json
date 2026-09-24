@@ -1,0 +1,65 @@
+{
+	"title": "The run log says what it is waiting on, never goes silent",
+	"name": "The run log says what it is waiting on,",
+	"description": "Found on run toou of a-repository-with-no-commits-either-work-vze3 (2026-09-10). The agent's session ended at 07:35:27Z and its last log line read `result: finished`, but `finishRun` wrote `endedAt` only at 07:38:40Z. For those ~3 minutes the board said `running`, the log said nothing new, and the run looked hung.\n\nCause: after the session, `runAudit` (packages/core/src/audit.ts:111-119) runs `dispatch.verify` and then every acceptance criterion in turn, and `log()` (audit.ts:188) appends the header and the output only after each command has finished. The long one was `pnpm test` — 164s in the run, 158s re-measured on development; the other three criteria together took ~7s. The build was a full turbo cache hit, so the time is vitest, not the build.\n\nThe work: no silent waiting. Before each command, write what is being waited on — which criterion, the command, that it has started — and after it, the exit and how long it took. The same for `dispatch.verify`. A reader of `logs`, `sober logs` or the panel mid-audit should see \"running acceptance 1 of 4: `pnpm test`\", not a finished-looking tail. Probably its own line kind (e.g. a check starting / a check done) rather than `raw`, which is why this waits on m105: that node widens `LogLine` in packages/schema/src/wire.ts, and two nodes widening the same type at once would collide.\n\nOut of scope, and a separate decision if wanted: the audit re-runs the whole suite the agent already ran. That is ADR 0019's trust model (work under review does not judge itself) and costs ~3 minutes a run; changing it is the human's call, not this node's.\n\nThe visual nodes that render line kinds (one-mark-colour-and-icon-per-kind-and-pe-6tsw, and through it the run panel and `sober logs`) depend on this, so the waiting line gets its mark and is not forgotten.",
+	"notes": "",
+	"dependsOn": [
+		"the-run-log-carries-what-the-agent-actua-m105"
+	],
+	"decisions": [],
+	"files": [],
+	"brief": {
+		"approach": "Score 4: two small writes in one function plus one enum widening, but the widening lands on the type `m105` just moved, so match what it left rather than re-deciding it.\n\n**What `m105` already did** (merged in `f6cd123`, read it before writing): `LogLine` in `packages/schema/src/wire.ts:164` is now `kind: z.enum(['started', 'text', 'thinking', 'tool', 'result', 'raw', 'answer'])` plus `tool: z.string().nullable().default(null)`, and both render tables — `MARK`/`TONE` in `apps/dashboard/src/logs/data.ts` and `TAIL` in `packages/cli/src/work.ts:49` — carry an entry per kind, kept aligned by hand by an accepted decision. That is the pattern this node extends; do not restructure it.\n\n**1. Two kinds, not one.** Add `'check'` and `'checked'` to the enum: a command starting, and the same command's result. One kind cannot be both — a reader mid-audit needs a line that says *started and still going*, and a line that says *done, exit N, took M*. Put them next to `result` in the enum, and give each an entry in `MARK`/`TONE` and in `TAIL` in the same commit; the alignment is by hand and the slip this node is fixing is what a missing entry looks like.\n\n**2. The writes — `packages/core/src/audit.ts`.** `runAudit` (line ~105) runs `dispatch.verify` through `judge`, logs it, then loops the criteria doing the same. `log()` at line ~188 appends `\\n--- ${header}\\n${output}(exit N)` only *after* `judge` returns, so a 164-second `pnpm test` is 164 seconds of a log whose tail reads `result: finished`. Split it:\n\n- **Before** each `judge`, append a `check` line naming what is being waited on: which criterion of how many, and the command exactly as typed — `acceptance 1 of 4: \\`pnpm test\\``. For `dispatch.verify`, `dispatch.verify: <command>`. The count needs the criteria list up front, so hoist `await criteriaOf(paths, node)` above the loop into a `const` and index it; it is called once today anyway.\n- **After**, keep the existing block but make it a `checked` line and add the elapsed time — `Date.now()` either side of `judge`, rendered in seconds. The exit is already there.\n\nKeep `log()` as the one place that writes, with a parameter for the kind, rather than adding a second appender beside it. The run log is a text file appended by `appendRunOutput`; the kind reaches a screen through the same tail parser that reads the rest of the file, so check how `packages/core/src/tail.ts` turns these `--- ` headers into lines and extend that rather than inventing a second encoding — if the tail currently maps them to `raw`, this is where it learns the two new kinds.\n\n**3. What this does not do.** The audit re-runs the suite the agent already ran. That is ADR 0019's trust model — work under review does not judge itself — and it costs about three minutes a run. Changing it is a decision for a human, not this node; say so in one comment at the top of `runAudit` so the next reader stops there instead of optimising it.\n\n**4. Tests** in `packages/core/src/tail.test.ts` and beside `audit.ts`: a criterion that is slow produces a `check` line before any `checked` line exists — assert on the log file's contents partway, by giving `judge` a command that writes a marker file then sleeps briefly, or by asserting the two lines' order in the finished file, which is the honest cheap version. And one case that the `checked` line carries the exit and a duration. In `packages/schema/src/wire.test.ts`, that a line of each new kind parses.\n\nNothing else changes: no dispatch change, no MCP tool, no server route. `one-mark-colour-and-icon-per-kind-and-pe-6tsw` owns what glyph and colour each kind finally gets and waits on this node — give both kinds a plain entry here so nothing renders as the fallback dot, and leave the vocabulary pass to it.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/tail.test.ts packages/schema/src/wire.test.ts",
+				"proves": "a line of each new kind parses off the wire and the tail turns the audit's headers into them rather than into `raw`"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/audit.test.ts",
+				"proves": "a real audit writes a `check` line before each command and a `checked` line after it carrying the exit and how long it took — so a reader mid-audit sees what is being waited on instead of a finished-looking tail"
+			},
+			{
+				"run": "git grep -q \"'check'\" -- packages/schema/src/wire.ts apps/dashboard/src/logs/data.ts packages/cli/src/work.ts && git grep -q \"'checked'\" -- packages/schema/src/wire.ts apps/dashboard/src/logs/data.ts packages/cli/src/work.ts",
+				"proves": "both new kinds reached the wire and both hand-aligned render tables in the same commit — a missing entry is exactly the slip this node exists to stop"
+			},
+			{
+				"run": "pnpm vitest run apps/dashboard/src/logs",
+				"proves": "the dashboard renders the two new kinds rather than falling through to the unknown-kind mark"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!packages/core' ':!packages/schema' ':!apps/dashboard/src/logs' ':!packages/cli/src/work.ts' ':!test/integration/audit.test.ts')\"",
+				"proves": "the change is the audit, the tail, the type and the two tables — dispatch, the MCP tools and the server were not touched"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "every exhaustive switch and Record over LogLine['kind'] still compiles with two more members"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:25:51.829Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:28:48.374Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:33:07.755Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-10T07:47:55.330Z"
+}

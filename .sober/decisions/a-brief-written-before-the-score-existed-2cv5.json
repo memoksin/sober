@@ -1,0 +1,32 @@
+{
+	"category": "error-handling",
+	"question": "A brief written before the score existed reaches dispatch — what model runs it?",
+	"options": [
+		{
+			"id": "plain-host",
+			"label": "No score means no model flag — `dispatch.host` runs as it does today",
+			"reason": "Every board and every approved brief that exists keeps working untouched, and the migration adds a nullable field and backfills nothing. Turning the whole feature off stays a matter of not scoring, which is the conservative default `DEFAULT_CONFIG` already argues for.",
+			"costLater": "Two invocation paths live side by side forever. “Why did this node run on the default model” has two answers — no score, or a score whose tier is empty — and every surface that reports the model has to say which."
+		},
+		{
+			"id": "middle-tier",
+			"label": "The migration backfills every existing brief at the middle of the scale",
+			"reason": "One path through `dispatch.ts`, and the model a node ran on is a fact somebody can read off the record for every node on the board rather than for the ones written after today.",
+			"costLater": "A backfilled score is a number nobody chose, and a year later it reads exactly like one an agent judged — the failure ADR 0049 avoided by recording `did-not-run` instead of `passed`. The migration is also one-way: a v5 board coming back from a teammate carries it."
+		},
+		{
+			"id": "refuse-to-approve",
+			"label": "A brief without a score cannot be approved",
+			"reason": "The score decides what a run costs, so it belongs to what the human approves beside the acceptance list — the same argument ADR 0027 makes about criteria being the definition of done.",
+			"costLater": "Every already-approved brief on the board has to be rewritten before its node can run, and `approve` gains a refusal about a field the person approving did not write themselves."
+		}
+	],
+	"suggested": "plain-host",
+	"answer": {
+		"option": "plain-host",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-10T07:20:37.855Z"
+	},
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

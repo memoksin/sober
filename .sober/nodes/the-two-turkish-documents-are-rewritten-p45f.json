@@ -1,0 +1,54 @@
+{
+	"title": "The two Turkish documents are rewritten in English",
+	"name": "The two Turkish documents are rewritten",
+	"description": "`docs/PLAYBOOK.md` (185 lines) and `docs/REVIEW-2026-08-29.md` (217 lines) are written in Turkish; every other file in `docs/`, including `REVIEW-2026-08-28.md`, is English. Rewrite both in English, keeping every heading, table, ADR reference, file path and line citation exactly where it is — these are dated records of what was judged on those days, so the job is translation and never revision.\n\nTwo things stay Turkish and the node should not touch them: the Turkish strings in `packages/core/src/id.ts` and `packages/core/src/id.test.ts` are fixtures for the transliteration table and are the whole point of that test (`Ayrıştırma` → `ayristirma`), and the author's name in `LICENSE`, `.claude-plugin/marketplace.json` and the three `plugin.json` files is a name.\n\nAcceptance is a command: a search for Turkish-specific letters and a short Turkish word list over tracked files returns only those two exclusions.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"docs/PLAYBOOK.md",
+		"docs/REVIEW-2026-08-29.md"
+	],
+	"brief": {
+		"approach": "Keep the completed translation commit unchanged unless the corrected checks expose a real content defect. Rewrite only `docs/PLAYBOOK.md` and `docs/REVIEW-2026-08-29.md` in English, preserving paths, filenames, section numbering, tables, ADR references, `file:line` citations, dated measurements, and the original document structure. Preserve the five **→ ADR** markers, render all three **[KARAR]** markers as **[DECISION]**, and use the terse verdict-first register of `docs/REVIEW-2026-08-28.md` with `Hüküm:` rendered as `Ruling:`. Do not touch Turkish transliteration fixtures, the author's name, `docs/M1-GATE.md`'s quoted `ı`, or the immutable Turkish-derived node slug cited by `docs/adr/0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md`. Complexity is 3 / 10: the change is long but constrained to faithful translation of two documents and is checked mechanically for scope and preserved references.",
+		"complexity": null,
+		"acceptance": [
+			{
+				"run": "! git grep -lwI -e 'için' -e 'değil' -e 'olarak' -e 'ile' -e 'bir' -e 'ama' -e 'daha' -e 'kadar' -e 'yok' -e 'hüküm' -- ':!docs/adr/0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md'",
+				"proves": "No Turkish prose remains outside the pre-existing immutable node ID cited by ADR 0057."
+			},
+			{
+				"run": "! git grep -lI -e 'ı' -e 'ş' -e 'ğ' -e 'İ' -e 'Ş' -e 'Ğ' -- ':!LICENSE' ':!packages/cli/LICENSE' ':!.claude-plugin/marketplace.json' ':!**/plugin.json' ':!packages/core/src/id.ts' ':!packages/core/src/id.test.ts' ':!docs/M1-GATE.md' ':!docs/adr/0057-the-host-question-tool-asks-and-the-agent-relays-the-pick.md'",
+				"proves": "No Turkish-only letter remains outside deliberate names, fixtures, quoted-letter text, and the immutable node ID."
+			},
+			{
+				"run": "grep -q '^### 1.2' docs/REVIEW-2026-08-29.md && grep -q '^### 2.1' docs/REVIEW-2026-08-29.md && grep -q '^\\*\\*3.6 ' docs/REVIEW-2026-08-29.md && grep -q '^### 4.1' docs/REVIEW-2026-08-29.md",
+				"proves": "All four externally cited section markers remain in their original structural form, including 3.6 as bold prose."
+			},
+			{
+				"run": "test \"$(git diff --name-only development...HEAD)\" = \"$(printf 'docs/PLAYBOOK.md\\ndocs/REVIEW-2026-08-29.md')\"",
+				"proves": "Only the two authorized documents changed relative to the development base."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "Markdown formatting and secret checks remain clean."
+			}
+		],
+		"approval": null
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T07:46:41.946Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T07:51:15.714Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

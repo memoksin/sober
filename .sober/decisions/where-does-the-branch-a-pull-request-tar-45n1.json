@@ -1,0 +1,32 @@
+{
+	"category": "state",
+	"question": "Where does the branch a pull request targets live — a config key read off the base ref, or the branch you happen to be standing on?",
+	"options": [
+		{
+			"id": "config-key",
+			"label": "A `dispatch.base` key in .sober/config.jsonc",
+			"reason": "Every other dispatch setting — host, setup, verify, draftPr, accept — is already a config key read off the base ref (docs/adr/0019-configuration-is-read-from-the-base.md, packages/core/src/config.ts). The target stops being an accident of what is checked out, it travels with the repository, and a second person who clones gets the same answer without being told.",
+			"costLater": "The key that names the base is itself read from the base, so the very first read still has to fall back to the current branch — a bootstrap fold that has to be written and explained once, forever. A repository that renames its branch now has one more file to update."
+		},
+		{
+			"id": "current-branch",
+			"label": "Stay with the current branch, as today",
+			"reason": "Nothing to build. `--base` already overrides it per invocation, and a person who stands on the right branch gets the right answer.",
+			"costLater": "Every run started from `main` quietly targets `main`, which is exactly the release nobody asked for. The rule lives in a person's head instead of the repository, so it holds until the first tired evening."
+		},
+		{
+			"id": "remote-head",
+			"label": "Read origin/HEAD, git's own default branch",
+			"reason": "git already records which branch is the default; no new setting, no new file, no drift between config and remote.",
+			"costLater": "origin/HEAD names `main` — the one branch we specifically do not want as the everyday target — so it answers the wrong question. It is also unset in plenty of clones, which puts the fallback back where it started."
+		}
+	],
+	"suggested": "config-key",
+	"answer": {
+		"option": "config-key",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T21:16:15.586Z"
+	},
+	"createdAt": "2026-09-08T21:08:54.828Z"
+}

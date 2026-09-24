@@ -1,0 +1,65 @@
+{
+	"title": "`sober decisions` says what was decided, not only what is still open",
+	"name": "`sober decisions` says what was decided,",
+	"description": "`decisions()` in `packages/cli/src/work.ts:61` iterates `openDecisions(board)`, so an answered decision vanishes from the only place the command line lists them — and the help line says as much: “every decision still waiting on you” (`packages/cli/src/index.ts:41`).\n\nAdd `--all`. It prints answered decisions too: the question, the option that was picked, the rationale, `derived` when there is one, and the options that were not picked, in the same two colours the open list already uses for `because` and `later` (ADR 0024). The bare command keeps its current output — it is what a person runs to find their next move, and burying that under a month of settled decisions is a worse default.\n\nThe words are the ones the dashboard list settled, which is why this node comes after it. A run that says one thing in the terminal and another on the screen is the defect `every-message-that-names-a-node-says-which-node-it-is` is already open about.",
+	"notes": "",
+	"dependsOn": [
+		"a-screen-that-lists-every-decision-and-w-p6qj"
+	],
+	"decisions": [],
+	"files": [
+		"packages/cli/src/work.ts",
+		"packages/cli/src/index.ts",
+		"test/integration/cli.test.ts"
+	],
+	"brief": {
+		"approach": "One flag, one branch inside one function. `decisions()` at `packages/cli/src/work.ts:61` takes a parameter, `packages/cli/src/index.ts` passes it, and the words come from the screen that already settled them.\n\n**The flag.** `all: { type: 'boolean' }` in the `options` object at `packages/cli/src/index.ts:155` (alongside `anyway`, `queue`, `watch`, `done`), and `case 'decisions': return decisions(values.all === true)` at line 214. The help table at line 41 gains a second row under the existing one, in the same two-column shape the rest of the block uses:\n\n```\n  decisions                      every decision still waiting on you\n  decisions --all                every decision, answered ones included\n```\n\nThe bare command's output does not change by one character. It is what a person runs to find their next move, and a month of settled decisions in front of that is a worse default — say that in one comment on the parameter, not in the help text.\n\n**The listing.** `openDecisions(board)` in `packages/core/src/status.ts:121` is `decisionState(decision) !== 'answered' && !board.archivedDecisions.has(id)`. Do not widen it — it is the right filter and four other callers depend on it. For `--all`, iterate `board.decisions` directly with the archive filter only: `[...board.decisions].filter(([id]) => !board.archivedDecisions.has(id))`. Archived decisions stay out either way; an archived record is off the board, which is what `archive` means.\n\nOrder the way `apps/dashboard/src/decisions/data.ts` orders it, because the terminal and the screen saying different things in a different order is the defect `every-message-that-names-a-node-says-whi-kr9o` is open about: **open first, then unopened, then answered**, and `createdAt` ascending within each group. That file landed in `1db39a6f` — read its `ORDER` map and match it rather than inventing a second ordering.\n\n**The answered block.** For an answered decision, after the `id` / `category` / question lines that are already printed for every decision:\n\n- the chosen option, found in `decision.options` by `answer.option` — an id, never an index (ADR 0020) — printed with the same `cyan(bold(option.id))  option.label` shape the open list uses at line 72, so a reader recognises the row;\n- `answer.rationale` under it;\n- `answer.derived` when it is non-null, as one short marker saying the answer was read off the code and confirmed rather than arrived at (ADR 0055) — the word the dashboard uses is `derived`, and it names *where*, so print the value;\n- the options that were **not** picked, each keeping its `green('because')` / `yellow('later')` pair from lines 74-77. Those two colours are the education pillar (ADR 0024) and are the reason to show the rejected options at all;\n- and instead of the `answer it with: sober decide …` line, who answered it and when — `answer.by`, `answer.at`.\n\nReuse the `magenta`/`cyan`/`green`/`yellow`/`dim`/`bold` helpers and `say` already imported in the file. No new colour, no table, no box: `work.ts` prints lines.\n\n**A decision whose options are null** keeps its existing `options have not been produced yet` line under `--all` too. It cannot be answered, so the answered block does not apply and the branch must not assume `options` is an array.\n\n**Test** in `test/integration/cli.test.ts`, extending the scripted walkthrough that already answers `session-store-k7f2` with `cookie` at line 186. After that answer: `sober decisions` no longer contains `session-store-k7f2`, and `sober decisions --all` does — with the chosen label, the rationale, and the label of an option that was not picked. Two assertions, in the file that already owns this walkthrough; do not start a new test file for one flag.\n\nNothing outside `packages/cli` and that one test changes. `core` gains no export, the schema is untouched, and the dashboard is not edited — it already shows this, which is why this node came after it.",
+		"complexity": null,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/cli.test.ts",
+				"proves": "the bare command still hides an answered decision and `--all` shows it with the option that was picked, the rationale, and an option that was not — asserted against a real board the same walkthrough just answered"
+			},
+			{
+				"run": "git grep -q \"decisions --all\" -- packages/cli/src/index.ts",
+				"proves": "the flag is in the help table, so a person finds it without reading the source"
+			},
+			{
+				"run": "git grep -q 'openDecisions' -- packages/core/src/status.ts && test -z \"$(git diff --name-only development -- packages/core)\"",
+				"proves": "`openDecisions` was left alone and core gained nothing — the four other callers of that filter are unaffected"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!packages/cli' ':!test/integration/cli.test.ts')\"",
+				"proves": "only the CLI and its own integration test changed: no schema, no core, no dashboard, no MCP tool"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the widened `decisions()` signature and its one call site compile"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:00:36.714Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:00:38.965Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:03:03.097Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

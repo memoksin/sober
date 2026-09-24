@@ -1,0 +1,80 @@
+{
+	"title": "Agent-written text renders as markdown wherever it lands, not only in the panel",
+	"name": "Agent-written text renders as markdown",
+	"description": "`apps/dashboard/src/panel/markdown.tsx` renders the subset of markdown an agent writes, and `Panel.tsx` is its only caller — so the brief reads properly and every other screen shows the source.\n\nMove it to `apps/dashboard/src/markdown.tsx`: it stopped being the panel's the moment a second screen wanted it. Then use it everywhere an agent wrote the words: the decision question and each option's `reason` and `costLater` in `panel/Decision.tsx`, the same fields in the new decisions list, `because` on each match in `distribute/Distribution.tsx`, the scan findings and the rejection text in `review/Review.tsx`, and the node description wherever else it is printed.\n\nTwo places stay as they are, and the node says so rather than leaving a reviewer to wonder: `logs/Logs.tsx` is a monospace line-per-event transcript where a backtick is what the agent typed, and the CLI is a terminal with no renderer.\n\nKeep the renderer's shape. It returns React elements and never an HTML string, and it has no links — which together are why there is no sanitiser to get wrong, and it ships to every user inside the CLI bundle (ADR 0007).",
+	"notes": "",
+	"dependsOn": [
+		"a-screen-that-lists-every-decision-and-w-p6qj"
+	],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/markdown.tsx",
+		"apps/dashboard/src/markdown.test.tsx",
+		"apps/dashboard/src/panel/**",
+		"apps/dashboard/src/review/**",
+		"apps/dashboard/src/distribute/**",
+		"apps/dashboard/src/decisions/**"
+	],
+	"brief": {
+		"approach": "Score 4: a file move plus six call sites, all in one package — but the move touches the one module whose shape is a security property, so the shape has to be preserved deliberately rather than by accident.\n\n**1. The move.** `apps/dashboard/src/panel/markdown.tsx` → `apps/dashboard/src/markdown.tsx`, with `apps/dashboard/src/panel/markdown.test.tsx` → `apps/dashboard/src/markdown.test.tsx`. Use `git mv` so the history follows. Its two exports are `Inline` (line 124) and `Markdown` (line 153); its only importer today is `panel/Panel.tsx`. Fix that import and the test's, and change nothing inside the module.\n\n**Keep the module's shape exactly**, and keep the doc comment that explains why, because it is the reason there is no sanitiser here to get wrong: it returns React elements and never an HTML string, and it renders no links — `javascript:` in an `href` is the one place a renderer produces an attribute worth being careful about. It also ships to every user inside the CLI bundle (ADR 0007). Do not add links, do not add raw-HTML passthrough, do not swap in a dependency.\n\n**2. The call sites.** Agent-written text gets `<Markdown>` for a block and `<Inline>` for a run of text inside an existing element — pick per site by what the surrounding element already is; wrapping a `<span>`'s contents in block-level output is a layout regression, not a win.\n\n- `apps/dashboard/src/panel/Decision.tsx`: the question at line 97, and each option's `reason` (line 143) and `costLater` (line 150).\n- `apps/dashboard/src/decisions/Decisions.tsx`: the same three fields, plus `answer.rationale`. That screen landed in `1db39a6f` and renders them as bare text today.\n- `apps/dashboard/src/distribute/Distribution.tsx`: `row.because` at line 60.\n- `apps/dashboard/src/review/Review.tsx`: the scan finding messages (line 144) and the rejection text. Finding messages are short single-line strings from the scanner, so `Inline` is the right one there; the rejection is a human's paragraph and gets `Markdown`.\n- The node description wherever a screen prints it — find them with `rg -n 'description' apps/dashboard/src` and treat each the same way.\n\n**3. Two places stay as they are**, and the node says so rather than leaving a reviewer wondering: `apps/dashboard/src/logs/Logs.tsx` is a monospace line-per-event transcript where a backtick is a character the agent typed, and the CLI is a terminal with no renderer. Put that in one comment where it will be read — the top of `markdown.tsx` is the wrong place; a line in `Logs.tsx` saying why it does not use the renderer is the place someone will look.\n\n**4. Tests.** The moved `markdown.test.tsx` keeps passing unchanged — that is the proof the move changed nothing. Then one assertion per newly-wrapped screen, in the test file that screen already has (`Decision.test.tsx`, `decisions/data.test.ts`'s sibling component test, `Distribution.test.tsx`, `Review.tsx`'s test): a field containing backticked text renders a `<code>` element rather than the backticks. Do not snapshot whole screens for this; one targeted assertion each says what broke when it breaks.\n\nNothing outside `apps/dashboard` changes: no core, no schema, no server route, no MCP tool.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run apps/dashboard/src/markdown.test.tsx",
+				"proves": "the renderer's own tests pass unchanged from their new location — the move was a move, not a rewrite"
+			},
+			{
+				"run": "pnpm vitest run apps/dashboard/src",
+				"proves": "every screen that now renders agent-written text shows a code element where the agent wrote backticks, and no existing panel, decision, review or distribution behaviour regressed"
+			},
+			{
+				"run": "test ! -f apps/dashboard/src/panel/markdown.tsx && test -f apps/dashboard/src/markdown.tsx && ! git grep -q 'panel/markdown' -- apps/dashboard/src",
+				"proves": "the module moved out of panel/ and no import still reaches for the old path"
+			},
+			{
+				"run": "! git grep -nE 'dangerouslySetInnerHTML|href=' -- apps/dashboard/src/markdown.tsx",
+				"proves": "the shape that makes this safe survived the move: React elements only, and still no link attribute — this renderer ships to every user inside the CLI bundle"
+			},
+			{
+				"run": "git grep -q 'Markdown' -- apps/dashboard/src/panel/Decision.tsx apps/dashboard/src/decisions/Decisions.tsx apps/dashboard/src/distribute/Distribution.tsx apps/dashboard/src/review/Review.tsx",
+				"proves": "all four screens that print agent-written words now use the renderer, rather than only the panel it used to belong to"
+			},
+			{
+				"run": "! git grep -q 'markdown' -- apps/dashboard/src/logs && git grep -qi 'monospace\\|transcript' -- apps/dashboard/src/logs/Logs.tsx",
+				"proves": "the log transcript was deliberately left as raw monospace text, and says so where the next reader will look"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!apps/dashboard')\"",
+				"proves": "only the dashboard changed: no core, no schema, no server route, no MCP tool and no CLI"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "every moved import and every new call site compiles"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:20:27.373Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:20:44.780Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:24:02.248Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-09T09:36:42.245Z"
+}

@@ -1,0 +1,32 @@
+{
+	"category": "data-flow",
+	"question": "How does a release's bump — patch, minor, major — get from the person deciding it into the version that ships?",
+	"options": [
+		{
+			"id": "changeset-by-hand",
+			"label": "By hand, with `pnpm changeset`, as today",
+			"reason": "This is what the repository already does: .changeset/config.json with `commit: false`, and a version-packages pull request that consumes whatever changeset files are present. Zero new code, and the tool is already understood.",
+			"costLater": "Nothing ties a node to its bump, so a merge into `main` with no changeset ships nothing and says nothing — a silent release, which is the failure the whole rule exists to prevent."
+		},
+		{
+			"id": "changeset-at-accept",
+			"label": "Accepting a node writes its changeset",
+			"reason": "The bump is named while the change is fresh and the person who did the work is the one answering. The existing release pull request consumes the file with no new machinery downstream.",
+			"costLater": "`accept` — a path that today only merges — grows a question and a file write, and every node now owes an answer even when it changes nothing publishable. Twenty accepted nodes make twenty changeset files to reconcile at release time."
+		},
+		{
+			"id": "bump-at-release",
+			"label": "The one merge into main asks the bump once",
+			"reason": "One question per release instead of one per node, asked at the moment the user is already deciding to release. Nodes stay about the work; the release stays about the version.",
+			"costLater": "The bump is chosen far from the change, so a breaking change buried among twenty nodes is easy to bill as a patch. Somebody has to read the whole range to answer honestly, and nobody does that twice."
+		}
+	],
+	"suggested": "changeset-by-hand",
+	"answer": {
+		"option": "bump-at-release",
+		"rationale": "The bump is the user's call at the release, not something a node guesses. Per-node changesets forced every agent to name patch, minor or major for work that publishes nothing on `development`. CI now asks for a changeset only on a pull request into `main`, which is the release, and CLAUDE.md tells agents never to write one for a node.",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-09T09:09:44.599Z"
+	},
+	"createdAt": "2026-09-08T21:08:54.828Z"
+}

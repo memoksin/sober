@@ -1,0 +1,72 @@
+{
+	"title": "A node's title and description can be corrected after it is opened",
+	"name": "A node's title and description can be",
+	"description": "Today a node's title and description are written once, by `propose` or `open_node`, and nothing changes them afterwards. The MCP surface has `edit_decision` but no node counterpart; the CLI's `edit <id> <option>` only changes a decision's answer. Re-proposing does not help: a new id gets a random suffix, so it opens a second node instead of fixing the first. `bind` changes edges and `write_brief` rewrites the approach, but the node's own words stay as first written — and the node text is what the brief renders under \"This node\" and what every agent reads.\n\nThe work: one tool and one CLI command that rewrite a node's title and/or description in place, keeping its id, edges and history, and logging the edit as an event. Whether an edit touches an approved brief is the decision below.",
+	"notes": "",
+	"dependsOn": [
+		"a-node-gets-a-short-name-a-person-can-re-xygw"
+	],
+	"decisions": [
+		"when-a-node-s-title-or-description-is-ed-rl05"
+	],
+	"files": [
+		"packages/core/src/**",
+		"packages/mcp/src/tools/plan.ts",
+		"packages/cli/src/**",
+		"test/integration/**"
+	],
+	"brief": {
+		"approach": "Score 5: one core function reached by two surfaces, and one rule — the edit clears the approval — that has to be enforced in core rather than at each surface, or one of them will forget.\n\n**Core — `packages/core/src/flag.ts`, beside `createNode` and `reopenNode`.** That file already owns the node's own-words operations and is where `createNode` lives, so this goes there rather than in a new module:\n\n```ts\nexport interface Correction {\n\treadonly title?: string\n\treadonly description?: string\n\treadonly name?: string\n\treadonly by: Handle\n}\n\nexport const correctNode = (paths: Paths, node: string, correction: Correction): Promise<Node>\n```\n\n`reopenNode` (line 67) is the shape to copy exactly: `withLock(paths, '<action>', …)`, `readNode`, throw `NotOnBoardError` when it is not there, build the updated record with a spread, `writeNode`, `appendEvent`, return the record. Match it line for line.\n\nThree rules inside it:\n\n1. **The id never changes.** `newId` seeds from the name for a *new* node; a correction must not reseed. An id is written once and is the branch name, the worktree path, the run record's key and every citation in every brief. Say that in a comment where a reader would otherwise be tempted.\n2. **An edit with nothing in it is refused**, not a silent no-op write: all three fields absent throws, in the register `reopenNode`'s \"there is nothing to reopen\" refusal uses. An empty write still bumps the record and still fires an event, which is a lie in the history.\n3. **Any edit clears the approval.** This is the bound decision. Clear `brief.approval`, not the brief itself — the contrast with `editDecision` in `packages/core/src/impact.ts:105` is worth a comment: that one clears the *whole brief* because the approach was written against an answer that is now gone, while here the approach still stands and only the words the human read alongside it changed. So the node returns to `needs-approval`, not `needs-brief`. Leave `brief` null alone. Note the queue consequence the decision's cost line names — a queued node (ADR 0056) drops out until someone approves it again — in the same comment.\n\nAlso allow `name`, even though the node's text predates it: `Node.name` is now a required field (merged with `a-node-gets-a-short-name-a-person-can-re-xygw`) and it goes stale exactly when the title is rewritten and the name is not. A correction tool that can fix the title but not the name builds that staleness in on day one. Same 40-character bound as the schema.\n\n**Export** it from `packages/core/src/index.ts`. The ceiling in `packages/core/src/exports.test.ts` is 107 and the surface is already over it, which prints a warning by design (ADR 0028) — do not raise the number; update the snapshot with `-u`.\n\n**MCP — a new tool beside `open_node` in `packages/mcp/src/tools/flag.ts`.** Name it for what it does to a node, in the register of the tools around it. Inputs: `node`, and nullish `title`, `description`, `name`. Its description must say the one surprising thing: an edit withdraws an approval already given, because the human approved words that no longer exist. Return text naming what changed and that the brief needs approving again when it had one.\n\n**CLI — `packages/cli/src/index.ts` and `work.ts`.** A new command, and a row in the help under **When a decision moved** or beside `open`. Careful with the name: `edit <id> <option>` already means changing a decision's answer, so do not overload it — a second meaning on that word is how one surface becomes two. Take the new text through flags (`--title`, `--description`, `--name`) reusing the existing `title`/`name` option entries in the `options` object.\n\n**Tests.** `packages/core/src/flag.test.ts` (or wherever `createNode`/`reopenNode` are tested — find it with `fd flag packages/core/src`): a title edit keeps the id, the edges, the claim and the accepted record; an approval on the brief is cleared while the approach survives; an edit with no fields is refused; a node that is not on the board throws `NotOnBoardError`. In `test/integration/mcp.test.ts` and `test/integration/cli.test.ts`, one end-to-end each: correct a node, then `sober status` shows it back at `needs-approval` rather than `ready`.\n\nNothing in the dashboard or the server changes here.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/flag.test.ts packages/core/src/exports.test.ts",
+				"proves": "a correction keeps the id, edges, claim and accepted record, clears only the approval while the approach survives, refuses an edit with nothing in it, and throws for a node that is not on the board"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/mcp.test.ts test/integration/cli.test.ts",
+				"proves": "both surfaces reach the same core function and a corrected node comes back as needs-approval rather than ready — the bound decision made mechanical, end to end"
+			},
+			{
+				"run": "git grep -q 'CEILING = 107' -- packages/core/src/exports.test.ts",
+				"proves": "the export ceiling was not raised to absorb the new name — ADR 0028 says that number moves by ADR"
+			},
+			{
+				"run": "! git grep -n 'newId' -- packages/core/src/flag.ts | grep -i correct",
+				"proves": "the correction does not reseed the id — an id is the branch name, the worktree path and every citation, and rewriting one breaks all of them"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- apps packages/server)\"",
+				"proves": "no dashboard screen and no server route changed: this is core plus the two surfaces that already write nodes"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "the new export, the tool and the CLI command compile across the monorepo"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:45:40.812Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T21:14:21.367Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T21:47:32.320Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "did-not-run"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-10T07:59:16.770Z"
+}

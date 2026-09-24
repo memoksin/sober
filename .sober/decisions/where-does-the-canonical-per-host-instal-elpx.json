@@ -1,0 +1,32 @@
+{
+	"category": "module-boundaries",
+	"question": "Where does the canonical per-host install instruction live — in the root README, or in each host package README?",
+	"options": [
+		{
+			"id": "package-canonical",
+			"label": "Each package README is canonical; the root README's Hosts table links to it",
+			"reason": "This is what the repository already does: the Hosts table in README.md carries one row per host linking to packages/*-plugin/README.md, and three of the four READMEs exist and already own their install section. Nothing moves; the guide gains one short 'install the plugin for your host' section that says the shared prerequisite (`sober` on PATH) once and sends the reader to their row.",
+			"costLater": "A reader who lands on the README has to leave it to finish installing — four clicks for four hosts, and the guide is no longer readable top to bottom. The 'no checkout needed for Claude Code' fact, which is the single most useful thing a newcomer learns, stays one page away from the install section."
+		},
+		{
+			"id": "root-canonical",
+			"label": "The root README carries every host's install steps; package READMEs keep only the per-host differences",
+			"reason": "The guide stays a guide: someone installs SOBER without leaving the page, and the four hosts sit next to each other where the difference between 'no checkout' and 'checkout required' is visible at a glance. Package READMEs shrink to what only they can say — hook enforcement, elicitation, attended dispatch.",
+			"costLater": "The root README grows by four install blocks and keeps growing with every new host; the Hosts table and the install section then say overlapping things and drift apart. Someone who arrives at packages/codex-plugin from a search result finds a README that no longer tells them how to install it."
+		},
+		{
+			"id": "both-with-source",
+			"label": "Both, generated from one source under plugins/hosts/",
+			"reason": "Neither reader loses: the guide is complete and each package README is complete, and they cannot disagree because one file produces both. It follows the pattern already in the repository, where packages/*-plugin/skills/ is generated from plugins/skills/ by scripts/build-plugins.mjs.",
+			"costLater": "Prose behind a generator is prose nobody edits casually — a one-word fix needs a build step and a regenerated diff across five files. It also puts install instructions in the same machinery as the skills, so a break in build-plugins.mjs now breaks documentation too."
+		}
+	],
+	"suggested": "package-canonical",
+	"answer": {
+		"option": "root-canonical",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-08T12:11:52.325Z"
+	},
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

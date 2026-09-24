@@ -1,0 +1,68 @@
+{
+	"title": "A tool loop in core that runs a brief against an OpenAI-compatible chat-completions endpoint",
+	"name": "tool-loop",
+	"description": "New file packages/core/src/agent.ts (plus agent.test.ts) — the half that does the work, with no adapter wiring yet. Input: base URL (default https://openrouter.ai/api/v1), model id, API key, cwd (the worktree), the prompt, an `onLine: (line: LogLine) => void`, an AbortSignal. It POSTs `${base}/chat/completions` with `tools` in the OpenAI function-calling shape and loops until the assistant answers without a tool call. Four tools, no more: `bash` (spawn `sh -c` in cwd, stdout+stderr, exit code, a timeout), `read_file`, `write_file`, `edit_file` (exact old→new replacement, refuse if not unique). The system prompt is `NO_HUMAN` from hosts.ts, then the contents of the worktree's root `CLAUDE.md` and `AGENTS.md` where they exist (root only — no nested files, no `.claude/CLAUDE.md`), then a short paragraph on the four tools. Every assistant text and every tool call is one LogLine (`text` / `tool`, same shapes hosts.ts renders), so `sober logs` and the run panel show it like any host. The end of the run: `finished` when the model stops on its own, `failed` with the status and the body's message when the endpoint refuses — retry policy per the bound decision. Tests use an injected `fetch` (as models.ts's `openRouterModels` already does): a scripted two-turn conversation that writes a file through `edit_file`, an aborted run, a refused call. Tokens in and out from `usage` go on the last line so the record can say what it cost (ADR vki3). No streaming (`stream: false`) — one response per turn is enough for a log that already renders per event.",
+	"notes": "",
+	"dependsOn": [
+		"api-loop-adr-id28"
+	],
+	"decisions": [
+		"where-does-sober-s-own-tool-loop-run-in-i1nr",
+		"when-the-endpoint-refuses-mid-run-a-429-8q5u"
+	],
+	"files": [
+		"packages/core/src/agent.ts",
+		"packages/core/src/agent.test.ts",
+		"packages/core/src/index.ts"
+	],
+	"brief": {
+		"approach": "One new module and its test; no adapter, no CLI subcommand (those are `openrouter-host-bdws`).\n\n1. `packages/core/src/agent.ts` — export `runAgent(options): Promise<AgentExit>` where `AgentExit` is the existing union from `host.ts` (`finished` / `failed` / `stopped`). Options: `baseUrl` (default `https://openrouter.ai/api/v1`, trailing slashes stripped like `jev.ts` does), `model`, `apiKey`, `cwd`, `prompt`, `onLine: (line: LogLine) => void` (`LogLine` from `@besober/schema`), `signal?: AbortSignal`, `fetch?` injected for tests (the `openRouterModels` pattern in `models.ts`). No new dependency: `fetch`, `node:child_process`, `node:fs/promises`.\n\n2. The system prompt, in order: `NO_HUMAN` from `hosts.ts`; the contents of `<cwd>/CLAUDE.md` and `<cwd>/AGENTS.md` where each exists (root only, each under a `# CLAUDE.md` / `# AGENTS.md` heading; ENOENT is silence, any other error is a `failed` exit); one short paragraph naming the four tools and that the work must be committed. The user message is `prompt`.\n\n3. The loop: POST `${baseUrl}/chat/completions` with `{ model, messages, tools, stream: false }`, header `authorization: Bearer <apiKey>`. Tools in the OpenAI function shape, exactly four: `bash` (`{command}`; `spawn('sh', ['-c', command], { cwd })`, stdout+stderr joined, exit code appended, 120 s timeout then SIGTERM and a note in the result), `read_file` (`{path}` relative to cwd; the content, or the error message), `write_file` (`{path, content}`, `mkdir -p` the parent), `edit_file` (`{path, old, new}`; refuse with a message when `old` is absent or appears more than once). Every tool result goes back as a `role: 'tool'` message with the `tool_call_id`; a path outside `cwd` (after `resolve`) is refused as a tool result, not thrown. Each assistant `content` becomes `{ kind: 'text', text }`, each tool call `{ kind: 'tool', text: '<name> <one-line arg>', tool: name }` — the same two kinds the OpenCode adapter emits in `hosts.ts`. The loop ends when the assistant answers with no tool calls: emit `{ kind: 'result', text: 'finished — <prompt_tokens> in, <completion_tokens> out' }` from the summed `usage`, return `finished`. `ponytail:` a hard cap of 200 turns; over it, `failed` with that reason.\n\n4. Errors, per decision `when-the-endpoint-refuses-mid-run-a-429-8q5u`: a 429 or 5xx, or a fetch that throws (network), is retried up to 3 tries with 2 s / 4 s backoff, and before each wait `onLine({ kind: 'raw', text: 'waiting on <status>, try <n> of 3' })` so the run never goes silent (node pcsz's rule). The fourth failure, and any other non-OK status at once, returns `failed` with `\"<baseUrl> answered <status>: <first line of the body>\"`. An aborted `signal` (checked before every request and passed to `fetch`) returns `stopped` and kills a running `bash`. A malformed body (no `choices[0].message`) is `failed`, named.\n\n5. Export `runAgent` and `AgentOptions` (rename the agent's to `LoopOptions` to avoid the clash with `host.ts`'s `AgentOptions`) from `packages/core/src/index.ts`; `exports.test.ts`'s ceiling is 107 and only warns, so read the count it prints and leave the number alone unless it is crossed.\n\n6. `packages/core/src/agent.test.ts` (vitest, like `models.test.ts`): a scripted `fetch` that returns, in order, one response with an `edit_file` tool call and one with plain text — run in a temp dir holding a file and a `CLAUDE.md`, assert the file was edited, the system message carried the CLAUDE.md text and `NO_HUMAN`, the `onLine` sequence is `tool`, `text`, `result`, and the exit is `finished`; a 429 then 200 → one `raw` waiting line then `finished`; four 429s → `failed` naming 429; a 401 → `failed` at once with no `raw` line; a pre-aborted signal → `stopped` with no request made; `edit_file` with a non-unique `old` → the tool result text says so and the loop continues; a path `../outside` → refused in the tool result.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/agent.test.ts",
+				"proves": "The loop edits a file through a tool call, carries CLAUDE.md and NO_HUMAN in the system prompt, retries 429/5xx three times with a waiting line and fails on the fourth, fails 401 at once, honours abort, refuses an ambiguous edit and a path outside cwd"
+			},
+			{
+				"run": "rg -q \"from './agent.js'\" packages/core/src/index.ts && pnpm vitest run packages/core/src/exports.test.ts",
+				"proves": "runAgent is exported from core and the export count is still under the ceiling"
+			},
+			{
+				"run": "rg -c \"name: '\" packages/core/src/agent.ts | rg -q '^4$'",
+				"proves": "Exactly four tools are declared — bash, read_file, write_file, edit_file"
+			},
+			{
+				"run": "! rg -q 'stream: true' packages/core/src/agent.ts && rg -q \"kind: 'raw'\" packages/core/src/agent.ts",
+				"proves": "No streaming, and the backoff wait is written to the log"
+			},
+			{
+				"run": "git diff --stat development -- packages/cli packages/core/src/hosts.ts packages/core/src/host.ts | rg -q . && exit 1 || exit 0",
+				"proves": "No adapter or CLI wiring — that is the openrouter-host node"
+			},
+			{
+				"run": "pnpm lint && pnpm typecheck",
+				"proves": "The repo's gate is green"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-21T16:44:55.491Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T16:56:24.886Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T17:00:18.168Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-21T16:27:14.935Z"
+}

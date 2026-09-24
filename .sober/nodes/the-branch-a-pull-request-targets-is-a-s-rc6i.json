@@ -1,0 +1,66 @@
+{
+	"title": "The branch a pull request targets is a setting, not wherever you are standing",
+	"name": "The branch a pull request targets is a",
+	"description": "`baseOf` in packages/cli/src/board.ts:69 is `given ?? currentBranch(paths.root)`, so the branch a run is cut from and the branch its draft targets are both an accident of what happens to be checked out. Start a run while standing on `main` and SOBER opens a pull request into `main` — the release nobody asked for.\n\nGive the target a home in `.sober/config.jsonc` under `dispatch` — the zod schema and the commented jsonc template both live in packages/core/src/config.ts, beside `draftPr` and `accept`. `baseOf` falls back to that setting before it falls back to the current branch, and the existing `--base` flag (packages/cli/src/index.ts:158) stays the per-invocation override. packages/core/src/pr.ts:125 already hands whatever it is given to `gh pr create --base`, so the publish path itself does not change. The same fallback has to reach the `accept`, `review`, `audit` and `reject` call sites in packages/cli/src/review.ts, which all go through `baseOf`.\n\nAcceptance: a run started from any checked-out branch opens its draft against the configured target; `--base` still wins; a config with no target behaves exactly as today. Tests land with the code.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-the-branch-a-pull-request-tar-45n1",
+		"how-does-a-release-s-bump-patch-minor-ma-65rt"
+	],
+	"files": [
+		"packages/core/src/config.ts",
+		"packages/core/src/config.test.ts",
+		"packages/cli/src/board.ts",
+		"packages/cli/src/board.test.ts",
+		"packages/cli/src/index.ts",
+		"packages/core/src/pr.ts",
+		".sober/config.jsonc"
+	],
+	"brief": {
+		"approach": "Complexity 5 / 10: the schema change is small, but the bootstrap lookup must preserve every CLI override and every review/accept call site while preventing accidental PRs into `main`. Add nullable `dispatch.base` beside the existing dispatch settings in `packages/core/src/config.ts`, defaulting to null for compatibility and documenting it in `DEFAULT_CONFIG_TEXT` as the branch new run branches and draft PRs target. In `packages/cli/src/board.ts`, keep explicit `--base` highest priority; otherwise use the checked-out branch only to bootstrap `readConfigFromBase`, return its configured `dispatch.base` when present, and fall back to the current branch when absent. A broken base-ref config must continue through the CLI’s existing refusal path rather than being silently ignored. Ensure `run`, queue draining, `review`, `audit`, `reject`, `accept`, and `accept --green` continue to call this single `baseOf` path; `packages/core/src/pr.ts` must remain a consumer of the resolved base and need no model of current checkout. Extend the nearest config and CLI/integration tests to prove a run started while checked out on `main` cuts from and opens its draft against configured `development`, `--base` still overrides it, review actions resolve against the configured target, and an omitted key behaves exactly as before. Update `.sober/config.jsonc` only if the generated/default configuration contract requires the repository’s checked-in example to carry `base: development`; do not create a changeset or release behavior.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/config.test.ts test/integration/dispatch.test.ts test/integration/pr.test.ts",
+				"proves": "Config parsing, run branch creation, draft PR targets, review actions, explicit overrides, and missing-key compatibility are covered."
+			},
+			{
+				"run": "git grep -q 'base' -- packages/core/src/config.ts packages/cli/src/board.ts && git grep -q -- '--base' packages/cli/src/index.ts",
+				"proves": "The target has a documented config home while the per-invocation override remains available."
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "All run and review call sites compile through the single resolved-base contract."
+			},
+			{
+				"run": "pnpm vitest run packages/schema/src/exports.test.ts packages/core/src/exports.test.ts",
+				"proves": "No public export ceiling moved."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "Biome and secretlint remain clean."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:15:47.126Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:16:32.405Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:21:43.132Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-08T21:08:54.828Z"
+}

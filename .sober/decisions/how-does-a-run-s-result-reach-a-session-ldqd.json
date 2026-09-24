@@ -1,0 +1,34 @@
+{
+	"category": "data-flow",
+	"question": "How does a run's result reach a session whose host cuts a tool call off after a few minutes?",
+	"options": [
+		{
+			"id": "block-raise",
+			"label": "Keep run blocking, raise the host's limit",
+			"reason": "Smallest change: the tool contract and every skill stay as they are; Codex gets a per-server tool timeout in `.mcp.json`/its config, and Claude Code keeps working as today.",
+			"costLater": "Every host has its own knob, and a hosted client (ChatGPT/Codex app) may cap calls whatever the config says — then this fixes nothing there. A 30-minute run still pins the session for 30 minutes."
+		},
+		{
+			"id": "detach",
+			"label": "run returns at once; the session follows the run",
+			"reason": "No host limit can bite: `run` starts the dispatch detached and returns the run id; the agent reads `logs`/`board` until it ends. One code path for every host, and it points the same way as the dispatcher-without-a-session node.",
+			"costLater": "Every host changes, not only Codex: the skills must teach polling, a session that forgets the run leaves it going unseen, and the overlap `anyway` question and the wave's 'nothing built on a result you have not seen' rule need a new home."
+		},
+		{
+			"id": "per-host",
+			"label": "Block where progress keeps the call alive, detach elsewhere",
+			"reason": "Claude Code keeps its live progress lines in the call; Codex and any host without a progressToken get the detached shape.",
+			"costLater": "Two behaviours of one tool to test and document, skills that differ per host through slots, and a host that changes its timeout handling silently moves between the two."
+		}
+	],
+	"suggested": "block-raise",
+	"derived": "packages/mcp/src/tools/build.ts:45 — `run` \"blocks until the run ends\", kept alive by progress notifications",
+	"answer": {
+		"option": "block-raise",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-21T13:36:09.755Z",
+		"derived": "packages/mcp/src/tools/build.ts:45 — `run` \"blocks until the run ends\", kept alive by progress notifications"
+	},
+	"createdAt": "2026-09-14T11:39:12.254Z"
+}

@@ -1,0 +1,34 @@
+{
+	"category": "state",
+	"question": "Where do a tier's host and model live in `.sober/config.jsonc` — one string, a host-and-model pair, or a tier→host table beside a host→model table?",
+	"options": [
+		{
+			"id": "command-line",
+			"label": "One command line per tier: `dispatch.tiers.high = \"claude --model claude-fable-5-1\"`",
+			"reason": "It is the shape `dispatch.host` already has. `adapterFor` finds the adapter, `hostCommand` splits it, and the model flag is typed in the host's own spelling — no new syntax, no new adapter row. A tier is a `dispatch.host` with a name.",
+			"costLater": "SOBER cannot read the model back out of the string, so the record, `sober status` and the dashboard show `opencode --model minimax/m3-free` as one blob. Nothing validates that the model exists on that host, and each host's flag spelling (`--model`, `-m`, `provider/model`) is the user's to get right."
+		},
+		{
+			"id": "host-and-model",
+			"label": "A pair per tier: `dispatch.tiers.high = { host: \"claude\", model: \"claude-fable-5-1\" }`",
+			"reason": "The model is a field SOBER can show on its own, record on its own, and validate against the host. `sober status` says \"high · claude · fable-5.1\" without parsing a shell string.",
+			"costLater": "A fifth row in the adapter table — how each host spells its model flag — read off all four CLIs and recorded (BUILD-PLAN §6 forbids writing it from memory). OpenCode wants `provider/model`, so the field is not the same string on every host. And `dispatch.host` keeps carrying the model inside the command line, so the same fact lives in two shapes until `dispatch.host` is retired."
+		},
+		{
+			"id": "two-tables",
+			"label": "Two tables: `dispatch.tiers.<tier> = \"<host>\"` beside `dispatch.models.<host>.<tier>`",
+			"reason": "Keeps `a-model-per-tier-per-host-in-the-config` exactly as titled and adds one word per tier on top. Moving a tier between hosts is a one-word edit; every host keeps its own model names.",
+			"costLater": "Two lookups to learn what runs a node, and a new error when a tier points at a host whose model table has no row for it. The widest config of the three, and the one a reader has to trace by hand."
+		}
+	],
+	"suggested": "command-line",
+	"derived": "packages/core/src/hosts.ts (`hostCommand`: \"`dispatch.host` is a command line, so `claude --model opus` is settable without a fourth setting\") and docs/DESIGN.md §5.1, the same sentence",
+	"answer": {
+		"option": "command-line",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-12T18:15:19.300Z",
+		"derived": "packages/core/src/hosts.ts (`hostCommand`: \"`dispatch.host` is a command line, so `claude --model opus` is settable without a fourth setting\") and docs/DESIGN.md §5.1, the same sentence"
+	},
+	"createdAt": "2026-09-12T17:41:57.651Z"
+}

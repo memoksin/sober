@@ -1,0 +1,58 @@
+{
+	"title": "The transcript reads like a Claude Code session: ⏺ lines, tool blocks with a ⎿ result, long output folded",
+	"name": "tool-blocks",
+	"description": "The lines inside the frame. Replace the per-line `<li>` rendering in `apps/dashboard/src/logs/Logs.tsx` with a transcript component (e.g. `logs/Transcript.tsx`): agent text as a `⏺` line rendered as markdown (reuse `src/markdown.tsx`), a tool call and its result grouped into one block (`⏺ Read(path)` then `⎿ 92 lines`), output over a few lines folded behind a click, `raw` stderr in the danger tone, human answers marked as coming from this side. Colours only from the transcript tokens transcript-adr adds. Grouping logic lives in `logs/data.ts` so it is tested without a screen. Build on what line-detail puts on the wire, per the line-shape decision.",
+	"notes": "",
+	"dependsOn": [
+		"transcript-adr-a7he",
+		"line-detail-n9rr",
+		"session-shell-n0ow"
+	],
+	"decisions": [
+		"where-does-the-detail-a-claude-code-styl-iepy"
+	],
+	"files": [
+		"apps/dashboard/src/logs/Transcript.tsx",
+		"apps/dashboard/src/logs/Logs.tsx",
+		"apps/dashboard/src/logs/Logs.test.tsx",
+		"apps/dashboard/src/logs/data.ts",
+		"apps/dashboard/src/logs/data.test.ts"
+	],
+	"brief": {
+		"approach": "This node renders the lines inside the frame session-shell built, ported from `docs/design/watch-the-run.html`. It builds on line-detail's `LogLine`: `at`, `call`, `detail`, kind `output` with `body`.\n\n1. **Grouping** is a pure function in `logs/data.ts`: `groupLines(lines): Block[]`.\n   - A `tool` line and the later `output` line with the same non-null `call` form one block. When a call has more than one output, the last one wins.\n   - A `tool` line with no `call` or no output yet is a block on its own, which shows it as pending.\n   - An `output` whose call has not been seen yet is shown as its own block.\n   - Every other kind is a single-line block.\n   Also in `data.ts`:\n   - `foldBody(body, max = 4)`: returns `{ shown, hidden }`. Up to 4 lines show whole; beyond that, 3 lines show plus `… +N lines`.\n   - `elapsedLabel(at, startAt)`: formats `mm:ss`. When `at` is null it falls back to the line's arrival time, which `LogScreen` records as lines come in, because Claude carries no timestamps.\n2. **Rendering** moves to a new `logs/Transcript.tsx`, taking the `<ol>` body out of `Logs.tsx`:\n   - Agent `text` is a `⏺` line in ink, sans (`var(--font-transcript-sans)`), max 76ch. Keep text as typed; do not add markdown here. The comment above `LogScreen` explains why.\n   - A tool block is `⏺ Tool(detail)` in `var(--tx-tool)`, mono (`var(--font-transcript-mono)`), with the tool glyph from `toolMark` in the mark column. Under it, indented, `⎿ summary` in `var(--tx-result)`. A body is folded with a `… +N lines (click to expand)` button (`type=\"button\"`, `aria-expanded`), and expanding it does not break the reader's scroll follow.\n   - `raw` uses `var(--tx-error)` with the `!` mark.\n   - `answer` uses `›` in `var(--tx-human)`.\n   - `started`, `check` and `checked` stay as today's dim rows. session-statusbar turns checks into the checklist card later.\n   - The right column shows elapsed time (`<time dateTime={at}>`) and is hidden below 700px.\n   - With `detail` null (old logs), a tool line renders the bare tool text exactly as today.\n3. **Wiring.** `Logs.tsx` renders `<Transcript lines={filtered} startAt=… />` and keeps the find filter from session-shell. Keep the EKG and status bar out of `Transcript.tsx`; session-statusbar owns them in `Logs.tsx`.\n\n**Tests:**\n- `groupLines` in `data.test.ts`: pairing, last output wins, orphan output, no call, old logs.\n- `foldBody` and `elapsedLabel` in `data.test.ts`.\n- In `Logs.test.tsx`:\n  - a tool block shows `Read(apps/x.ts)` and `⎿ 92 lines`;\n  - a long body folds and expands;\n  - raw uses `--tx-error`;\n  - an old-style tool line still renders.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src/logs",
+				"proves": "grouping, folding, elapsed labels and the block rendering behave, old logs included"
+			},
+			{
+				"run": "test -f apps/dashboard/src/logs/Transcript.tsx && grep -q 'groupLines' apps/dashboard/src/logs/Transcript.tsx",
+				"proves": "the transcript renders from the pure grouping function, not ad-hoc in the component"
+			},
+			{
+				"run": "pnpm --filter @besober/dashboard typecheck && pnpm --filter @besober/dashboard build",
+				"proves": "the dashboard type-checks and builds"
+			},
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src",
+				"proves": "nothing else in the dashboard broke"
+			},
+			{
+				"run": "npx biome check apps/dashboard/src/logs",
+				"proves": "lint and format are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T21:55:10.956Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-23T18:38:33.782Z"
+}

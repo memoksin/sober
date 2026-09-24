@@ -1,0 +1,23 @@
+{
+	"title": "The plan skill binds a decision already on the board before it derives a new one",
+	"name": "decision-reuse",
+	"description": "ADR 0055's aim is 'don't re-ask what the code already answers', but the planning agent cannot see answered decisions: the `board` tool renders open ones only, the `decisions` tool lists only those waiting, and `sober decisions --all` exists on the CLI alone. So every `plan` run can re-derive and re-ask the same question and leave duplicate records. Two parts. (1) The `decisions` MCP tool takes an `all` input, mirroring `sober decisions --all`: answered decisions too, each with its category, chosen option and `derived` source (packages/mcp/src/, with a render test). (2) Step 5 of plugins/skills/plan/SKILL.md: before writing a decision, call `decisions` with `all`; if one on the board already covers the question — open or answered — put its id in the node's `decisions` instead of proposing a new one; derive only when none does. Run `pnpm plugins` so all four hosts get it. No core change and no new ADR: this applies 0055, it does not change it.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [],
+	"files": [
+		"packages/mcp/src/index.ts",
+		"packages/mcp/src/render.ts",
+		"packages/mcp/src/render.test.ts",
+		"plugins/skills/plan/SKILL.md",
+		"packages/*-plugin/skills/plan/SKILL.md",
+		"packages/opencode-plugin/**/plan*"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-23T08:51:45.377Z"
+}

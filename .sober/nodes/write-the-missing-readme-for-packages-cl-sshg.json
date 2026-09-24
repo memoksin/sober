@@ -1,0 +1,60 @@
+{
+	"title": "Write the missing README for packages/claude-code-plugin",
+	"name": "Write the missing README for",
+	"description": "packages/claude-code-plugin is the only host package with no README — the root README's Hosts table links to the bare directory while the other three rows link to a README.md. Write it in the same shape as packages/cursor-plugin/README.md: what the plugin ships (hooks/hooks.json with the PreToolUse spawn deny and the SessionStart hook, six generated skills, the sober MCP server), how to install it, and what is different from the other hosts — this is the only host that enforces the block in-session. Two install paths are true and both must appear: `/plugin marketplace add memoksin/sober` then `/plugin install sober@sober` (Claude Code clones the repo itself — no manual clone, which is what .claude-plugin/marketplace.json at the root already supports), and the settings.json route via extraKnownMarketplaces + enabledPlugins for a team that wants the plugin present on checkout. State the `sober` on PATH prerequisite, because hooks.json shells out to `sober hook spawn` and `sober hook session`. Close with the same \"do not edit the skills here\" paragraph the other three carry.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"where-does-the-canonical-per-host-instal-elpx"
+	],
+	"files": [
+		"packages/claude-code-plugin/README.md",
+		"README.md"
+	],
+	"brief": {
+		"approach": "Create `packages/claude-code-plugin/README.md` using the structure and register of `packages/cursor-plugin/README.md`, `packages/codex-plugin/README.md`, and `packages/opencode-plugin/README.md`. Describe the shipped `.claude-plugin/plugin.json` metadata, `hooks/hooks.json` (`PreToolUse` spawn guard and `SessionStart` board hook), generated six-skill set, and MCP server declaration. Document both repository-backed installation paths already supported by `.claude-plugin/marketplace.json`: the interactive `/plugin marketplace add memoksin/sober` followed by `/plugin install sober@sober`, and the team-managed `settings.json` form using `extraKnownMarketplaces` plus `enabledPlugins`; state once that `npm i -g @besober/cli` must put `sober` on PATH because both hooks and the MCP declaration execute it. Explain the Claude-specific behavior: it is the only host package with in-session hook enforcement, its MCP client can elicit decisions, and attended dispatch is supported. End with the standard generated-skill warning copied in substance from the other host READMEs. Keep this node to the new package README; inspect `README.md` only to keep terminology aligned and do not change the root install guide owned by `a-per-host-install-section-in-the-readme-ykg6`.",
+		"complexity": null,
+		"acceptance": [
+			{
+				"run": "test -f packages/claude-code-plugin/README.md && git grep -q 'plugin marketplace add memoksin/sober' -- packages/claude-code-plugin/README.md && git grep -q 'plugin install sober@sober' -- packages/claude-code-plugin/README.md",
+				"proves": "The missing host README exists and contains the supported no-manual-clone marketplace installation commands."
+			},
+			{
+				"run": "git grep -q 'extraKnownMarketplaces' -- packages/claude-code-plugin/README.md && git grep -q 'enabledPlugins' -- packages/claude-code-plugin/README.md && git grep -q 'npm i -g @besober/cli' -- packages/claude-code-plugin/README.md",
+				"proves": "The team settings route and the executable PATH prerequisite are documented."
+			},
+			{
+				"run": "git grep -q 'PreToolUse' -- packages/claude-code-plugin/README.md && git grep -q 'SessionStart' -- packages/claude-code-plugin/README.md && git grep -q 'pnpm plugins' -- packages/claude-code-plugin/README.md",
+				"proves": "Claude Code's hook behavior and the generated-skill editing rule are explained."
+			},
+			{
+				"run": "git diff --exit-code development -- README.md && test \"$(git diff --name-only development -- packages/claude-code-plugin README.md)\" = 'packages/claude-code-plugin/README.md'",
+				"proves": "The node adds only the missing package README and does not overlap the separate root installation-guide node."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "The repository's Markdown and secret checks remain clean."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T07:48:22.933Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T07:51:44.676Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:04:40.920Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

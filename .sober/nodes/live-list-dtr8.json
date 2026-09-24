@@ -1,0 +1,69 @@
+{
+	"title": "Jev is given a model list checked against what exists today, not the config as typed",
+	"name": "live-list",
+	"description": "Today `dispatch()` in packages/core/src/dispatch.ts hands `askJev` `config.dispatch.models` untouched, so Jev picks among entries that may be retired and never among models released since the config was written. Build the list Jev sees at dispatch time, in a new `candidatesFor(config, sources)` in packages/core/src/models.ts, per the `list-source` decision (whole catalogue, filtered): start from the three catalogues — `claudeModels()`, `codexModels()` (`~/.codex/models_cache.json`), `openRouterModels()` for the `openrouter` host (ADR 0062) — and narrow them with a new `dispatch.sources` block in packages/core/src/config.ts: per source a complexity range and optional `only`/`deny` id patterns (e.g. `openrouter: { complexity: [1,3], only: [\"*:free\"] }`, `claude: { complexity: [6,10], deny: [\"haiku\"] }`). A source not named in `dispatch.sources` contributes nothing. `dispatch.models` stays for pinning a hand-named entry, and a pin wins over a discovered entry with the same name. The `CLAUDE` table in models.ts holds Claude Code's aliases (`opus`, `sonnet`, `haiku`, and the full id only for a model with no alias) instead of dated ids, so a run line is `claude --model opus` and a new Claude release needs no code change; the run record takes the resolved model id from the Claude stream's init event, so what ran is still named. Update `.sober/config.jsonc` to the new shape. The catalogue fetch is best-effort with a cache in `.sober/local/catalogue.json` (TTL a config knob, default one hour): unreachable, it logs and that source is empty for this dispatch — an OpenRouter outage never stops a dispatch. Log each dropped or discovered entry through the dispatch log line. Inject `fetch`/home as the existing functions do so tests need no network. Write an ADR amending 0061. `sober models --sources` prints the list Jev would see. Tests: models.test.ts covers the filter (only, deny, complexity), pin precedence, Claude aliases, cache hit, cache miss, fetch failure; dispatch.test.ts shows Jev receives the built list and the log names the drops.",
+	"notes": "",
+	"dependsOn": [
+		"openrouter-host-bdws"
+	],
+	"decisions": [
+		"what-list-of-models-does-jev-choose-from-8vel"
+	],
+	"files": [
+		"packages/core/src/models.ts",
+		"packages/core/src/models.test.ts",
+		"packages/core/src/dispatch.ts",
+		"packages/core/src/dispatch.test.ts",
+		"packages/core/src/config.ts",
+		"packages/core/src/config.test.ts",
+		"packages/core/src/paths.ts",
+		"docs/adr/*.md",
+		".sober/config.jsonc"
+	],
+	"brief": {
+		"approach": "The built list has the same shape as `dispatch.models` (`Model`: name, run, complexity, about), so `askJev`, `modelQuestion` and `chooseLine` take it unchanged — only what `dispatch()` hands them changes.\n\n1. **Config** — `packages/core/src/config.ts`: add `dispatch.sources`, a strict object with optional `claude`, `codex`, `openrouter` keys, each `{ complexity: [low, high], only?: string[], deny?: string[] }` (same range refine as `models`), default `{}`. Add `dispatch.catalogueSeconds` (int, default 3600). Document both in the `init` template text next to `models`. With `sources` empty, behaviour is exactly today's.\n\n2. **Claude aliases** — `packages/core/src/models.ts`: the `CLAUDE` table holds `['opus', 'opus', …]`, `['sonnet', 'sonnet', …]`, `['haiku', 'haiku', …]`, `['fable', 'claude-fable-5-1', …]` (Fable has no alias, so its id stays); `about` loses the version number. Run line becomes `claude --model opus`. Update the ponytail comment: the table now only changes when a *family* is added, not on a release.\n\n3. **Build the list** — in `models.ts`, `candidatesFor(dispatch, catalogues): { models: Model[]; dropped: string[] }`, pure, where `catalogues` is `{ claude, codex, openrouter: Candidate[] | null }` (null = unreachable). Per named source: keep candidates whose id (the `--model` argument) matches `only` (if given) and no `deny` pattern — patterns are `*`-only globs, converted by a one-line regex escape, matched against the whole id so `*:free` matches `qwen/qwen3.8-27b:free` and `gpt-5*` matches `gpt-5.6-sol`. Each kept one becomes a `Model` with the source's range. Pins from `dispatch.models` go first and win a name clash; a pin on `codex`/`openrouter` whose id is absent from a reachable catalogue is dropped (retired) with a reason; claude pins and pins on an unreachable source are kept. A discovered name clashing with an earlier one is dropped with a reason. `liveModels(paths, dispatch, deps)` wraps it: reads `claudeModels()`, `codexModels(home)`, and `openRouterModels(fetch)` through a cache at `paths.catalogue` (`.sober/local/catalogue.json`, `{ at, models }`, fresh while `at + catalogueSeconds` is ahead) — only called for the sources actually named, so a board with no `sources` does no fetch. Fetch failure → that source is `null`, logged, never thrown. `deps` injects `fetch`, `home`, `now`.\n\n4. **Dispatch** — `packages/core/src/dispatch.ts`: before `askJev`, `const models = await liveModels(...)`; pass `models` to `askJev` and call `chooseLine({ ...config.dispatch, models }, …)` so the jevMode-off path (`modelForScore`) uses the same list. Write one `appendEvent(paths, { action: 'models', node, count, dropped })` per dispatch (`packages/core/src/local.ts` already has it) so the drops are in the log.\n\n5. **What ran** — `packages/core/src/hosts.ts`, the claude adapter's `system`/`init` line: text becomes `session started (<event.model>)` when the event carries `model`, so an alias run still names the resolved id in `sober logs`. No schema change: surfacing it in `sober status` and the run panel is sober-status-sober-logs-and-the-run-pane-0o4s's job.\n\n6. **CLI** — `packages/cli/src/models.ts`: `sober models --sources` prints `liveModels` output for the board (name, run, range) plus the dropped lines; wire the flag in `packages/cli/src/index.ts`.\n\n7. **This repo's config** — `.sober/config.jsonc`: claude pins use aliases (`opus` 8–10, `sonnet` 4–7). Every codex and OpenRouter pin goes — `astra` and the four free OpenRouter ones — replaced by `sources: { codex: { complexity: [4, 10], deny: [\"gpt-5*\"] }, openrouter: { complexity: [1, 3], only: [\"*:free\"] } }`. The codex rule is a deny on the old family, not an `only` on the new one: a GPT-6 model Codex's catalogue adds later (Sol, Luna — not listed for codex-cli 0.154.0 today) and a GPT-7 join with no edit. Update the comment above `models`.\n\n8. **ADR** — `docs/adr/0063-jev-chooses-from-the-live-catalogue.md`, amends 0061: the list-source decision, the aliases, the cache, what a pin means now, deny-the-old over only-the-new, and the costs the decision named (noisier choice, provider blurbs as `about`, untried free models).\n\nTests: `models.test.ts` — only / deny / range / `*:free` and `gpt-5*` globs, pin wins a clash, retired pin dropped, unreachable source keeps pins, discovered clash dropped, aliases in the claude run line, cache hit (no fetch), cache stale (fetch), fetch failure (null, no throw), no sources → no fetch. `dispatch.test.ts` — Jev receives the built list, jevMode off picks from it, the `models` log event names the drops. `config.test.ts` — `sources` parses, bad range refused, default `{}`. `hosts.test.ts` — init with `model` names it. Refresh the coverage baseline if the ratchet asks.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/models.test.ts packages/core/src/dispatch.test.ts packages/core/src/config.test.ts packages/core/src/hosts.test.ts",
+				"proves": "The filter, pins, drops, cache and fetch-failure paths hold; dispatch hands Jev and chooseLine the built list and logs the drops; the init line names the resolved model"
+			},
+			{
+				"run": "rg -q 'claude --model claude-opus|claude-sonnet-5|claude-opus-5' packages/core/src/models.ts .sober/config.jsonc && exit 1 || exit 0",
+				"proves": "No dated Claude id is left in the table or this repo's config — a new Claude release needs no edit"
+			},
+			{
+				"run": "rg -q '\"sources\"' .sober/config.jsonc && rg -q 'gpt-5\\*' .sober/config.jsonc && ! rg -q 'codex --model|openrouter --model' .sober/config.jsonc && rg -q 'catalogue' packages/core/src/paths.ts",
+				"proves": "This repo's board uses sources with the old GPT family denied, no codex or OpenRouter model is hand-named, and the cache has its path under .sober/local"
+			},
+			{
+				"run": "fd -g '0063-*.md' docs/adr | rg -q . && rg -q '0061' docs/adr/0063-*.md",
+				"proves": "The ADR exists and says which one it amends"
+			},
+			{
+				"run": "pnpm lint && pnpm typecheck && pnpm test",
+				"proves": "The repo's gate is green, the rest of the suite included"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-23T09:18:03.718Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T09:38:59.762Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T09:51:20.463Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-21T13:30:00.197Z"
+}

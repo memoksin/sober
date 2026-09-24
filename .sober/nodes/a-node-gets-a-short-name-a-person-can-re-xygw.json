@@ -1,0 +1,74 @@
+{
+	"title": "A node gets a short name a person can read",
+	"name": "A node gets a short name a person can",
+	"description": "An id today is `newId(title)` in packages/core/src/id.ts: the title lowercased, non-alphanumerics collapsed to hyphens, **cut at 40 characters**, plus four random letters (ADR 0020). Cutting at 40 is what produces `the-run-panel-a-box-for-what-the-agent-s-5svv` — severed mid-word, and the half that carried the meaning is the half that got cut.\n\nThe Node record in packages/schema/src/node.ts has `title` and `description` and nothing between them: nothing short enough to print in a list and long enough to mean something. Give it one, in whatever form the decision on where it lives settles — a stored field, or a function that derives it from the title without severing a word.\n\nIf it becomes a stored field: `Node` is a `z.strictObject` whose doc comment says a board written by a newer SOBER must fail loudly rather than be quietly rewritten, so this is a schema version step. That machinery is in packages/core/src/migrate.ts and reads raw JSON; add the entry to MIGRATIONS with `to: 6`, bump `n_VERSION` in packages/schema/src/project.ts, and backfill every existing node from its title — the spread order in the existing entries is the pattern to copy, so a value already there is left alone. Every board on disk today is v5 and one of them is this repository's own.\n\nAlso settle what `newId` is seeded from. Seeding it from a short name instead of the title gives clean ids going forward and changes no id that already exists, since an id is written once. Note the constraint ADR 0020 already recorded when it rejected pure-slug ids: a slug goes stale when the title changes. The same is true of a stored name, and it is survivable for a label in a way it was not for an identifier — but say so in the code rather than discovering it later.\n\nSchema and migration and the id seed are one node: a field with no migration is a board that will not load.",
+	"notes": "",
+	"dependsOn": [],
+	"decisions": [
+		"is-the-short-readable-name-a-field-store-quqp"
+	],
+	"files": [
+		"packages/schema/src/node.ts",
+		"packages/schema/src/project.ts",
+		"packages/schema/src/*.test.ts",
+		"packages/schema/src/__snapshots__/*",
+		"packages/core/src/id.ts",
+		"packages/core/src/id.test.ts",
+		"packages/core/src/migrate.ts",
+		"packages/core/src/migrate.test.ts"
+	],
+	"brief": {
+		"approach": "Score 7: a strict-schema field, a migration with a backfill over every board on disk, and a change to how ids are seeded — three things that cannot land separately, plus one number that has moved since the node was written.\n\n**The version is 7, not 6.** `packages/schema/src/project.ts:21` now reads `SCHEMA_VERSION = 6` and `packages/core/src/migrate.ts` ends at `{ to: 6 }` — `the-brief-carries-how-hard-the-node-is-g2au` took 6 for `Brief.complexity`. Check both files before writing; if another node has taken 7 by then, take the next free number rather than colliding.\n\n**1. The field — `packages/schema/src/node.ts:78`.** Add `name` beside `title`:\n\n```ts\nname: z.string().min(1).max(40),\n```\n\nNot nullable and not defaulted: the accepted decision says somebody chooses it, and a nullable field would let every writer skip it and leave the board half-named. The migration is what makes existing records valid, which is the whole reason this is a version step. Put a comment on it saying what it is for and what it costs — it is the word a person distinguishes this node from its three siblings by (`log-wire` against `log-vocabulary`), and it goes stale when the title is rewritten and the name is not. ADR 0020 cited exactly that staleness when it rejected pure-slug **ids**; say in the comment why it is survivable for a label and was not for an identifier — an id is written once and referenced forever, a label is only read.\n\n**2. `SCHEMA_VERSION = 7`** in `packages/schema/src/project.ts`.\n\n**3. The migration — `packages/core/src/migrate.ts`, `{ to: 7 }` after the `to: 6` entry**, in the voice of the ones above it. A migration reads raw JSON, not a parsed record. Backfill from the title, and use the same spread order the others use so a value already there is left alone: `{ name: <derived>, ...record }`. Derive it by trimming the title to the field's 40-character bound **on a word boundary** — the whole complaint in this node is a name severed mid-word — and fall back to the untrimmed first word if a single word is longer than the bound. Two tests in `migrate.test.ts`: a v6 node arrives with a name derived from its title and still parses; a node that somehow already has one keeps it. The existing \"a board written by an older SOBER is brought forward\" tests keep passing with the new number.\n\n**4. The id seed — `packages/core/src/id.ts:38`.** `newId(seed)` slices at 40 and strips a trailing hyphen, which is what produced `the-run-panel-a-box-for-what-the-agent-s-5svv`. Leave `newId` itself alone: it is a pure function over whatever it is handed, it is tested on its own, and the transliteration table is the interesting part of it. Change the **callers** that mint a node id to pass the name instead of the title — find them with `rg -n 'newId' packages/`. Ids already written do not change and must not: an id is written once, and rewriting one breaks every branch, worktree, run record and citation that names it. Put that sentence in a comment where the seed changes, because it is the thing a later reader will be tempted to \"fix\".\n\n**5. Every writer must now supply a name.** `Node` is a `z.strictObject`, so this is a compile error at each site rather than a silent gap — follow `pnpm typecheck` to find them. The two that matter: `propose` and `open_node` in `packages/mcp/` take it as input (the planning agent writes it, which is what the decision chose), and the CLI's `open --title` needs an answer for a node opened from a terminal with no agent — derive it from the title with the same word-boundary trim the migration uses, so there is one rule and not two. Factor that trim into one small function and use it in both places.\n\nThe planning agent being *told* to write a good name is `the-planning-agent-writes-the-name-when-66gw`, which waits on this node. Here the field just has to exist, be required, and be filled by something sensible; do not edit the plan skill.\n\n**6. Snapshots.** `packages/schema/src/__snapshots__/` holds the parsed shapes and will need `-u`. Check `packages/core/src/__snapshots__/exports.test.ts.snap` too if a new export lands; if the trim helper stays internal to `core`, nothing new is exported and the ceiling is untouched.\n\nNothing renders the name yet. `every-message-that-names-a-node-says-whi-kr9o` and `the-terminal-and-the-dashboard-say-the-n-idmg` own the surfaces and both wait on this node — do not change `sober status`, the panel or any tool's output here.",
+		"complexity": 7,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/schema/src/node.test.ts packages/core/src/migrate.test.ts packages/core/src/id.test.ts",
+				"proves": "a node round-trips with a name and is refused without one; a v6 board arrives at v7 with a name derived from each title on a word boundary and no other field touched; and the transliteration table still behaves"
+			},
+			{
+				"run": "git grep -q 'SCHEMA_VERSION = 7' -- packages/schema/src/project.ts && git grep -q 'to: 7' -- packages/core/src/migrate.ts",
+				"proves": "the version moved with the migration that makes it safe — a strict field without one is a board that will not load"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/mcp.test.ts test/integration/cli.test.ts",
+				"proves": "every writer supplies a name: propose and open_node take it, `sober open --title` derives one, and a full loop from proposal to acceptance still runs end to end"
+			},
+			{
+				"run": "pnpm vitest run packages/core/src/exports.test.ts packages/schema/src/exports.test.ts",
+				"proves": "no export ceiling moved — the trim helper stayed internal (ADR 0028)"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!packages/schema' ':!packages/core' ':!packages/mcp' ':!packages/cli' ':!test/integration')\"",
+				"proves": "no surface was changed to show the name: the dashboard, the server and every skill are untouched, because rendering it belongs to the two nodes waiting on this one"
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "every construction site of the strict Node record supplies the new field — the compile error is what finds them, and none was silenced with a cast"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:31:12.524Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:33:57.663Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:43:54.001Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "failed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:35:02.425Z"
+}

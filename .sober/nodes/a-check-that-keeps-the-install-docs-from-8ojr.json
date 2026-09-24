@@ -1,0 +1,66 @@
+{
+	"title": "A check that keeps the install docs from drifting",
+	"name": "A check that keeps the install docs from",
+	"description": "Install prose names things the repository owns: the marketplace names in .claude-plugin/marketplace.json and .agents/plugins/marketplace.json, the plugin directory each one points at, the package name @besober/cli, and the relative links between README.md and the four package READMEs. Today nothing fails when one of those moves. Add a check that reads the manifests and the README files and asserts they agree — in test/integration alongside plugin.test.ts, which already guards the generated skills, or as a script under scripts/ if the decision below puts the prose behind the generator. Assert at minimum: every relative link in README.md resolves to a file that exists, every host row in the Hosts table points at an existing README, and the plugin/marketplace names quoted in install snippets match the manifests. Ship the check with whatever fixture it needs; it is one node with its test, not two.",
+	"notes": "",
+	"dependsOn": [
+		"turn-the-root-readme-into-a-short-guide-0hlc",
+		"write-the-missing-readme-for-packages-cl-sshg",
+		"correct-the-install-instructions-in-the-1wxl",
+		"a-per-host-install-section-in-the-readme-ykg6"
+	],
+	"decisions": [
+		"when-an-install-fact-changes-a-marketpla-xq25"
+	],
+	"files": [
+		"test/integration/*.test.ts",
+		"scripts/*.mjs",
+		"README.md"
+	],
+	"brief": {
+		"approach": "One new test file, in the place the repository already keeps checks over data that nothing typechecks. Score 4: the assertions are simple, but working out what is actually pinnable from the prose is the real work, and over-asserting produces a check that fails on every honest edit.\n\n**Where it goes.** `test/integration/docs.test.ts`, beside `test/integration/plugin.test.ts`. That file is the model in every respect and should be read first: it opens with a doc comment saying why data nobody typechecks needs a test at all, it resolves the repository root with `fileURLToPath(new URL('../../', import.meta.url))`, and it reads manifests with a small `read` helper. Copy that shape. Do not put this under `scripts/` — the decision bound to this node chose hand-written prose with a test that reads the manifests, and the test belongs where the other manifest test already is.\n\n**What to assert — and nothing more.** The decision's own cost line says the check only catches what it was told to look for, so the value is in pinning the facts that break an install, not in guarding wording.\n\n1. **Every relative link in `README.md` resolves.** Extract `](...)` targets with one regexp, drop anything starting `http`, `#` or `mailto:`, split a trailing `#anchor` off, resolve against the repository root and assert the file exists. This is the assertion that catches a moved package or a renamed document, and it is worth writing carefully: report the failing target in the expect message, or a red build says only `false !== true`.\n2. **Every host row in the Hosts table points at something that exists.** The table lives under `## Hosts` and has four rows — Claude Code, Cursor, Codex, OpenCode — each linking into `packages/`. Assert all four rows are present by host name and that each link target exists. `packages/claude-code-plugin/README.md` now exists (written by `write-the-missing-readme-for-packages-cl-sshg`, merged), so all four rows may link to a README; assert what the table says today rather than forcing a shape.\n3. **The names quoted in the install snippets match the manifests.** Three facts, each read from its own file, never retyped:\n   - `.claude-plugin/marketplace.json` → `name` (`sober`) and the one plugin entry's `name` and `source`. The README's Claude Code block says `/plugin marketplace add memoksin/sober` and `/plugin install sober@sober`; assert the `sober@sober` form is built from `<plugin.name>@<marketplace.name>`, so renaming either in the manifest fails the test.\n   - `.agents/plugins/marketplace.json` → the Codex entry's `source.path` (`./packages/codex-plugin`). Assert that path exists and that the README's Codex block names `.agents/plugins/marketplace.json`.\n   - `packages/cli/package.json` → `name`. Assert `npm i -g <that name>` appears in `README.md`, so renaming the published package fails here rather than in a user's terminal. `@besober/cli` is the only published package (ADR 0007), so this is one name, not a loop over the workspace.\n4. **The four package READMEs still carry the PATH prerequisite**, `npm i -g @besober/cli` read from the same `package.json` name — the one line without which no host works.\n\n**What not to assert**, and say so in the doc comment so the next person does not add it: no assertion on prose wording, no word counts, no check that a section exists by heading text beyond the Hosts table, and nothing about the *order* of the install subsections. Those fail on every honest edit and teach people to update the test without reading it — which is the failure mode `plugin.test.ts`'s own comment warns about for generated files.\n\n**No fixture.** Everything under test is a real file in this repository; the test reads the tree it lives in, as `plugin.test.ts` does. Do not build a temp repo.\n\nRegister: one `test(...)` per group above with a name that says what breaks when it fails, and a comment on each naming the user-visible failure — \"a source path that does not resolve installs an empty plugin, silently\" is the voice to match.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/docs.test.ts",
+				"proves": "the check runs green against the repository as it stands today: every relative README link resolves, all four host rows point at real files, and the install snippets agree with the three manifests"
+			},
+			{
+				"run": "pnpm vitest run --project integration test/integration/plugin.test.ts",
+				"proves": "the existing manifest guard still passes and was not merged into or broken by the new file"
+			},
+			{
+				"run": "node -e \"const fs=require('node:fs');const p='README.md';const s=fs.readFileSync(p,'utf8');fs.writeFileSync(p,s.replace('packages/codex-plugin','packages/codex-plugin-gone'));\" ; pnpm vitest run --project integration test/integration/docs.test.ts; code=$?; git checkout -- README.md; test $code -ne 0",
+				"proves": "the check actually fails when an install fact drifts — a link target that no longer exists turns the build red, which is the whole point and is not provable by a passing run alone"
+			},
+			{
+				"run": "test -z \"$(git diff --name-only development -- . ':!test/integration/docs.test.ts')\"",
+				"proves": "only the new test file was added: no README was edited, no manifest was changed, and no source file was touched to make the check pass"
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "biome and secretlint are clean on the new file"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-15T08:10:09.256Z",
+			"queue": false
+		}
+	},
+	"outcome": null,
+	"assignee": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:12:24.836Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-15T08:14:36.333Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
+	"dismissal": null,
+	"createdAt": "2026-09-08T12:09:02.101Z"
+}

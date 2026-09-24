@@ -1,0 +1,34 @@
+{
+	"category": "data-flow",
+	"question": "Where does the detail a Claude Code-style transcript needs (tool arguments, tool result summary, timestamps, call↔result pairing) come from?",
+	"options": [
+		{
+			"id": "enrich-line",
+			"label": "Core renders a richer LogLine",
+			"reason": "Each host adapter in hosts.ts already parses the host's events; it adds the argument summary, a result line and a timestamp to LogLine. The dashboard and `sober logs` read the same enriched line, so the two surfaces stay one vocabulary (logs/data.ts already insists on that).",
+			"costLater": "Every host adapter changes and each needs its own tests; a host that adds event types means adapter work before the screen shows it. LogLine grows fields both ends must keep in step."
+		},
+		{
+			"id": "client-only",
+			"label": "Dashboard works with today's lines",
+			"reason": "No schema, core or CLI change: tool blocks group adjacent lines, timers use the browser clock from when a line arrived. Fastest to ship.",
+			"costLater": "Claude tool lines stay a bare name — no `Read(path)`, no `⎿ 92 lines`, so the session look is half there. Timers are wrong for a finished run replayed from disk. line-detail becomes empty work."
+		},
+		{
+			"id": "raw-events",
+			"label": "Send raw host events to the browser",
+			"reason": "The browser gets everything the host said and the dashboard can render any detail it likes without touching core.",
+			"costLater": "Five host event formats parsed in the browser as well as in core: two renderers that drift, and `sober logs` falls behind the screen. Moves parsing across the ADR 0008 line that says the browser reaches core only through server."
+		}
+	],
+	"suggested": "enrich-line",
+	"derived": "packages/schema/src/wire.ts (LogLine is rendered by core, drawn by the screen) and apps/dashboard/src/logs/data.ts (CLI and screen share one vocabulary)",
+	"answer": {
+		"option": "enrich-line",
+		"rationale": "",
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-23T18:41:03.444Z",
+		"derived": "packages/schema/src/wire.ts (LogLine is rendered by core, drawn by the screen) and apps/dashboard/src/logs/data.ts (CLI and screen share one vocabulary)"
+	},
+	"createdAt": "2026-09-23T18:38:33.782Z"
+}

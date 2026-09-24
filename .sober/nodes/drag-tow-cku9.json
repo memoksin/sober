@@ -1,0 +1,24 @@
+{
+	"title": "Node sürüklemeyi ve bağlı node'ların takip hareketini iyileştir",
+	"name": "drag-tow",
+	"description": "Dashboard Cytoscape canvas'ında node'u tutma, sürükleme ve bırakma hissini; bağlı node'ların gecikerek takip etmesini; edge'lerin sürükleme sırasında uzayıp geri toparlanmasını gerçek board üzerinde inceleyip iyileştir. apps/dashboard/src/canvas/Canvas.tsx içindeki grab/drag/free ve frame döngüsüyle graph.ts içindeki tow hesabını birlikte düzenle. Komşular basılı tutma veya küçük pointer titremesiyle kaymamalı; takip kontrollü, geri dönüş kararlı, bırakma sonrası hareket kısa ve kesilebilir olmalı. Hareket edge yönünü ve ilişkiyi izlemeyi zorlaştırmamalı; reduced-motion tercihi ve dokunma/pointer etkileşimini gözet. Başlangıç konumu için yeni graph-reading düğümünün yerleşimini esas al. Davranışı graph.test.ts'de anlamlı senaryolarla ve dashboard'da elle doğrula; mevcut seçme/panel açma davranışını koru.",
+	"notes": "",
+	"dependsOn": [
+		"graph-reading-l1t7"
+	],
+	"decisions": [],
+	"files": [
+		"apps/dashboard/src/canvas/Canvas.tsx",
+		"apps/dashboard/src/canvas/graph.ts",
+		"apps/dashboard/src/canvas/graph.test.ts",
+		"apps/dashboard/src/canvas/paint.ts",
+		"docs/adr/**"
+	],
+	"brief": null,
+	"outcome": null,
+	"assignee": null,
+	"claim": null,
+	"accepted": null,
+	"dismissal": null,
+	"createdAt": "2026-09-24T07:21:08.442Z"
+}
