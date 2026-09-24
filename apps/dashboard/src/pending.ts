@@ -24,6 +24,7 @@ export const PENDING: Readonly<Record<string, string>> = {
 	review: 'Running the scan…',
 	accept: 'Merging it…',
 	reject: 'Sending it back…',
+	audit: 'Running the acceptance list…',
 	decide: 'Saving the answer…',
 	edit_decision: 'Changing the answer…',
 	impact: 'Reading what it reaches…',

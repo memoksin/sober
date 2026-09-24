@@ -58,6 +58,7 @@ export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, 
  * line's for now: both are set up once per machine, not once per session.
  */
 export const GAPS = [
+	'audit',
 	'add_model',
 	'start_dispatcher',
 	'stop_dispatcher',

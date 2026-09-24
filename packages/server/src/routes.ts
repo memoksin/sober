@@ -8,6 +8,7 @@ import {
 	approveBrief,
 	archiveNode,
 	assignNode,
+	auditNode,
 	bind,
 	boardDistance,
 	claimChain,
@@ -258,6 +259,19 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 		}),
 		async (paths, { node: id, text, clean, base }) =>
 			rejectWork(paths, id, { by: await whoami(paths.root), text, clean, base }),
+	),
+
+	// Re-running the acceptance list against the worktree a run already left
+	// (ADR 0049). A `null` from `core` means the node has never run — a `SoberError`
+	// so the wire answers 409, in the CLI's own words.
+	audit: route(
+		z.strictObject({ node: Id, base: z.string().optional() }),
+		async (paths, { node: id, base }) => {
+			const audited = await auditNode(paths, id, await baseOf(paths, base))
+			if (audited === null)
+				throw new SoberError('no-run', `${id} has not run — there is nothing to audit yet`)
+			return audited
+		},
 	),
 
 	archive: route(node, async (paths, { node: id }) => {

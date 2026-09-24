@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { currentBranch, paths } from '@besober/core'
+import { currentBranch, paths, SoberError } from '@besober/core'
 import { AGENT_OPERATIONS, OPERATIONS } from '@besober/schema'
 import { afterEach, expect, test } from 'vitest'
 import { COVERS, GAPS, OPS, READS, WATCHES } from './routes.js'
@@ -139,6 +139,56 @@ test('sync run with no branch lands on the configured board branch, never the ch
 	expect(run('rev-parse', 'main')).toBe(before)
 	expect(await currentBranch(dir)).toBe('main')
 	expect(run('log', 'sober-graph', '-1', '--format=%s')).toContain('sober: board from')
+})
+
+test('audit refuses a node that has never run, and writes nothing', async () => {
+	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
+	const run = (...args: string[]) =>
+		execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim()
+	run('init', '--initial-branch=main')
+	run('config', 'user.name', 'SOBER Test')
+	run('config', 'user.email', 'test@besober.dev')
+	run('config', 'commit.gpgsign', 'false')
+	writeFileSync(join(dir, 'README.md'), '# acme\n')
+	run('add', '-A')
+	run('commit', '-m', 'chore: first')
+
+	const p = paths(dir)
+	await OPS.init.run(p, { project: { title: 'acme', intent: '', constraints: [] } })
+	await OPS.create_node.run(p, { title: 'The auth API' })
+	const board = (await READS.board.run(p, {})) as { nodes: readonly { id: string }[] }
+	const node = board.nodes[0]?.id
+	if (node === undefined) throw new Error('no node was created')
+
+	await expect(OPS.audit.run(p, { node })).rejects.toThrow(
+		`${node} has not run — there is nothing to audit yet`,
+	)
+	await expect(OPS.audit.run(p, { node })).rejects.toBeInstanceOf(SoberError)
+
+	const after = (await READS.board.run(p, {})) as {
+		nodes: readonly { id: string; outcome: unknown }[]
+	}
+	expect(after.nodes[0]?.outcome).toBeNull()
+})
+
+test('audit refuses a node that is not on the board', async () => {
+	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
+	const run = (...args: string[]) =>
+		execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim()
+	run('init', '--initial-branch=main')
+	run('config', 'user.name', 'SOBER Test')
+	run('config', 'user.email', 'test@besober.dev')
+	run('config', 'commit.gpgsign', 'false')
+	writeFileSync(join(dir, 'README.md'), '# acme\n')
+	run('add', '-A')
+	run('commit', '-m', 'chore: first')
+
+	const p = paths(dir)
+	await OPS.init.run(p, { project: { title: 'acme', intent: '', constraints: [] } })
+
+	await expect(OPS.audit.run(p, { node: 'no-such-node-zzzz' })).rejects.toThrow(
+		'is not on this board',
+	)
 })
 
 test('the board read carries thinkingVerbs — the default pool absent, the configured one set, null when the config is broken', async () => {

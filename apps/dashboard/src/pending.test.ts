@@ -14,6 +14,7 @@ const CLICKABLE = [
 	'review',
 	'accept',
 	'reject',
+	'audit',
 	'decide',
 	'edit_decision',
 	'impact',

@@ -44,6 +44,10 @@ export const OPERATIONS = [
 	'stop',
 	'accept',
 	'reject',
+	// Re-running the acceptance list against the worktree a run already left
+	// (ADR 0049). It writes the local run record, never the board, and it is
+	// still an ability a surface either has or lacks (`PR-09-08`).
+	'audit',
 	'archive',
 	'sync',
 	'resolve',
