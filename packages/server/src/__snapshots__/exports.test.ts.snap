@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`server exports nothing new without a reviewer seeing it 1`] = `
+[
+  "COVERS",
+  "OPS",
+  "READS",
+  "WATCHES",
+  "serve",
+]
+`;
