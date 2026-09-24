@@ -154,10 +154,13 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		'decisions',
 		{
 			title: 'Open decisions',
-			description: 'Every decision waiting on the human, with each option and what it costs later.',
-			inputSchema: {},
+			description:
+				'Every decision waiting on the human, with each option and what it costs later. Pass `all` to also see answered decisions — their chosen option, provenance, and alternatives — so an existing answer can be reused instead of re-derived (ADR 0055). Call with `all` before proposing new decisions.',
+			inputSchema: { all: z.boolean().default(false) },
 		},
-		tool(async () => text(renderDecisions(await loadBoard(await openBoard(cwd))))),
+		tool(async ({ all }: { all: boolean }) =>
+			text(renderDecisions(await loadBoard(await openBoard(cwd)), all)),
+		),
 	)
 
 	server.registerTool(

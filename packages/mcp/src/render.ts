@@ -101,12 +101,40 @@ const waiting = (board: Board, id: string): string => {
 	return blocked.length > 0 ? ` — waiting on ${namedAll(board, blocked)}` : ''
 }
 
-export const renderDecisions = (board: Board): string => {
+const DECISION_ORDER = { open: 0, unopened: 1, answered: 2 } as const
+
+/**
+ * `all` mirrors `sober decisions --all` (packages/cli/src/work.ts): archived
+ * decisions stay out, and the rest sort open/unopened before answered so a
+ * settled decision doesn't push the ones still waiting off the top.
+ */
+export const renderDecisions = (board: Board, all = false): string => {
+	const listed = all
+		? [...board.decisions]
+				.filter(([id]) => !board.archivedDecisions.has(id))
+				.toSorted(
+					([, a], [, b]) =>
+						DECISION_ORDER[decisionState(a)] - DECISION_ORDER[decisionState(b)] ||
+						a.createdAt.localeCompare(b.createdAt),
+				)
+		: openDecisions(board)
+
 	const lines: string[] = []
-	for (const [id, decision] of openDecisions(board)) {
+	for (const [id, decision] of listed) {
 		lines.push(`## ${id}  (${decision.category})`, decision.question)
 		if (decision.options === null) {
 			lines.push('No options yet — produce them with the `open_decision` tool.')
+		} else if (decision.answer !== null) {
+			const { answer } = decision
+			const chosen = decision.options.find((option) => option.id === answer.option)
+			lines.push(`- ${answer.option}: ${chosen?.label ?? ''} (answered)`)
+			if (answer.derived !== null) lines.push(`    derived: ${answer.derived}`)
+			for (const option of decision.options.filter((one) => one.id !== answer.option))
+				lines.push(
+					`- ${option.id}: ${option.label}`,
+					`    because: ${option.reason}`,
+					`    later:   ${option.costLater}`,
+				)
 		} else {
 			for (const option of decision.options) {
 				// The reason and what it costs later are the whole of the education
