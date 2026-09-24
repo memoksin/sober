@@ -13,7 +13,7 @@ import { NotOnBoardError } from './errors.js'
 import { git, refExists } from './git.js'
 import { type Board, loadBoard } from './graph.js'
 import { appendEvent, type Feedback, writeFeedback } from './local.js'
-import { deleteBranch, type Merged, MergeRefusedError, mergeNode } from './merge.js'
+import { deleteBranch, type Merged, MergeRefusedError, mergeNode, unmergeNode } from './merge.js'
 import type { Paths } from './paths.js'
 import { checksOf, pullRequestOf, readyAndMerge } from './pr.js'
 import { readNode } from './records.js'
@@ -116,14 +116,17 @@ export interface AcceptOptions {
 }
 
 /**
- * Accepting lands the work (§6.3): the `accepted` record is written — which is
- * what makes the node `done`, with no boolean to forget — then the branch is
- * merged locally and the worktree removed.
+ * Accepting lands the work (§6.3): the branch is merged and the `accepted`
+ * record written — which is what makes the node `done`, with no boolean to
+ * forget — then the worktree removed.
  *
- * The record is written **first**, on purpose. A merge that succeeds and a
- * record that never lands leaves work in the repository that the board says
- * nobody accepted; the other order leaves an accepted node whose merge the user
- * can retry.
+ * A local merge comes **first**. It is the step that refuses — a conflict, a
+ * dirty checkout, the wrong branch — and a record written before it left a
+ * `done` node over a base that never took the work. A record that fails after
+ * the merge takes the merge back, so either both land or neither does.
+ *
+ * A pull request is the other way round: the record goes first, because the
+ * merge happens on the host and cannot be taken back from here.
  */
 export type Landed =
 	| ({ readonly kind: 'merged' } & Merged & {
@@ -178,12 +181,7 @@ export const acceptWork = async (
 	const through =
 		config.kind === 'ok' ? config.value.dispatch.accept : DEFAULT_CONFIG.dispatch.accept
 
-	// The pull request has to be there before the record is written: the record
-	// is what makes the node done, and a done node whose work never landed is
-	// the one state this order exists to prevent.
-	if (through === 'pull-request') await requirePullRequest(paths, node)
-
-	await acceptNode(paths, node, {
+	const accepted = {
 		by: options.by,
 		at: new Date().toISOString(),
 		flagged: options.flagged ?? false,
@@ -194,9 +192,13 @@ export const acceptWork = async (
 		// and a field each of them has to remember to fill is a field that ends
 		// up saying "passed" on the one that forgot.
 		audit: await auditOf(paths, node),
-	})
+	}
 
 	if (through === 'pull-request') {
+		// The pull request has to be there before the record is written: a done
+		// node whose work never landed is the one state this order prevents.
+		await requirePullRequest(paths, node)
+		await acceptNode(paths, node, accepted)
 		const pr = await readyAndMerge(paths, node)
 		await removeWorktree(paths, node)
 		// The merge happened on the host, so this branch is not an ancestor of
@@ -208,6 +210,15 @@ export const acceptWork = async (
 	// Read before the branch goes: the pull request is found by its branch.
 	const openPr = await pullRequestOf(paths, node).catch(() => null)
 	const merged = await mergeNode(paths, node, options.base)
+	try {
+		await acceptNode(paths, node, accepted)
+	} catch (error) {
+		if (await unmergeNode(paths, merged).catch(() => false)) throw error
+		const reason = error instanceof Error ? error.message : String(error)
+		throw new MergeRefusedError(
+			`${merged.branch} was merged into ${merged.base} as ${merged.commit}, but the acceptance could not be recorded (${reason}), and the checkout is no longer exactly at that merge, so it was not taken back. The node is not done: undo the merge by hand (\`git reset --keep ${merged.commit}^1\` once nothing is on top of it), then accept again — the branch and worktree are kept`,
+		)
+	}
 	// Nothing removes a dirty worktree (§8.2), so this can refuse — and it
 	// refuses after the work is safely merged, which is the harmless order.
 	await removeWorktree(paths, node)
