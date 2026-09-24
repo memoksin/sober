@@ -14,6 +14,7 @@ import {
 } from './conflict.js'
 import { SoberError } from './errors.js'
 import {
+	currentBranch,
 	GitError,
 	git,
 	gitVerbatim,
@@ -95,6 +96,20 @@ const EMPTY = {
 } as const satisfies SyncResult
 
 /**
+ * The plumbing below commits a tree that holds only board records, as a child
+ * of whatever `branch` names. Landed on a branch someone has checked out,
+ * that tree overwrites their code with `.sober/` alone — `f2592f9`. `HEAD` in
+ * detached state never equals a real branch name, so it passes through.
+ */
+const refuseCheckedOut = async (root: string, branch: string): Promise<void> => {
+	if (branch === (await currentBranch(root)))
+		throw new SoberError(
+			'git',
+			`${branch} is the branch checked out here, not a board branch — the board lives on the branch named by board.branch in .sober/config.jsonc`,
+		)
+}
+
+/**
  * One action, in this order: commit what is here, pull, push (D35). Never
  * automatic and never on open — §1.2 says why.
  *
@@ -109,6 +124,7 @@ export const sync = async (
 ): Promise<SyncResult> =>
 	withLock(paths, 'sync', async () => {
 		const { root } = paths
+		await refuseCheckedOut(root, branch)
 		await createBoardBranch(root, branch)
 		const committed = await snapshot(paths, branch)
 
@@ -315,6 +331,7 @@ export const resolveConflict = async (
 ): Promise<Resolution> =>
 	withLock(paths, 'resolve', async () => {
 		const { root } = paths
+		await refuseCheckedOut(root, branch)
 		const remote = await remoteName(root)
 		if (remote === null)
 			throw new SoberError('git', 'there is nothing to resolve — this repository has no remote')

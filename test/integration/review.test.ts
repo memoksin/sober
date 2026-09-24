@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
 	AcceptedAlreadyError,
@@ -46,6 +46,11 @@ afterEach(() => {
 	repo?.cleanup()
 	repo = undefined
 })
+
+const git = (...args: string[]): string => {
+	if (repo === undefined) throw new Error('no repository')
+	return repo.git(...args)
+}
 
 const board = async (): Promise<Paths> => {
 	const created = createTempRepo()
@@ -302,10 +307,76 @@ test('a tracked change still refuses a merge, because that one would be merged i
 	await work(paths)
 	writeFileSync(join(paths.root, 'README.md'), '# fixture, edited\n')
 
+	const before = git('rev-parse', 'HEAD')
+
 	await expect(
 		acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' }),
 	).rejects.toThrow(/uncommitted changes/)
+
+	// Refused before anything was recorded: no done node over a base that never
+	// took its work.
+	expect((await readNodes(paths)).records.get(NODE)?.accepted).toBeNull()
+	expect(statusOf(await loadBoard(paths), NODE)).not.toBe('done')
+	expect(git('rev-parse', 'HEAD')).toBe(before)
+
+	git('checkout', '--', 'README.md')
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+	expect(statusOf(await loadBoard(paths), NODE)).toBe('done')
 })
+
+test('a conflicting merge records nothing, leaves the base clean where it was, and can be retried', async () => {
+	const paths = await board()
+	const path = await work(paths)
+	// The same file, written differently on the base: a real conflict.
+	mkdirSync(join(paths.root, 'src/auth'), { recursive: true })
+	writeFileSync(join(paths.root, 'src/auth/token.ts'), 'export const sign = () => "base"\n')
+	git('add', 'src/auth/token.ts')
+	git('commit', '-m', 'feat: base work')
+	const before = git('rev-parse', 'HEAD')
+
+	await expect(
+		acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' }),
+	).rejects.toThrow(/does not merge into main cleanly — main is left as it was/)
+
+	expect((await readNodes(paths)).records.get(NODE)?.accepted).toBeNull()
+	expect(statusOf(await loadBoard(paths), NODE)).not.toBe('done')
+	expect(git('rev-parse', 'HEAD')).toBe(before)
+	expect(git('status', '--porcelain', '--untracked-files=no')).toBe('')
+	expect(() => git('rev-parse', '--verify', '--quiet', 'MERGE_HEAD')).toThrow()
+
+	// Resolved on the branch, where the conflict belongs, the same accept lands.
+	execFileSync('git', ['merge', '-X', 'ours', '-m', 'merge main', 'main'], { cwd: path })
+	const landed = await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+	expect(landed.kind).toBe('merged')
+	expect(statusOf(await loadBoard(paths), NODE)).toBe('done')
+	expect(readFileSync(join(paths.root, 'src/auth/token.ts'), 'utf8')).toContain('"ok"')
+})
+
+// A permission bit does not stop root, so there the write would not fail.
+test.skipIf(process.getuid?.() === 0)(
+	'a record that cannot be written after the merge takes the merge back',
+	async () => {
+		const paths = await board()
+		await work(paths)
+		const before = git('rev-parse', 'HEAD')
+
+		chmodSync(paths.nodes, 0o555)
+		try {
+			await expect(
+				acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' }),
+			).rejects.toThrow()
+		} finally {
+			chmodSync(paths.nodes, 0o755)
+		}
+
+		expect((await readNodes(paths)).records.get(NODE)?.accepted).toBeNull()
+		expect(git('rev-parse', 'HEAD')).toBe(before)
+		expect(git('status', '--porcelain', '--untracked-files=no')).toBe('')
+
+		await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+		expect(statusOf(await loadBoard(paths), NODE)).toBe('done')
+	},
+)
 
 test('a node with nothing committed cannot be accepted, and says what is waiting', async () => {
 	const paths = await board()

@@ -279,6 +279,17 @@ test('dispatch.catalogueSeconds parses and defaults to an hour', () => {
 	})
 })
 
+test('dispatch.probeSeconds parses and defaults to fifteen minutes', () => {
+	expect(parseConfig('c', '{}')).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { probeSeconds: 900 } },
+	})
+	expect(parseConfig('c', '{ "dispatch": { "probeSeconds": 60 } }')).toMatchObject({
+		kind: 'ok',
+		value: { dispatch: { probeSeconds: 60 } },
+	})
+})
+
 test('modelsFor keeps the list order where ranges overlap', () => {
 	expect(modelsFor(MODELS, 3).map((m) => m.name)).toEqual(['free', 'codex'])
 	expect(modelsFor(MODELS, 7).map((m) => m.name)).toEqual(['codex'])

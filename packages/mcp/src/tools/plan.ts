@@ -501,7 +501,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 					acceptance: acceptance.map((criterion) => ({ ...criterion })),
 				})
 				return text(
-					`${renderBrief(await loadBoard(paths), node) ?? ''}\n\n${node} has a brief. Show it to the human and ask for approval with the \`approve\` tool.\nPaste this above the question before you ask.`,
+					`${renderBrief(await loadBoard(paths), node) ?? ''}\n\n${node} has a brief. Explain its purpose, changes, checks, and meaningful risks in plain language, then ask the human for approval with the \`approve\` tool. The full technical brief is available in the dashboard; do not paste it into the conversation.`,
 				)
 			},
 		),
@@ -512,7 +512,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		{
 			title: 'Record the human’s approval of one brief',
 			description:
-				'Record that the human approved one node’s brief. Before calling, paste the brief block `write_brief` returned — the whole approach and every criterion — into this conversation, never a pointer to the board, then ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes. The question must say whether a yes also starts the node when it becomes ready, which is the queue argument when given, otherwise the board’s dispatch.queueByDefault. Never on a yes they did not give, never on one carried over from earlier in the conversation, never a batch (ADR 0057).',
+				'Record that the human approved one node’s brief. Before calling, explain the written brief in plain language: what changes, why, how success is checked, and any meaningful trade-off or risk. The full technical brief is available in the dashboard; do not paste it into the conversation. Ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes to that explanation. The question must say whether a yes also starts the node when it becomes ready, which is the queue argument when given, otherwise the board’s dispatch.queueByDefault. Never on a yes they did not give, never on one carried over from earlier in the conversation, never a batch (ADR 0057).',
 			inputSchema: {
 				node: z.string(),
 				confirmed: z.literal(true).describe('the human said yes to this brief, just now'),

@@ -118,7 +118,7 @@ test('an event type the tail does not know is dropped, not shown', () => {
 			{ type: 'system', subtype: 'init' },
 		),
 	)
-	expect(rendered).toEqual([{ kind: 'started', text: 'session started', tool: null }])
+	expect(rendered).toMatchObject([{ kind: 'started', text: 'session started', tool: null }])
 })
 
 test('an assistant turn renders its text, and a tool call renders the tool', () => {
@@ -128,7 +128,7 @@ test('an assistant turn renders its text, and a tool call renders the tool', () 
 			{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Edit' }] } },
 		),
 	)
-	expect(rendered).toEqual([
+	expect(rendered).toMatchObject([
 		{ kind: 'text', text: 'wrote the file', tool: null },
 		{ kind: 'tool', text: 'Edit', tool: 'Edit' },
 	])
@@ -136,7 +136,7 @@ test('an assistant turn renders its text, and a tool call renders the tool', () 
 
 test('a failing result says so, where the last line is what a reader looks at', () => {
 	const rendered = tail(log({ type: 'result', subtype: 'error_during_execution', is_error: true }))
-	expect(rendered.at(-1)).toEqual({
+	expect(rendered.at(-1)).toMatchObject({
 		kind: 'result',
 		text: 'failed: error_during_execution',
 		tool: null,
@@ -145,7 +145,7 @@ test('a failing result says so, where the last line is what a reader looks at', 
 
 test('a line that is not JSON is the host’s own stderr, and it is never hidden', () => {
 	// The one thing a failing run always has, and the last thing to drop.
-	expect(tail('claude: command not found\n')).toEqual([
+	expect(tail('claude: command not found\n')).toMatchObject([
 		{ kind: 'raw', text: 'claude: command not found', tool: null },
 	])
 })
@@ -175,11 +175,52 @@ test('a Codex run renders its start, its message, its command and its end', () =
 			{ type: 'turn.completed', usage: { input_tokens: 22995, output_tokens: 5 } },
 		),
 	)
-	expect(rendered).toEqual([
+	expect(rendered).toMatchObject([
 		{ kind: 'started', text: 'session started', tool: null },
 		{ kind: 'text', text: 'ok', tool: null },
-		{ kind: 'tool', text: '/bin/zsh -lc ls', tool: 'command' },
+		{ kind: 'tool', text: '/bin/zsh -lc ls', tool: 'command', call: 'item_3' },
+		{ kind: 'output', text: 'exit 0', tool: 'command', call: 'item_3' },
 		{ kind: 'result', text: 'finished', tool: null },
+	])
+})
+
+test('a Claude tool call and its result round-trip through the tail, paired by call', () => {
+	const rendered = tail(
+		log(
+			{
+				type: 'assistant',
+				message: {
+					content: [
+						{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: { file_path: 'a.ts' } },
+					],
+				},
+			},
+			{
+				type: 'user',
+				session_id: 's',
+				message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'x\ny' }] },
+			},
+		),
+	)
+	expect(rendered).toEqual([
+		{
+			kind: 'tool',
+			text: 'Read',
+			tool: 'Read',
+			at: null,
+			call: 'toolu_1',
+			detail: 'a.ts',
+			body: null,
+		},
+		{
+			kind: 'output',
+			text: '2 lines',
+			tool: null,
+			at: null,
+			call: 'toolu_1',
+			body: 'x\ny',
+			detail: null,
+		},
 	])
 })
 
@@ -193,7 +234,9 @@ test('a warning Codex prints about itself is shown, not swallowed', () => {
 			item: { id: 'item_1', type: 'error', message: 'Exceeded skills context budget.' },
 		}),
 	)
-	expect(rendered).toEqual([{ kind: 'raw', text: 'Exceeded skills context budget.', tool: null }])
+	expect(rendered).toMatchObject([
+		{ kind: 'raw', text: 'Exceeded skills context budget.', tool: null },
+	])
 })
 
 test('an OpenCode run renders what it said and which tool it used', () => {
@@ -205,7 +248,7 @@ test('an OpenCode run renders what it said and which tool it used', () => {
 			{ type: 'step_finish', part: { type: 'step-finish', reason: 'stop' } },
 		),
 	)
-	expect(rendered).toEqual([
+	expect(rendered).toMatchObject([
 		{ kind: 'text', text: "I'll run ls to list the files.", tool: null },
 		{ kind: 'tool', text: 'bash', tool: 'bash' },
 	])
@@ -245,7 +288,7 @@ test('a Cursor run renders its start, its tools, what it said and its end', () =
 			{ type: 'result', subtype: 'success', is_error: false, session_id: session },
 		),
 	)
-	expect(rendered).toEqual([
+	expect(rendered).toMatchObject([
 		{ kind: 'started', text: 'session started (Claude 4 Sonnet)', tool: null },
 		{ kind: 'tool', text: 'read README.md', tool: 'read' },
 		{ kind: 'text', text: 'Done!', tool: null },
@@ -257,12 +300,12 @@ test('one host’s events are never read as another’s', () => {
 	// Every log carries its own shape, so a run started under one host still
 	// reads after `dispatch.host` changes — and Claude Code's `type: "user"` is
 	// not OpenCode's `type: "text"`.
-	expect(tail(log({ type: 'text', part: { type: 'text', text: 'from opencode' } }))).toEqual([
+	expect(tail(log({ type: 'text', part: { type: 'text', text: 'from opencode' } }))).toMatchObject([
 		{ kind: 'text', text: 'from opencode', tool: null },
 	])
 	expect(
 		tail(log({ type: 'assistant', message: { content: [{ type: 'text', text: 'from claude' }] } })),
-	).toEqual([{ kind: 'text', text: 'from claude', tool: null }])
+	).toMatchObject([{ kind: 'text', text: 'from claude', tool: null }])
 })
 
 test('the audit’s check lines render as their own kinds, not as stderr', () => {
@@ -270,7 +313,7 @@ test('the audit’s check lines render as their own kinds, not as stderr', () =>
 		tail(
 			'\n--- check: acceptance 1 of 2: `pnpm test`\nok\n--- checked: acceptance 1 of 2: `pnpm test` (exit 0, 1.2s)\n',
 		),
-	).toEqual([
+	).toMatchObject([
 		{ kind: 'check', text: 'acceptance 1 of 2: `pnpm test`', tool: null },
 		{ kind: 'raw', text: 'ok', tool: null },
 		{ kind: 'checked', text: 'acceptance 1 of 2: `pnpm test` (exit 0, 1.2s)', tool: null },

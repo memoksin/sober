@@ -12,9 +12,16 @@ import {
 } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
 import { loadBoard } from './graph.js'
-import { type AgentInput, checkHost, HostError, type HostReady, startAgent } from './host.js'
-import { adapterFor, UnknownHostError } from './hosts.js'
-import { askJev } from './jev.js'
+import {
+	type AgentInput,
+	checkHost,
+	HostError,
+	type HostReady,
+	hostAvailability,
+	startAgent,
+} from './host.js'
+import { adapterFor, limitSpent, renderLine, UnknownHostError } from './hosts.js'
+import { askJev, backupCandidates } from './jev.js'
 import {
 	appendEvent,
 	appendRunOutput,
@@ -125,22 +132,92 @@ export const dispatch = async (
 		dropped: built.dropped,
 	})
 
+	// A host's limit is account-wide, so it is asked once per host, not once
+	// per model (`limit-detect`). A host with no `availability` table
+	// (`opencode`, `cursor`) never appears in `spent`, so it is never removed.
+	const hostLines = new Map<string, string>()
+	for (const model of built.models) {
+		try {
+			const id = adapterFor(model.run).id
+			if (!hostLines.has(id)) hostLines.set(id, model.run)
+		} catch {
+			// An unknown host is refused later, at `checkHost` time.
+		}
+	}
+	const spent =
+		hostLines.size > 0
+			? await hostAvailability(paths, [...hostLines.values()], config.dispatch.probeSeconds)
+			: {}
+
+	const removed: { host: string; reason: string }[] = []
+	const unknown: string[] = []
+	const available = built.models.filter((model) => {
+		let id: string
+		try {
+			id = adapterFor(model.run).id
+		} catch {
+			return true
+		}
+		const state = spent[id]
+		if (state === undefined || state.state === 'ready') return true
+		if (state.state === 'unknown') {
+			if (!unknown.includes(id)) unknown.push(id)
+			return true
+		}
+		if (!removed.some((entry) => entry.host === id))
+			removed.push({ host: id, reason: state.reason ?? 'the usage limit is spent' })
+		return false
+	})
+	if (removed.length > 0 || unknown.length > 0)
+		await appendEvent(paths, { action: 'hosts', node, removed, unknown })
+	if (built.models.length > 0 && available.length === 0)
+		throw new HostError(
+			`${node} was not started: every host is out — ${removed
+				.map((r) => `${r.host}: ${r.reason}`)
+				.join('; ')}`,
+		)
+
 	// With jevMode on, the brief's own score is not consulted at all: the whole
 	// point is that nobody has to guess a number (ADR 0059). A Jev that cannot
 	// answer stops the dispatch here, before the worktree and before the spend.
 	const jev = config.dispatch.jevMode
 		? await askJev(await stateFor(paths, node), {
 				skills: config.dispatch.jevSkills,
-				models: built.models,
+				models: available,
 			})
 		: null
 	const complexity = jev?.complexity ?? record.value.brief?.complexity ?? null
 	const chosen = chooseLine(
-		{ ...config.dispatch, models: [...built.models] },
+		{ ...config.dispatch, models: [...available] },
 		complexity,
 		jev?.model ?? null,
 	)
-	const line = chosen.host
+	// Jev's backup when it picked the primary; otherwise the same rule Jev is
+	// shown, first candidate taken, so both paths agree on what may stand in.
+	let backup =
+		jev?.model != null
+			? (available.find((m) => m.name === jev.backup) ?? null)
+			: (backupCandidates(available, chosen.host, complexity)[0] ?? null)
+	// An attended run falls only to a host that can hear the human too; any
+	// other backup counts as none, before start and after.
+	if (backup !== null && options.attended === true) {
+		let attendable = false
+		try {
+			attendable = adapterFor(backup.run).attendable
+		} catch {
+			// An unknown line is no backup, not a crash.
+		}
+		if (!attendable) {
+			await appendEvent(paths, {
+				action: 'backup',
+				node,
+				host: backup.run,
+				reason: `skipped: ${backup.run} cannot be answered while it runs, and this run is attended`,
+			})
+			backup = null
+		}
+	}
+	let line = chosen.host
 	const named =
 		chosen.chose === null
 			? chosen.fallback
@@ -163,7 +240,23 @@ export const dispatch = async (
 			throw refused(`SOBER has no adapter for \`${line}\``, 'change')
 		throw error
 	}
-	if (!host.ok) throw refused(host.reason ?? 'the host is not ready', 'or change')
+	// A primary that is refused, or whose account the probe already found spent,
+	// hands over to the backup before the worktree — if the backup is ready.
+	// Without one, the refusal is today's, and a spent-but-ready primary still runs.
+	const primarySpent = spent[adapterFor(line).id]
+	const primaryReason = !host.ok
+		? (host.reason ?? 'the host is not ready')
+		: primarySpent?.state === 'spent'
+			? (primarySpent.reason ?? 'the usage limit is spent')
+			: null
+	let ran: 'primary' | 'backup' = 'primary'
+	let fellBack: string | null = null
+	if (primaryReason !== null && backup !== null && (await ready(backup.run))) {
+		line = backup.run
+		ran = 'backup'
+		fellBack = primaryReason
+		await appendEvent(paths, { action: 'backup', node, host: line, reason: primaryReason })
+	} else if (!host.ok) throw refused(primaryReason ?? 'the host is not ready', 'or change')
 
 	// Attended mode needs a host that reads stdin while it runs (ADR 0046), and
 	// two of the three do not. Refusing is the honest answer: running it
@@ -186,6 +279,9 @@ export const dispatch = async (
 		attended,
 		tier: chosen.chose,
 		fallback: chosen.fallback,
+		backup: backup?.run ?? null,
+		ran,
+		fellBack,
 	})
 	// The pid file holds the **agent's** pid and nothing else, written by
 	// `onStart` below. It used to be seeded with this process's, so a `sober
@@ -209,21 +305,63 @@ export const dispatch = async (
 	// run is attended, so a headless dispatch pays for none of it.
 	const relay = attended ? relayInput(paths, id) : null
 
-	try {
-		const exit = await startAgent({
-			host: line,
+	// What decides a fall after start: whether the primary reached a tool call,
+	// and the tail of what it printed, for the host's own limit patterns.
+	let sawTool = false
+	let output = ''
+	const emit = (raw: string): void => {
+		options.onLine?.(raw)
+		written = written.then(() => appendRunOutput(paths, id, `${raw}\n`))
+	}
+	const launch = (host: string) =>
+		startAgent({
+			host,
 			cwd: worktree.path,
 			prompt,
 			attended,
 			signal: control.signal,
 			onStart: (pid) => void writeRunPid(paths, id, pid),
 			onInput: (input) => relay?.start(input),
-			onLine: (line) => {
-				options.onLine?.(line)
-				written = written.then(() => appendRunOutput(paths, id, `${line}\n`))
+			onLine: (raw) => {
+				output = `${output}${raw}\n`.slice(-OUTPUT_KEPT)
+				if (!sawTool) {
+					try {
+						sawTool = renderLine(JSON.parse(raw)).some((l) => l.kind === 'tool')
+					} catch {
+						// Not JSON: a plain stderr line never counts as a tool call.
+					}
+				}
+				emit(raw)
 			},
 		})
+
+	try {
+		let exit = await launch(line)
 		await written
+
+		// A primary that stopped on a spent limit before touching anything runs
+		// once more on the backup, in the same worktree and under the same run.
+		// A stop, a timeout, or anything after a tool call is final.
+		const spentReason =
+			exit.kind === 'failed' && !sawTool && ran === 'primary' && backup !== null
+				? limitSpent(line, `${output}\n${exit.reason}`)
+				: null
+		if (
+			spentReason !== null &&
+			backup !== null &&
+			!control.signal.aborted &&
+			!(await wasStopped(paths, id)) &&
+			(await ready(backup.run))
+		) {
+			// The second launch hands `onInput` a fresh stdin; the first relay's timer must not outlive it.
+			relay?.stop()
+			emit(`primary ${line} stopped: ${spentReason} — running on ${backup.run}`)
+			line = backup.run
+			ran = 'backup'
+			fellBack = spentReason
+			exit = await launch(line)
+			await written
+		}
 		relay?.stop()
 
 		// A run past its limit is killed and recorded as failed with a timeout
@@ -259,7 +397,13 @@ export const dispatch = async (
 					})
 				: await unjudged(paths, node)
 
-		const run = await finishRun(paths, id, { ...result, ...judged })
+		const run = await finishRun(paths, id, {
+			...result,
+			...judged,
+			host: line,
+			ran,
+			...(fellBack === null ? {} : { fellBack }),
+		})
 		return {
 			run: id,
 			exit: run.exit ?? 'failed',
@@ -274,6 +418,19 @@ export const dispatch = async (
 		await clearRunPid(paths, id)
 		await clearStopped(paths, id)
 		await clearRunInput(paths, id)
+	}
+}
+
+/** How much of the primary's output is kept for the limit patterns to read. */
+const OUTPUT_KEPT = 64 * 1024
+
+/** A backup line that names no host is not ready; it is never a crash. */
+const ready = async (line: string): Promise<boolean> => {
+	try {
+		return (await checkHost(line)).ok
+	} catch (error) {
+		if (error instanceof UnknownHostError) return false
+		throw error
 	}
 }
 

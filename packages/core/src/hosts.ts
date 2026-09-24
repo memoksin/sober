@@ -1,5 +1,54 @@
-import { LogLine } from '@besober/schema'
+import { LogLine, type LogLineInput } from '@besober/schema'
 import { SoberError } from './errors.js'
+
+const BODY_LINES = 40
+const BODY_CHARS = 4096
+
+/** A result's text as the log keeps it: the first 40 lines or 4 KB, and a marker when cut. */
+export const capBody = (text: string): string => {
+	const kept = text.split('\n').slice(0, BODY_LINES).join('\n').slice(0, BODY_CHARS)
+	return kept.length < text.length ? `${kept}\n… (truncated)` : kept
+}
+
+/**
+ * A result in one line: `error: …` when the host says it failed, `exit N`
+ * where the text carries an exit code, the line itself when there is one, and
+ * a line count otherwise.
+ */
+export const summarize = (text: string, failed = false): string => {
+	const lines = text.trimEnd().split('\n')
+	const first = (lines[0] ?? '').trim()
+	if (failed) return `error: ${first}`
+	// Claude Code opens a failed Bash result with `Exit code N`; SOBER's own
+	// loop closes every bash result with `exit code: N`.
+	const exit = /^Exit code (\d+)/.exec(first) ?? /^exit code: (\d+)$/.exec(lines.at(-1) ?? '')
+	if (exit !== null) return `exit ${exit[1]}`
+	return lines.length === 1 ? first : `${lines.length} lines`
+}
+
+/** The one line of a tool's input a person wants beside its name. */
+const oneLine = (value: unknown): string | null =>
+	typeof value === 'string' && value.trim().length > 0
+		? (value.trim().split('\n')[0] ?? null)
+		: null
+
+/** Which key of a Claude Code tool's input names what it touched. */
+const CLAUDE_DETAIL: Readonly<Record<string, string>> = {
+	Read: 'file_path',
+	Edit: 'file_path',
+	Write: 'file_path',
+	Bash: 'command',
+	Grep: 'pattern',
+	Glob: 'pattern',
+	WebFetch: 'url',
+	Task: 'description',
+}
+
+/** A Claude `tool_result`'s content is a string or a list of text blocks. */
+const resultText = (content: string | readonly { text?: string }[] | undefined): string =>
+	typeof content === 'string'
+		? content
+		: (content ?? []).map((block) => block.text ?? '').join('\n')
 
 /**
  * `dispatch.host` is a command line, not just a program name, so `npx claude`
@@ -117,6 +166,19 @@ export interface Adapter {
 	readonly command?: string
 	/** Args that ask the host whether it can run at all, before a worktree exists. */
 	readonly probe: readonly string[]
+	/**
+	 * How to ask whether the host's own *account* is out of runway — Claude's
+	 * five-hour/seven-day windows, Codex's usage limit, OpenRouter's free-request
+	 * quota — as opposed to `probe`, which only asks whether the CLI is
+	 * installed and signed in (`limit-detect`). Absent on `opencode` and
+	 * `cursor`: there is nothing here that answers the question, so those two
+	 * hosts are never filtered on it.
+	 */
+	readonly availability?: {
+		readonly argv: readonly string[]
+		/** The reason the limit is gone, read from the probe's output — or null when it isn't. */
+		readonly spent: (output: string) => string | null
+	}
 	/** How the user signs in, in the words they have to type (§8.7). */
 	readonly signIn: (host: string) => string
 	/** True, false, or null when the answer cannot be read — never a silent pass. */
@@ -126,7 +188,7 @@ export interface Adapter {
 	/** Whether a watching human can reply to this host mid-run (ADR 0046). */
 	readonly attendable: boolean
 	/** One raw event, rendered — or null when the event is not this host's shape. */
-	readonly line: (event: Event) => LogLine | readonly LogLine[] | null
+	readonly line: (event: Event) => LogLineInput | readonly LogLineInput[] | null
 }
 
 export class UnknownHostError extends SoberError {
@@ -138,6 +200,62 @@ export class UnknownHostError extends SoberError {
 			).join(', ')} — set \`dispatch.host\` in \`.sober/config.jsonc\` to one of them.`,
 		)
 	}
+}
+
+/** Claude's own name for a window, in the words a person reads (`limit-detect`). */
+const CLAUDE_WINDOWS: Readonly<Record<string, string>> = {
+	five_hour: 'five-hour',
+	seven_day: 'seven-day',
+}
+
+/** An epoch-seconds `resetsAt` as a clock time, in UTC so a test is never timezone-dependent. */
+const resetTime = (epochSeconds: unknown): string => {
+	if (typeof epochSeconds !== 'number') return 'an unknown time'
+	const at = new Date(epochSeconds * 1000)
+	return `${String(at.getUTCHours()).padStart(2, '0')}:${String(at.getUTCMinutes()).padStart(2, '0')}`
+}
+
+interface RateLimitInfo {
+	readonly status?: string
+	readonly resetsAt?: number
+	readonly rateLimitType?: string
+	readonly unifiedWindows?: Readonly<Record<string, { readonly utilization?: number }>>
+}
+
+/**
+ * Claude Code emits `rate_limit_event` on every run (captured in
+ * `.sober/local/runs/*.log`). `status` is `allowed` or `allowed_warning` on a
+ * window with runway left; anything else, or a window at 100% utilization
+ * even under `allowed`, is the account out of runway.
+ *
+ * ponytail: only `allowed` has ever been captured — the rejected shape is
+ * built from it rather than seen, and is the one to replace when a real
+ * rejected event turns up.
+ */
+const claudeSpent = (output: string): string | null => {
+	for (const rawLine of output.split('\n')) {
+		const line = rawLine.trim()
+		if (line.length === 0) continue
+		let event: { type?: string; rate_limit_info?: RateLimitInfo }
+		try {
+			event = JSON.parse(line) as typeof event
+		} catch {
+			continue
+		}
+		if (event.type !== 'rate_limit_event' || event.rate_limit_info === undefined) continue
+
+		const info = event.rate_limit_info
+		const windows = info.unifiedWindows ?? {}
+		const full = Object.entries(windows).find(([, window]) => (window?.utilization ?? 0) >= 1)
+		const ready =
+			(info.status === 'allowed' || info.status === 'allowed_warning') && full === undefined
+		if (ready) return null
+
+		const key = full?.[0] ?? info.rateLimitType
+		const name = key === undefined ? 'usage' : (CLAUDE_WINDOWS[key] ?? key.replace(/_/g, '-'))
+		return `${name} limit, resets ${resetTime(info.resetsAt)}`
+	}
+	return null
 }
 
 /**
@@ -157,6 +275,18 @@ const claude: Adapter = {
 		}
 	},
 	argv: (prompt, attended) => ['-p', prompt, ...(attended ? ATTENDED_ARGS : HOST_ARGS)],
+	availability: {
+		argv: [
+			'-p',
+			'Reply with ok.',
+			'--model',
+			'haiku',
+			'--output-format',
+			'stream-json',
+			'--verbose',
+		],
+		spent: claudeSpent,
+	},
 	attendable: true,
 	line: (event) => {
 		if (event.type === 'system' && event.subtype === 'init')
@@ -171,6 +301,25 @@ const claude: Adapter = {
 						: `session started (${event.model})`,
 				tool: null,
 			}
+
+		// A tool's result comes back as a `user` message, paired to its call by
+		// `tool_use_id`. The result names no tool, so `tool` stays null; `at`
+		// stays null on every Claude line, because stream-json carries no time.
+		if (event.type === 'user') {
+			const outputs = (event.message?.content ?? []).flatMap((part): LogLineInput[] => {
+				if (part.type !== 'tool_result') return []
+				const text = resultText(part.content)
+				return [
+					{
+						kind: 'output',
+						text: summarize(text, part.is_error === true),
+						call: part.tool_use_id ?? null,
+						body: capBody(text),
+					},
+				]
+			})
+			if (outputs.length > 0) return outputs
+		}
 
 		// What the human said, echoed back by the host under
 		// `--replay-user-messages` (ADR 0046). It is in the log so the transcript
@@ -192,9 +341,19 @@ const claude: Adapter = {
 		}
 
 		if (event.type === 'assistant') {
-			const lines = (event.message?.content ?? []).flatMap((part): LogLine[] => {
-				if (part.type === 'tool_use' && part.name !== undefined && part.name.length > 0)
-					return [{ kind: 'tool', text: part.name, tool: part.name }]
+			const lines = (event.message?.content ?? []).flatMap((part): LogLineInput[] => {
+				if (part.type === 'tool_use' && part.name !== undefined && part.name.length > 0) {
+					const key = CLAUDE_DETAIL[part.name]
+					return [
+						{
+							kind: 'tool',
+							text: part.name,
+							tool: part.name,
+							call: part.id ?? null,
+							detail: key === undefined ? null : oneLine(part.input?.[key]),
+						},
+					]
+				}
 				const kind = part.type === 'text' ? 'text' : part.type === 'thinking' ? 'thinking' : null
 				const text = (part.type === 'thinking' ? part.thinking : part.text)?.trim()
 				return kind !== null && text !== undefined && text.length > 0
@@ -213,6 +372,22 @@ const claude: Adapter = {
 
 		return null
 	},
+}
+
+/**
+ * Codex's own words for a spent account, captured verbatim in
+ * `~/.codex/sessions/2026/09/15/…`:
+ * `{"error":{"message":"You've hit your usage limit. Upgrade to Pro
+ * (https://chatgpt.com/explore/pro), visit
+ * https://chatgpt.com/codex/settings/usage to purchase more credits or try
+ * again at 2:59 PM."}}`. The `try again at …` tail is carried into the reason
+ * when the message has one.
+ */
+const codexSpent = (output: string): string | null => {
+	const found = /You've hit your usage limit\.[^"]*/.exec(output)
+	if (found === null) return null
+	const tail = /try again at [^".]+/i.exec(found[0])
+	return tail === null ? 'usage limit' : `usage limit, ${tail[0]}`
 }
 
 /**
@@ -238,6 +413,12 @@ const codex: Adapter = {
 		return null
 	},
 	argv: (prompt) => ['exec', '--json', '--dangerously-bypass-approvals-and-sandbox', brief(prompt)],
+	// A minimal call on Codex's default model — the limit is the account's,
+	// not any one model's, so which model answers does not matter here.
+	availability: {
+		argv: ['exec', '--json', '--skip-git-repo-check', 'Reply with ok.'],
+		spent: codexSpent,
+	},
 	attendable: false,
 	line: (event) => {
 		if (event.type === 'thread.started')
@@ -252,9 +433,29 @@ const codex: Adapter = {
 			}
 			if (item?.type === 'command_execution') {
 				const command = item.command?.trim()
-				return command !== undefined && command.length > 0
-					? { kind: 'tool', text: command, tool: 'command' }
-					: null
+				if (command === undefined || command.length === 0) return null
+				const call = item.id ?? null
+				const ran: LogLineInput = {
+					kind: 'tool',
+					text: command,
+					tool: 'command',
+					call,
+					detail: command,
+				}
+				// The completed item carries the result with the call, so both lines come from it.
+				if (typeof item.exit_code !== 'number' && typeof item.aggregated_output !== 'string')
+					return ran
+				const output = item.aggregated_output ?? ''
+				return [
+					ran,
+					{
+						kind: 'output',
+						text: typeof item.exit_code === 'number' ? `exit ${item.exit_code}` : summarize(output),
+						tool: 'command',
+						call,
+						body: capBody(output),
+					},
+				]
 			}
 			// Codex reports its own complaints as items rather than on stderr, and
 			// they are the sentences that explain why a run behaved oddly.
@@ -300,7 +501,23 @@ const opencode: Adapter = {
 		}
 		if (event.type === 'tool_use') {
 			const tool = event.part?.tool?.trim()
-			return tool !== undefined && tool.length > 0 ? { kind: 'tool', text: tool, tool } : null
+			if (tool === undefined || tool.length === 0) return null
+			const call = event.part?.callID ?? null
+			const state = event.part?.state
+			// Only `command` is in the recording; other tools' input keys are not,
+			// so their detail stays null rather than guessed.
+			const ran: LogLineInput = {
+				kind: 'tool',
+				text: tool,
+				tool,
+				call,
+				detail: oneLine(state?.input?.command),
+			}
+			if (state?.status !== 'completed' || typeof state.output !== 'string') return ran
+			return [
+				ran,
+				{ kind: 'output', text: summarize(state.output), tool, call, body: capBody(state.output) },
+			]
 		}
 		return null
 	},
@@ -362,6 +579,9 @@ const cursor: Adapter = {
 		// they touch; anything else arrives under `function`, with its own name.
 		const tool = name === 'function' ? (call?.name ?? 'tool') : name.replace(/ToolCall$/, '')
 		const path = call?.args?.path
+		// No `call`, `detail` or output line: the documented shape carries no
+		// correlator between `started` and `completed`, and a wrong pairing is
+		// worse than none.
 		return { kind: 'tool', text: path === undefined ? tool : `${tool} ${path}`, tool }
 	},
 }
@@ -380,6 +600,18 @@ const brief = (prompt: string): string => `${NO_HUMAN}\n\n---\n\n${prompt}`
  * which reads `OPENROUTER_API_KEY` off the environment the dispatcher loaded
  * and asks the endpoint whether the key is accepted.
  */
+/**
+ * `sober agent --check` prints `spent: <reason>` itself, from the same
+ * `/auth/key` body it already fetches (`data.free_model_daily_requests` and
+ * `data.limit_remaining`, captured today), and a run prints it on stderr for a
+ * 429 left after the loop's retries. This only reads the line the CLI already
+ * classified, so the probe and a run's fall to its backup share one pattern.
+ */
+const openrouterSpent = (output: string): string | null => {
+	const found = /^spent: (.+)$/m.exec(output)
+	return found === null ? null : (found[1]?.trim() ?? null)
+}
+
 const openrouter: Adapter = {
 	id: 'openrouter',
 	command: 'sober',
@@ -388,15 +620,18 @@ const openrouter: Adapter = {
 	loggedIn: (stdout) =>
 		/^ok\b/m.test(stdout) ? true : /no key|401|unauthori[sz]ed/i.test(stdout) ? false : null,
 	argv: (prompt) => ['agent', brief(prompt)],
+	availability: {
+		argv: ['agent', '--check'],
+		spent: openrouterSpent,
+	},
 	attendable: false,
 	line: (event) => {
 		if (event.type !== 'sober') return null
 		// The loop writes `LogLine`s already; the parse is what keeps a stray
 		// line from crashing the reader rather than being dropped.
-		const kind = LogLine.shape.kind.safeParse(event.kind)
-		return kind.success
-			? { kind: kind.data, text: event.text ?? '', tool: event.tool ?? null }
-			: null
+		const { type: _, ...line } = event
+		const parsed = LogLine.safeParse(line)
+		return parsed.success ? parsed.data : null
 	},
 }
 
@@ -426,6 +661,15 @@ export const adapterFor = (host: string): Adapter => {
 }
 
 /**
+ * The reason a host's account is out of runway, read from its `availability`
+ * probe's output — or null when it is ready, or when the host has no
+ * `availability` table at all (`opencode`, `cursor`), which is what keeps
+ * those two from ever being filtered on it.
+ */
+export const limitSpent = (host: string, output: string): string | null =>
+	adapterFor(host).availability?.spent(output) ?? null
+
+/**
  * One raw event, whatever host wrote it. Read in order, and the first adapter
  * that recognises the shape owns the line — which is what lets a run started
  * under one host still render after `dispatch.host` changes.
@@ -433,7 +677,8 @@ export const adapterFor = (host: string): Adapter => {
 export const renderLine = (event: Event): readonly LogLine[] => {
 	for (const adapter of ADAPTERS) {
 		const result = adapter.line(event)
-		if (result !== null) return 'kind' in result ? [result] : result
+		if (result !== null)
+			return ('kind' in result ? [result] : result).map((line) => LogLine.parse(line))
 	}
 	return []
 }
@@ -453,14 +698,24 @@ export interface Event {
 			readonly text?: string
 			readonly thinking?: string
 			readonly name?: string
+			/** A `tool_use` part's call id and arguments. */
+			readonly id?: string
+			readonly input?: Readonly<Record<string, unknown>>
+			/** A `tool_result` part: the call it answers and what came back. */
+			readonly tool_use_id?: string
+			readonly content?: string | readonly { readonly type?: string; readonly text?: string }[]
+			readonly is_error?: boolean
 		}[]
 	}
 	/** Codex: one item in a turn. */
 	readonly item?: {
+		readonly id?: string
 		readonly type?: string
 		readonly text?: string
 		readonly command?: string
 		readonly message?: string
+		readonly aggregated_output?: string
+		readonly exit_code?: number
 	}
 	/** Cursor: one tool call, under a key that names the tool that made it. */
 	readonly tool_call?: Readonly<
@@ -473,10 +728,20 @@ export interface Event {
 	readonly kind?: string
 	readonly text?: string
 	readonly tool?: string | null
+	readonly at?: string | null
+	readonly call?: string | null
+	readonly detail?: string | null
+	readonly body?: string | null
 	/** OpenCode: one part of a step. */
 	readonly part?: {
 		readonly type?: string
 		readonly text?: string
 		readonly tool?: string
+		readonly callID?: string
+		readonly state?: {
+			readonly status?: string
+			readonly input?: Readonly<Record<string, unknown>>
+			readonly output?: string
+		}
 	}
 }

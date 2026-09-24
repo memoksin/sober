@@ -131,7 +131,8 @@ test('a conflicting branch is refused with something the user can act on', async
 	created.git('commit', '-am', 'docs: readme')
 
 	await expect(mergeNode(paths, 'auth-api-k7f2', 'main')).rejects.toThrow(/does not merge/)
-	created.git('merge', '--abort')
+	// mergeNode aborts its own conflicted merge, so the checkout is not left mid-merge.
+	expect(() => created.git('rev-parse', '--verify', '--quiet', 'MERGE_HEAD')).toThrow()
 })
 
 test('configuration is read from the base ref, never from the branch under review', async () => {

@@ -1,4 +1,4 @@
-import type { LogLine, LogWindow } from '@besober/schema'
+import { type LogLine, type LogWindow, ranLabel } from '@besober/schema'
 
 /**
  * What each kind of line looks like, beside the component for the reason
@@ -22,6 +22,7 @@ export const MARK: Readonly<Record<LogLine['kind'], string>> = {
 	// What the human said back, echoed into the log by the host. It points the
 	// other way because it is the one line that came from this side.
 	answer: '›',
+	output: '⎿',
 }
 
 // The transcript's own tones (ADR 0064), not the board's status colours: a
@@ -38,6 +39,7 @@ export const TONE: Readonly<Record<LogLine['kind'], string>> = {
 	// it is the one thing that must not read like ordinary output.
 	raw: 'var(--tx-error)',
 	answer: 'var(--tx-human)',
+	output: 'var(--tx-result)',
 }
 
 // A display convenience, not an allowlist: a host naming a tool nobody listed is
@@ -139,14 +141,5 @@ export const MORPH_SHRINK_EASING = 'cubic-bezier(.22, 1, .36, 1)'
 export const STAGE_STAGGER_MS = 60
 
 /** The host line, what chose it and the fallback, as the run record wrote them (ADR 0058, 0061). */
-export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string => {
-	const chose =
-		tier === null
-			? fallback
-				? 'no model covers this score, fallback to dispatch.host'
-				: 'unscored'
-			: fallback
-				? `${tier} named no host, fallback to dispatch.host`
-				: tier
-	return `Ran \`${host}\` — ${chose}`
-}
+export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string =>
+	`Ran \`${host}\` — ${ranLabel({ tier, fallback })}`
