@@ -4,7 +4,6 @@ import { Overlay } from '../Overlay.js'
 import type { Wire } from '../wire.js'
 import {
 	atBottom,
-	MARK,
 	MORPH_GROW_EASING,
 	MORPH_GROW_MS,
 	MORPH_REDUCED_MS,
@@ -18,9 +17,8 @@ import {
 	providerForModel,
 	ranWith,
 	STAGE_STAGGER_MS,
-	TONE,
-	toolMark,
 } from './data.js'
+import { Transcript } from './Transcript.js'
 
 /**
  * The run on the screen (ADR 0046). A dispatch is the longest and most
@@ -73,12 +71,20 @@ export const LogScreen = ({
 	const following = useRef(true)
 	const seenCount = useRef(0)
 
+	// When each line arrived, index-aligned with `lines`. `elapsedLabel` falls
+	// back to this for a host whose stream carries no timestamp (Claude Code's
+	// does not) — `at` on the line itself is always preferred where it exists.
+	const arrivals = useRef<(string | null)[]>([])
+	const [startAt, setStartAt] = useState<string | null>(null)
+
 	useEffect(() => {
 		const leaving = new AbortController()
 		setLines([])
 		setLive(null)
 		setFailure(null)
 		setEnded(false)
+		arrivals.current = []
+		setStartAt(null)
 
 		let offset: string | undefined
 		surface
@@ -89,7 +95,12 @@ export const LogScreen = ({
 					offset = String(window.offset)
 					setLive(window.live)
 					setRan(window.ran)
-					if (window.lines.length > 0) setLines((shown) => [...shown, ...window.lines])
+					if (window.lines.length > 0) {
+						const now = new Date().toISOString()
+						setStartAt((value) => value ?? now)
+						for (let i = 0; i < window.lines.length; i += 1) arrivals.current.push(now)
+						setLines((shown) => [...shown, ...window.lines])
+					}
 				},
 				leaving.signal,
 			)
@@ -300,7 +311,12 @@ export const LogScreen = ({
 		return () => box.removeEventListener('keydown', trap)
 	}, [])
 
-	const shown = findOpen ? lines.filter((line) => matchesLine(line, query)) : lines
+	// Filtered together so a line's arrival stays paired with it once the find
+	// box drops lines the query doesn't match.
+	const paired = lines.map((line, index) => [line, arrivals.current[index] ?? null] as const)
+	const shownPaired = findOpen ? paired.filter(([line]) => matchesLine(line, query)) : paired
+	const shown = shownPaired.map(([line]) => line)
+	const shownArrivals = shownPaired.map(([, at]) => at)
 
 	return (
 		<Overlay
@@ -407,41 +423,12 @@ export const LogScreen = ({
 						<p className="text-[var(--ink-faint)]">No matching lines.</p>
 					)}
 
-					<ol className="space-y-1">
-						{shown.map((line, index) => (
-							// The index is the identity: a log is append-only and a line has
-							// no id of its own, so its position is what it is.
-							// biome-ignore lint/suspicious/noArrayIndexKey: an append-only log has no other key
-							<li key={index} className="flex gap-3">
-								<span
-									aria-hidden
-									className={`select-none ${line.kind === 'thinking' ? 'mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--tx-think)]' : ''} ${
-										// Running belongs to the last line of a live run, not to the line:
-										// the next line re-renders this one at rest.
-										line.kind === 'thinking' && live === true && index === shown.length - 1
-											? 'animate-pulse'
-											: ''
-									}`}
-									style={line.kind === 'thinking' ? undefined : { color: TONE[line.kind] }}
-								>
-									{line.kind === 'thinking'
-										? null
-										: line.kind === 'tool'
-											? toolMark(line.tool ?? '')
-											: MARK[line.kind]}
-								</span>
-								{line.kind === 'text' || line.kind === 'answer' ? (
-									<span className="max-w-[68ch] whitespace-pre-wrap break-words font-sans text-[var(--ink)]">
-										{line.text}
-									</span>
-								) : (
-									<span className="whitespace-pre-wrap break-words text-[var(--ink-dim)]">
-										{line.text}
-									</span>
-								)}
-							</li>
-						))}
-					</ol>
+					<Transcript
+						lines={shown}
+						arrivals={shownArrivals}
+						startAt={startAt ?? new Date().toISOString()}
+						live={live}
+					/>
 				</div>
 
 				{unseen > 0 && (

@@ -143,3 +143,88 @@ export const STAGE_STAGGER_MS = 60
 /** The host line, what chose it and the fallback, as the run record wrote them (ADR 0058, 0061). */
 export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string =>
 	`Ran \`${host}\` — ${ranLabel({ tier, fallback })}`
+
+/**
+ * One row of the transcript: either a single line, or a `tool` paired with the
+ * `output` that answers its `call`.
+ */
+export type Block =
+	| { readonly kind: 'single'; readonly line: LogLine; readonly at: number }
+	| {
+			readonly kind: 'tool'
+			readonly tool: LogLine
+			readonly output: LogLine | null
+			readonly at: number
+			readonly outputAt: number | null
+	  }
+	| { readonly kind: 'orphanOutput'; readonly output: LogLine; readonly at: number }
+
+/**
+ * Groups a flat log into the blocks a reader sees: a `tool` line and the
+ * `output` that shares its `call` become one block, so a call and its result
+ * read as a single unit instead of two lines a person has to mentally pair up.
+ *
+ * A `tool` with no `call` (old logs, before line-detail) or whose output
+ * hasn't arrived yet stands alone — it renders pending until an output shows
+ * up. When a call has more than one output, the last one wins: a host that
+ * streams partial results only ever means the final one.
+ */
+export const groupLines = (lines: readonly LogLine[]): Block[] => {
+	const blocks: Block[] = []
+	// Index into `blocks` for each call id seen as a `tool` line, so a later
+	// `output` with the same call finds its block instead of starting a new one.
+	const toolAt = new Map<string, number>()
+
+	lines.forEach((line, at) => {
+		if (line.kind === 'tool') {
+			if (line.call !== null) toolAt.set(line.call, blocks.length)
+			blocks.push({ kind: 'tool', tool: line, output: null, at, outputAt: null })
+			return
+		}
+
+		if (line.kind === 'output') {
+			const pairedAt = line.call !== null ? toolAt.get(line.call) : undefined
+			if (pairedAt !== undefined) {
+				const paired = blocks[pairedAt]
+				if (paired?.kind === 'tool') {
+					blocks[pairedAt] = { ...paired, output: line, outputAt: at }
+					return
+				}
+			}
+			blocks.push({ kind: 'orphanOutput', output: line, at })
+			return
+		}
+
+		blocks.push({ kind: 'single', line, at })
+	})
+
+	return blocks
+}
+
+/** Up to `max` lines show whole; beyond that, the first three plus a count of the rest. */
+export const foldBody = (
+	body: string,
+	max = 4,
+): { readonly shown: string; readonly hidden: number } => {
+	const rows = body.split('\n')
+	if (rows.length <= max) return { shown: body, hidden: 0 }
+	return { shown: rows.slice(0, 3).join('\n'), hidden: rows.length - 3 }
+}
+
+/**
+ * `mm:ss` since the run started. `at` is the line's own ISO timestamp; when
+ * the host's stream carries none (Claude Code's does not), `fallbackAt` — the
+ * arrival time `LogScreen` records as lines come in — stands in for it.
+ */
+export const elapsedLabel = (
+	at: string | null,
+	startAt: string,
+	fallbackAt?: string | null,
+): string => {
+	const stamp = at ?? fallbackAt ?? startAt
+	const ms = Math.max(0, new Date(stamp).getTime() - new Date(startAt).getTime())
+	const totalSeconds = Math.floor(ms / 1000)
+	const minutes = Math.floor(totalSeconds / 60)
+	const seconds = totalSeconds % 60
+	return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}

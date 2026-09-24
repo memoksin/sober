@@ -1,7 +1,10 @@
-import { LogLine } from '@besober/schema'
+import { LogLine, type LogLineInput } from '@besober/schema'
 import { expect, test } from 'vitest'
 import {
 	atBottom,
+	elapsedLabel,
+	foldBody,
+	groupLines,
 	MARK,
 	matchesLine,
 	modelOf,
@@ -11,6 +14,8 @@ import {
 	TOOL_FALLBACK,
 	toolMark,
 } from './data.js'
+
+const line = (over: LogLineInput): LogLine => LogLine.parse(over)
 
 test('every kind a log line can be has a mark and a colour', () => {
 	// The shape is the wire's, so a host adding an event type that `tail` learns
@@ -72,6 +77,68 @@ test('the provider comes from the model id, not the host', () => {
 	expect(providerForModel('mistralai/mistral-large')).toBe('mistral')
 	expect(providerForModel('codestral-latest')).toBe('mistral')
 	expect(providerForModel('local/custom-model')).toBe('other')
+})
+
+test('a tool line and its later output pair into one block', () => {
+	const lines = [
+		line({ kind: 'tool', text: 'Read', tool: 'Read', call: 'c1', detail: 'Read(x.ts)' }),
+		line({ kind: 'output', text: '92 lines', call: 'c1', body: 'a\nb' }),
+	]
+	const blocks = groupLines(lines)
+	expect(blocks).toHaveLength(1)
+	expect(blocks[0]).toMatchObject({ kind: 'tool', output: { text: '92 lines' } })
+})
+
+test('when a call has more than one output, the last one wins', () => {
+	const lines = [
+		line({ kind: 'tool', text: 'Bash', call: 'c1' }),
+		line({ kind: 'output', text: 'first', call: 'c1' }),
+		line({ kind: 'output', text: 'second', call: 'c1' }),
+	]
+	const blocks = groupLines(lines)
+	expect(blocks).toHaveLength(1)
+	expect(blocks[0]).toMatchObject({ kind: 'tool', output: { text: 'second' } })
+})
+
+test('a tool with no call, or none answered yet, stands alone as pending', () => {
+	const lines = [
+		line({ kind: 'tool', text: 'Read', call: null }),
+		line({ kind: 'tool', text: 'Write', call: 'c1' }),
+	]
+	const blocks = groupLines(lines)
+	expect(blocks).toHaveLength(2)
+	for (const block of blocks) expect(block).toMatchObject({ kind: 'tool', output: null })
+})
+
+test('an output whose call has not been seen is its own block', () => {
+	const blocks = groupLines([line({ kind: 'output', text: 'stray', call: 'unknown' })])
+	expect(blocks).toEqual([
+		{ kind: 'orphanOutput', output: expect.objectContaining({ text: 'stray' }), at: 0 },
+	])
+})
+
+test('an old log with no call id groups nothing, one block per line', () => {
+	const lines = [
+		line({ kind: 'tool', text: 'Read', tool: null }),
+		line({ kind: 'text', text: 'wrote something', tool: null }),
+	]
+	const blocks = groupLines(lines)
+	expect(blocks).toHaveLength(2)
+	expect(blocks[0]).toMatchObject({ kind: 'tool', output: null })
+	expect(blocks[1]).toMatchObject({ kind: 'single' })
+})
+
+test('a short body shows whole, a long one folds to three lines plus a count', () => {
+	expect(foldBody('a\nb\nc')).toEqual({ shown: 'a\nb\nc', hidden: 0 })
+	const long = ['a', 'b', 'c', 'd', 'e', 'f'].join('\n')
+	expect(foldBody(long)).toEqual({ shown: 'a\nb\nc', hidden: 3 })
+})
+
+test('elapsed is mm:ss since the run started, falling back to arrival time', () => {
+	const start = '2026-01-01T00:00:00.000Z'
+	expect(elapsedLabel('2026-01-01T00:01:05.000Z', start)).toBe('01:05')
+	expect(elapsedLabel(null, start, '2026-01-01T00:00:09.000Z')).toBe('00:09')
+	expect(elapsedLabel(null, start, null)).toBe('00:00')
 })
 
 test('a find query checks text, detail and tool, and an empty query matches everything', () => {
