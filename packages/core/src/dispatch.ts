@@ -194,10 +194,29 @@ export const dispatch = async (
 	)
 	// Jev's backup when it picked the primary; otherwise the same rule Jev is
 	// shown, first candidate taken, so both paths agree on what may stand in.
-	const backup =
+	let backup =
 		jev?.model != null
 			? (available.find((m) => m.name === jev.backup) ?? null)
 			: (backupCandidates(available, chosen.host, complexity)[0] ?? null)
+	// An attended run falls only to a host that can hear the human too; any
+	// other backup counts as none, before start and after.
+	if (backup !== null && options.attended === true) {
+		let attendable = false
+		try {
+			attendable = adapterFor(backup.run).attendable
+		} catch {
+			// An unknown line is no backup, not a crash.
+		}
+		if (!attendable) {
+			await appendEvent(paths, {
+				action: 'backup',
+				node,
+				host: backup.run,
+				reason: `skipped: ${backup.run} cannot be answered while it runs, and this run is attended`,
+			})
+			backup = null
+		}
+	}
 	let line = chosen.host
 	const named =
 		chosen.chose === null
