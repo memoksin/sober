@@ -71,6 +71,73 @@ export const atBottom = (box: {
 	scrollHeight: number
 }): boolean => box.scrollHeight - box.scrollTop - box.clientHeight < 24
 
+/**
+ * Whether a line matches a find query. Null-safe on `detail`: the field
+ * arrives with `line-detail`, and a line log-adapters haven't reached yet
+ * still has to be searchable on `text` and `tool` alone.
+ */
+export const matchesLine = (
+	line: Pick<LogLine, 'text' | 'tool'> & { detail?: string | null },
+	query: string,
+): boolean => {
+	const q = query.trim().toLowerCase()
+	if (q === '') return true
+	return [line.text, line.detail, line.tool].some(
+		(field) => typeof field === 'string' && field.toLowerCase().includes(q),
+	)
+}
+
+/**
+ * The model a host's command line was launched with. Handles `--model X`,
+ * `--model=X` and `-m X`; null when the line names none.
+ */
+export const modelOf = (host: string): string | null => {
+	const eq = /--model=(\S+)/.exec(host)
+	if (eq !== null) return eq[1] ?? null
+	const spaced = /(?:--model|-m)\s+(\S+)/.exec(host)
+	return spaced?.[1] ?? null
+}
+
+export type Provider = 'anthropic' | 'openai' | 'google' | 'mistral' | 'other'
+
+export const PROVIDER_NAME: Readonly<Record<Provider, string>> = {
+	anthropic: 'Anthropic',
+	openai: 'OpenAI',
+	google: 'Google',
+	mistral: 'Mistral',
+	other: 'Other provider',
+}
+
+// The brand tokens ADR 0064 adds; a fallback for whatever a model id doesn't name.
+export const PROVIDER_COLOUR: Readonly<Record<Provider, string>> = {
+	anthropic: 'var(--provider-anthropic)',
+	openai: 'var(--provider-openai)',
+	google: 'var(--provider-google)',
+	mistral: 'var(--provider-mistral)',
+	other: 'var(--provider-other)',
+}
+
+/**
+ * The provider a model id names, not the host that ran it — `anthropic/claude-…`
+ * on openrouter is still Anthropic. Ported from `docs/design/watch-the-run.html`.
+ */
+export const providerForModel = (model: string): Provider => {
+	const id = model.toLowerCase()
+	if (/(^|\/)(anthropic\/|claude-)/.test(id)) return 'anthropic'
+	if (/(^|\/)(openai\/|gpt-|o[134](?:-|$))/.test(id)) return 'openai'
+	if (/(^|\/)(google\/|gemini-)/.test(id)) return 'google'
+	if (/(^|\/)(mistralai\/|mistral-|codestral-)/.test(id)) return 'mistral'
+	return 'other'
+}
+
+/** The run screen's full-screen morph (ADR 0064), timed to match the mockup's `toggleFull`. */
+export const MORPH_GROW_MS = 450
+export const MORPH_SHRINK_MS = 330
+export const MORPH_REDUCED_MS = 120
+export const MORPH_GROW_EASING = 'linear(0, 0.32 12%, 0.72 27%, 0.95 43%, 1.018 60%, 0.995 80%, 1)'
+export const MORPH_SHRINK_EASING = 'cubic-bezier(.22, 1, .36, 1)'
+export const STAGE_STAGGER_MS = 60
+
 /** The host line, what chose it and the fallback, as the run record wrote them (ADR 0058, 0061). */
 export const ranWith = ({ host, tier, fallback }: NonNullable<LogWindow['ran']>): string => {
 	const chose =

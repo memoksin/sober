@@ -260,6 +260,170 @@ test('prose is a line like any other', async () => {
 	expect(screen.getByText('the answer').closest('li')?.firstElementChild?.textContent).toBe('›')
 })
 
+test('f toggles full screen, and the button reflects it', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([window({ live: true })], { hold: true })}
+			onClose={() => {}}
+		/>,
+	)
+
+	const dialog = await screen.findByRole('dialog')
+	const toggle = screen.getByRole('button', { name: /enter full screen/i })
+	expect(toggle.getAttribute('aria-pressed')).toBe('false')
+
+	fireEvent.keyDown(dialog, { key: 'f' })
+	expect(
+		(await screen.findByRole('button', { name: /leave full screen/i })).getAttribute(
+			'aria-pressed',
+		),
+	).toBe('true')
+
+	fireEvent.click(screen.getByRole('button', { name: /leave full screen/i }))
+	expect(
+		(await screen.findByRole('button', { name: /enter full screen/i })).getAttribute(
+			'aria-pressed',
+		),
+	).toBe('false')
+})
+
+test('Escape leaves full screen before it closes', async () => {
+	const onClose = vi.fn()
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([window({ live: true })], { hold: true })}
+			onClose={onClose}
+		/>,
+	)
+
+	const dialog = await screen.findByRole('dialog')
+	fireEvent.keyDown(dialog, { key: 'f' })
+	await screen.findByRole('button', { name: /leave full screen/i })
+
+	fireEvent.keyDown(dialog, { key: 'Escape' })
+	expect(onClose).not.toHaveBeenCalled()
+	await screen.findByRole('button', { name: /enter full screen/i })
+
+	fireEvent.keyDown(dialog, { key: 'Escape' })
+	expect(onClose).toHaveBeenCalledTimes(1)
+})
+
+test('keys are ignored while the answer box has focus', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([window({ live: true })], { hold: true })}
+			onClose={() => {}}
+		/>,
+	)
+
+	const box = await screen.findByLabelText(/answer the run/i)
+	fireEvent.change(box, { target: { value: 'f is not a shortcut here' } })
+	fireEvent.keyDown(box, { key: 'f' })
+
+	expect(
+		screen.getByRole('button', { name: /enter full screen/i }).getAttribute('aria-pressed'),
+	).toBe('false')
+	expect((box as HTMLTextAreaElement).value).toBe('f is not a shortcut here')
+})
+
+test('/ opens find, which filters the transcript', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({
+					lines: [
+						{ kind: 'text', text: 'wrote the auth middleware', tool: null },
+						{ kind: 'tool', text: 'ls', tool: 'Bash' },
+					],
+				}),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	const dialog = await screen.findByRole('dialog')
+	await screen.findByText('wrote the auth middleware')
+	fireEvent.keyDown(dialog, { key: '/' })
+
+	const query = await screen.findByPlaceholderText(/filter the transcript/i)
+	fireEvent.change(query, { target: { value: 'middleware' } })
+
+	expect(screen.getByText('wrote the auth middleware')).toBeTruthy()
+	expect(screen.queryByText('ls')).toBeNull()
+})
+
+test('the dots wave only while the run is live', async () => {
+	const { unmount, container } = render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([window({ live: true })], { hold: true })}
+			onClose={() => {}}
+		/>,
+	)
+	await screen.findByText('running')
+	expect(container.querySelectorAll('.sober-dot-wave').length).toBe(3)
+	unmount()
+
+	render(
+		<LogScreen node="n-k7f2" surface={surfaceOf([window({ live: false })])} onClose={() => {}} />,
+	)
+	await screen.findByText('the run has ended')
+	expect(document.querySelectorAll('.sober-dot-wave').length).toBe(0)
+})
+
+test('the model badge names the provider from the model id, not the host', async () => {
+	render(
+		<LogScreen
+			node="n-k7f2"
+			surface={surfaceOf([
+				window({ ran: { host: 'openrouter --model anthropic/claude-opus-5-5', tier: null, fallback: false } }),
+			])}
+			onClose={() => {}}
+		/>,
+	)
+
+	expect(await screen.findByText('Anthropic')).toBeTruthy()
+	expect(screen.getByText('anthropic/claude-opus-5-5')).toBeTruthy()
+	expect(screen.getByText(/via openrouter/)).toBeTruthy()
+})
+
+test('a scroll away from the bottom, then a new line, shows a pill that a click clears', async () => {
+	let deliver: ((window: LogWindow) => void) | undefined
+	const surface: Wire = {
+		read: () => Promise.reject(new Error('unused')),
+		op: (() => Promise.resolve({})) as Wire['op'],
+		watch: (async (_name, _params, onMessage: (message: unknown) => void) => {
+			deliver = onMessage as (window: LogWindow) => void
+			onMessage(window({ lines: [{ kind: 'text', text: 'first', tool: null }], live: true }))
+			await new Promise(() => {})
+		}) as Wire['watch'],
+	}
+
+	render(<LogScreen node="n-k7f2" surface={surface} onClose={() => {}} />)
+	await screen.findByText('first')
+
+	const scroller = screen.getByText('first').closest('div') as HTMLDivElement
+	Object.defineProperty(scroller, 'scrollHeight', { value: 1000, configurable: true })
+	Object.defineProperty(scroller, 'clientHeight', { value: 200, configurable: true })
+	Object.defineProperty(scroller, 'scrollTop', { value: 0, configurable: true, writable: true })
+	fireEvent.scroll(scroller, { target: { scrollTop: 0 } })
+
+	deliver?.(
+		window({
+			lines: [{ kind: 'text', text: 'second', tool: null }],
+			live: true,
+		}),
+	)
+
+	const pill = await screen.findByText(/1 new line ↓/)
+	fireEvent.click(pill)
+	await waitFor(() => expect(screen.queryByText(/new lines? ↓/)).toBeNull())
+})
+
 const markOf = (text: string): string | undefined =>
 	screen.getByText(text).closest('li')?.querySelector('[aria-hidden]')?.className
 
