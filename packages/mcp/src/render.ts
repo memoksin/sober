@@ -1,4 +1,4 @@
-import type { Board, Overlap } from '@besober/core'
+import type { Board, DecisionMatch, Overlap } from '@besober/core'
 import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
 import type { Node, Review } from '@besober/schema'
 import { decisionState } from '@besober/schema'
@@ -150,6 +150,32 @@ export const renderDecisions = (board: Board, all = false): string => {
 		lines.push('')
 	}
 	return lines.length === 0 ? 'Nothing is waiting on you.' : [...lines, PASTE].join('\n')
+}
+
+/**
+ * The catalog a headless agent searches for an answered decision it is not
+ * bound to — the same fields `brief.ts` renders for a bound one, plus which
+ * nodes it binds, since provenance is the whole point of a search (ADR 0055's
+ * neighbor: reuse an answer instead of re-deriving it).
+ */
+export const renderCatalog = (board: Board, matches: readonly DecisionMatch[]): string => {
+	if (matches.length === 0)
+		return 'No answered decision matches that search. If this is a node-local implementation detail, continue. If it is a new choice that would change more than one node, stop and ask the human to open or answer a decision — do not decide it yourself.'
+
+	return matches
+		.map((match) =>
+			[
+				`## ${match.id}`,
+				match.question,
+				`- Chosen: ${match.chosen}`,
+				match.rationale === '' ? '' : `- Your reason: ${match.rationale}`,
+				match.costLater === '' ? '' : `- Costs later: ${match.costLater}`,
+				`- Binds: ${match.nodes.length === 0 ? 'no node' : namedAll(board, match.nodes.map((one) => one.id))}`,
+			]
+				.filter((line) => line !== '')
+				.join('\n'),
+		)
+		.join('\n\n')
 }
 
 /**

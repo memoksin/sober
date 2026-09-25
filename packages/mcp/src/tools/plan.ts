@@ -21,6 +21,7 @@ import {
 	readProject,
 	renderBrief,
 	paths as resolvePaths,
+	searchDecisions,
 	unlinked,
 	whoami,
 	writeBrief,
@@ -33,7 +34,14 @@ import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
 import { drained } from '../queue.js'
-import { named, namedAll, renderBoard, renderDecisions, renderUnlinked } from '../render.js'
+import {
+	named,
+	namedAll,
+	renderBoard,
+	renderCatalog,
+	renderDecisions,
+	renderUnlinked,
+} from '../render.js'
 
 const CriterionInput = z.object({
 	run: z.string().describe('the command that proves it, exactly as it is typed'),
@@ -161,6 +169,27 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		tool(async ({ all }: { all: boolean }) =>
 			text(renderDecisions(await loadBoard(await openBoard(cwd)), all)),
 		),
+	)
+
+	server.registerTool(
+		'decision_catalog',
+		{
+			title: 'Search answered decisions',
+			description:
+				'Search answered decisions on the board — question, chosen option, your reason, what it costs later, and which nodes it binds. Use this when a choice in front of you affects more than your own node: another node may already have answered it, and a run only carries the answers bound to its own node. Empty query lists every answered decision. No match and the choice is a node-local implementation detail: continue. No match and it is a new choice that would change more than one node: stop and ask the human to open or answer a decision — never decide it yourself.',
+			inputSchema: {
+				query: z
+					.string()
+					.default('')
+					.describe(
+						'matched against question, chosen option, rationale, cost, and bound node titles; empty lists everything answered',
+					),
+			},
+		},
+		tool(async ({ query }: { query: string }) => {
+			const board = await loadBoard(await openBoard(cwd))
+			return text(renderCatalog(board, searchDecisions(board, query)))
+		}),
 	)
 
 	server.registerTool(

@@ -96,3 +96,47 @@ const upstream = (board: Board, id: string): string =>
 			return node.outcome === null ? [] : [`**${node.title}**: ${node.outcome}`]
 		}),
 	)
+
+/** One answered decision, as a headless agent needs it: the choice and where it reaches. */
+export interface DecisionMatch {
+	readonly id: string
+	readonly question: string
+	readonly chosen: string
+	readonly rationale: string
+	readonly costLater: string
+	readonly nodes: readonly { readonly id: string; readonly title: string }[]
+}
+
+/**
+ * Answered decisions a headless agent can search when a choice in front of it
+ * affects more than its own node — a run already carries its bound answers
+ * through `renderBrief`; this is for the ones it is not bound to. Unanswered
+ * decisions never appear here: an agent must not read an open question as a
+ * decided one.
+ */
+export const searchDecisions = (board: Board, query: string): DecisionMatch[] => {
+	const needle = query.trim().toLowerCase()
+
+	const matches = [...board.decisions]
+		.filter(([, decision]) => decisionState(decision) === 'answered')
+		.map(([id, decision]): DecisionMatch => {
+			const chosen = decision.options?.find((option) => option.id === decision.answer?.option)
+			const nodes = [...board.nodes]
+				.filter(([, node]) => node.decisions.includes(id))
+				.map(([nodeId, node]) => ({ id: nodeId, title: node.title }))
+			return {
+				id,
+				question: decision.question,
+				chosen: chosen?.label ?? decision.answer?.option ?? '',
+				rationale: decision.answer?.rationale ?? '',
+				costLater: chosen?.costLater ?? '',
+				nodes,
+			}
+		})
+
+	if (needle === '') return matches
+	return matches.filter((match) =>
+		[match.question, match.chosen, match.rationale, match.costLater, ...match.nodes.map((n) => n.title)]
+			.some((field) => field.toLowerCase().includes(needle)),
+	)
+}

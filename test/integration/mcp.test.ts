@@ -171,6 +171,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'contributors',
 			'correct_node',
 			'decide',
+			'decision_catalog',
 			'decisions',
 			'dismiss',
 			'distribute',
@@ -662,7 +663,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(28)
+		expect((await client.listTools()).tools.length).toBe(29)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -691,6 +692,36 @@ test('the board reads back what the session wrote, with what each node waits for
 	const open = await call(client, 'decisions')
 	expect(open).toContain('because: Revocable')
 	expect(open).toContain('later:   A service to run')
+})
+
+test('a headless client can search answered decisions and read what a bound one already carries', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()] as [string]
+	const auth = [...(await loadBoard(paths)).nodes].find(
+		([, node]) => node.title === 'The auth API',
+	)?.[0] as string
+
+	// Unanswered yet: the catalog is answered decisions only, so it has nothing to say.
+	expect(await call(client, 'decision_catalog', { query: 'session' })).toContain(
+		'No answered decision matches',
+	)
+
+	await call(client, 'decide', { decision, option: 'redis' })
+
+	const all = await call(client, 'decision_catalog', {})
+	expect(all).toContain('Where does session state live?')
+	expect(all).toContain('Chosen: Redis')
+	expect(all).toContain('Costs later: A service to run')
+	expect(all).toContain(`Binds: ${auth} (The auth API)`)
+
+	const found = await call(client, 'decision_catalog', { query: 'session' })
+	expect(found).toContain(decision)
+
+	expect(await call(client, 'decision_catalog', { query: 'nothing matches this' })).toContain(
+		'No answered decision matches',
+	)
 })
 
 test('a decision with no options is opened before it is put to anyone', async () => {

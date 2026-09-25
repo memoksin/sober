@@ -1,6 +1,6 @@
 import type { Answer } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { renderBrief } from './brief.js'
+import { renderBrief, searchDecisions } from './brief.js'
 import type { Board } from './graph.js'
 import { aDecision, aNode } from './records.fixture.js'
 
@@ -102,4 +102,34 @@ test('a node with no brief renders the skeleton and says the approach is missing
 
 test('a node the board does not hold has no brief', () => {
 	expect(renderBrief(board(), 'gone-node-x9y8')).toBe(null)
+})
+
+test('the catalog returns an answered decision with its choice, rationale, cost and binding node', () => {
+	const [match] = searchDecisions(board(), '')
+
+	expect(match).toEqual({
+		id: 'auth-model-k7f2',
+		question: 'Where does session state live?',
+		chosen: 'Redis',
+		rationale: 'We already run one.',
+		costLater: 'A service to run',
+		nodes: [{ id: 'auth-api-k7f2', title: 'Session endpoints' }],
+	})
+})
+
+test('the catalog excludes decisions with no answer yet', () => {
+	const unanswered = { ...board(), decisions: new Map([['auth-model-k7f2', aDecision()]]) }
+
+	expect(searchDecisions(unanswered, '')).toEqual([])
+})
+
+test('the catalog searches the question, the choice, the rationale, the cost, and bound node titles', () => {
+	const b = board()
+
+	expect(searchDecisions(b, 'redis')).toHaveLength(1)
+	expect(searchDecisions(b, 'session state')).toHaveLength(1)
+	expect(searchDecisions(b, 'already run one')).toHaveLength(1)
+	expect(searchDecisions(b, 'service to run')).toHaveLength(1)
+	expect(searchDecisions(b, 'Session endpoints')).toHaveLength(1)
+	expect(searchDecisions(b, 'nothing matches this')).toEqual([])
 })
