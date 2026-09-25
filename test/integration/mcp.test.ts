@@ -184,6 +184,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'reopen',
 			'review',
 			'run',
+			'search_decisions',
 			'stop',
 			'sync',
 			'write_brief',
@@ -641,6 +642,38 @@ test('an archived decision stops being listed as one waiting on the human', asyn
 	expect(shown).toContain(`${decision} (archived)`)
 })
 
+test('a headless client can search answered decisions and read back the option, rationale and node that bound it', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const [decision] = [...(await loadBoard(paths)).decisions.keys()]
+	await call(client, 'decide', { decision, option: 'redis' })
+	const auth = [...(await loadBoard(paths)).nodes].find(([, node]) => node.title === 'The auth API')
+
+	const byQuestion = await call(client, 'search_decisions', { query: 'session state' })
+	expect(byQuestion).toContain(decision)
+	expect(byQuestion).toContain('redis: Redis (answered)')
+	expect(byQuestion).toContain('later: A service to run')
+	expect(byQuestion).toContain(`binds: ${auth?.[0]} (The auth API)`)
+
+	// The same result is found from the node it binds, not only the question.
+	expect(await call(client, 'search_decisions', { query: 'The auth API' })).toContain(decision)
+	expect(await call(client, 'search_decisions', { query: 'nothing on this board' })).toBe(
+		'No answered decision matches that.',
+	)
+})
+
+test('a search leaves an unanswered decision out, however it is asked for', async () => {
+	const { repo: created } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+
+	expect(await call(client, 'search_decisions', {})).toBe('No answered decision matches that.')
+	expect(await call(client, 'search_decisions', { query: 'session state' })).toBe(
+		'No answered decision matches that.',
+	)
+})
+
 test('a tool that cannot do its job answers with a sentence, never a protocol error', async () => {
 	const { repo: created } = await board()
 	const client = await connect(created.dir)
@@ -662,7 +695,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(28)
+		expect((await client.listTools()).tools.length).toBe(29)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
