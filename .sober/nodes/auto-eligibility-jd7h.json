@@ -21,11 +21,54 @@
 		"packages/core/src/*.test.ts",
 		"test/integration/attended.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Implement ADR 0065 §2–§7 in core only; the `sober:auto` entry point, its skill and auto-reject sequencing belong to auto-lifecycle-jo8f and auto-skill-g9sj.\n\n1. Provenance in the schema. Add `AutoProvenance = z.strictObject({ invocation: z.literal('sober:auto'), invokedBy: Handle })` in packages/schema/src (beside `Approval` in brief.ts, or a small auto.ts re-exported from the index). Add `autonomous: AutoProvenance.optional()` to `Approval` (packages/schema/src/brief.ts) and `Accepted` (packages/schema/src/node.ts). Optional, not defaulted, so every existing record parses and is not rewritten; absent means a human did it. `by` on an autonomous record is the invoker's handle, and the record says it was automated — never read as that person's approval.\n\n2. The gate, packages/core/src/auto.ts (new). `autoGate(board, node, transition: 'approve' | 'dispatch' | 'accept', base)` returns a list of refusal reasons, empty when clear; `AutoRefusedError extends SoberError` (code `auto-refused`) carries them. Checks, all from a fresh `loadBoard` (packages/core/src/graph.ts), never a cached board: `openDecisions(board)` empty board-wide (status.ts — drafts count as open); `board.broken` empty and `findCycle(board.nodes)` null; `statusOf` equals the transition's expected status (approve → a written, unapproved brief; dispatch → ready; accept → in-review); no `claim` by anyone other than the invoker; `overlaps(board.nodes, node)` (team.ts) empty; `flagsOf(board, node)` not stale-flagged; brief present with a non-empty acceptance list; base safe (see 4); and for dispatch, no retry (see 5).\n\n3. Auto transitions, same file. `autoApprove(paths, node, { invokedBy, base })`, `autoDispatch(paths, node, { invokedBy, base, ... })`, `autoAccept(paths, node, { invokedBy, base, scan, ci })`. Each reuses the attended mechanics rather than copying them: `approveBrief` (decide.ts) and `acceptWork` (review.ts) gain an optional `autonomous?: AutoProvenance` option written into the record, and an optional `guard?: () => Promise<void>` awaited inside their existing lock right before writing/merging. The auto functions pass `guard` = reload board + `autoGate`, so a decision opened, a claim taken, a record broken or an overlapping node started between the caller's check and the write is caught. autoDispatch calls `dispatch` (dispatch.ts) with `anyway` and `attended` never set. Attended callers pass neither option and behave exactly as today; the attended surfaces (MCP `approve`/`accept`, CLI, server routes) must not be able to set `autonomous`. Events appended with the provenance.\n\n4. Unsafe base. Auto requires `dispatch.base` in config (packages/core/src/config.ts) to be set; `base` must equal it, and must not be `main`, `master` or match `release/*` / `release-*`. A null `dispatch.base` refuses with a sentence saying to set it. Nothing here opens a PR into main or writes a changeset.\n\n5. No retry (ADR 0056 decision 3). autoDispatch refuses when the node has any prior run that failed, timed out or was stopped, or any rejection feedback (`lastRun`, `board.feedback`): it is the human's from then on.\n\n6. Accept threshold (§5). autoAccept requires `scan === 'clean'`, `auditOf(paths, node) === 'passed'` (`none`/`did-not-run`/`failed` refuse), CI `passed` where the project has CI (unreadable → refuse), and not flagged. Anything short refuses with the reason and leaves the node in review; it does not reject (that sequencing is auto-lifecycle's).\n\n7. Rendering. Every surface that prints an approval or acceptance says when it was autonomous, e.g. `approved autonomously under sober:auto (invoked by X)`: packages/mcp/src/tools/plan.ts (brief tool), packages/mcp/src/render.ts (review header), packages/cli/src/work.ts and review.ts, apps/dashboard/src/panel/Panel.tsx and apps/dashboard/src/review/data.ts. No new MCP tool and no CLI command in this node.\n\n8. Export the new API from packages/core/src/index.ts and update the exports snapshot. Tests: packages/core/src/auto.test.ts covering each refusal (open decision elsewhere on the board, draft decision, archived decision ignored, broken record, cycle, claimed by another, overlap, stale flag, missing brief, null base, `main`, release branch, retry after failure/rejection, each inconclusive accept input), provenance written and parsed, a change landing after the gate passes but before the locked write (a decision opened in that window) refusing without writing, and old records without `autonomous` still loading. Schema tests in packages/schema/src/brief.test.ts and node.test.ts for the optional strict field. test/integration/attended.test.ts gains a case proving the attended approve/dispatch path writes no `autonomous` field and is not held by an open decision elsewhere on the board; test/integration/review.test.ts proves an attended accept writes none either and an autonomous accept records it after a real merge.",
+		"complexity": 7,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src/auto.test.ts",
+				"proves": "The gate refuses every ADR 0065 §3–§5 condition from a fresh board read, rechecks under the write lock so a concurrent change is caught, and records autonomous provenance on approval and acceptance."
+			},
+			{
+				"run": "pnpm exec vitest run packages/core/src/decide.test.ts packages/core/src/exports.test.ts",
+				"proves": "Attended approval is unchanged for callers that pass no autonomous option, and the new core API is exported deliberately."
+			},
+			{
+				"run": "pnpm exec vitest run packages/schema",
+				"proves": "Existing records without the provenance field still parse and the new field is strict."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/attended.test.ts test/integration/review.test.ts",
+				"proves": "The attended approve, dispatch and accept paths write no autonomous record and are not held by the auto-only board-wide rule, while an autonomous accept records provenance after a real merge."
+			},
+			{
+				"run": "pnpm build",
+				"proves": "Schema, core, MCP, CLI and dashboard compile with the new optional fields."
+			},
+			{
+				"run": "pnpm exec biome check packages/core/src packages/schema/src packages/mcp/src packages/cli/src apps/dashboard/src test/integration/attended.test.ts test/integration/review.test.ts",
+				"proves": "Changed files pass repository style checks."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-25T11:43:55.223Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-25T11:53:04.226Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-25T11:57:41.721Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T09:45:20.142Z"
 }

@@ -47,9 +47,15 @@
 	"assignee": null,
 	"claim": {
 		"by": "Mehmet Yiğit Keskin",
-		"at": "2026-09-25T09:58:11.618Z"
+		"at": "2026-09-25T11:36:54.463Z"
 	},
-	"accepted": null,
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-25T11:39:46.054Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-21T16:27:14.935Z"
 }

@@ -14,10 +14,47 @@
 		"apps/dashboard/src/wire.ts",
 		"test/integration/contract.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Chosen by the human for this node: the person writes the question, the category and the nodes it holds; the options still come later from a session's `open_decision` (DESIGN §2.6 unchanged). So opening a question is data entry, the same line `create_node` already sits on, and `open_decision` stays in `AGENT_OPERATIONS`.\n\n1. Operation. Add `'create_decision'` to `OPERATIONS` in packages/schema/src/operation.ts, next to `create_node`, with a comment: the question, category and binding are a person's; the options are a model's and stay behind `open_decision` in `AGENT_OPERATIONS`. Extend the block comment above `AGENT_OPERATIONS` accordingly (there is no `KNOWN_GAPS` list in the code — this comment and the contract test's `open_decision` check are what the node meant; the check stays, because the options are still session-only). Update packages/schema/src/__snapshots__/operation.test.ts.snap.\n\n2. Core. `createDecision(paths, { question, category, binds, by })` in packages/core/src/decide.ts, exported from packages/core/src/index.ts (exports snapshot updated). Under one `withLock`: `loadBoard`; trim and refuse an empty question (`SoberError`, a sentence); refuse an empty `binds` (a decision nothing binds holds nothing and reads as waiting for no reason — `unbound` in edges.ts); refuse any unknown node with `NotOnBoardError` before writing anything; write the decision `{ category, question, options: null, suggested: null, derived: null, answer: null, createdAt }` under an id from the same `newId`/`shortName` seeding `createNode` in flag.ts uses; then append the id to each bound node's `decisions` (no duplicates, nothing else on the node touched — same semantics as `bind`, no approval change); append a `decision.created` event with `by` and the bound nodes. Every bound node reads `held` from that write on, because `statusOf` treats an unopened decision as unanswered.\n\n3. Surfaces, all over that one function:\n- Server: `create_decision` route in packages/server/src/routes.ts beside `create_node` (`question`, `category` as `Category`, `binds: z.array(Id).min(1)`), `by` from `whoami`. Test in packages/server/src/routes.test.ts: the route writes an unopened decision and the bound node reads held on the board read.\n- Host session: an MCP tool `create_decision` in packages/mcp/src/tools/plan.ts (description: opens a question a person already knows they want answered; it arrives with no options — produce them with `open_decision`), entry in packages/mcp/src/covers.ts, tool list in test/integration/mcp.test.ts.\n- Command line: `sober question \"<question>\" --category <c> --binds <id,...>` in packages/cli/src (next to where `open` lives), in `sober --help`, entry in packages/cli/src/covers.ts. The CLI has no gaps today and keeps none.\n- Dashboard: a form on the decisions screen (apps/dashboard/src/decisions/Decisions.tsx) — question, one of the four categories, and a pick of the nodes to hold from `board.nodes` (non-done nodes only) — sending through `wire(token).op('create_decision', …)` and refreshing the board, wired in apps/dashboard/src/App.tsx the way the other ops are. Build the body in a pure function in apps/dashboard/src/decisions/data.ts with a test in data.test.ts. An `unopened` row says it has no options yet and that a session produces them (`/sober:decide`), instead of reading as an empty answer. Add `create_decision` to `COVERS` in apps/dashboard/src/covers.ts; it is not a gap.\n\n4. Docs. DESIGN.md §2.6 gains one sentence: a person can open a question by hand on any surface; its options are still produced on demand by a session.\n\nNot in scope: generating or writing options outside a session, changing `bind`, or withdrawing an approved brief on a node the new decision holds.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src/decide.test.ts packages/core/src/exports.test.ts",
+				"proves": "createDecision writes an unopened decision, binds every named node so each reads held, refuses an empty question, an empty bind list and an unknown node without writing anything, and is exported deliberately."
+			},
+			{
+				"run": "pnpm exec vitest run packages/server/src/routes.test.ts packages/schema",
+				"proves": "The server route opens a decision over the same core function and the new operation is on the schema's list."
+			},
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src/decisions/data.test.ts",
+				"proves": "The decisions screen builds the create_decision body from the form and labels an unopened decision as waiting for options."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/contract.test.ts test/integration/mcp.test.ts test/integration/cli.test.ts",
+				"proves": "Every surface covers create_decision (the dashboard by an actual call), no surface routes open_decision, and the MCP tool and CLI command exist."
+			},
+			{
+				"run": "pnpm build",
+				"proves": "Schema, core, server, MCP, CLI and dashboard compile with the new operation."
+			},
+			{
+				"run": "pnpm exec biome check packages/schema/src packages/core/src packages/server/src packages/mcp/src packages/cli/src apps/dashboard/src test/integration",
+				"proves": "Changed files pass repository style checks."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-25T12:02:18.275Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-25T12:24:12.525Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-23T06:52:14.657Z"
