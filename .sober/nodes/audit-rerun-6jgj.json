@@ -15,11 +15,54 @@
 		"apps/dashboard/src/wire.ts",
 		"test/integration/contract.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "**Today.** `sober audit <node>` (`packages/cli/src/review.ts:162`) calls core's `auditNode(paths, node, base)` (`packages/core/src/audit.ts:212`). That function runs `dispatch.verify` and every acceptance criterion against the node's existing worktree, overwrites the last run record's `verify`/`acceptance` (`recordAudit`), appends a `run.audited` event, and returns `null` when the node has never run. The review screen (`apps/dashboard/src/review/Review.tsx`) only renders what `/read/review` returns; nothing on the screen can run the list again. `audit` is not in `OPERATIONS`, so no route can carry it: `OPS` is typed over `Operation`.\n\n**1. The catalogue.** Add `'audit'` to `OPERATIONS` in `packages/schema/src/operation.ts`, with a comment in the style of `answer`/`stop`: it writes the local run record rather than the board, and it is still an ability a surface either has or lacks (`PR-09-08`). Update the `operation.test.ts` snapshot. Then follow the parity pattern `client-parity-owv8` landed:\n- `packages/cli/src/covers.ts`: `audit: 'audit'`.\n- `packages/mcp/src/covers.ts`: add `'audit'` to `GAPS`. There is no MCP tool, and building one is out of scope.\n- `apps/dashboard/src/covers.ts`: `audit: 'review: Run the checks again'`. It was never in dashboard `GAPS`, so nothing is deleted there.\n\n**2. The route.** In `packages/server/src/routes.ts`, add `audit: route(z.strictObject({ node: Id, base: z.string().optional() }), …)` next to `accept`. It resolves the base with `baseOf(paths, base)` as `accept` does and calls `auditNode`. A `null` result, meaning the node has never run, is refused with the CLI's sentence `<node> has not run — there is nothing to audit yet`, through whatever mechanism the other routes use to refuse (follow how `NotOnBoardError` and existing refusals reach the client as a message). Return the `Audited` value on success.\n\n**3. Route tests** in `packages/server/src/routes.test.ts`, following that file's temp-board pattern:\n- a node that has never run is refused with that sentence, and no run record is written;\n- an unknown node is refused as not on the board.\n\nIf the existing server or integration tests already have a fixture that leaves a real run and worktree (see `test/integration/audit.test.ts`), also assert that a second audit **replaces** the recorded acceptance, so a later `/read/review` shows the new results. Otherwise say so in the commit body rather than faking a run record.\n\n**4. The screen.**\n- `ReviewScreen` takes `onAudit: () => Promise<void>`.\n- It shows a **\"Run the checks again\"** button in the footer, left of Turn it down and Accept, whenever `review.run !== null` and `review.accepted === null`.\n- It goes through the screen's existing `act` busy path. While busy, the button reads `pending('audit')` and Accept and Turn it down are disabled, so nobody accepts halfway through an audit. A refusal lands in the existing `refused` line.\n- Add `audit: 'Running the acceptance list…'` to `PENDING` in `apps/dashboard/src/pending.ts`, and `'audit'` to `CLICKABLE` in `pending.test.ts`.\n- In `App.tsx`, `onAudit` sends `wire(token).op('audit', { node: reviewing.node })`, then reads `review` again for the same node and `setReviewing(...)` with the fresh result, so the shown checks are replaced. Then `refresh()`.\n\n**5. A dashboard test** in `apps/dashboard/src/App.test.tsx`, using its fetch harness (`sent`, `ops`): open a review for a node with a run, click Run the checks again, and assert three things. The request is `audit`. The button shows the pending sentence while the op is unresolved. After it resolves, the screen shows the criterion result from the **second** `/read/review` response (e.g. `failed · exit 1` becoming `passed`).\n\n**Out of scope:** an MCP `audit` tool, and any change to core's audit. No changeset (CLAUDE.md).",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/server/src/routes.test.ts apps/dashboard packages/schema",
+				"proves": "The route refuses a node that never ran with the CLI's sentence, and refuses an unknown node. The catalogue snapshot names `audit`. The review screen sends `audit`, shows the pending sentence while it runs, and replaces the shown results with the re-read review."
+			},
+			{
+				"run": "pnpm build && pnpm vitest run --project integration test/integration/contract.test.ts",
+				"proves": "Parity still holds with `audit` in the catalogue. The command line covers it, the server routes it, the dashboard's type-checked `op` calls include it, and MCP lists it as a declared gap rather than hiding it."
+			},
+			{
+				"run": "pnpm build && pnpm vitest run --project integration test/integration/audit.test.ts",
+				"proves": "Core's audit behaviour, which the route now reaches, is unchanged."
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "`Record<Exclude<Operation, Gap>, …>` compiles on every surface with the new operation: routed on the server, covered on CLI and dashboard, a gap on MCP."
+			},
+			{
+				"run": "pnpm boundaries",
+				"proves": "The dashboard still reaches core only through the server."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "The formatter and secret scan pass."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T18:19:45.230Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T20:15:32.685Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T20:36:56.797Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T06:52:14.657Z"
 }

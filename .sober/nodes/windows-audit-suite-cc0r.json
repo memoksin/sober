@@ -11,11 +11,46 @@
 		"packages/core/src/git.ts",
 		".github/workflows/ci.yml"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "**Status, checked 2026-09-24.** The failure still happens. Every CI run on the recent PR branches (for example run 36011978968, `sober/thinking-verbs-8er2`) fails `integration (windows-latest)`. The same failures reproduce on this Windows machine. `pnpm vitest run --project integration test/integration/audit.test.ts test/integration/scan.test.ts` gives 10 failed / 12 passed: 9 in `audit.test.ts` and 1 in `scan.test.ts`. The job has a third failure, in `review.test.ts`.\n\n**Root cause: test fixtures, not production code.** accept-shell-h3a3 made acceptance commands, `dispatch.verify` and `scan.extra` run through `posixShell()` (`packages/core/src/audit.ts`, used by `packages/core/src/scan.ts:211`). That is correct: those commands are POSIX shell by contract. The test fixtures still build commands like `` `${process.execPath} -e \"process.exit(0)\"` ``. On Windows, `process.execPath` is `C:\\hostedtoolcache\\...\\node.exe`. `sh` reads each unquoted backslash as an escape, so the path turns into `C:hostedtoolcache...`, and the command is not found. The run then exits 127, which the code reads as `did-not-run`. So each criterion's result is `null` or `did-not-run`, never the exit the test expects.\n\n**Fix.**\n1. Add one export to `test/integration/fixture.ts`. It is the node binary as a POSIX-shell word: forward slashes, double-quoted, so a path with spaces also works.\n   `export const NODE_SH = JSON.stringify(process.execPath.replaceAll('\\\\', '/'))`\n   Git for Windows' `sh` resolves `C:/...` paths. On Linux and macOS this is the same path, quoted.\n2. `test/integration/audit.test.ts`: replace every `${process.execPath}` that builds a command for the shell with `${NODE_SH}`. That is `exits()`, `missing`, the worktree-marker criterion and the `expected 200, got 401` criterion. Check `FAKE_HOST` (line 29) separately. It is the host command, not an acceptance command. Change it only if it also goes through `posixShell()`; otherwise leave it.\n3. `test/integration/scan.test.ts:155`: the `extra` scanner command uses `${NODE_SH}` in the same way.\n4. `test/integration/review.test.ts:356`, \"a record that cannot be written after the merge takes the merge back\". The test uses `chmodSync(dir, 0o555)` to make the nodes directory unwritable. Windows ignores POSIX mode bits on directories, so the write succeeds and the merge stands. Add `|| process.platform === 'win32'` to the existing `test.skipIf`, and extend the comment above it: a directory's mode bits do not stop a write on Windows either. Do not try to emulate read-only with ACLs. The other two platforms keep the coverage.\n\n**Out of scope.**\n- No change to `packages/core/src/audit.ts`, `git.ts` or `scan.ts`: the shell behaviour is the contract.\n- No change to `.github/workflows/ci.yml`.\n- The separate `ubuntu-latest` `pnpm audit` job is a different thing and is not touched.\n- The flaky core unit tests (`packages/core/src/sync.test.ts` EBUSY/timeouts, `models.test.ts` executable check, `agent.test.ts` EPERM) are not part of this node.\n- The other 15 integration files that use `process.execPath` stay as they are unless they fail. Most spawn `node` directly, with no shell.",
+		"complexity": 3,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run --project integration test/integration/audit.test.ts test/integration/scan.test.ts test/integration/review.test.ts",
+				"proves": "the three integration files that fail in the Windows CI job pass on this Windows machine"
+			},
+			{
+				"run": "! grep -qF '${process.execPath} -e' test/integration/audit.test.ts test/integration/scan.test.ts",
+				"proves": "no shell command in those fixtures is still built from the raw, backslashed node path"
+			},
+			{
+				"run": "git diff --quiet development -- packages/core/src packages/cli/src .github",
+				"proves": "production code and CI config are untouched: the fix is in the tests, where the cause is"
+			},
+			{
+				"run": "npx biome check test/integration",
+				"proves": "lint and format are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T14:55:07.532Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T14:56:00.412Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T15:08:51.744Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T22:43:21.893Z"
 }

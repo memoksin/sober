@@ -17,10 +17,31 @@
 		"packages/mcp/src/render.ts",
 		"test/integration/mcp.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Add a core helper that filters answered board decisions and searches their question, chosen option, rationale, later cost, and the binding nodes that supplied provenance. Expose it as one MCP tool in packages/mcp/src/tools/plan.ts, with concise tool guidance for a headless agent to search when a decision affects more than its own node and to pause when a cross-node choice has no answer. Reuse the existing board records and render conventions; do not add a separate catalog store. Cover result fields and matching in core tests, and tool registration/results in the MCP integration test.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src/brief.test.ts",
+				"proves": "Core tests confirm answered-decision search returns the question, selected option, rationale, costs, and node provenance, while excluding unanswered decisions."
+			},
+			{
+				"run": "pnpm exec vitest run test/integration/mcp.test.ts",
+				"proves": "The MCP integration test confirms a headless client can search and read matching answered decisions through the registered tool."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-25T08:25:33.200Z",
+			"queue": true
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-25T09:58:18.625Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-23T09:45:20.142Z"

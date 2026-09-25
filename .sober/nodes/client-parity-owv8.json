@@ -14,11 +14,54 @@
 		"apps/dashboard/src/covers.ts",
 		"apps/dashboard/src/wire.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "**What is wrong today (verified).** `test/integration/contract.test.ts:63-65` names a test \"the dashboard covers every operation\", but it compares `OPERATIONS` with `SERVER_COVERS`, which is only the keys of `OPS` in `packages/server/src/routes.ts`. The client calls `wire(token).op(name, body)` (`apps/dashboard/src/wire.ts:32`) with 15 distinct names: sync, decide, edit_decision, resolve (App.tsx), run, approve, stop (via `doTo`'s narrowed `Action['does']`), dismiss, reopen, create_node (via `flagOp` in `panel/data.ts:168`), accept_distribution, drop_distribution, accept, reject (App.tsx), and answer (logs/Logs.tsx). init, bind, write_brief, archive, contributors_add, contributors_remove, assign, claim and release have a route and no caller. Separately, `OPERATIONS` (`packages/schema/src/operation.ts`) lacks four state-changing operations other surfaces already have: `sober correct` / MCP `correct_node`, `sober models add`, and `sober dispatch` (start, and Ctrl-C to stop).\n\n**1. The catalogue grows by four** (`packages/schema/src/operation.ts`), named verb_noun like `create_node` and `edit_decision`: `correct_node`, `add_model`, `start_dispatcher`, `stop_dispatcher`. Each gets a short comment in the file's style. `open_decision` does **not** move: it stays in `AGENT_OPERATIONS` because it generates options with a model (§2.6, ADR 0009); say so in the comment above `AGENT_OPERATIONS`. `models remove` is not added, because no surface has it. Update the `operation.test.ts` snapshot.\n\n**2. Every surface declares its gaps beside its coverage, and the type enforces the split.** Each surface exports `GAPS` (`as const satisfies readonly Operation[]`), and its manifest is typed `Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, …>>`. Leaving an operation out without listing it is a type error, and so is covering one that is still listed, because of the excess-property check on the literal.\n- `packages/cli/src/covers.ts`: no gaps. Add `correct_node: 'correct'`, `add_model: 'models'`, `start_dispatcher: 'dispatch'` and `stop_dispatcher: 'dispatch'`, with a comment on the last that Ctrl-C on the process `sober dispatch` holds is the stop, which its help line already says. Export `GAPS = [] as const` for symmetry.\n- `packages/mcp/src/covers.ts`: add `correct_node: 'correct_node'`. `GAPS = ['add_model', 'start_dispatcher', 'stop_dispatcher']`.\n- `packages/server/src/routes.ts`: `OPS` is typed over `Exclude<Operation, ServerGap>`. `GAPS = ['correct_node', 'add_model', 'start_dispatcher', 'stop_dispatcher']`. `COVERS` stays `Object.keys(OPS)`. Export `GAPS` from `packages/server/src/index.ts` and update the exports snapshot. Fix any lookup in `serve.ts` or elsewhere that indexes `OPS` with an arbitrary `Operation`, using a has-own check, without behaviour change. In `routes.test.ts`, the first and third tests read `OPERATIONS` minus `GAPS`.\n- **New** `apps/dashboard/src/covers.ts`: `COVERS` maps each of the 15 called operations to where the UI sends it, in words a reviewer can find (e.g. `approve: 'panel: Approve the brief'`). `GAPS` holds the other 13: the nine above plus the four new ones. Add a header comment in the style of the CLI and MCP covers files saying each dashboard node deletes its own `GAPS` line in the diff that adds the UI.\n\n**3. The dashboard's declaration is checked against the calls it actually makes.**\n- Type `Wire.op`'s name as `Operation` from `@besober/schema` (the dashboard already depends on it).\n- Narrow `flagOp`'s return to `readonly ['dismiss' | 'reopen' | 'create_node', Record<string, unknown>]`. `doTo`, `onPlan` and `settle` already pass literal unions.\n- In `contract.test.ts`, build a TypeScript program from `apps/dashboard/tsconfig.json` (`typescript` is a root devDependency). Walk every non-test source file under `apps/dashboard/src` for call expressions whose `op` property resolves to the declaration in `wire.ts`, and read the checker's type of the first argument as a union of string literals. A call site whose argument is not a literal union, or is the whole `Operation` union, fails with `file:line`: a call must name what it sends.\n- The union of all call sites is **what the dashboard calls**.\n\n**4. The contract test, per surface.** Replace the two coverage tests with one parity check per surface (CLI, MCP, server, dashboard), written as a small pure function in the test file with its own direct cases. It fails when:\n- an operation is in both the manifest and `GAPS`, or in neither;\n- a name appears that `OPERATIONS` does not have;\n- for the dashboard, the manifest's keys differ from what it calls, or a `GAPS` entry is called: the ratchet, like `coverage-baseline.json`.\n\nKeep every other test in the file unchanged. `no surface routes what an agent authors` also checks the dashboard `COVERS`.\n\n**Out of scope:** building any UI, route or tool for a gap. The downstream nodes (panel-brief, panel-edges, panel-owner, node-correct, models-screen, queue-screen, decision-open, audit-rerun) do that. No changeset (CLAUDE.md).",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm build && pnpm vitest run --project integration test/integration/contract.test.ts",
+				"proves": "Parity holds on all four surfaces modulo each surface's declared gaps. The dashboard's declaration matches the operations its client actually sends, read from the type checker. The ratchet cases run directly: a gap that is covered, an operation in neither list, and a declared-but-uncalled operation each fail."
+			},
+			{
+				"run": "node -e \"const t=require('fs').readFileSync('apps/dashboard/src/covers.ts','utf8');const gaps=t.slice(t.indexOf('GAPS'));for(const g of ['init','bind','write_brief','archive','contributors_add','contributors_remove','assign','claim','release','correct_node','add_model','start_dispatcher','stop_dispatcher'])if(!gaps.includes(\\\"'\\\"+g+\\\"'\\\")){console.error('dashboard GAPS missing '+g);process.exit(1)}console.log('ok')\"",
+				"proves": "The dashboard's gap list names the nine routed-but-unbuilt operations and the four new ones. The test is green because the gap is written down, not because it is hidden."
+			},
+			{
+				"run": "pnpm vitest run packages/schema packages/server apps/dashboard packages/cli/src/covers packages/mcp/src",
+				"proves": "The catalogue snapshot, the server's route-table tests, the exports snapshot and the dashboard's own tests (the wire and flagOp shapes) pass with the new operations and the typed `op`."
+			},
+			{
+				"run": "pnpm typecheck",
+				"proves": "The `Record<Exclude<Operation, Gap>, …>` manifests compile on every surface: no operation is missing, and none is covered while still listed as a gap."
+			},
+			{
+				"run": "pnpm boundaries",
+				"proves": "The new dashboard covers file imports only `@besober/schema`. The dashboard still does not reach core or server."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "The formatter and secret scan pass."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T17:40:32.858Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T17:41:38.833Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T18:09:44.042Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T06:52:14.657Z"
 }

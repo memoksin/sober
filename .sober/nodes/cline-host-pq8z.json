@@ -16,10 +16,39 @@
 		"README.md",
 		".sober/config.jsonc"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Implement only the dispatch adapter, not a Cline plugin. Start by verifying the current published npm `cline` CLI behavior against https://docs.cline.bot/cli/cli-reference, https://docs.cline.bot/usage/cli-overview and the upstream apps/cli README, recording the version/date and source for every flag/event in `docs/testing/v1x-4-other-hosts.tdd.md` and citations beside the new row in `packages/core/src/hosts.ts`. Identify a genuinely non-interactive no-task authentication probe and its positive/negative output before wiring `probe`/`loggedIn`; `cline auth` and `cline config` are interactive according to the published docs and `--version` is NOT an auth check. If the documented CLI has no such surface, do not fake readiness: make the absence explicit in ADR 0063 and report that prerequisite rather than silently treating installation as login. Add `cline` to ADAPTERS with `signIn`, one-shot `--json --auto-approve true` argv, the existing `brief(prompt)` prefix with NO_HUMAN, `attendable: false`, and defensive rendering for documented Cline NDJSON say/ask/tool/result event shapes without leaking echoed prompts as human answers. Note the reference actually documents `--system`, but it overrides Cline's default prompt; retain the node's requested prefix without claiming no system flag exists. Follow `packages/core/src/hosts.test.ts` cases for argv, auth and real event fixtures; add a fake CLI at `test/integration/hosts/cline.mjs` and include Cline in `test/integration/other-hosts.test.ts` so a spawned run proves probe, dispatch, log rendering and attended refusal. If a documented CLI command exposes a machine-readable model catalogue, add `cline` to `packages/core/src/models.ts` and its catalogue flow; otherwise explicitly leave model discovery unchanged and explain in ADR 0063. Update README's host installation section and `.sober/config.jsonc`'s dispatch.host comment. Document exactly which recordings came from a live CLI versus published examples; do not call synthetic fixtures live recordings. The published reference shows `--json` events with `type: say|ask`, `text`, `ts`, `say|ask`, `partial`; the upstream README also shows `agent_event` examples, so resolve version/event-shape differences from the actual reference or CLI before implementing, rather than guessing.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src/hosts.test.ts packages/core/src/tail.test.ts",
+				"proves": "Cline argv, authentication parsing and documented JSON event lines render correctly without affecting the other hosts."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/other-hosts.test.ts",
+				"proves": "A fake Cline process exercises preflight, real child-process dispatch in a worktree, log rendering and refusal of attended mode."
+			},
+			{
+				"run": "pnpm build",
+				"proves": "The adapter and any catalogue type changes compile across the workspace."
+			},
+			{
+				"run": "pnpm exec biome check packages/core/src/hosts.ts packages/core/src/hosts.test.ts packages/core/src/models.ts test/integration/other-hosts.test.ts test/integration/hosts/cline.mjs",
+				"proves": "Changed source and integration fixtures pass repository style checks."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T20:56:42.177Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-25T09:58:11.618Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-21T16:27:14.935Z"

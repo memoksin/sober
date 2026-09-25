@@ -12,11 +12,50 @@
 		"docs/adr/0063-*.md",
 		"docs/DESIGN.md"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Documentation only — no code, schema or test changes. The implementation belongs to auto-eligibility-jd7h, decision-catalog-mn4d and auto-lifecycle-jo8f; this ADR is the contract they build against.\n\n**Number.** The declared `docs/adr/0063-*.md` is stale: 0063 and 0064 are taken. Write `docs/adr/0065-sober-auto-is-an-opt-in-that-may-approve-and-accept.md` (title may be reworded, number may not). Follow the header shape of ADR 0056: `# 0065 — …`, `- **Status:** accepted`, `- **Date:** 2026-09-24`, `- **Supersedes:** …` naming exactly what is superseded and what survives.\n\n**What it supersedes, in part and only for an opt-in auto invocation:** D26's \"approval is human\" (DESIGN §3.7 *Production and approval*), `SCOPE.md` MUST #5 / `PR-09-05` \"only a human can accept\", and ADR 0056's \"approval stays per node, human\". It does **not** touch: ADR 0010 / §2.4 (auto never answers, suggests-into-answer, or edits a decision — decisions stay human, always), ADR 0056 decision 3 (no unattended retry), the two 0017 safety rules, ADR 0059 / 0053 (a merge into main is a release and is the human's), the attended flow and its tools, which are unchanged when auto is not invoked.\n\n**Sections (Context / Decision / Consequences / Alternatives rejected), covering:**\n1. *Opt-in.* Auto is an explicit invocation (`sober:auto`), never a setting that turns on by itself and never the default; without it every path is today's human path.\n2. *Authority lives in core* (decision: Core auto modu). Core enforces the gate and writes the records so CLI, MCP and dashboard share one rule; the skill only drives the sequence. Cost named: schema and core API grow, and the attended and auto paths must share code without blurring.\n3. *The gate.* Before each consequential transition — brief approval, dispatch, accept — core rechecks: zero open, non-archived decisions **anywhere on the board** (not only bound ones; a draft with `suggested` and no `answer` counts as open, §2.4); a board that loads with no broken record (§8.4) and a DAG (§3.6); the node is actionable (its derived status is the one the transition expects, no foreign claim, no same-files overlap with an active node, not flagged by a changed decision); the brief has a non-empty acceptance list of runnable commands. Any failure refuses the transition and hands the node back to the human — nothing is skipped or worked around.\n4. *Forbidden.* Work targeting `main` or a release branch, opening or merging a PR into `main`, writing a changeset, and any retry of a failed, stopped or rejected run (0056 §3). Auto lands on the configured base (`development` here), never `main`.\n5. *Accept threshold.* Auto accepts only a conclusively green result: every acceptance command passed, scan clean (not `did-not-run`), CI green where there is CI, no flag. Anything inconclusive stops and surfaces for the human; a clear failure is rejected with actionable feedback, and the rejected node is the human's thereafter (no rerun).\n6. *Provenance.* An autonomous approval or acceptance is recorded as autonomous — never attributed to a human who did not see it. State the requirement (the record says it was auto, which invocation and who invoked it); the field shape is auto-eligibility-jd7h's to choose.\n7. *Mid-run gate change.* If a decision opens, the graph breaks, or the node is claimed while a run is in flight, the run is not killed (§5.4 stop is a human act) but auto takes no further transition on it: the result waits in review for a human, and auto stops.\n8. *Decision threshold and catalog* (decision: Katalog ve arama). The run's brief carries bound answers (§3.7). When the agent meets a choice the brief does not answer, it searches the board's answered-decision catalog over MCP. Found → follow it. Not found and node-local (an implementation detail inside the node's files) → decide and say so in `outcome`. Not found and it would change the shape of more than one node in one of the four categories (`state`, `module-boundaries`, `data-flow`, `error-handling`) → stop and ask the human to open and answer a decision; auto never opens-and-answers one itself. Cost named: when to search must be described reliably, and an unmatched question must be visible.\n9. *Alternatives rejected:* skill-only enforcement (each surface could route around it), a board-wide setting that makes everything auto (0056's reason: a trade taken by editing a file), gating only on bound decisions (an unbound open decision is exactly the cross-node question auto must not guess), letting auto answer a decision with a rationale (ADR 0010's rubber stamp with a paper trail).\n\n**DESIGN.md.** Keep edits small and pointer-shaped, matching how ADR 0056 landed:\n- §3.7 *Production and approval*: after the D26 paragraph, one paragraph saying the one exception is an explicit `sober:auto` invocation, under ADR 0065's gate and with autonomous provenance; decisions stay human.\n- §6 intro (line ~668): one sentence naming the same exception to \"Nothing lands without a human\", pointing at ADR 0065 and its accept threshold.\n- A new §5.6 *Auto — opt-in* summarising the gate, the forbidden list, the mid-run rule and the catalog threshold in a few paragraphs, pointing at ADR 0065 for the argument.\n\n**SCOPE.md / PRODUCT.md.** Add a pointer clause to MUST #5's reason and to `PR-09-05` (\"except under an explicit auto invocation, ADR 0065\") so no normative doc still says the opposite. Outside the declared files; it will show in review.\n\nNo changeset (CLAUDE.md). Nothing in `packages/` changes.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "node -e \"const fs=require('fs');const f=fs.readdirSync('docs/adr').filter(n=>n.startsWith('0065-'));if(f.length!==1){console.error('expected one 0065 ADR, found '+f.length);process.exit(1)}const t=fs.readFileSync('docs/adr/'+f[0],'utf8');for(const w of ['# 0065','Status:','Supersedes','opt-in','zero open','non-archived','main','changeset','retry','provenance','mid-run','catalog','node-local','state','module-boundaries','data-flow','error-handling','attended','core','ADR 0010','ADR 0056','Alternatives rejected'])if(!t.includes(w)){console.error('ADR 0065 does not mention: '+w);process.exit(1)}console.log('ok '+f[0])\"",
+				"proves": "Exactly one ADR numbered 0065 exists (no collision with 0063/0064) and it states every clause the node asks for: opt-in, the board-wide zero-open-decision gate, no main/release/changeset, no retry, provenance, the mid-run rule, the catalog lookup and the four-category threshold, the core authority, and what it leaves of ADR 0010 and 0056."
+			},
+			{
+				"run": "node -e \"const t=require('fs').readFileSync('docs/DESIGN.md','utf8');for(const w of ['ADR 0065','### 5.6'])if(!t.includes(w)){console.error('DESIGN.md missing: '+w);process.exit(1)}const n=t.split('ADR 0065').length-1;if(n<3){console.error('ADR 0065 cited '+n+' times; expected in 3.7, 5.6 and 6');process.exit(1)}console.log('ok')\"",
+				"proves": "DESIGN.md carries the exception where the human-only rules are stated (§3.7 approval, §6 review) and has the new §5.6 section, all pointing at ADR 0065."
+			},
+			{
+				"run": "node -e \"const fs=require('fs');for(const f of ['docs/SCOPE.md','docs/PRODUCT.md'])if(!fs.readFileSync(f,'utf8').includes('ADR 0065')){console.error(f+' does not point at ADR 0065');process.exit(1)}console.log('ok')\"",
+				"proves": "SCOPE MUST #5 and PR-09-05 no longer state the human-only rule without its exception."
+			},
+			{
+				"run": "git diff --name-only development -- packages apps .changeset",
+				"proves": "Prints nothing: no code, schema, dashboard or changeset was touched — this node is the contract only."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "The repository's formatter and secret scan still pass."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T17:01:54.153Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T17:03:07.834Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T17:10:12.808Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T09:45:20.142Z"
 }

@@ -10,11 +10,50 @@
 		"commitlint.config.js",
 		"package.json"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "**Diagnosis (already reproduced; do not re-derive, verify only).**\n\nThe `commit messages` step in the `lint` job (`.github/workflows/ci.yml:29-31`) runs `commitlint --from origin/<base_ref> --to HEAD` on every pull request. It went red on five development PRs on 2026-09-23 (runs 35918937479, 35922717194, 35923553879, 35925034827, 35927325176 — session-mock, transcript-adr, tool-colour, text-lines, line-detail). In each, the node's own commits passed; the failures were older commits that were in the node branch but not yet on `origin/development`, because SOBER cuts a node's branch from **local** `development`, which carried unpushed merges. Once `development` was pushed those commits left the range and development PRs went green again (every run since is green on this step).\n\nThe defect has not gone away; it has moved. Those commits are now on `origin/development`, so they sit in `origin/main..origin/development`, the range the next release PR into `main` will lint. Today `pnpm exec commitlint --from origin/main --to origin/development` fails on exactly seven commits:\n\n- `2d8ac64` `design: replace graph pulse with EKG trace, add motion-force switch`, type-enum\n- `17495e4` `design: refine watch-the-run graph pulse and session motion`, type-enum\n- `7a27b3b` `fix(core): prefer Git's bin/sh.exe, which puts /usr/bin on PATH`, body-max-line-length\n- `17c2de0` `fix(core): start npm-installed hosts on Windows through their script`, body-max-line-length\n- `67473e3` `fix(core): run sober's own entry for openrouter on Windows`, body-max-line-length\n- `5d6f986` `feat(core): dispatch refusals name the config key to edit`, body-max-line-length\n- `c1597e8` `fix: advance the test board with a commit git will not deduplicate`, body-max-line-length\n\n`development` is shared and pushed, so rewriting those commits is off the table.\n\n**Change: `commitlint.config.js` only.**\n\nAdd an `ignores` entry that skips exactly those seven landed commits, matched on the **exact first line** of the message: a `Set` of the seven subjects and `ignores: [(message) => LANDED.has(message.split('\\n')[0].trim())]`. Add a comment in the file's existing style (like the `subject-case` and `sober` comments) saying these are already on `development`, cannot be rewritten, and are listed so the release range can pass; new commits are not covered. Keep `defaultIgnores` on (the merge-commit ignore is needed for the PR merge ref). Change no rule: `design` stays a scope (`docs(design):`, `fix(design):` are the convention), and `body-max-line-length` stays at 100.\n\n**`.github/workflows/ci.yml`: no change. Record the check in the commit body.** The step's condition `github.event_name == 'pull_request'` is correct. `push` only fires for `main`, where a merge is a release already linted as its PR, and development PRs use `base_ref`. The `--from origin/<base_ref>` range is right; what made it noisy was branches cut from an unpushed local base, which is a dispatch concern and out of scope here.\n\n**Commit message:** conventional, body lines ≤100 chars, e.g. `ci: let commitlint pass the seven commits already on development`. No changeset (CLAUDE.md). Do not touch `package.json`.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm exec commitlint --from origin/main --to origin/development",
+				"proves": "The range the next release PR into main will lint passes. Before this change it failed on the seven landed commits."
+			},
+			{
+				"run": "node -e \"const {spawnSync}=require('child_process');const lint=m=>spawnSync('pnpm exec commitlint',{input:m,shell:true}).status;const cases=[['design: a new design-typed commit',1],['fix(core): a new commit\\n\\n'+'x'.repeat(101),1],['design: refine watch-the-run graph pulse and session motion',0],['fix(core): start npm-installed hosts on Windows through their script\\n\\n'+'x'.repeat(150),0],['feat(core): an ordinary new commit',0]];let bad=0;for(const [m,want] of cases){const got=lint(m)===0?0:1;if(got!==want){bad++;console.error((want?'should fail, passed: ':'should pass, failed: ')+m.split('\\n')[0])}}if(bad)process.exit(1);console.log('ok')\"",
+				"proves": "The exemption is narrow. A new `design:` commit and a new commit with a 101-character body line still fail. Only the listed historical subjects pass, and an ordinary commit still passes."
+			},
+			{
+				"run": "pnpm exec commitlint --from origin/development --to HEAD",
+				"proves": "The node's own commits pass the same check the development PR will run."
+			},
+			{
+				"run": "git diff --exit-code development -- .github/workflows/ci.yml package.json .changeset",
+				"proves": "The workflow, package.json and changesets are untouched. The fix is the config alone, with no changeset."
+			},
+			{
+				"run": "pnpm lint",
+				"proves": "The formatter and secret scan still pass with the edited config file."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T17:20:48.705Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T17:22:43.160Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T17:32:08.697Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T22:43:21.893Z"
 }

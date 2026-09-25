@@ -12,11 +12,50 @@
 		"packages/**/src/**/*.ts",
 		".github/workflows/ci.yml"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "**What breaks, checked 2026-09-24.** In CI's `test` job (ubuntu), `pnpm test --coverage` passes. The step after it, `pnpm coverage:check` (`scripts/coverage-ratchet.mjs`), fails. Run 36017421150 prints:\n```\ncore: 98.48% -> 97.86% — coverage dropped\ncli: 17.92% -> 21.86% — run pnpm coverage:update and commit it\ndashboard: 69.49% -> 74.46% — run pnpm coverage:update and commit it\nserver: 94.82% -> 95.9% — run pnpm coverage:update and commit it\nmcp: 95.78% (baseline 95.51%)\n```\n\n**Where the core drop comes from.** I traced it through the CI history:\n- The last green core line is run `4a5d8b3` (brief-toggle, 2026-09-23 12:34), at 98.48%.\n- The first red line is `fdb29d5` (accept-shell, \"run acceptance commands through a POSIX shell\"), at 97.93%.\n- Since then the core commits have mostly been **Windows-only branches that the ubuntu job never runs**:\n  - `posixShell()`'s win32 block in `packages/core/src/audit.ts` (`fdb29d5`, `7a27b3b`).\n  - The `shell === null` \"no POSIX shell found\" paths in `audit.ts` and `packages/core/src/scan.ts:211`.\n  - The npm-shim start and openrouter entry on Windows in `packages/core/src/host.ts` (`17c2de0`, `67473e3`, and `npmShimTarget` at `host.ts:49`).\n- A second, smaller step (97.95 → 97.86) arrived with `5cd3827` (\"abort a conflicted merge\", `packages/core/src/merge.ts` and `review.ts`). It is most likely the abort/cleanup error path.\n- Small ±0.05 wobble between runs is timing noise. Do not chase it.\n\n**The local numbers are not the ratchet's.** On this Windows machine, `vitest --coverage` takes the win32 branches and skips POSIX-only ones. The integration suite also takes more than 20 minutes and times out here. So never run `pnpm coverage:update` locally: it would write Windows numbers into a Linux baseline. The judge is the draft PR's ubuntu `test` job.\n\n**Fix.**\n1. **Make the platform branches testable on any OS.** Refactor, don't hide.\n   - Split `posixShell()` into a pure `posixShellFor(platform, gitExecPath, exists)` plus the cached wrapper that calls it with `process.platform`, `git --exec-path` and `existsSync`.\n   - Unit-test every outcome in `packages/core/src/audit.test.ts`: non-win32 → `true`; `bin/sh.exe` found first; fallback to `usr/bin/sh.exe`; neither → `null`; the git call throws → `null`.\n   - Do the same for the win32 decisions in `host.ts`: give `npmShimTarget` and the openrouter-entry choice the platform as a parameter where they read `process.platform`, and test both sides in `packages/core/src/host.test.ts`.\n   - Cover the `shell === null` path in `audit.ts` (and in `scan.ts` if the seam allows it) by injecting the shell resolver, or with `vi.mock` of `./audit.js` in a unit test.\n   - Do not use `/* v8 ignore */`: the repo has none, and the node forbids buying green.\n2. **Cover `merge.ts`'s conflict-abort path from `5cd3827`** with a unit or integration test that forces a conflicted merge and asserts the abort. There is no `packages/core/src/merge.test.ts` today; `test/integration/review.test.ts` already builds conflicting merges, so extend it there if that is simpler.\n3. **Refresh the rising baselines by hand to the numbers CI measured**, in `coverage-baseline.json`: `cli` 21.86, `dashboard` 74.46, `server` 95.9, `mcp` 95.78. Leave `core` at **98.48**. Never lower it. This is exactly what `coverage:update` would write on ubuntu for those four.\n4. **Make the ratchet say where a drop is.** In `scripts/coverage-ratchet.mjs`, when a package drops, also print its five files with the most uncovered lines (`lines.total - lines.covered`, from the same `coverage-summary.json`). Then the next CI log names the files instead of only the package. Keep it to a few lines.\n\n**Out of scope.**\n- `vitest.config.ts` and `.github/workflows/ci.yml` do not change.\n- The Windows-local flaky unit tests (`sync.test.ts` EBUSY, `models.test.ts` executable bit, `agent.test.ts` EPERM) do not run on ubuntu and are not this node.\n\n**Risk.** Nothing here can measure the Linux number locally, so the core recovery is only proven by the draft PR's `test` job. If it still reads under 98.47, step 4's output names the files, and a rejection with that list is the next run's brief.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm vitest run packages/core/src/audit.test.ts packages/core/src/host.test.ts packages/core/src/hosts.test.ts packages/core/src/scan.test.ts",
+				"proves": "the new platform-branch tests and the existing ones for the touched modules pass"
+			},
+			{
+				"run": "node -e \"const b=require('./coverage-baseline.json'); const ok=b.core>=98.48&&b.cli===21.86&&b.dashboard===74.46&&b.server===95.9&&b.mcp===95.78; process.exit(ok?0:1)\"",
+				"proves": "the core floor was not lowered, and the rising packages carry the numbers CI measured"
+			},
+			{
+				"run": "! grep -rn 'v8 ignore\\|c8 ignore\\|istanbul ignore' packages/core/src",
+				"proves": "no coverage was bought by excluding code"
+			},
+			{
+				"run": "git diff --quiet development -- vitest.config.ts .github",
+				"proves": "the measurement and CI config are untouched"
+			},
+			{
+				"run": "pnpm --filter @besober/core typecheck && npx biome check packages/core/src scripts coverage-baseline.json",
+				"proves": "core type-checks, and lint and format are clean"
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-24T16:17:05.333Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T16:39:21.653Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-24T16:56:27.798Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T22:43:21.893Z"
 }
