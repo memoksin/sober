@@ -14,6 +14,27 @@ export const Criterion = z.strictObject({
 export type Criterion = z.infer<typeof Criterion>
 
 /**
+ * An approval or acceptance made under `sober:auto` rather than by a person
+ * (ADR 0065 §6). `invokedBy` is who ran the invocation; the record's own `by`
+ * is that same handle and never reads as their approval. Absent means a human.
+ */
+export const AutoProvenance = z.strictObject({
+	invocation: z.literal('sober:auto'),
+	invokedBy: Handle,
+})
+
+export type AutoProvenance = z.infer<typeof AutoProvenance>
+
+/**
+ * The words after "approved" or "accepted", worded once for every surface: an
+ * autonomous record never reads as a person's act (ADR 0065 §6).
+ */
+export const byWhom = (record: { by: string; autonomous?: AutoProvenance }): string =>
+	record.autonomous === undefined
+		? `by ${record.by}`
+		: `autonomously under ${record.autonomous.invocation} (invoked by ${record.autonomous.invokedBy})`
+
+/**
  * `queue: true` is ADR 0017's "approve and queue" — the same human approval,
  * plus the instruction to dispatch when the node becomes ready.
  */
@@ -21,6 +42,7 @@ export const Approval = z.strictObject({
 	by: Handle,
 	at: Timestamp,
 	queue: z.boolean(),
+	autonomous: AutoProvenance.optional(),
 })
 
 export type Approval = z.infer<typeof Approval>

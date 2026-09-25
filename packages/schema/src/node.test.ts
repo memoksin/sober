@@ -69,6 +69,26 @@ test('accepted records the scan result, so a scan that did not run is never drop
 	expect(Node.safeParse({ ...node, accepted: { ...accepted, scan: 'ok' } }).success).toBe(false)
 })
 
+test('an acceptance without provenance is a human one, and an autonomous one is strict', () => {
+	const accepted = {
+		by: 'memoksin',
+		at: '2026-08-27T12:00:00Z',
+		flagged: false,
+		scan: 'clean',
+		audit: 'passed',
+	}
+	const autonomous = { invocation: 'sober:auto', invokedBy: 'memoksin' }
+
+	expect(Node.parse({ ...node, accepted }).accepted).not.toHaveProperty('autonomous')
+	expect(
+		Node.parse({ ...node, accepted: { ...accepted, autonomous } }).accepted?.autonomous,
+	).toEqual(autonomous)
+	expect(
+		Node.safeParse({ ...node, accepted: { ...accepted, autonomous: { invokedBy: 'memoksin' } } })
+			.success,
+	).toBe(false)
+})
+
 test('a dismissal keeps who judged the flag, when, and why (DESIGN §7.2)', () => {
 	const dismissal = {
 		by: 'memoksin',

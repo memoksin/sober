@@ -110,7 +110,10 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 		// failed probe still gets a read, the same as a successful one, before
 		// falling back to the generic refusal.
 		const failed = error as Error & { stdout?: string; stderr?: string }
-		if (adapter.loggedIn(failed.stdout ?? '') === false || adapter.loggedIn(failed.stderr ?? '') === false)
+		if (
+			adapter.loggedIn(failed.stdout ?? '') === false ||
+			adapter.loggedIn(failed.stderr ?? '') === false
+		)
 			return {
 				ok: false,
 				reason: `${host} is installed but not logged in — run \`${adapter.signIn(host)}\``,

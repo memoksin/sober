@@ -8,8 +8,10 @@ import {
 	acceptWork,
 	addWorktree,
 	answerDecision,
+	applySetting,
 	approveBrief,
 	archiveDecision,
+	autoAccept,
 	createBoardBranch,
 	detectSetup,
 	dismissFlag,
@@ -27,6 +29,7 @@ import {
 	writeBrief,
 	writeDecision,
 	writeNode,
+	writeRun,
 } from '@besober/core'
 import { afterEach, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
@@ -201,7 +204,59 @@ test('accepting lands the work, records how the scan read, and takes the worktre
 	const board2 = await loadBoard(paths)
 	expect(statusOf(board2, NODE)).toBe('done')
 	expect(board2.nodes.get(NODE)?.accepted).toMatchObject({ by: 'memoksin', scan: 'clean' })
+	// A human accepted this, and the record cannot be read as anything else.
+	expect(board2.nodes.get(NODE)?.accepted).not.toHaveProperty('autonomous')
 	expect(readFileSync(join(paths.root, 'src/auth/token.ts'), 'utf8')).toContain('sign')
+})
+
+test('an autonomous accept merges into the configured base and records who invoked it', async () => {
+	const paths = await board()
+	git('checkout', '-b', 'development')
+	await applySetting(paths, ['dispatch', 'base'], 'development')
+	await answerDecision(paths, DECISION, { option: 'cookie', by: 'memoksin' })
+	await writeBrief(paths, NODE, {
+		approach: 'Endpoints first.',
+		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
+	})
+	await approveBrief(paths, NODE, { by: 'memoksin', queue: false })
+	git('add', '-A')
+	git('commit', '-m', 'chore: approve')
+
+	const { path } = await addWorktree(paths, NODE, 'development')
+	mkdirSync(join(path, 'src/auth'), { recursive: true })
+	writeFileSync(join(path, 'src/auth/token.ts'), 'export const sign = () => "ok"\n')
+	execFileSync('git', ['add', '-A'], { cwd: path })
+	execFileSync('git', ['commit', '-m', 'feat: work'], { cwd: path })
+	await writeRun(paths, 'run-auto-k7f2', {
+		node: NODE,
+		host: 'claude-code',
+		branch: `sober/${NODE}`,
+		worktree: path,
+		startedAt: AT,
+		endedAt: AT,
+		exit: 'finished',
+		error: null,
+		verify: null,
+		acceptance: [{ exit: 0 }],
+		attended: false,
+		tier: null,
+		fallback: false,
+	})
+
+	const landed = await autoAccept(paths, NODE, {
+		invokedBy: 'memoksin',
+		base: 'development',
+		scan: 'clean',
+		ci: { kind: 'none' },
+	})
+
+	expect(landed).toMatchObject({ kind: 'merged', base: 'development' })
+	expect(readFileSync(join(paths.root, 'src/auth/token.ts'), 'utf8')).toContain('sign')
+	expect((await loadBoard(paths)).nodes.get(NODE)?.accepted).toMatchObject({
+		by: 'memoksin',
+		audit: 'passed',
+		autonomous: { invocation: 'sober:auto', invokedBy: 'memoksin' },
+	})
 })
 
 test('rejecting deletes nothing, and what was written comes back for the next run', async () => {

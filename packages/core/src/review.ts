@@ -1,5 +1,6 @@
 import type {
 	AuditResult,
+	AutoProvenance,
 	CommandResult,
 	Criterion,
 	CriterionResult,
@@ -81,7 +82,7 @@ const criterionResults = (
  * could run makes the whole audit `did-not-run`, because a list is only as read
  * as its least-read entry.
  */
-const auditOf = async (paths: Paths, node: string): Promise<AuditResult> => {
+export const auditOf = async (paths: Paths, node: string): Promise<AuditResult> => {
 	const board = await loadBoard(paths)
 	const run = lastRun(board, node)
 	return auditResultOf(
@@ -113,6 +114,13 @@ export interface AcceptOptions {
 	readonly base: string
 	readonly scan: ScanResult
 	readonly flagged?: boolean
+	/** Set only by `sober:auto` (ADR 0065 §6); no attended surface passes it. */
+	readonly autonomous?: AutoProvenance
+	/**
+	 * Awaited before the merge and again under the lock that writes the record:
+	 * a refusal in between takes the merge back like any failed record write.
+	 */
+	readonly guard?: () => Promise<void>
 }
 
 /**
@@ -192,13 +200,15 @@ export const acceptWork = async (
 		// and a field each of them has to remember to fill is a field that ends
 		// up saying "passed" on the one that forgot.
 		audit: await auditOf(paths, node),
+		...(options.autonomous && { autonomous: options.autonomous }),
 	}
+	await options.guard?.()
 
 	if (through === 'pull-request') {
 		// The pull request has to be there before the record is written: a done
 		// node whose work never landed is the one state this order prevents.
 		await requirePullRequest(paths, node)
-		await acceptNode(paths, node, accepted)
+		await acceptNode(paths, node, accepted, options.guard)
 		const pr = await readyAndMerge(paths, node)
 		await removeWorktree(paths, node)
 		// The merge happened on the host, so this branch is not an ancestor of
@@ -211,7 +221,7 @@ export const acceptWork = async (
 	const openPr = await pullRequestOf(paths, node).catch(() => null)
 	const merged = await mergeNode(paths, node, options.base)
 	try {
-		await acceptNode(paths, node, accepted)
+		await acceptNode(paths, node, accepted, options.guard)
 	} catch (error) {
 		if (await unmergeNode(paths, merged).catch(() => false)) throw error
 		const reason = error instanceof Error ? error.message : String(error)

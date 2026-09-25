@@ -1,3 +1,4 @@
+import { byWhom } from '@besober/schema'
 import { useState } from 'react'
 import { Inline, Markdown } from '../markdown.js'
 import { pending } from '../pending.js'
@@ -103,7 +104,7 @@ export const Panel = ({
 									<span className="ml-2 font-normal normal-case tracking-normal">
 										{node.brief.approval === null
 											? 'not approved yet'
-											: `approved by ${node.brief.approval.by}${node.brief.approval.queue ? ', queued' : ''}`}
+											: `approved ${byWhom(node.brief.approval)}${node.brief.approval.queue ? ', queued' : ''}`}
 									</span>
 								</summary>
 								{/*
@@ -185,7 +186,7 @@ export const Panel = ({
 						{node.accepted !== null && (
 							<Section title="Accepted">
 								<p className="text-[length:var(--text-sm)] text-[var(--ink-dim)]">
-									by {node.accepted.by} · scan {node.accepted.scan}
+									{byWhom(node.accepted)} · scan {node.accepted.scan}
 									{node.accepted.flagged ? ' · flagged' : ''}
 								</p>
 								{node.outcome !== null && node.outcome !== '' && (

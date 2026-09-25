@@ -41,6 +41,9 @@ export const ERROR_CODES = [
 	// Jev was asked for the tier and the skills and could not answer. Named
 	// apart from `host` because nothing has been spawned yet (ADR 0059).
 	'jev',
+	// A sober:auto transition the gate turned down (ADR 0065 §3). Named apart so
+	// a surface can hand the node back to the human rather than report a crash.
+	'auto-refused',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

@@ -1,7 +1,7 @@
 import type { Board, DecisionMatch, Overlap } from '@besober/core'
 import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
 import type { Node, Review } from '@besober/schema'
-import { decisionState } from '@besober/schema'
+import { byWhom, decisionState } from '@besober/schema'
 
 /**
  * What a surface shows is derived here the same way the CLI derives it, from
@@ -199,7 +199,7 @@ export const renderReview = (review: Review, showDiff: boolean): string => {
 	const lines = [
 		review.accepted === null
 			? `# ${review.node}  (last run: ${review.exit ?? 'not run'})`
-			: `# ${review.node}  (done — accepted by ${review.accepted.by} on ${review.accepted.at.slice(0, 10)}, scan: ${review.accepted.scan})`,
+			: `# ${review.node}  (done — accepted ${byWhom(review.accepted)} on ${review.accepted.at.slice(0, 10)}, scan: ${review.accepted.scan})`,
 		'',
 		`## Scan: ${scan.result === 'clean' ? 'clean' : scan.result === 'findings' ? `${scan.findings.length} finding(s)` : 'DID NOT RUN'}`,
 		`rules: ${scan.ruleSet}   files: ${review.files.length}`,
