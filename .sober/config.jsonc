@@ -5,7 +5,8 @@
 	"dispatch": {
 		// The host CLI SOBER launches headless. It is the tool you already
 		// installed and logged into: SOBER never asks for an API key and
-		// never chooses the model (DESIGN §5.1).
+		// never chooses the model (DESIGN §5.1). One of claude, codex,
+		// opencode, cursor, openrouter, cline (ADR 0066).
 		"host": "claude",
 
 		// Shell command run in a fresh worktree before the agent starts.

@@ -587,6 +587,153 @@ const cursor: Adapter = {
 }
 
 /**
+ * Cline (ADR 0066). Every flag and event shape below was read off the
+ * published npm `cline` CLI at v3.0.65 (`npm view cline version`, matching
+ * `cline/cline`'s `main` at the time this was written) — the recordings are in
+ * `docs/testing/v1x-4-other-hosts.tdd.md`, and two of them come from source
+ * rather than from docs.cline.bot, because the site and the CLI disagree.
+ *
+ * **The probe has no lightweight surface, and that is not a guess.** `cline
+ * auth` and `cline config` are the two commands a reader would reach for, and
+ * both were read off `apps/cli/src/commands/auth.ts` and `config.ts`: bare
+ * `auth` opens a TUI and, without a TTY, only checks *that* — "interactive
+ * auth setup requires a TTY" — never whether credentials already exist; bare
+ * `config` without `--json` does the same (`docs/usage/cli-overview.md` calls
+ * it "the interactive config view"), and `config --json` prints workflows,
+ * rules, skills, hooks, agents, plugins, MCP servers and tools — never
+ * providers or auth. `cline doctor` diagnoses stale local processes, not
+ * credentials. `--version` answers whether the binary exists, not whether
+ * anyone is signed in. None of the five reports login without doing work, so
+ * there is no no-task probe to wire — a gap named in ADR 0066 rather than
+ * papered over with one of these four.
+ *
+ * What genuinely is documented, in `apps/cli/README.md` and the repo's own
+ * `AGENTS.md`: a non-interactive run with no saved credentials "fails fast
+ * with an authentication message" — `AGENTS.md` names it exactly, "the
+ * default `cline` provider fails fast with an `Unauthorized` error" — instead
+ * of opening a browser. That is the one real signal the CLI gives, and using
+ * it costs a trivial turn ("Reply with ok.") rather than nothing, the same
+ * trade Claude Code's own `availability` probe already makes in this file.
+ * `loggedIn` reads it defensively: a `done` event is signed in, an `error`
+ * event whose message names the failure is not, anything else is unread
+ * rather than guessed at (§2.8).
+ *
+ * **The run.** `--json` is documented as non-interactive, needing "either a
+ * prompt argument or piped stdin" (`README.md`), so the brief goes in as the
+ * trailing positional argument, the same shape as Codex, OpenCode and Cursor.
+ * `--auto-approve true` is the explicit form of the CLI's own default — spelled
+ * out rather than relied on, the way `bypassPermissions` is spelled out for
+ * Claude Code. The reference documents `-s, --system <prompt>` too, but it
+ * *replaces* Cline's own system prompt rather than adding to it
+ * (`cli-reference.md`: "Override the default system prompt") — losing
+ * whatever Cline's default prompt does for tool use is a worse trade than the
+ * one every other flagless host already makes, so `NO_HUMAN` goes in front of
+ * the brief like it does for them, not into `--system`.
+ *
+ * **The events.** `--json` output on docs.cline.bot is stale: it documents
+ * `{"type": "say"|"ask", "text", "ts", "say", "ask", "partial"}`, a shape
+ * nothing in the installed source emits. The real wrapper
+ * (`apps/cli/src/utils/events.ts`, `handleEvent`) writes
+ * `{ts, type: "agent_event", event}` for every one of the CLI's own
+ * `AgentEvent`s (`sdk/packages/shared/src/agents/types.ts`), which is also
+ * what the README's own `jq` example filters on
+ * (`select(.type == "agent_event" and .event.text)`). `content_start` fires on
+ * every streamed chunk — rendering it for text or reasoning would print a
+ * message once per token, so only `content_end`, which carries the whole
+ * turn's final text, becomes a line; a tool call is the opposite, one
+ * `content_start` to say what is running and one `content_end` to say how it
+ * went, which is the same "start once, finish once" split Claude Code's own
+ * `tool_use`/`tool_result` pair keeps. `input` on a tool call is typed
+ * `unknown` in the source — no key is common enough to read a one-line detail
+ * from the way `CLAUDE_DETAIL` does, so `detail` stays null rather than
+ * guessed at, the same call Cursor's adapter makes for an unnamed tool.
+ */
+const cline: Adapter = {
+	id: 'cline',
+	probe: ['--json', '--auto-approve', 'true', 'Reply with ok.'],
+	signIn: (host) => `${host} auth`,
+	loggedIn: (stdout) => {
+		for (const rawLine of stdout.split('\n')) {
+			const line = rawLine.trim()
+			if (line.length === 0) continue
+			let parsed: { type?: string; event?: { type?: string; error?: unknown } }
+			try {
+				parsed = JSON.parse(line) as typeof parsed
+			} catch {
+				continue
+			}
+			if (parsed.type !== 'agent_event' || parsed.event === undefined) continue
+			if (parsed.event.type === 'done') return true
+			if (parsed.event.type === 'error') {
+				const message =
+					typeof parsed.event.error === 'object' && parsed.event.error !== null
+						? ((parsed.event.error as { message?: string }).message ?? '')
+						: ''
+				return /unauthor|credential|authenticat/i.test(message) ? false : null
+			}
+		}
+		return null
+	},
+	argv: (prompt) => ['--json', '--auto-approve', 'true', brief(prompt)],
+	attendable: false,
+	line: (event) => {
+		if (event.event === undefined) return null
+		const inner = event.event
+
+		if (inner.type === 'content_end') {
+			if (inner.contentType === 'text') {
+				const text = inner.text?.trim()
+				return text !== undefined && text.length > 0 ? { kind: 'text', text, tool: null } : null
+			}
+			if (inner.contentType === 'reasoning') {
+				const text = inner.reasoning?.trim()
+				return text !== undefined && text.length > 0
+					? { kind: 'thinking', text, tool: null }
+					: null
+			}
+			if (inner.contentType === 'tool') {
+				const tool = inner.toolName ?? 'tool'
+				const call = inner.toolCallId ?? null
+				const failure = typeof inner.error === 'string' ? inner.error : undefined
+				if (failure !== undefined)
+					return { kind: 'output', text: `error: ${summarize(failure)}`, tool, call, body: capBody(failure) }
+				const output =
+					typeof inner.output === 'string'
+						? inner.output
+						: inner.output === undefined
+							? ''
+							: JSON.stringify(inner.output)
+				return { kind: 'output', text: summarize(output), tool, call, body: capBody(output) }
+			}
+			return null
+		}
+
+		if (inner.type === 'content_start' && inner.contentType === 'tool') {
+			const tool = inner.toolName ?? 'tool'
+			return { kind: 'tool', text: tool, tool, call: inner.toolCallId ?? null, detail: null }
+		}
+
+		if (inner.type === 'done')
+			return {
+				kind: 'result',
+				text: inner.reason === 'completed' ? 'finished' : `failed: ${inner.reason ?? 'stopped'}`,
+				tool: null,
+			}
+
+		if (inner.type === 'error') {
+			const runError =
+				typeof inner.error === 'object' && inner.error !== null
+					? (inner.error as { message?: string })
+					: undefined
+			const message = runError?.message?.trim()
+			return message !== undefined && message.length > 0 ? { kind: 'raw', text: message, tool: null } : null
+		}
+
+		return null
+	},
+}
+
+/**
  * The brief, for a host with nowhere else to put the system prompt. The
  * sentence goes first and is separated by a rule, so a model reading the two as
  * one document still reads them as two things.
@@ -635,7 +782,7 @@ const openrouter: Adapter = {
 	},
 }
 
-export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode, cursor, openrouter]
+export const ADAPTERS: readonly Adapter[] = [claude, codex, opencode, cursor, openrouter, cline]
 
 /**
  * `dispatch.host` is a command line rather than a program name, so the adapter
@@ -743,5 +890,26 @@ export interface Event {
 			readonly input?: Readonly<Record<string, unknown>>
 			readonly output?: string
 		}
+	}
+	/**
+	 * Cline: one `AgentEvent`, wrapped as `{ts, type: 'agent_event', event}`
+	 * (`apps/cli/src/utils/events.ts`). `error` is `string` on a tool's own
+	 * `content_end` and the serialized `Error` (`{name, message, stack}`) on the
+	 * run-level `error` event — one field name, two shapes, told apart by
+	 * `inner.type` in `line`.
+	 */
+	readonly event?: {
+		readonly type?: string
+		readonly contentType?: string
+		readonly text?: string
+		readonly reasoning?: string
+		readonly toolName?: string
+		readonly toolCallId?: string
+		readonly output?: unknown
+		readonly error?: string | Readonly<Record<string, unknown>>
+		readonly reason?: string
+		readonly iterations?: number
+		readonly iteration?: number
+		readonly recoverable?: boolean
 	}
 }

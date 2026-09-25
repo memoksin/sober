@@ -17,12 +17,14 @@ import { afterEach, expect, test } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
 
 /**
- * The second, third and fourth hosts, end to end: a real git repository, a real child
- * process, a real worktree and a real run record, with only the host itself
- * faked (ADR 0014). The fakes answer the shapes recorded off `codex exec
- * --json` and `opencode run --format json`, and the shape Cursor's CLI
- * reference publishes for `agent -p --output-format stream-json` — see
- * `hosts/codex.mjs`, `hosts/opencode.mjs` and `hosts/cursor.mjs`.
+ * The second through fifth hosts, end to end: a real git repository, a real
+ * child process, a real worktree and a real run record, with only the host
+ * itself faked (ADR 0014). The fakes answer the shapes recorded off `codex
+ * exec --json` and `opencode run --format json`, the shape Cursor's CLI
+ * reference publishes for `agent -p --output-format stream-json`, and the
+ * `AgentEvent` shape read off the installed `cline` source — see
+ * `hosts/codex.mjs`, `hosts/opencode.mjs`, `hosts/cursor.mjs` and
+ * `hosts/cline.mjs`.
  *
  * What this proves is the half of `SCOPE.md`'s SHOULD that is code: a node
  * dispatched to one of these hosts actually runs, commits, and reads back.
@@ -30,7 +32,7 @@ import { createTempRepo, type TempRepo } from './fixture.js'
 const fake = (host: string): string =>
 	`${process.execPath} ${fileURLToPath(new URL(`./hosts/${host}.mjs`, import.meta.url))}`
 
-const OTHER_HOSTS = ['codex', 'opencode', 'cursor'] as const
+const OTHER_HOSTS = ['codex', 'opencode', 'cursor', 'cline'] as const
 
 const aNode = (title: string) => ({
 	title,

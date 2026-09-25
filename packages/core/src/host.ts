@@ -104,6 +104,17 @@ export const checkHost = async (host: string): Promise<HostReady> => {
 		const code = (error as { code?: string }).code
 		if (code === 'ENOENT')
 			return { ok: false, reason: `${host} is not installed, or is not on this PATH` }
+		// Every existing probe answers with exit 0 regardless of login state — a
+		// status command's whole job. Cline has none (ADR 0066): its probe is a
+		// trivial real task, and a task with no credentials exits non-zero. So a
+		// failed probe still gets a read, the same as a successful one, before
+		// falling back to the generic refusal.
+		const failed = error as Error & { stdout?: string; stderr?: string }
+		if (adapter.loggedIn(failed.stdout ?? '') === false || adapter.loggedIn(failed.stderr ?? '') === false)
+			return {
+				ok: false,
+				reason: `${host} is installed but not logged in — run \`${adapter.signIn(host)}\``,
+			}
 		return { ok: false, reason: `${host} could not report its authentication status` }
 	}
 

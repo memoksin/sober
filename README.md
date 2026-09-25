@@ -48,8 +48,8 @@ default and a comment explaining each, and cuts the orphan board branch
 
 Every host talks to the same binary: `sober` must be on your `PATH`, because
 each host's MCP declaration names that command, and Claude Code's `hooks.json`
-names it too. With that in place, the four host CLIs follow; `openrouter` has
-no plugin and is described under **Hosts** below.
+names it too. With that in place, the four host CLIs follow; `openrouter` and
+`cline` have no plugin and are described under **Hosts** below.
 
 ### Claude Code
 
@@ -193,6 +193,7 @@ differs between them.
 | Codex | [`packages/codex-plugin`](packages/codex-plugin/README.md) | no | no |
 | OpenCode | [`packages/opencode-plugin`](packages/opencode-plugin/README.md) | no | no |
 | OpenRouter | — | no | no |
+| Cline | — | no | no |
 
 Claude Code is the only host whose plugin can *enforce* the block from inside a
 session, with a hook that denies a spawn onto a held node. Everywhere SOBER owns
@@ -211,6 +212,22 @@ OPENROUTER_API_KEY=sk-or-…
 A run line is `openrouter --model <id>`, with `--base-url <url>` on the same
 line for another OpenAI-compatible endpoint. `sober models` lists the
 catalogue, free models first; `sober models --all` lists every one.
+
+### Cline
+
+No plugin yet (ADR 0066) — this is dispatch only. Install the CLI and sign in
+once, interactively:
+
+```
+npm i -g cline
+cline auth
+```
+
+Set `dispatch.host` to `cline` and dispatches run headless: `cline --json
+--auto-approve true <brief>`. There is no dedicated status command in Cline's
+CLI, so readiness is checked with a trivial one-shot task rather than for
+free — a dispatch to a signed-out account costs one wasted turn before SOBER
+reports it, not zero.
 
 ## When not to use it
 
