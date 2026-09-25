@@ -49,6 +49,7 @@ export {
 	AnswerLockedError,
 	answerDecision,
 	approveBrief,
+	createDecision,
 	NoBriefError,
 	NoSuchOptionError,
 	queueByDefault,

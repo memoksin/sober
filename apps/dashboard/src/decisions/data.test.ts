@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { BoardRead } from '../panel/data.js'
-import { decisionRows, filterDecisionRows } from './data.js'
+import { bindable, decisionRows, filterDecisionRows, questionBody, waitingLabel } from './data.js'
 
 const options = [
 	{ id: 'a', label: 'A', reason: 'ra', costLater: 'ca' },
@@ -91,4 +91,33 @@ test('filterDecisionRows keeps the answer source on derived rows', () => {
 	const rows = decisionRows(board([decision('d', { answer: answer('a', 'src/store.ts') })]))
 	const [row] = filterDecisionRows(rows, 'derived')
 	expect(row?.answer?.derived).toBe('src/store.ts')
+})
+
+test('an unopened decision says it waits for options from a session, not for an answer', () => {
+	const rows = decisionRows(
+		board(
+			[decision('u', { options: null }), decision('o', {})],
+			[{ id: 'n1', title: 'N', decisions: ['u', 'o'] }],
+		),
+	)
+	const label = Object.fromEntries(rows.map((row) => [row.id, waitingLabel(row)]))
+	expect(label.u).toBe('No options yet — a session produces them (/sober:decide) · holds 1 node')
+	expect(label.o).toBe('Unanswered · holds 1 node')
+})
+
+test('a new question can hold any node that is not done', () => {
+	const nodes = [
+		{ id: 'n1', title: 'One', status: 'ready', decisions: [] },
+		{ id: 'n2', title: 'Two', status: 'done', decisions: [] },
+		{ id: 'n3', title: 'Three', status: 'held', decisions: [] },
+	]
+	expect(bindable(board([], nodes)).map((node) => node.id)).toEqual(['n1', 'n3'])
+})
+
+test('the create_decision body is trimmed and deduplicated, and withheld until it can be sent', () => {
+	expect(
+		questionBody({ question: '  Where?  ', category: 'data-flow', binds: ['n1', 'n3', 'n1'] }),
+	).toEqual({ question: 'Where?', category: 'data-flow', binds: ['n1', 'n3'] })
+	expect(questionBody({ question: '   ', category: 'state', binds: ['n1'] })).toBeNull()
+	expect(questionBody({ question: 'Where?', category: 'state', binds: [] })).toBeNull()
 })

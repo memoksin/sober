@@ -1,6 +1,14 @@
-import { correctNode, createNode, dismissFlag, reopenNode, whoami } from '@besober/core'
+import {
+	correctNode,
+	createDecision,
+	createNode,
+	dismissFlag,
+	reopenNode,
+	whoami,
+} from '@besober/core'
+import { CATEGORIES, Category } from '@besober/schema'
 import { openBoard } from './board.js'
-import { bold, dim, green, refuse, say } from './out.js'
+import { bold, dim, fail, green, refuse, say } from './out.js'
 
 /**
  * DESIGN §7.2's three actions on a flagged node, on the command line. Each one
@@ -79,3 +87,26 @@ const list = (given: string | undefined): string[] | undefined =>
 				.split(',')
 				.map((one) => one.trim())
 				.filter((one) => one !== '')
+
+/** A question opened by hand (§2.6). Its options are a session's, so it arrives unopened. */
+export const question = async (
+	text: string,
+	given: { category?: string; binds?: string },
+): Promise<void> => {
+	if (text.trim() === '')
+		fail('what is the question? sober question "…" --category <c> --binds <ids>')
+	const category = Category.safeParse(given.category)
+	if (!category.success) return fail(`which category? one of ${CATEGORIES.join(', ')}`)
+	const paths = await openBoard()
+	const binds = list(given.binds) ?? []
+	const { id } = await createDecision(paths, {
+		question: text,
+		category: category.data,
+		binds,
+		by: await whoami(paths.root),
+	}).catch(refuse)
+
+	say(`${green('✓')} ${id} holds ${binds.join(', ')}`)
+	say()
+	say(dim('It has no options yet. A session produces them: /sober:decide.'))
+}

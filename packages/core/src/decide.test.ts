@@ -1,10 +1,14 @@
+import { decisionState } from '@besober/schema'
 import { beforeEach, expect, test } from 'vitest'
 import { initBoard } from './board.js'
-import { answerDecision, approveBrief } from './decide.js'
+import { answerDecision, approveBrief, createDecision } from './decide.js'
+import { loadBoard } from './graph.js'
 import { editDecision } from './impact.js'
+import { readLog } from './local.js'
 import type { Paths } from './paths.js'
 import { aDecision, aNode } from './records.fixture.js'
 import { readDecision, readNode, writeDecision, writeNode } from './records.js'
+import { statusOf } from './status.js'
 import { tmpRoot } from './tmp.fixture.js'
 
 let paths: Paths
@@ -92,4 +96,52 @@ test('a guard that refuses under the lock writes nothing', async () => {
 		}),
 	).rejects.toThrow('changed underneath')
 	expect(await approvalOf('auth-api-k7f2')).toBeNull()
+})
+
+test('a decision opened by hand arrives unopened, and every node it binds reads held', async () => {
+	await writeNode(paths, 'auth-api-k7f2', aNode({ decisions: ['older-q-aaaa'] }))
+	await writeNode(paths, 'auth-ui-m3p1', aNode())
+	await writeNode(paths, 'bystander-x9x9', aNode())
+
+	const { id } = await createDecision(paths, {
+		question: '  Where does session state live?  ',
+		category: 'state',
+		binds: ['auth-api-k7f2', 'auth-ui-m3p1', 'auth-api-k7f2'],
+		by: 'memoksin',
+	})
+
+	const board = await loadBoard(paths)
+	const decision = board.decisions.get(id)
+	expect(decision && decisionState(decision)).toBe('unopened')
+	expect(decision?.question).toBe('Where does session state live?')
+	expect(board.nodes.get('auth-api-k7f2')?.decisions).toEqual(['older-q-aaaa', id])
+	expect(board.nodes.get('auth-ui-m3p1')?.decisions).toEqual([id])
+	expect(statusOf(board, 'auth-ui-m3p1')).toBe('held')
+	expect(statusOf(board, 'bystander-x9x9')).not.toBe('held')
+	expect((await readLog(paths)).events.at(-1)).toMatchObject({
+		action: 'decision.created',
+		decision: id,
+		by: 'memoksin',
+		binds: ['auth-api-k7f2', 'auth-ui-m3p1'],
+	})
+})
+
+test.each([
+	['an empty question', { question: '   ', binds: ['auth-api-k7f2'] }, 'no-question'],
+	['an empty bind list', { question: 'Where?', binds: [] }, 'binds-nothing'],
+	[
+		'an unknown node',
+		{ question: 'Where?', binds: ['auth-api-k7f2', 'gone-zzzz'] },
+		'not-on-board',
+	],
+])('%s is refused and writes nothing', async (_, input, code) => {
+	await writeNode(paths, 'auth-api-k7f2', aNode())
+
+	await expect(
+		createDecision(paths, { ...input, category: 'state', by: 'memoksin' }),
+	).rejects.toMatchObject({ code })
+
+	const board = await loadBoard(paths)
+	expect(board.decisions.size).toBe(0)
+	expect(board.nodes.get('auth-api-k7f2')?.decisions).toEqual([])
 })

@@ -45,6 +45,8 @@ export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, 
 	dismiss: 'dismiss',
 	reopen: 'reopen',
 	create_node: 'open_node',
+	// The question only. Its options are `open_decision`'s, which needs a model.
+	create_decision: 'create_decision',
 	// One tool, four acts, told apart by what it is given — the shape
 	// `contributors` already has. Proposing is the session's alone (ADR 0051);
 	// the two operations here are the human's and are on every surface.

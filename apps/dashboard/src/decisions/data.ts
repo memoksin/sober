@@ -56,3 +56,36 @@ export const decisionRows = (board: BoardRead): DecisionRow[] =>
 					.map((node) => ({ id: node.id, title: node.title })),
 			}
 		})
+
+/** What the row says while nothing has been picked. An unopened one has nothing to pick from yet. */
+export const waitingLabel = (row: DecisionRow): string => {
+	const holds = `holds ${row.nodes.length} ${row.nodes.length === 1 ? 'node' : 'nodes'}`
+	return row.state === 'unopened'
+		? `No options yet — a session produces them (/sober:decide) · ${holds}`
+		: `Unanswered · ${holds}`
+}
+
+/** The nodes a new question can hold. A done node has nothing left to hold back. */
+export const bindable = (
+	board: BoardRead,
+): readonly { readonly id: string; readonly title: string }[] =>
+	board.nodes
+		.filter((node) => node.status !== 'done')
+		.map((node) => ({ id: node.id, title: node.title }))
+
+export interface QuestionForm {
+	readonly question: string
+	readonly category: Category
+	readonly binds: readonly string[]
+}
+
+/**
+ * The `create_decision` body, or null while the form cannot be sent: a question
+ * with no words has nothing to answer, and one that holds no node blocks nothing.
+ */
+export const questionBody = (form: QuestionForm): QuestionForm | null => {
+	const question = form.question.trim()
+	return question === '' || form.binds.length === 0
+		? null
+		: { question, category: form.category, binds: [...new Set(form.binds)] }
+}

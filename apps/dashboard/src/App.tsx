@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from './canvas/Canvas.js'
 import { visible } from './canvas/graph.js'
 import { DecisionsScreen } from './decisions/Decisions.js'
+import type { QuestionForm } from './decisions/data.js'
 import { Digest } from './digest/Digest.js'
 import { worthShowing } from './digest/data.js'
 import { DistributionScreen } from './distribute/Distribution.js'
@@ -333,6 +334,15 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		[token, refresh],
 	)
 
+	const openQuestion = useCallback(
+		async (body: QuestionForm): Promise<void> => {
+			if (token === null) return
+			await wire(token).op('create_decision', body)
+			await refresh()
+		},
+		[token, refresh],
+	)
+
 	/**
 	 * The node's own words, rewritten in place. The panel keeps the drawer open
 	 * on the same node — a correction never changes which node is selected — and
@@ -574,7 +584,11 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				)}
 
 				{decisionsOpen && board !== null && (
-					<DecisionsScreen board={board} onClose={() => setDecisionsOpen(false)} />
+					<DecisionsScreen
+						board={board}
+						onClose={() => setDecisionsOpen(false)}
+						onCreate={openQuestion}
+					/>
 				)}
 
 				{conflictsOpen && synced?.kind === 'conflicted' && token !== null && (

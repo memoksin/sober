@@ -31,6 +31,7 @@ export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, 
 	reopen: 'panel: Run it again',
 	correct_node: 'panel: Save the correction',
 	create_node: 'panel: Open a node for the fix',
+	create_decision: 'decisions: Open a question',
 	accept_distribution: 'distribution: Assign all',
 	drop_distribution: 'distribution: Drop it',
 }

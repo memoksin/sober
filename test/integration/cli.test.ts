@@ -785,3 +785,24 @@ test('models add appends an entry to dispatch.models and refuses a bad range or 
 	)
 	expect(failed(dir, 'models', 'add', 'x')).toContain('sober models add')
 })
+
+test('a question opened from the terminal holds the node it binds until a session gives it options', () => {
+	const created = project()
+	sober(created.dir, 'init', '--title', 'Acme', '--intent', 'Ship sign-in')
+	const node = /[a-z0-9-]+-[a-z0-9]{4}/.exec(
+		sober(created.dir, 'open', '--title', 'auth api'),
+	)?.[0] as string
+
+	expect(failed(created.dir, 'question', 'Where?', '--binds', node)).toContain('which category?')
+	const said = sober(
+		created.dir,
+		'question',
+		'Where does session state live?',
+		'--category',
+		'state',
+		'--binds',
+		node,
+	)
+	expect(said).toContain('/sober:decide')
+	expect(sober(created.dir, 'status', node)).toContain('held')
+})
