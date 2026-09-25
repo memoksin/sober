@@ -211,3 +211,127 @@ exit=0
 - **No hook enforcement and no attended dispatch on the new hosts.** Deliberate, and both stay in `SCOPE.md`'s SHOULD list with the reason attached (ADR 0048).
 - **Cursor was not built.** Its headless invocation has no released shape to read flags off here, and writing one from memory is what BUILD-PLAN §6 forbids.
 - **`opencode providers list` is parsed by counting credentials.** It is the only readiness surface the CLI offers and it is prose, not JSON. A release that reworded the box would read as "cannot report its status", which is a refusal rather than a silent pass — the failure mode this was chosen for.
+
+## Cline (ADR 0066)
+
+- Date: 2026-09-25
+- Branch: `sober/cline-host-pq8z`
+
+No live `cline` binary on the machine this was built on. Every citation below is either the **published reference** at `docs.cline.bot` (fetched as raw Markdown via its `.md` suffix, which Mintlify serves unrendered) or the **installed npm source**, read through `gh api`/`gh search code` against `cline/cline` — never from memory (BUILD-PLAN §6). Where the two disagreed, the source won, and the disagreement is recorded rather than silently resolved.
+
+```
+$ npm view cline version
+3.0.65
+$ npm view cline dist-tags
+{ nightly: '3.0.65-nightly.1790252460', latest: '3.0.65' }
+```
+
+`apps/cli/package.json` on `cline/cline`'s `main` branch reports the same `3.0.65` — the source read below is the version on npm, not an ahead-of-release snapshot.
+
+**The flags** — `docs.cline.bot/cli/cli-reference.md`, "Help Menu (Source of Truth)":
+
+```
+Usage: cline [options] [command] [prompt]
+  --json                       Output messages as JSON instead of styled text
+  --auto-approve <boolean>     Set tool auto-approval for all tools (default: true)
+  -s, --system <system-prompt> Override the default system prompt
+Commands:
+  auth [options] [provider]    Authenticate a provider and configure what model is used
+  config [options]             Show current configuration
+  doctor                       Diagnose and fix configuration issues
+```
+
+The upstream `apps/cli/README.md` (raw, `main`) documents a newer flag set the published reference does not yet show — `--yolo`, `--compaction`, `--team-name`, `--kanban` — which is named here rather than used: the reference is the one the node asked to be verified against, and `--auto-approve true` already gets the same headless guarantee `--yolo` would.
+
+**The event shape — the reference is stale, the source is not.** `docs.cline.bot` documents `{"type": "say"|"ask", "text", "ts", "say", "ask", "partial"}`. The installed CLI does not emit it:
+
+```
+$ gh api /repos/cline/cline/contents/apps/cli/src/utils/events.ts
+  emitJsonLine("stdout", { type: "agent_event", event })   # handleEvent, json branch
+$ gh api /repos/cline/cline/contents/apps/cli/src/utils/output.ts
+  function emitJsonLine(stream, record) {
+    const line = `${JSON.stringify({ ts: nowIso(), ...record }, jsonReplacer)}\n`
+    ...
+  }
+  function jsonReplacer(_key, value) {
+    if (value instanceof Error) return { name: value.name, message: value.message, stack: value.stack }
+    ...
+  }
+```
+
+commit `8bbdde2a5c1f972864fe1b954f639c21fac61a40`, 2026-08-14, is the last one to touch `events.ts`. So a `--json` line is `{ts, type: "agent_event", event}`, and `event` is one of the union in `sdk/packages/shared/src/agents/types.ts`'s `AgentEvent`:
+
+```
+content_start / content_end   { contentType: "text"|"reasoning"|"tool"|"media", text?, reasoning?, toolName?, toolCallId?, input?, output?, error? }
+iteration_start / iteration_end
+notice, usage
+done    { reason: "completed"|"max_iterations"|"aborted"|"mistake_limit"|"error", text, iterations }
+error   { error: Error, recoverable, iteration }   # Error serialized to {name, message, stack} by jsonReplacer
+```
+
+The README's own automation example agrees with the source, not the reference: `cline --json "..." | jq -r 'select(.type == "agent_event" and .event.text) | .event.text'`.
+
+**The probe — there is no dedicated one, checked against the source rather than assumed from the doc's silence:**
+
+```
+$ gh api /repos/cline/cline/contents/apps/cli/src/commands/auth.ts
+  async function runInteractiveAuthTui(input) {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      input.io.writeErr("interactive auth setup requires a TTY (use --provider/--apikey/--modelid for non-interactive setup)")
+      return 1
+    }
+    ...
+  }
+```
+
+Bare `auth`, run the way `checkHost` runs a probe (no TTY, output piped), always hits this branch — it reports "no TTY", never "logged in" or "logged out". `config`'s source (`apps/cli/src/commands/config.ts`) confirmed the same for the other candidate: `config --json` genuinely runs without a TTY and prints JSON, but the JSON is `loadInteractiveConfigDataForCommand`'s workflows/rules/skills/hooks/agents/plugins/mcp/tools — no provider field anywhere in `InteractiveConfigData`. `doctor.ts` was read in full and is CLI/hub-daemon process health, not credentials.
+
+What is documented, in `apps/cli/README.md` and the repository's own `AGENTS.md`:
+
+```
+# apps/cli/README.md
+For non-interactive runs, if an OAuth provider is selected and no saved credentials
+are available, `cline` fails fast with an authentication message instead of
+launching a hidden browser flow.
+
+# AGENTS.md (repo root)
+An actual agent turn requires an LLM provider credential. With no credentials
+the default `cline` provider fails fast with an `Unauthorized` error and the
+interactive TUI shows a provider sign-in screen.
+```
+
+That is the probe: `--json --auto-approve true "Reply with ok."`, and `loggedIn` reads a `done` event as signed in, an `error` event naming the auth failure as signed out, and anything else — a rate limit, a network error — as unread rather than guessed at.
+
+## Task report — Cline
+
+RED first, same discipline as the Codex/OpenCode pass: `hosts.test.ts` gained cline assertions and `other-hosts.test.ts` gained `cline` in `OTHER_HOSTS` against a module and a fake that did not exist yet.
+
+```
+$ pnpm exec vitest run --project integration test/integration/other-hosts.test.ts
+FAIL > a logged-out cline is caught before a worktree exists
+  AssertionError: expected reason to contain "not logged in", got
+  "… cline.mjs could not report its authentication status"
+Tests  1 failed | 15 passed (16)
+```
+
+The other fifteen passed on the first run — dispatch, log rendering and attended refusal were already host-shaped enough. The one failure was real: `checkHost`'s `catch` had never had to read a *failed* probe's own output, because every other adapter's probe exits 0 regardless of login state. Cline's probe is a real task, so a signed-out run exits non-zero, and the fix is in `host.ts`'s shared catch (one branch, all five hosts), not in the adapter.
+
+GREEN:
+
+```
+$ pnpm exec vitest run --project integration test/integration/other-hosts.test.ts
+Test Files  1 passed (1)
+Tests  16 passed (16)
+
+$ pnpm exec vitest run packages/core/src/hosts.test.ts packages/core/src/tail.test.ts packages/core/src/host.test.ts
+Test Files  3 passed (3)
+Tests  76 passed (76)
+```
+
+## Known gaps — Cline
+
+- **No live Cline session drove the loop, and no live probe was ever run.** Every recording here is source-derived or reference-derived, never captured off a running `cline`. The fake (`test/integration/hosts/cline.mjs`) encodes what the source says the CLI does; it has not been checked against the binary itself.
+- **The auth probe spends a real turn.** Every other host's readiness check is free. Cline's is not — a signed-out dispatch burns one trivial completion before SOBER can say so, and a signed-in one burns it silently on every dispatch's checkHost call. This is disclosed in ADR 0066 and in the README rather than hidden.
+- **The `Unauthorized` wording is one string from one file (`AGENTS.md`), not a stable API.** A Cline release that changes the message, or that starts returning a structured error code instead of prose, breaks `loggedIn`'s classification silently into `null` (§2.8's refusal, not a false positive) — but it does break it, and there is no test against a real release to catch the day it happens.
+- **No model catalogue.** Confirmed absent in the CLI's own command table, not merely unimplemented here — `sober models` does not gain a `cline` source, and `models.ts` is unchanged.
+- **No plugin.** MCP-in-session and decisions-in-session are both future work, named as such and not started.

@@ -35,7 +35,7 @@ test('a host SOBER has no adapter for is refused by name, with the ones it has',
 	// `--permission-mode` to a CLI that has no such flag, and the failure would
 	// arrive three minutes later as an unreadable exit code.
 	expect(() => adapterFor('aider')).toThrow(UnknownHostError)
-	expect(() => adapterFor('aider')).toThrow(/claude, codex, opencode, cursor, openrouter/)
+	expect(() => adapterFor('aider')).toThrow(/claude, codex, opencode, cursor, openrouter, cline/)
 })
 
 test('every adapter tells a headless run that nobody can answer it', () => {
@@ -43,7 +43,7 @@ test('every adapter tells a headless run that nobody can answer it', () => {
 	// operator's own rules file, and a rule there stopped two of five
 	// dispatches dead. Claude Code has a flag for it; the other two do not, so
 	// the same sentence goes in front of the brief.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter', 'cline']) {
 		const argv = adapterFor(host).argv('build the node', false)
 		expect(argv.join('\n'), host).toContain(NO_HUMAN)
 	}
@@ -52,7 +52,7 @@ test('every adapter tells a headless run that nobody can answer it', () => {
 test('the brief is an argument, never a shell string, in every adapter', () => {
 	// A brief carrying a backtick is text. `startAgent` never uses a shell, and
 	// the adapters must not hand one a single joined string either.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter', 'cline']) {
 		const argv = adapterFor(host).argv('rm -rf `pwd`', false)
 		expect(
 			argv.some((arg) => arg.includes('rm -rf `pwd`')),
@@ -61,14 +61,16 @@ test('the brief is an argument, never a shell string, in every adapter', () => {
 	}
 })
 
-test('only Claude Code can be attended, and the other two say so rather than pretend', () => {
+test('only Claude Code can be attended, and the others say so rather than pretend', () => {
 	// ADR 0046's conversation needs a host that reads stdin as it runs.
-	// `codex exec` and `opencode run` take one message and exit, so an attended
-	// run there would be a monologue with a watcher in front of it.
+	// `codex exec`, `opencode run` and `cline --json` take one message and
+	// exit, so an attended run there would be a monologue with a watcher in
+	// front of it.
 	expect(adapterFor('claude').attendable).toBe(true)
 	expect(adapterFor('codex').attendable).toBe(false)
 	expect(adapterFor('opencode').attendable).toBe(false)
 	expect(adapterFor('cursor').attendable).toBe(false)
+	expect(adapterFor('cline').attendable).toBe(false)
 })
 
 test('each adapter asks its own host whether it is ready, in that host’s words', () => {
@@ -82,6 +84,10 @@ test('each adapter asks its own host whether it is ready, in that host’s words
 	// are not in the reference, and guessing one is what BUILD-PLAN §6 forbids.
 	// The sentence it prints is documented; the JSON's shape is not.
 	expect(adapterFor('cursor').probe).toEqual(['status'])
+	// Cline has no dedicated status command at all (ADR 0066) — `auth` and
+	// `config` are both interactive-only without one. The probe is the only
+	// documented non-interactive signal: a trivial one-shot task.
+	expect(adapterFor('cline').probe).toEqual(['--json', '--auto-approve', 'true', 'Reply with ok.'])
 })
 
 test('a logged-in host reads as ready, and a logged-out one as not', () => {
@@ -103,10 +109,58 @@ test('a logged-in host reads as ready, and a logged-out one as not', () => {
 	expect(cursor.loggedIn('Not authenticated\n')).toBe(false)
 })
 
+test('Cline reads its probe’s own NDJSON: a `done` is signed in, an auth error is not', () => {
+	// ADR 0066: there is no dedicated status command, so the probe is a
+	// trivial one-shot task and `loggedIn` reads the same `agent_event` shape
+	// a real dispatch does (`apps/cli/src/utils/events.ts`).
+	const cline = adapterFor('cline')
+	expect(
+		cline.loggedIn(
+			JSON.stringify({
+				ts: '2026-09-25T00:00:00.000Z',
+				type: 'agent_event',
+				event: { type: 'done', reason: 'completed', text: 'ok', iterations: 1 },
+			}),
+		),
+	).toBe(true)
+	// `AGENTS.md`, verbatim: "the default `cline` provider fails fast with an
+	// `Unauthorized` error" when no credentials are saved.
+	expect(
+		cline.loggedIn(
+			JSON.stringify({
+				ts: '2026-09-25T00:00:00.000Z',
+				type: 'agent_event',
+				event: {
+					type: 'error',
+					error: { name: 'Error', message: 'Unauthorized' },
+					recoverable: false,
+					iteration: 1,
+				},
+			}),
+		),
+	).toBe(false)
+	// An error that says nothing about auth — a network blip, a rate limit —
+	// is not read as "logged out": not knowing is not the same as being fine.
+	expect(
+		cline.loggedIn(
+			JSON.stringify({
+				ts: '2026-09-25T00:00:00.000Z',
+				type: 'agent_event',
+				event: {
+					type: 'error',
+					error: { name: 'Error', message: 'upstream timed out' },
+					recoverable: true,
+					iteration: 1,
+				},
+			}),
+		),
+	).toBeNull()
+})
+
 test('a status no adapter can read is a refusal, never a silent pass', () => {
 	// §2.8's rule, applied to the login check: not knowing is not the same as
 	// being fine, and a run started on a logged-out host dies three minutes in.
-	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter']) {
+	for (const host of ['claude', 'codex', 'opencode', 'cursor', 'openrouter', 'cline']) {
 		expect(adapterFor(host).loggedIn('<html>504 Gateway Timeout</html>'), host).toBeNull()
 	}
 })
@@ -430,6 +484,107 @@ test('an OpenCode tool carries its callID, its command, and its completed output
 		{ kind: 'tool', tool: 'bash', call: 'c1', detail: 'ls' },
 		{ kind: 'output', text: '2 lines', tool: 'bash', call: 'c1', body: 'a\nb' },
 	])
+})
+
+test('a Cline tool call is one line to start it and one to say how it went', () => {
+	// `apps/cli/src/utils/events.ts`: `content_start` fires once per call,
+	// `content_end` once when it finishes — the same "start once, finish once"
+	// split Claude Code's `tool_use`/`tool_result` pair keeps.
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: {
+				type: 'content_start',
+				contentType: 'tool',
+				toolName: 'write_to_file',
+				toolCallId: 'call_1',
+			},
+		}),
+	).toMatchObject([
+		{ kind: 'tool', text: 'write_to_file', tool: 'write_to_file', call: 'call_1', detail: null },
+	])
+
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: {
+				type: 'content_end',
+				contentType: 'tool',
+				toolName: 'write_to_file',
+				toolCallId: 'call_1',
+				output: 'wrote 12 lines',
+			},
+		}),
+	).toMatchObject([
+		{ kind: 'output', text: 'wrote 12 lines', tool: 'write_to_file', call: 'call_1' },
+	])
+
+	// A tool's own failure arrives as a plain string on `content_end`, not the
+	// `Error` object the run-level `error` event carries.
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: {
+				type: 'content_end',
+				contentType: 'tool',
+				toolName: 'execute_command',
+				error: 'command not found',
+			},
+		}),
+	).toMatchObject([{ kind: 'output', text: 'error: command not found' }])
+})
+
+test('Cline reports its final text once, on `content_end`, never on every streamed chunk', () => {
+	// `content_start` fires on every token the model streams; rendering it
+	// would print a message once per chunk. Only the turn's final text, on
+	// `content_end`, becomes a line.
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'content_start', contentType: 'text', text: 'Wri' },
+		}),
+	).toEqual([])
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'content_end', contentType: 'text', text: 'Writing the file now.' },
+		}),
+	).toMatchObject([{ kind: 'text', text: 'Writing the file now.', tool: null }])
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'content_end', contentType: 'reasoning', reasoning: 'weighing it' },
+		}),
+	).toMatchObject([{ kind: 'thinking', text: 'weighing it', tool: null }])
+})
+
+test('a Cline run ends on `done`, and a run-level `error` is the one shape that renders raw', () => {
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'done', reason: 'completed', text: 'ok', iterations: 3 },
+		}),
+	).toMatchObject([{ kind: 'result', text: 'finished', tool: null }])
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'done', reason: 'mistake_limit', text: '', iterations: 3 },
+		}),
+	).toMatchObject([{ kind: 'result', text: 'failed: mistake_limit', tool: null }])
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: {
+				type: 'error',
+				error: { name: 'Error', message: 'the model refused the request' },
+				recoverable: false,
+				iteration: 2,
+			},
+		}),
+	).toMatchObject([{ kind: 'raw', text: 'the model refused the request', tool: null }])
+	// Not every AgentEvent is a line: `iteration_start`, `usage` and `notice`
+	// carry nothing a person watching a run needs repeated.
+	expect(renderLine({ type: 'agent_event', event: { type: 'iteration_start' } })).toEqual([])
 })
 
 test('a host whose stream carries no correlator leaves call, detail and at null', () => {
