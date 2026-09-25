@@ -13,7 +13,7 @@ export {
 	type InitResult,
 	initBoard,
 } from './board.js'
-export { renderBrief } from './brief.js'
+export { type DecisionMatch, renderBrief, searchDecisions } from './brief.js'
 export {
 	applySetting,
 	type Config,

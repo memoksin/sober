@@ -1,4 +1,4 @@
-import type { Board, Overlap } from '@besober/core'
+import type { Board, DecisionMatch, Overlap } from '@besober/core'
 import { flagsOf, openDecisions, statusOf, unbound } from '@besober/core'
 import type { Node, Review } from '@besober/schema'
 import { decisionState } from '@besober/schema'
@@ -150,6 +150,28 @@ export const renderDecisions = (board: Board, all = false): string => {
 		lines.push('')
 	}
 	return lines.length === 0 ? 'Nothing is waiting on you.' : [...lines, PASTE].join('\n')
+}
+
+/**
+ * A search over the board's answered decisions (ADR 0055's reuse gap): the
+ * question, what was chosen and why, what it costs later, and the nodes it
+ * binds — the provenance a headless agent needs to tell "this is settled
+ * elsewhere" from "this decision does not exist yet".
+ */
+export const renderCatalog = (matches: readonly DecisionMatch[]): string => {
+	if (matches.length === 0) return 'No answered decision matches that.'
+	const lines: string[] = []
+	for (const match of matches) {
+		lines.push(`## ${match.id}  ${match.question}`)
+		lines.push(`- ${match.option.id}: ${match.option.label} (answered)`)
+		lines.push(`    later: ${match.option.costLater}`)
+		if (match.rationale !== '') lines.push(`    reason: ${match.rationale}`)
+		lines.push(
+			`    binds: ${match.nodes.map((node) => `${node.id} (${node.title})`).join(', ') || 'no node'}`,
+		)
+		lines.push('')
+	}
+	return lines.join('\n').trimEnd()
 }
 
 /**

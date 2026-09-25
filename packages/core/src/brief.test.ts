@@ -1,6 +1,6 @@
 import type { Answer } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { renderBrief } from './brief.js'
+import { renderBrief, searchDecisions } from './brief.js'
 import type { Board } from './graph.js'
 import { aDecision, aNode } from './records.fixture.js'
 
@@ -98,6 +98,42 @@ test('a node with no brief renders the skeleton and says the approach is missing
 
 	expect(rendered).toContain('No approach written yet')
 	expect(rendered).toContain('A billing API two teams can call.')
+})
+
+test('a search over answered decisions returns the question, the option chosen, its rationale, cost and the node that bound it', () => {
+	const [match] = searchDecisions(board(), 'session')
+	expect(match).toBeDefined()
+	expect(match?.question).toBe('Where does session state live?')
+	expect(match?.option).toEqual({
+		id: 'redis',
+		label: 'Redis',
+		reason: 'Revocable',
+		costLater: 'A service to run',
+	})
+	expect(match?.rationale).toBe('We already run one.')
+	expect(match?.nodes).toEqual([{ id: 'auth-api-k7f2', title: 'Session endpoints' }])
+})
+
+test('a search matches on the chosen option, its cost, and a bound node’s name — not only the question', () => {
+	expect(searchDecisions(board(), 'redis')).toHaveLength(1)
+	expect(searchDecisions(board(), 'service to run')).toHaveLength(1)
+	expect(searchDecisions(board(), 'Session endpoints')).toHaveLength(1)
+	expect(searchDecisions(board(), 'nothing matches this')).toHaveLength(0)
+})
+
+test('an unanswered or unopened decision never appears in a search, whatever the query', () => {
+	const withUnanswered: Board = {
+		...board(),
+		decisions: new Map([
+			...board().decisions,
+			['unopened-x9y8', aDecision({ question: 'How does billing retry?', options: null })],
+			['unanswered-a1b2', aDecision({ question: 'Where do webhooks land?' })],
+		]),
+	}
+
+	expect(searchDecisions(withUnanswered, '')).toHaveLength(1)
+	expect(searchDecisions(withUnanswered, 'billing retry')).toHaveLength(0)
+	expect(searchDecisions(withUnanswered, 'webhooks')).toHaveLength(0)
 })
 
 test('a node the board does not hold has no brief', () => {

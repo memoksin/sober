@@ -21,6 +21,7 @@ import {
 	readProject,
 	renderBrief,
 	paths as resolvePaths,
+	searchDecisions,
 	unlinked,
 	whoami,
 	writeBrief,
@@ -33,7 +34,14 @@ import { z } from 'zod'
 import { askYes } from '../ask.js'
 import { openBoard, text, tool } from '../context.js'
 import { drained } from '../queue.js'
-import { named, namedAll, renderBoard, renderDecisions, renderUnlinked } from '../render.js'
+import {
+	named,
+	namedAll,
+	renderBoard,
+	renderCatalog,
+	renderDecisions,
+	renderUnlinked,
+} from '../render.js'
 
 const CriterionInput = z.object({
 	run: z.string().describe('the command that proves it, exactly as it is typed'),
@@ -160,6 +168,26 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		},
 		tool(async ({ all }: { all: boolean }) =>
 			text(renderDecisions(await loadBoard(await openBoard(cwd)), all)),
+		),
+	)
+
+	server.registerTool(
+		'search_decisions',
+		{
+			title: 'Search answered decisions',
+			description:
+				'Search decisions already answered elsewhere on this board — each result gives the question, the option chosen, why, what it costs later, and the nodes that bind it. A dispatched run already carries the answers bound to its own node; reach for this only when a choice in front of you is bigger than that node — a state shape, a module boundary, a data flow, or an error-handling rule other nodes would have to follow too. If nothing here answers it and the choice is not a local implementation detail, stop and say so rather than deciding it yourself: a cross-node choice needs a decision opened and answered by the human, not one picked mid-run.',
+			inputSchema: {
+				query: z
+					.string()
+					.default('')
+					.describe(
+						'matched, case-insensitively, against the question, the chosen option, its rationale and cost, and the ids/names of the nodes bound to it; empty lists every answered decision',
+					),
+			},
+		},
+		tool(async ({ query }: { query: string }) =>
+			text(renderCatalog(searchDecisions(await loadBoard(await openBoard(cwd)), query))),
 		),
 	)
 

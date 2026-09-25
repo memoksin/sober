@@ -1,3 +1,4 @@
+import type { Option } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import type { Board } from './graph.js'
 
@@ -86,6 +87,52 @@ const files = (board: Board, id: string): string => {
 	if (globs.length === 0) return ''
 	// A prediction refined here, not a contract enforced before the work runs (§3.1).
 	return `${list(globs)}\n\nThis list is a prediction. Work outside it is shown in review, not refused.`
+}
+
+/** One answered decision, with the same provenance a brief renders it with (§3.7). */
+export interface DecisionMatch {
+	readonly id: string
+	readonly question: string
+	readonly option: Option
+	readonly rationale: string
+	/** The nodes that bind this decision — where the answer came from and what it reaches. */
+	readonly nodes: readonly { readonly id: string; readonly title: string }[]
+}
+
+/**
+ * The board's answered decisions, kept in one catalog rather than a second
+ * store (the run brief already carries a node's own bound answers; this is
+ * for the ones a headless agent finds it needs but was not bound). A blank
+ * query lists every answered decision; otherwise a case-insensitive match
+ * against the question, the chosen option, its rationale and cost, and the
+ * nodes that bind it — a headless agent does not know a node's id up front.
+ */
+export const searchDecisions = (board: Board, query: string): DecisionMatch[] => {
+	const needle = query.trim().toLowerCase()
+
+	return [...board.decisions].flatMap(([id, decision]) => {
+		if (decisionState(decision) !== 'answered') return []
+		const chosen = decision.options?.find((option) => option.id === decision.answer?.option)
+		if (chosen === undefined) return []
+
+		const nodes = [...board.nodes]
+			.filter(([, node]) => node.decisions.includes(id))
+			.map(([nodeId, node]) => ({ id: nodeId, title: node.title }))
+
+		const rationale = decision.answer?.rationale ?? ''
+		const haystack = [
+			decision.question,
+			chosen.label,
+			chosen.costLater,
+			rationale,
+			...nodes.flatMap((node) => [node.id, node.title]),
+		]
+			.join('\n')
+			.toLowerCase()
+		if (needle !== '' && !haystack.includes(needle)) return []
+
+		return [{ id, question: decision.question, option: chosen, rationale, nodes }]
+	})
 }
 
 const upstream = (board: Board, id: string): string =>
