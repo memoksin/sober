@@ -116,7 +116,11 @@ test('Cline reads its probe’s own NDJSON: a `done` is signed in, an auth error
 	const cline = adapterFor('cline')
 	expect(
 		cline.loggedIn(
-			JSON.stringify({ ts: '2026-09-25T00:00:00.000Z', type: 'agent_event', event: { type: 'done', reason: 'completed', text: 'ok', iterations: 1 } }),
+			JSON.stringify({
+				ts: '2026-09-25T00:00:00.000Z',
+				type: 'agent_event',
+				event: { type: 'done', reason: 'completed', text: 'ok', iterations: 1 },
+			}),
 		),
 	).toBe(true)
 	// `AGENTS.md`, verbatim: "the default `cline` provider fails fast with an
@@ -126,7 +130,12 @@ test('Cline reads its probe’s own NDJSON: a `done` is signed in, an auth error
 			JSON.stringify({
 				ts: '2026-09-25T00:00:00.000Z',
 				type: 'agent_event',
-				event: { type: 'error', error: { name: 'Error', message: 'Unauthorized' }, recoverable: false, iteration: 1 },
+				event: {
+					type: 'error',
+					error: { name: 'Error', message: 'Unauthorized' },
+					recoverable: false,
+					iteration: 1,
+				},
 			}),
 		),
 	).toBe(false)
@@ -137,7 +146,12 @@ test('Cline reads its probe’s own NDJSON: a `done` is signed in, an auth error
 			JSON.stringify({
 				ts: '2026-09-25T00:00:00.000Z',
 				type: 'agent_event',
-				event: { type: 'error', error: { name: 'Error', message: 'upstream timed out' }, recoverable: true, iteration: 1 },
+				event: {
+					type: 'error',
+					error: { name: 'Error', message: 'upstream timed out' },
+					recoverable: true,
+					iteration: 1,
+				},
 			}),
 		),
 	).toBeNull()
@@ -479,9 +493,16 @@ test('a Cline tool call is one line to start it and one to say how it went', () 
 	expect(
 		renderLine({
 			type: 'agent_event',
-			event: { type: 'content_start', contentType: 'tool', toolName: 'write_to_file', toolCallId: 'call_1' },
+			event: {
+				type: 'content_start',
+				contentType: 'tool',
+				toolName: 'write_to_file',
+				toolCallId: 'call_1',
+			},
 		}),
-	).toMatchObject([{ kind: 'tool', text: 'write_to_file', tool: 'write_to_file', call: 'call_1', detail: null }])
+	).toMatchObject([
+		{ kind: 'tool', text: 'write_to_file', tool: 'write_to_file', call: 'call_1', detail: null },
+	])
 
 	expect(
 		renderLine({
@@ -494,14 +515,21 @@ test('a Cline tool call is one line to start it and one to say how it went', () 
 				output: 'wrote 12 lines',
 			},
 		}),
-	).toMatchObject([{ kind: 'output', text: 'wrote 12 lines', tool: 'write_to_file', call: 'call_1' }])
+	).toMatchObject([
+		{ kind: 'output', text: 'wrote 12 lines', tool: 'write_to_file', call: 'call_1' },
+	])
 
 	// A tool's own failure arrives as a plain string on `content_end`, not the
 	// `Error` object the run-level `error` event carries.
 	expect(
 		renderLine({
 			type: 'agent_event',
-			event: { type: 'content_end', contentType: 'tool', toolName: 'execute_command', error: 'command not found' },
+			event: {
+				type: 'content_end',
+				contentType: 'tool',
+				toolName: 'execute_command',
+				error: 'command not found',
+			},
 		}),
 	).toMatchObject([{ kind: 'output', text: 'error: command not found' }])
 })
@@ -510,28 +538,48 @@ test('Cline reports its final text once, on `content_end`, never on every stream
 	// `content_start` fires on every token the model streams; rendering it
 	// would print a message once per chunk. Only the turn's final text, on
 	// `content_end`, becomes a line.
-	expect(renderLine({ type: 'agent_event', event: { type: 'content_start', contentType: 'text', text: 'Wri' } })).toEqual(
-		[],
-	)
 	expect(
-		renderLine({ type: 'agent_event', event: { type: 'content_end', contentType: 'text', text: 'Writing the file now.' } }),
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'content_start', contentType: 'text', text: 'Wri' },
+		}),
+	).toEqual([])
+	expect(
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'content_end', contentType: 'text', text: 'Writing the file now.' },
+		}),
 	).toMatchObject([{ kind: 'text', text: 'Writing the file now.', tool: null }])
 	expect(
-		renderLine({ type: 'agent_event', event: { type: 'content_end', contentType: 'reasoning', reasoning: 'weighing it' } }),
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'content_end', contentType: 'reasoning', reasoning: 'weighing it' },
+		}),
 	).toMatchObject([{ kind: 'thinking', text: 'weighing it', tool: null }])
 })
 
 test('a Cline run ends on `done`, and a run-level `error` is the one shape that renders raw', () => {
 	expect(
-		renderLine({ type: 'agent_event', event: { type: 'done', reason: 'completed', text: 'ok', iterations: 3 } }),
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'done', reason: 'completed', text: 'ok', iterations: 3 },
+		}),
 	).toMatchObject([{ kind: 'result', text: 'finished', tool: null }])
 	expect(
-		renderLine({ type: 'agent_event', event: { type: 'done', reason: 'mistake_limit', text: '', iterations: 3 } }),
+		renderLine({
+			type: 'agent_event',
+			event: { type: 'done', reason: 'mistake_limit', text: '', iterations: 3 },
+		}),
 	).toMatchObject([{ kind: 'result', text: 'failed: mistake_limit', tool: null }])
 	expect(
 		renderLine({
 			type: 'agent_event',
-			event: { type: 'error', error: { name: 'Error', message: 'the model refused the request' }, recoverable: false, iteration: 2 },
+			event: {
+				type: 'error',
+				error: { name: 'Error', message: 'the model refused the request' },
+				recoverable: false,
+				iteration: 2,
+			},
 		}),
 	).toMatchObject([{ kind: 'raw', text: 'the model refused the request', tool: null }])
 	// Not every AgentEvent is a line: `iteration_start`, `usage` and `notice`

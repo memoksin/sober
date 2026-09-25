@@ -19,7 +19,8 @@
  * shapes, this file is what has to be re-read.
  */
 const args = process.argv.slice(2)
-const say = (event) => process.stdout.write(`${JSON.stringify({ ts: new Date().toISOString(), ...event })}\n`)
+const say = (event) =>
+	process.stdout.write(`${JSON.stringify({ ts: new Date().toISOString(), ...event })}\n`)
 const agentEvent = (event) => say({ type: 'agent_event', event })
 const prompt = args.at(-1) ?? ''
 

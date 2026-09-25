@@ -687,16 +687,20 @@ const cline: Adapter = {
 			}
 			if (inner.contentType === 'reasoning') {
 				const text = inner.reasoning?.trim()
-				return text !== undefined && text.length > 0
-					? { kind: 'thinking', text, tool: null }
-					: null
+				return text !== undefined && text.length > 0 ? { kind: 'thinking', text, tool: null } : null
 			}
 			if (inner.contentType === 'tool') {
 				const tool = inner.toolName ?? 'tool'
 				const call = inner.toolCallId ?? null
 				const failure = typeof inner.error === 'string' ? inner.error : undefined
 				if (failure !== undefined)
-					return { kind: 'output', text: `error: ${summarize(failure)}`, tool, call, body: capBody(failure) }
+					return {
+						kind: 'output',
+						text: `error: ${summarize(failure)}`,
+						tool,
+						call,
+						body: capBody(failure),
+					}
 				const output =
 					typeof inner.output === 'string'
 						? inner.output
@@ -726,7 +730,9 @@ const cline: Adapter = {
 					? (inner.error as { message?: string })
 					: undefined
 			const message = runError?.message?.trim()
-			return message !== undefined && message.length > 0 ? { kind: 'raw', text: message, tool: null } : null
+			return message !== undefined && message.length > 0
+				? { kind: 'raw', text: message, tool: null }
+				: null
 		}
 
 		return null
