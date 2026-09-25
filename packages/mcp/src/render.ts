@@ -170,7 +170,14 @@ export const renderCatalog = (board: Board, matches: readonly DecisionMatch[]): 
 				`- Chosen: ${match.chosen}`,
 				match.rationale === '' ? '' : `- Your reason: ${match.rationale}`,
 				match.costLater === '' ? '' : `- Costs later: ${match.costLater}`,
-				`- Binds: ${match.nodes.length === 0 ? 'no node' : namedAll(board, match.nodes.map((one) => one.id))}`,
+				`- Binds: ${
+					match.nodes.length === 0
+						? 'no node'
+						: namedAll(
+								board,
+								match.nodes.map((one) => one.id),
+							)
+				}`,
 			]
 				.filter((line) => line !== '')
 				.join('\n'),

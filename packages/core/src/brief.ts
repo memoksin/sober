@@ -136,7 +136,12 @@ export const searchDecisions = (board: Board, query: string): DecisionMatch[] =>
 
 	if (needle === '') return matches
 	return matches.filter((match) =>
-		[match.question, match.chosen, match.rationale, match.costLater, ...match.nodes.map((n) => n.title)]
-			.some((field) => field.toLowerCase().includes(needle)),
+		[
+			match.question,
+			match.chosen,
+			match.rationale,
+			match.costLater,
+			...match.nodes.map((n) => n.title),
+		].some((field) => field.toLowerCase().includes(needle)),
 	)
 }
