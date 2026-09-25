@@ -646,11 +646,15 @@ const cline: Adapter = {
 		if (event.partial === true) return null
 		const text = event.text?.trim()
 		if (text === undefined || text.length === 0) return null
+		// A malformed or out-of-range `ts` (NaN, Infinity, or beyond Date's
+		// +/-8.64e15ms range) makes `Date` invalid, and `toISOString` throws
+		// on an invalid `Date` rather than returning a string.
+		const at = typeof event.ts === 'number' ? new Date(event.ts) : null
 		return {
 			kind: 'text',
 			text,
 			tool: null,
-			at: typeof event.ts === 'number' ? new Date(event.ts).toISOString() : null,
+			at: at !== null && !Number.isNaN(at.getTime()) ? at.toISOString() : null,
 		}
 	},
 }

@@ -32,6 +32,7 @@ Two things surfaced while reading it that the node asked to be resolved rather t
 - Cline can never actually run a node through SOBER today — `checkHost` refuses it unconditionally, real CLI or fake. This is a documented prerequisite, not a bug: the day the published CLI adds a non-interactive auth check, only `cline.probe`/`cline.loggedIn` need to change, and everything downstream (argv, line rendering, the adapter's place in `ADAPTERS`) is already correct and already tested against the reference.
 - `test/integration/other-hosts.test.ts` does not add Cline to the loop that dispatches a node end to end and expects it to finish — that loop needs a login that can be toggled, and Cline has none to toggle. It gets its own two tests instead: the preflight refusal, and that a dispatch (headless or attended) never reaches a worktree.
 - Nobody using Cline today gets an adapter that quietly does nothing useful; they get a sentence naming exactly what is missing, the same sentence `checkHost` already gives for a status it cannot parse on any host.
+- Every `docs.cline.bot` address this node touches — the two in `hosts.ts`'s adapter comment, the one in this ADR, the one in `docs/testing/v1x-4-other-hosts.tdd.md`, the two in `test/integration/hosts/cline.mjs`'s header comment — is a citation of the published reference the adapter was read from, not a URL any runtime path fetches: nothing in `hosts.ts`'s `cline` adapter or in the fake CLI calls out over the network. A hardcoded-address scan flags all six; none is a network call.
 
 ## Alternatives rejected
 

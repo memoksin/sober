@@ -150,6 +150,12 @@ test('a Cline say/ask line renders as text, a partial one does not, and ts becom
 	])
 	// Not Cline's shape: nothing renders it.
 	expect(renderLine({ type: 'agent_event', text: 'unrecognised envelope' })).toEqual([])
+	// A `ts` outside `Date`'s range makes `new Date(ts)` invalid, and
+	// `toISOString` throws on an invalid `Date` — the line still renders,
+	// just without a time, instead of crashing log rendering.
+	expect(
+		renderLine({ type: 'say', text: 'still here', ts: Number.MAX_SAFE_INTEGER, say: 'text' }),
+	).toMatchObject([{ kind: 'text', text: 'still here', at: null }])
 })
 
 test('a Cursor tool call renders, and the four events it shares with Claude Code still do', () => {
