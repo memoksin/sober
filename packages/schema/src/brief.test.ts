@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { Brief } from './brief.js'
+import { Brief, byWhom } from './brief.js'
 
 const criterion = {
 	run: 'pnpm test packages/core/src/status',
@@ -55,4 +55,36 @@ test('there is no approved boolean beside the approval record', () => {
 	const approval = { by: 'memoksin', at: '2026-08-27T10:00:00Z', queue: false }
 
 	expect(Brief.safeParse({ ...brief, approval, approved: true }).success).toBe(false)
+})
+
+test('an approval written before sober:auto existed still parses, and reads as a human', () => {
+	const approval = { by: 'memoksin', at: '2026-08-27T10:00:00Z', queue: false }
+
+	expect(Brief.parse({ ...brief, approval }).approval).not.toHaveProperty('autonomous')
+})
+
+test('an autonomous approval names the invocation and who ran it, and nothing else', () => {
+	const autonomous = { invocation: 'sober:auto', invokedBy: 'memoksin' }
+	const approval = { by: 'memoksin', at: '2026-08-27T10:00:00Z', queue: false, autonomous }
+
+	expect(Brief.parse({ ...brief, approval }).approval?.autonomous).toEqual(autonomous)
+	expect(
+		Brief.safeParse({
+			...brief,
+			approval: { ...approval, autonomous: { ...autonomous, via: 'x' } },
+		}).success,
+	).toBe(false)
+	expect(
+		Brief.safeParse({
+			...brief,
+			approval: { ...approval, autonomous: { ...autonomous, invocation: 'sober:next' } },
+		}).success,
+	).toBe(false)
+})
+
+test('an autonomous record never reads as the invoker’s own act', () => {
+	expect(byWhom({ by: 'memoksin' })).toBe('by memoksin')
+	expect(
+		byWhom({ by: 'memoksin', autonomous: { invocation: 'sober:auto', invokedBy: 'memoksin' } }),
+	).toBe('autonomously under sober:auto (invoked by memoksin)')
 })

@@ -1,4 +1,4 @@
-import type { Checks, CriterionResult, Review } from '@besober/schema'
+import { byWhom, type Checks, type CriterionResult, type Review } from '@besober/schema'
 
 /**
  * How loudly a line reads. Four, because "could not be read" needs a weight of
@@ -40,7 +40,7 @@ export const verdict = (review: Review): Verdict => {
 	if (review.accepted !== null)
 		return {
 			tone: 'done',
-			headline: `accepted by ${review.accepted.by}, with the scan reading "${review.accepted.scan}"`,
+			headline: `accepted ${byWhom(review.accepted)}, with the scan reading "${review.accepted.scan}"`,
 			warnings,
 			decidable: false,
 		}

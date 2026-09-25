@@ -1,10 +1,10 @@
 import { beforeEach, expect, test } from 'vitest'
 import { initBoard } from './board.js'
-import { answerDecision } from './decide.js'
+import { answerDecision, approveBrief } from './decide.js'
 import { editDecision } from './impact.js'
 import type { Paths } from './paths.js'
-import { aDecision } from './records.fixture.js'
-import { readDecision, writeDecision } from './records.js'
+import { aDecision, aNode } from './records.fixture.js'
+import { readDecision, readNode, writeDecision, writeNode } from './records.js'
 import { tmpRoot } from './tmp.fixture.js'
 
 let paths: Paths
@@ -54,4 +54,42 @@ test('an edit drops the provenance — it is a person changing their mind, not a
 	})
 
 	expect(await answerOf('auth-model-k7f2')).toMatchObject({ option: 'cookie', derived: null })
+})
+
+const briefed = aNode({
+	brief: {
+		approach: 'Endpoints first.',
+		complexity: null,
+		acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
+		approval: null,
+	},
+})
+
+const approvalOf = async (id: string) => {
+	const record = await readNode(paths, id)
+	return record.kind === 'ok' ? record.value.brief?.approval : null
+}
+
+test('an attended approval is written exactly as before: no provenance field at all', async () => {
+	await writeNode(paths, 'auth-api-k7f2', briefed)
+
+	await approveBrief(paths, 'auth-api-k7f2', { by: 'memoksin', queue: false })
+
+	expect(await approvalOf('auth-api-k7f2')).toEqual({
+		by: 'memoksin',
+		at: expect.any(String),
+		queue: false,
+	})
+})
+
+test('a guard that refuses under the lock writes nothing', async () => {
+	await writeNode(paths, 'auth-api-k7f2', briefed)
+
+	await expect(
+		approveBrief(paths, 'auth-api-k7f2', {
+			by: 'memoksin',
+			guard: () => Promise.reject(new Error('changed underneath')),
+		}),
+	).rejects.toThrow('changed underneath')
+	expect(await approvalOf('auth-api-k7f2')).toBeNull()
 })

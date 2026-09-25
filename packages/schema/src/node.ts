@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Brief } from './brief.js'
+import { AutoProvenance, Brief } from './brief.js'
 import { Handle, Id, Timestamp } from './id.js'
 
 export const SCAN_RESULTS = ['clean', 'findings', 'did-not-run'] as const
@@ -33,6 +33,7 @@ export const Accepted = z.strictObject({
 	flagged: z.boolean(),
 	scan: ScanResult,
 	audit: AuditResult,
+	autonomous: AutoProvenance.optional(),
 })
 
 export type Accepted = z.infer<typeof Accepted>

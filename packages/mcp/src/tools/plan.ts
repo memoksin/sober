@@ -28,7 +28,14 @@ import {
 	writeDecision,
 	writeNode,
 } from '@besober/core'
-import { CATEGORIES, type Decision, type Impact, type Node, type Option } from '@besober/schema'
+import {
+	byWhom,
+	CATEGORIES,
+	type Decision,
+	type Impact,
+	type Node,
+	type Option,
+} from '@besober/schema'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { askYes } from '../ask.js'
@@ -494,7 +501,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				`${rendered}\n\n${
 					approval == null
 						? 'Not approved. Nothing runs without an approval, which is the human’s.'
-						: `Approved by ${approval.by}${approval.queue ? ', and queued' : ''}.`
+						: `Approved ${byWhom(approval)}${approval.queue ? ', and queued' : ''}.`
 				}`,
 			)
 		}),

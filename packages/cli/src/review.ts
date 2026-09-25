@@ -10,7 +10,7 @@ import {
 	reviewNode,
 	whoami,
 } from '@besober/core'
-import type { Review } from '@besober/schema'
+import { byWhom, type Review } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
 import {
 	blue,
@@ -119,7 +119,7 @@ export const review = async (node: string, base?: string, showDiff = false): Pro
 		found.accepted === null
 			? dim(`  sober accept ${node}   ·   sober reject ${node} -m "what was wrong"`)
 			: dim(
-					`  accepted by ${found.accepted.by} on ${when(found.accepted.at)}, with the scan reading "${found.accepted.scan}"`,
+					`  accepted ${byWhom(found.accepted)} on ${when(found.accepted.at)}, with the scan reading "${found.accepted.scan}"`,
 				),
 	)
 }

@@ -20,7 +20,7 @@ import {
 	whoami,
 	writeBrief,
 } from '@besober/core'
-import { Brief, decisionState, type LogLine, ranLabel } from '@besober/schema'
+import { Brief, byWhom, decisionState, type LogLine, ranLabel } from '@besober/schema'
 import { baseOf, openBoard, readBoard } from './board.js'
 import { source } from './input.js'
 import {
@@ -279,7 +279,7 @@ export const brief = async (node: string, write?: string): Promise<void> => {
 	say(
 		approval === undefined || approval === null
 			? dim(`Not approved. Approve it with: sober approve ${node}`)
-			: dim(`Approved by ${approval.by}${approval.queue ? ', and queued' : ''}.`),
+			: dim(`Approved ${byWhom(approval)}${approval.queue ? ', and queued' : ''}.`),
 	)
 }
 

@@ -135,8 +135,10 @@ export const acceptNode = (
 	paths: Paths,
 	node: string,
 	accepted: NonNullable<Node['accepted']>,
+	guard?: () => Promise<void>,
 ): Promise<Node> =>
 	withLock(paths, 'accept', async () => {
+		await guard?.()
 		const record = await readNode(paths, node)
 		if (record.kind !== 'ok') throw new NotOnBoardError('node', node)
 
@@ -147,6 +149,7 @@ export const acceptNode = (
 			node,
 			by: accepted.by,
 			scan: accepted.scan,
+			autonomous: accepted.autonomous,
 		})
 		return updated
 	})

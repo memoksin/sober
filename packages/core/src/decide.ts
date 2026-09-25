@@ -1,4 +1,4 @@
-import type { Brief, Decision, Handle, Node } from '@besober/schema'
+import type { AutoProvenance, Brief, Decision, Handle, Node } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import { readConfig } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
@@ -105,12 +105,18 @@ export class AcceptedAlreadyError extends SoberError {
  * briefs is how a per-node approval becomes a rubber stamp through fatigue,
  * which is the failure that rule exists to prevent.
  */
-export const approveBrief = (
-	paths: Paths,
-	id: string,
-	options: { readonly by: Handle; readonly queue?: boolean },
-): Promise<Node> =>
+export interface ApproveOptions {
+	readonly by: Handle
+	readonly queue?: boolean
+	/** Set only by `sober:auto` (ADR 0065 §6); no attended surface passes it. */
+	readonly autonomous?: AutoProvenance
+	/** Awaited under the lock before the write, so a refusal writes nothing. */
+	readonly guard?: () => Promise<void>
+}
+
+export const approveBrief = (paths: Paths, id: string, options: ApproveOptions): Promise<Node> =>
 	withLock(paths, 'approve', async () => {
+		await options.guard?.()
 		const record = await readNode(paths, id)
 		if (record.kind !== 'ok') throw new NotOnBoardError('node', id)
 		if (record.value.brief === null) throw new NoBriefError(id)
@@ -130,11 +136,17 @@ export const approveBrief = (
 				by: options.by,
 				at: new Date().toISOString(),
 				queue: options.queue ?? (await queueByDefault(paths)),
+				...(options.autonomous && { autonomous: options.autonomous }),
 			},
 		}
 		const node: Node = { ...record.value, brief }
 		await writeNode(paths, id, node)
-		await appendEvent(paths, { action: 'brief.approved', node: id, by: options.by })
+		await appendEvent(paths, {
+			action: 'brief.approved',
+			node: id,
+			by: options.by,
+			autonomous: options.autonomous,
+		})
 		return node
 	})
 

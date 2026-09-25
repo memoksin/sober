@@ -3,14 +3,17 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
 	answerRun,
+	approveBrief,
 	dispatch,
 	initBoard,
+	loadBoard,
 	type Paths,
 	readRunOutput,
 	readRuns,
 	setSetting,
 	tail,
 	writeBrief,
+	writeDecision,
 	writeNode,
 	writeRun,
 } from '@besober/core'
@@ -212,4 +215,30 @@ test('a headless run in flight cannot be talked to, because nothing is listening
 	})
 
 	await expect(answerRun(paths, node, 'hello?')).rejects.toThrow(/nothing is listening/i)
+})
+
+test('the human path approves and dispatches past an open decision elsewhere, and records no autonomy', async () => {
+	const { paths, node } = await aBoard()
+	// ADR 0065 §3's board-wide rule is auto's alone: attended, only the
+	// decisions a node binds hold it.
+	await writeDecision(paths, 'elsewhere-k7f2', {
+		category: 'state',
+		question: 'Where does session state live?',
+		options: [
+			{ id: 'cookie', label: 'A cookie', reason: 'No server state', costLater: 'Size limits' },
+			{ id: 'redis', label: 'Redis', reason: 'Revocable', costLater: 'A service to run' },
+		],
+		suggested: null,
+		derived: null,
+		answer: null,
+		createdAt: '2026-09-04T00:00:00.000Z',
+	})
+
+	await approveBrief(paths, node, { by: 'memoksin', queue: false })
+	const ran = await dispatch(paths, node, { base: 'main' })
+
+	expect(ran.exit).toBe('finished')
+	const approval = (await loadBoard(paths)).nodes.get(node)?.brief?.approval
+	expect(approval).toMatchObject({ by: 'memoksin' })
+	expect(approval).not.toHaveProperty('autonomous')
 })
