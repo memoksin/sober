@@ -177,7 +177,7 @@ test('an accepted node with no reachable sober merge is reported unmeasurable, a
 	})
 })
 
-test('a rename from an undeclared path into a declared one counts both the source and the destination, regardless of the user\'s `diff.renames`', async () => {
+test("a rename from an undeclared path into a declared one counts both the source and the destination, regardless of the user's `diff.renames`", async () => {
 	await board()
 	// A user-level rename-detection config a contributor might have set —
 	// the accuracy report must not vary with it (`git diff` without

@@ -44,7 +44,10 @@ interface CommitEntry {
  * used to run a fresh `git log <base>` plus a parent lookup per node: 83
  * accepted nodes meant 83 full history walks for the same history.
  */
-const loadMergeIndex = async (root: string, base: string): Promise<ReadonlyMap<string, CommitEntry[]>> => {
+const loadMergeIndex = async (
+	root: string,
+	base: string,
+): Promise<ReadonlyMap<string, CommitEntry[]>> => {
 	const log = await git(root, 'log', base, '--format=%H%x09%P%x09%s')
 	const bySubject = new Map<string, CommitEntry[]>()
 	for (const line of log.split('\n')) {
@@ -52,7 +55,10 @@ const loadMergeIndex = async (root: string, base: string): Promise<ReadonlyMap<s
 		const first = line.indexOf('\t')
 		const second = line.indexOf('\t', first + 1)
 		const commit = line.slice(0, first)
-		const parents = line.slice(first + 1, second).split(/\s+/).filter((parent) => parent.length > 0)
+		const parents = line
+			.slice(first + 1, second)
+			.split(/\s+/)
+			.filter((parent) => parent.length > 0)
 		const subject = line.slice(second + 1)
 		const list = bySubject.get(subject) ?? []
 		list.push({ commit, parents })
