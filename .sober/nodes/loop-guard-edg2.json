@@ -10,10 +10,31 @@
 		"packages/core/src/agent.test.ts",
 		"docs/adr/0063-*.md"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Keep the change inside the OpenRouter tool loop. Before `runBash` spawns `sh -c` in packages/core/src/agent.ts, conservatively inspect the requested command: refuse direct `git push` and other remote-changing git commands, `sudo`, and literal absolute or parent-relative path operands that resolve outside cwd; give the refusal as a normal bash tool result so the next model turn can correct its command. Permit ordinary local git/build commands and paths inside the worktree. Do not describe this textual check as a sandbox: quoting, shell expansion, runtime-built commands, symlinks and subprocesses can bypass textual inspection. Name those limits explicitly in a new ADR amending docs/adr/0062-sober-reaches-an-openai-compatible-endpoint-itself.md rather than changing ADR 0063. Extend packages/core/src/agent.test.ts at the tool-loop boundary to exercise denied commands (including an out-of-tree write attempt with no external effect), an allowed local command, and the subsequent successful turn after a refusal. Avoid new dependencies or unrelated host/dispatch changes. During work run only targeted tests; the approved acceptance commands run independently once the agent exits. Commit the work; do not push or merge.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src/agent.test.ts",
+				"proves": "The OpenRouter loop returns a refusal for prohibited direct bash commands without executing them, continues to the next turn, and still executes permitted in-worktree commands."
+			},
+			{
+				"run": "pnpm exec biome check packages/core/src/agent.ts packages/core/src/agent.test.ts docs/adr && pnpm --filter @besober/core build",
+				"proves": "The changed loop compiles and its implementation, tests, and security-boundary ADR pass repository style checks."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-26T09:28:14.869Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-26T09:44:57.053Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-23T06:48:48.055Z"

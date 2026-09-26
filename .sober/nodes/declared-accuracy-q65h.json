@@ -13,10 +13,31 @@
 		"packages/cli/src/index.ts",
 		"packages/cli/src/status.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Build a read-only declared-files accuracy report, independent of the active `loop-guard-edg2` run and touching no packages/core/src/agent.ts or ADR. In packages/core/src/accuracy.ts load accepted nodes from `loadBoard(paths)` and derive changed paths from local git history: find the accepted node's exact `sober: <id>` merge commit reachable from the base, then use the first-parent-to-merge diff (`git diff --name-only -z <merge>^1 <merge>`) so additions, deletions and renames count as touched paths. Compare each touched path with its node.files using the same picomatch behavior as packages/core/src/signals.ts, and count each declared glob matching no touched path. Empty declarations leave all touched paths undeclared. Report one row for every accepted node plus aggregate totals of measurable nodes, touched and undeclared files, and unmatched declared globs. If an accepted node's work is not attributable to an exact reachable local merge (e.g. remote PR squash or history unavailable), explicitly mark that node unmeasurable and exclude it from numerator/denominator; never silently treat it as zero or infer from current worktree. Export the read-only function from packages/core/src/index.ts, then add a `sober accuracy` read-only CLI command in packages/cli/src/index.ts and a small CLI renderer using existing output conventions. No new persisted fields, refusal, policy change, or scan change. Add deterministic real-git integration tests with accepted merges for exact counts (including deleted paths, unmatched globs, zero declarations), plus missing-provenance reporting; exercise the CLI output. Use targeted tests during work; the approved acceptance command runs independently after the agent exits. Commit; do not push or merge.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/accuracy.test.ts",
+				"proves": "Real git merges produce per-node and total declared-file accuracy including deletions, unmatched globs, and an explicit unmeasurable row for missing provenance; the CLI exposes those facts."
+			},
+			{
+				"run": "pnpm build && pnpm exec biome check packages/core/src/accuracy.ts packages/core/src/index.ts packages/cli/src/index.ts packages/cli/src/accuracy.ts test/integration/accuracy.test.ts",
+				"proves": "The read-only core metric and its CLI surface build and meet repository style conventions without changing the review signal."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-26T09:31:19.573Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-26T10:26:45.293Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-23T06:48:48.055Z"

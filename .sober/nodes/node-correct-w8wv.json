@@ -14,7 +14,29 @@
 		"apps/dashboard/src/wire.ts",
 		"test/integration/contract.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Use the existing `correctNode` in packages/core/src/flag.ts; do not add a second correction path. In packages/server/src/routes.ts register `correct_node` beside `create_node`, accept `node` plus optional `title`/`name`/`description` through strict Zod input, pass `by: await whoami(paths.root)`, and remove only `correct_node` from GAPS. In packages/server/src/routes.test.ts prove the route changes each field, keeps the id and unrelated fields, and clears an approved brief exactly as core does. In apps/dashboard/src/panel/Panel.tsx add a small labelled edit form for title, name and description beside the existing header/details, with Save/Cancel, visible failure feedback and keyboard-focusable controls; keep display mode unchanged when not editing. In apps/dashboard/src/App.tsx wire `onCorrect` to `wire(token).op('correct_node', …)` and `refresh()`, preserving the selected node id and showing the resulting needs-approval status. Reuse existing styles and the existing `BoardRead` projection. Add `correct_node` to dashboard coverage, update the dashboard wire contract only if the new operation requires it, and test the consumer-visible route and operation in the existing server/contract integration tests. Keep this node separate from the accuracy-report node: change no accuracy, CLI or git-diff code. During work use targeted tests; the approved acceptance commands run independently after the agent exits. Commit the work; do not push or merge.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/server/src/routes.test.ts",
+				"proves": "A correction through the server updates title, name and description, preserves identity and unrelated fields, and withdraws brief approval."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/contract.test.ts",
+				"proves": "The dashboard's actual correct_node request is covered by the server route and the operation coverage contract has no stale gap."
+			},
+			{
+				"run": "pnpm build && pnpm exec biome check packages/server/src/routes.ts packages/server/src/routes.test.ts apps/dashboard/src/panel apps/dashboard/src/App.tsx apps/dashboard/src/covers.ts test/integration/contract.test.ts",
+				"proves": "The affected server and dashboard compile and the touched correction surface passes repository style checks."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-26T09:25:32.437Z",
+			"queue": false
+		}
+	},
 	"outcome": null,
 	"assignee": null,
 	"claim": null,
