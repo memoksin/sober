@@ -37,6 +37,9 @@ Shared work list for any agent (Claude Code, Codex, …) on `development`.
   Calendar…), 9 plugins, the global `~/.claude/CLAUDE.md`, a 5 KB SessionStart hook.
   A worker answered in Turkish because of the operator's global language rule.
 - Worker runs at the operator's `effortLevel: "high"` for every node.
+- Per run, folded from the 52 Claude run logs in `.sober/local/runs` with `tally`
+  (high effort, not isolated): 30.4 turns (median 23), 81k peak context,
+  $0.99 API-equivalent (median $0.75). This is the row "spend by effort" compares against.
 - Limit probe: `claude -p "Reply with ok." --model haiku` loads ~26k tokens per probe.
   The Codex probe returned `unknown` on the last check.
 - Retry reuses the node's worktree and branch (`worktree.ts:42`). The run record keeps no session id.
@@ -281,8 +284,8 @@ Total ≈ 22 h of work, plus measurement windows after 2, 4 and 6.
 
 ## Next (not done)
 
-1. **Measure effort** — needs real runs. After ~10 runs per band, read `sober status` → "spend by effort" (`none` is the baseline). Keep or drop `effort: "auto"` (ADR 0068).
-2. **Measure Codex isolation** — the account was spent. Run `codex exec --json --skip-git-repo-check "Reply with exactly: ok"` with and without `--ignore-user-config`; compare `turn.completed` `usage.input_tokens`. Drop the flag if it saves nothing.
+1. **Measure effort** — needs real runs. After ~10 runs per band, read `sober status` → "spend by effort" (`none` there is empty: old records carry no `usage`; compare with the per-run baseline above). Keep or drop `effort: "auto"` (ADR 0068).
+2. **Measure Codex isolation** — the account was spent; a measurement is set for 2026-09-27 02:12. Run `codex exec --json --skip-git-repo-check "Reply with exactly: ok"` with and without `--ignore-user-config`; compare `turn.completed` `usage.input_tokens`. Drop the flag if it saves nothing.
 3. [x] Verify on real hosts — OpenCode `sessionID` recorded; `claude -p --resume` over 100k and hours old works.
 4. [x] W3 remainder — the run log says when `init` did not load a named skill.
 5. [x] M1 display — `sober status` and `sober status <node>`.
@@ -308,3 +311,4 @@ Total ≈ 22 h of work, plus measurement windows after 2, 4 and 6.
   - `missingSkills` (`hosts.ts`): dispatch logs a skill the prompt names that Claude's `init` did not load. Real init lists plugin skills as `plugin:skill`.
   - `spendByEffort` (`core/status.ts`); `sober status` prints "spend by effort", `sober status <node>` the last run's host, effort, turns, peak, cost, session. The fake Claude host now reports `num_turns` and `total_cost_usd`.
   - ADR 0068 and 0069 updated. Tests: `hosts`, `host`, `status`, `dispatch`, `cli`, `resume` pass; typecheck clean.
+- 2026-09-26 · Claude Code · Per-run baseline folded from 52 old Claude logs (see Baseline). Effort bands still need real runs. Codex isolation measurement waits for the limit reset at 02:09.
