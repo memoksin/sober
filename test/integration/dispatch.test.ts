@@ -529,22 +529,34 @@ test('a score no entry covers runs dispatch.host, and the record says so', async
 	expect(await ran(paths)).toMatchObject({ host: FAKE_HOST, tier: null, fallback: true })
 })
 
-test('with jevMode on and a models list, Jev picks among the entries that cover its score', async () => {
+test('with jevMode on and a models list, Jev picks among every entry, not the ones covering its score', async () => {
 	const paths = await board({ models: MODELS, jevMode: true })
 	await score(paths, 9)
 	process.env.JEV_API_KEY = 'sk-test'
+	// The score (3) lands in "free"'s and "codex"'s range and outside "big"'s —
+	// Jev is shown all three anyway, and picking "big" against its own score
+	// is not a failure.
 	const fetch = vi
 		.fn()
 		.mockResolvedValueOnce(new Response(JSON.stringify(jevAnswers(2))))
 		.mockResolvedValueOnce(
-			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'codex' } } })),
+			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'big' } } })),
+		)
+		// No other host to fall back on, so a backup is still asked among the
+		// other two entries — host diversity, not the score, decides the set.
+		.mockResolvedValueOnce(
+			new Response(JSON.stringify({ answers: { backup: { type: 'choice', choice: 'free' } } })),
 		)
 	vi.stubGlobal('fetch', fetch)
 
 	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
 
-	expect(fetch).toHaveBeenCalledTimes(2)
-	expect(await ran(paths)).toMatchObject({ host: MODELS[1]?.run, tier: 'codex', fallback: false })
+	const modelCall = JSON.parse(
+		(fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body as string,
+	)
+	expect(modelCall.questions.model.criteria).toHaveProperty('big')
+	expect(fetch).toHaveBeenCalledTimes(3)
+	expect(await ran(paths)).toMatchObject({ host: MODELS[2]?.run, tier: 'big', fallback: false })
 })
 
 test('a tier naming a host no adapter knows is refused the same way, not as a bare unknown host', async () => {

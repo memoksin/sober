@@ -237,8 +237,9 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// complexity range it takes. Set, this wins over "tiers" and
 		// "thresholds" above. Order is preference: where ranges overlap, the
 		// first match runs. A score no entry covers runs "host", and the run
-		// record says so. "about" is the one line Jev reads when it chooses
-		// between the entries that cover the score (ADR 0061), for example:
+		// record says so. "about" is the one line Jev reads when "jevMode" is on
+		// and it chooses among every entry here, straight from the brief and not
+		// narrowed by the score (ADR 0067), for example:
 		//   { "name": "free",  "run": "opencode --model openrouter/qwen/qwen3-coder:free",
 		//     "complexity": [1, 3], "about": "Free. Small edits and tests." },
 		//   { "name": "codex", "run": "codex --model gpt-5.3-codex",

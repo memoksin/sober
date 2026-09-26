@@ -129,8 +129,8 @@ test('a body with no answers, and a skill answer with no probability, both fail'
 	).toThrow(/probability/)
 })
 
-test('the choice question shows only the covering entries, by their about or their line', () => {
-	const question = modelQuestion([model('free', 1, 3, 'Free.'), model('codex', 3, 7)])
+test('the choice question shows every entry it is handed, by their about or their line', () => {
+	const question = modelQuestion([model('free', 1, 3, 'Free.'), model('codex', 8, 10)])
 	expect(question.model).toMatchObject({
 		type: 'choice',
 		criteria: { free: 'Free.', codex: 'opencode --model codex' },
@@ -146,37 +146,39 @@ test('a choice off the list is a failure, not a guess', () => {
 	expect(() => jevChoice(null, ['free'])).toThrow(JevError)
 })
 
-test('no covering entry is one call and no model; one entry is one call and that model', async () => {
+test('no models is one call and no model; one entry is one call and that model regardless of score', async () => {
 	process.env.JEV_API_KEY = 'sk-test'
 	const fetch = vi.fn(async () => new Response(JSON.stringify(answers(1))))
 	vi.stubGlobal('fetch', fetch)
 
-	const none = await askJev('the brief', { skills: [], models: [model('big', 8, 10)] })
+	const none = await askJev('the brief', { skills: [], models: [] })
 	expect(none.model).toBeNull()
 	expect(fetch).toHaveBeenCalledTimes(1)
 
-	const one = await askJev('the brief', { skills: [], models: [model('free', 1, 3)] })
-	expect(one.model).toBe('free')
+	// The score (1) is nowhere near "big"'s range (8-10): it still runs, unasked.
+	const one = await askJev('the brief', { skills: [], models: [model('big', 8, 10)] })
+	expect(one.model).toBe('big')
 	expect(fetch).toHaveBeenCalledTimes(2)
 })
 
-test('two covering entries is a second call, and Jev picks among those alone', async () => {
+test('more than one entry is a second call, and Jev picks among the whole list, not a score-narrowed one', async () => {
 	process.env.JEV_API_KEY = 'sk-test'
 	const fetch = vi
 		.fn()
-		.mockResolvedValueOnce(new Response(JSON.stringify(answers(4))))
+		.mockResolvedValueOnce(new Response(JSON.stringify(answers(9))))
 		.mockResolvedValueOnce(
-			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'codex' } } })),
+			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'free' } } })),
 		)
 	vi.stubGlobal('fetch', fetch)
 
 	const decision = await askJev('the brief', {
 		skills: [],
-		models: [model('free', 1, 5, 'Free.'), model('codex', 3, 7, 'Plumbing.'), model('big', 8, 10)],
+		models: [model('free', 1, 5, 'Free.'), model('codex', 3, 7, 'Plumbing.')],
 	})
 
-	// One host only, so the backup is the one other covering entry: no third call.
-	expect(decision).toEqual({ complexity: 5, skills: [], model: 'codex', backup: 'free' })
+	// A high score (10) and Jev still picks the model whose range is 1-5: the
+	// score no longer narrows what it may choose.
+	expect(decision).toEqual({ complexity: 10, skills: [], model: 'free', backup: 'codex' })
 	expect(fetch).toHaveBeenCalledTimes(2)
 	const second = JSON.parse(
 		(fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body as string,
@@ -280,22 +282,30 @@ test('a backup Jev picks off the list is a failure', async () => {
 	).rejects.toThrow(JevError)
 })
 
-test('zero or one backup candidate costs no extra call', async () => {
+test('one model costs no choice call and has no backup; a single other host is the backup with no extra call', async () => {
 	process.env.JEV_API_KEY = 'sk-test'
-	const fetch = vi.fn(async () => new Response(JSON.stringify(answers(4))))
-	vi.stubGlobal('fetch', fetch)
+	const solo = vi.fn(async () => new Response(JSON.stringify(answers(4))))
+	vi.stubGlobal('fetch', solo)
 
 	expect(await askJev('the brief', { skills: [], models: [OPUS] })).toMatchObject({
 		model: 'opus',
 		backup: null,
 	})
-	expect(fetch).toHaveBeenCalledTimes(1)
+	expect(solo).toHaveBeenCalledTimes(1)
 
-	// `gpt` does not cover the score, and is still the backup: the one other host.
+	// `gpt`'s range (8-10) does not reach the score (5) — irrelevant now, its
+	// host diversity alone makes it the one candidate, so no third call either.
+	const two = vi
+		.fn()
+		.mockResolvedValueOnce(new Response(JSON.stringify(answers(4))))
+		.mockResolvedValueOnce(
+			new Response(JSON.stringify({ answers: { model: { type: 'choice', choice: 'free-too' } } })),
+		)
+	vi.stubGlobal('fetch', two)
 	const models = [FREE_TOO, on('codex --model gpt', 'gpt', 8, 10)]
 	expect(await askJev('the brief', { skills: [], models })).toMatchObject({
 		model: 'free-too',
 		backup: 'gpt',
 	})
-	expect(fetch).toHaveBeenCalledTimes(2)
+	expect(two).toHaveBeenCalledTimes(2)
 })
