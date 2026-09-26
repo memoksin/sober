@@ -1,4 +1,11 @@
-import { correctNode, createDecision, createNode, dismissFlag, reopenNode, whoami } from '@besober/core'
+import {
+	correctNode,
+	createDecision,
+	createNode,
+	dismissFlag,
+	reopenNode,
+	whoami,
+} from '@besober/core'
 import { CATEGORIES, Category } from '@besober/schema'
 import { openBoard } from './board.js'
 import { bold, dim, green, refuse, say } from './out.js'
@@ -93,7 +100,11 @@ export const question = async (
 	say(`${green('✓')} ${id}`)
 	say()
 	say(dim('It holds what it binds until it is answered, and it has no options yet.'))
-	say(dim(`Next: ask a session for them (${bold('/sober:decide')}), then ${bold(`sober decide ${id} <option>`)}.`))
+	say(
+		dim(
+			`Next: ask a session for them (${bold('/sober:decide')}), then ${bold(`sober decide ${id} <option>`)}.`,
+		),
+	)
 }
 
 /** `--decisions a,b` — the same spelling `sober bind` takes. */

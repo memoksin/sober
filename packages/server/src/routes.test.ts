@@ -244,7 +244,11 @@ test('create_decision opens an unopened decision, and the node it binds reads he
 	const { id: node } = (await OPS.create_node.run(p, { title: 'The auth API' })) as { id: string }
 
 	await expect(
-		OPS.create_decision.run(p, { question: 'Where does state live?', category: 'state', binds: [] }),
+		OPS.create_decision.run(p, {
+			question: 'Where does state live?',
+			category: 'state',
+			binds: [],
+		}),
 	).rejects.toThrow()
 	const { id } = (await OPS.create_decision.run(p, {
 		question: 'Where does state live?',

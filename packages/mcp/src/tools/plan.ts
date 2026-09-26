@@ -322,7 +322,11 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 			},
 		},
 		tool(
-			async (input: { question: string; category: (typeof CATEGORIES)[number]; binds: string[] }) => {
+			async (input: {
+				question: string
+				category: (typeof CATEGORIES)[number]
+				binds: string[]
+			}) => {
 				const paths = await openBoard(cwd)
 				const { id } = await createDecision(paths, { ...input, by: await whoami(paths.root) })
 				const board = await loadBoard(paths)

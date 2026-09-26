@@ -2,8 +2,8 @@ import { CATEGORIES, type Category } from '@besober/schema'
 import { useState } from 'react'
 import { Inline } from '../markdown.js'
 import { Overlay } from '../Overlay.js'
-import { pending } from '../pending.js'
 import type { BoardRead } from '../panel/data.js'
+import { pending } from '../pending.js'
 import { type Asking, askingBody, bindable, decisionRows, waiting } from './data.js'
 
 /**
@@ -180,7 +180,9 @@ const AskForm = ({
 				</select>
 			</label>
 			<fieldset className="flex flex-col gap-1">
-				<legend className="text-[var(--ink-dim)]">Holds — each reads held until it is answered</legend>
+				<legend className="text-[var(--ink-dim)]">
+					Holds — each reads held until it is answered
+				</legend>
 				{nodes.length === 0 ? (
 					<p className="text-[var(--ink-faint)]">No unfinished node to hold.</p>
 				) : (
