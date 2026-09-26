@@ -53,9 +53,11 @@ the node was.
   fire in a CLI check; put worker hooks in project `.claude/settings.json` or a
   plugin. A worker that needs a plugin gets it by name.
 - Isolation drops `effortLevel` from user settings, so "auto" is the default, not
-  an option. Its saving is not proven yet: one single-task test showed no clear
-  difference. The run record's `usage` (ADR 0069) is what decides whether the
-  mapping stays.
+  an option. It saves nothing measurable on a small node: 9 isolated runs of one
+  task, 3 per band, cost $0.26–0.29 each on average, all passing, with more
+  spread inside a band than between bands (`docs/RUN-COST-TODO.md`, Log). It
+  stays because it costs nothing and keeps `high` for hard nodes; `sober status`
+  re-checks it on real runs.
 - An isolated Codex worker uses Codex's default model unless its line names one
   (`codex --model …`), the same as Claude drops the model in user settings.
 - The Codex saving is not measured yet: the account was spent when this landed.

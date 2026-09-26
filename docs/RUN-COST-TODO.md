@@ -284,7 +284,7 @@ Total ≈ 22 h of work, plus measurement windows after 2, 4 and 6.
 
 ## Next (not done)
 
-1. **Measure effort** — needs real runs. After ~10 runs per band, read `sober status` → "spend by effort" (`none` there is empty: old records carry no `usage`; compare with the per-run baseline above). Keep or drop `effort: "auto"` (ADR 0068).
+1. [x] Measure effort — 9 runs, one task, 3 per band: no difference in cost, turns or quality. Keep `"auto"`. Re-check on a large node when `sober status` has real runs per band.
 2. **Measure Codex isolation** — the account was spent; a measurement is set for 2026-09-27 02:12. Run `codex exec --json --skip-git-repo-check "Reply with exactly: ok"` with and without `--ignore-user-config`; compare `turn.completed` `usage.input_tokens`. Drop the flag if it saves nothing.
 3. [x] Verify on real hosts — OpenCode `sessionID` recorded; `claude -p --resume` over 100k and hours old works.
 4. [x] W3 remainder — the run log says when `init` did not load a named skill.
@@ -312,3 +312,11 @@ Total ≈ 22 h of work, plus measurement windows after 2, 4 and 6.
   - `spendByEffort` (`core/status.ts`); `sober status` prints "spend by effort", `sober status <node>` the last run's host, effort, turns, peak, cost, session. The fake Claude host now reports `num_turns` and `total_cost_usd`.
   - ADR 0068 and 0069 updated. Tests: `hosts`, `host`, `status`, `dispatch`, `cli`, `resume` pass; typecheck clean.
 - 2026-09-26 · Claude Code · Per-run baseline folded from 52 old Claude logs (see Baseline). Effort bands still need real runs. Codex isolation measurement waits for the limit reset at 02:09.
+- 2026-09-26 · Claude Code · Effort benchmark on Claude (Codex account spent). One task (`spendByEffort` gains `minutes`), SOBER's worker argv and prompt, isolated with ponytail only, Opus 5.5, 3 runs per band in 3 worktrees, graded by a hidden test and `tsc`:
+  | effort | turns | peak | cost | minutes | passed |
+  |---|---|---|---|---|---|
+  | low | 15 | 31k | $0.29 | 1.9 | 3/3 |
+  | medium | 13.3 | 32k | $0.26 | 1.5 | 3/3 |
+  | high | 14 | 33k | $0.28 | 1.9 | 3/3 |
+  - Spread inside a band ($0.20–0.39) is larger than between bands. Effort does not move spend on a small node; turns × context does. `"auto"` stays: it costs nothing and gives hard nodes `high`. Not measured: a large node, where `low` may cut quality.
+  - Runner and raw rows: session scratchpad `bench/run.mjs`, `bench/results.jsonl` (not kept in the repo).
