@@ -55,7 +55,7 @@ the human's; no tool takes one on your behalf.
 ## Commands
 
 ```
-Start here   init · status
+Start here   init · status · accuracy
 Decide       decisions · decide · edit · bind
 Prepare      brief · approve
 Build        run · stop · logs · say
@@ -67,6 +67,11 @@ Surfaces     dashboard · mcp · hook
 ```
 
 `sober --help` prints all of them with a line each.
+
+`sober accuracy [--base <ref>]` is read-only: it reports, per node and in
+aggregate, how many files an accepted node's merged work actually touched
+versus what it declared, with an explicit unmeasurable row for work that has
+no local merge to measure against.
 
 ## Where you work
 
