@@ -100,8 +100,22 @@ const connect = async (dir: string, human: Human = (_, choices) => choices[0] ??
 const said = (result: unknown): string =>
 	((result as { content: { text: string }[] }).content ?? []).map((part) => part.text).join('\n')
 
+/** What every brief a test writes says in plain words, unless the test says otherwise (ADR 0070). */
+const PLAIN = {
+	what: 'Adds sign-in and sign-out.',
+	why: 'People need an account.',
+	check: 'The tests for the new endpoints pass.',
+	risk: 'none',
+}
+
 const call = async (client: Client, name: string, args: Record<string, unknown> = {}) =>
-	said(await client.callTool({ name, arguments: args }))
+	said(
+		await client.callTool({
+			name,
+			arguments:
+				name === 'write_brief' && args.plain === undefined ? { ...args, plain: PLAIN } : args,
+		}),
+	)
 
 const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
 
@@ -454,7 +468,7 @@ test('a host that declares elicitation is never asked again to approve', async (
 	expect(statusOf(await loadBoard(paths), node)).toBe('ready')
 })
 
-test('write_brief returns the rendered brief with every criterion', async () => {
+test('write_brief returns only the plain block to paste; brief still reads the whole brief', async () => {
 	const { repo: created, paths } = await board()
 	const client = await connect(created.dir)
 	await call(client, 'propose', PROPOSAL)
@@ -468,8 +482,15 @@ test('write_brief returns the rendered brief with every criterion', async () => 
 			{ run: 'npm run lint', proves: 'The code is clean.' },
 		],
 	})
-	for (const part of ['npm test', 'The endpoints answer.', 'npm run lint', 'The code is clean.'])
-		expect(reply).toContain(part)
+	// ADR 0070: nothing technical to paste by mistake, one positive instruction.
+	for (const part of Object.values(PLAIN)) expect(reply).toContain(part)
+	expect(reply).toContain('Paste this block as it is')
+	expect(reply).not.toContain('npm test')
+	expect(reply).not.toMatch(/do not paste/i)
+
+	const read = await call(client, 'brief', { node })
+	for (const part of ['npm test', 'The endpoints answer.', 'npm run lint', PLAIN.what])
+		expect(read).toContain(part)
 })
 
 test('a brief is written, approved by the human, and nothing runs before that', async () => {

@@ -121,8 +121,9 @@ test('a cache that cannot be read for any other reason is an error, not an empty
 
 test('installed looks for an executable on the given PATH', () => {
 	home = mkdtempSync(join(tmpdir(), 'sober-path-'))
-	writeFileSync(join(home, 'present'), '#!/bin/sh\n')
-	chmodSync(join(home, 'present'), 0o755)
+	const present = process.platform === 'win32' ? 'present.cmd' : 'present'
+	writeFileSync(join(home, present), process.platform === 'win32' ? '@echo off\n' : '#!/bin/sh\n')
+	if (process.platform !== 'win32') chmodSync(join(home, present), 0o755)
 	writeFileSync(join(home, 'plain'), '')
 	expect(installed('present', home)).toBe(true)
 	expect(installed('plain', home)).toBe(false)

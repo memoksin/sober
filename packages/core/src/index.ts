@@ -20,7 +20,7 @@ export {
 	type InitResult,
 	initBoard,
 } from './board.js'
-export { type DecisionMatch, renderBrief, searchDecisions } from './brief.js'
+export { type DecisionMatch, renderBrief, renderPlain, searchDecisions } from './brief.js'
 export {
 	applySetting,
 	type Config,
@@ -80,7 +80,7 @@ export {
 } from './flag.js'
 export { currentBranch, isRepo, showFromRef, whoami } from './git.js'
 export { type Board, findCycle, loadBoard } from './graph.js'
-export { checkHost, HostError } from './host.js'
+export { checkHost, HostError, knownAvailability } from './host.js'
 export { newId } from './id.js'
 export { type Editing, editDecision, ImpactError, impactOf } from './impact.js'
 export {

@@ -64,6 +64,25 @@ export const Run = z.strictObject({
 	backup: z.string().nullable().default(null),
 	ran: z.enum(['primary', 'backup']).default('primary'),
 	fellBack: z.string().nullable().default(null),
+	/**
+	 * The host's own session or thread id, which a retry resumes instead of
+	 * starting cold. Null when the host named none. Defaulted like `attended`.
+	 */
+	session: z.string().nullable().default(null),
+	/** The reasoning effort the host was launched with, null when none was passed. */
+	effort: z.string().nullable().default(null),
+	/**
+	 * What the host said it spent, where it says so. Each part is null when the
+	 * host does not report it. `contextPeak` is the largest single-turn context.
+	 */
+	usage: z
+		.strictObject({
+			turns: z.int().nullable(),
+			contextPeak: z.int().nullable(),
+			cost: z.number().nullable(),
+		})
+		.nullable()
+		.default(null),
 })
 
 export type Run = z.infer<typeof Run>

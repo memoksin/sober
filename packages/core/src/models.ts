@@ -1,4 +1,4 @@
-import { accessSync, constants } from 'node:fs'
+import { accessSync, constants, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -30,6 +30,14 @@ export interface Candidate extends Omit<Model, 'complexity'> {
 /** On the PATH and executable — not logged in, which is `checkHost`'s question. */
 export const installed = (command: string, path = process.env.PATH ?? ''): boolean =>
 	path.split(delimiter).some((dir) => {
+		if (process.platform === 'win32')
+			return (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').some((ext) => {
+				try {
+					return statSync(join(dir, command + ext)).isFile()
+				} catch {
+					return false
+				}
+			})
 		try {
 			accessSync(join(dir, command), constants.X_OK)
 			return true

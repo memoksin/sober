@@ -42,6 +42,7 @@ test('every read a screen asked for, and no speculative seventh', () => {
 	// distribution the sixth, and each was written when its screen asked for it
 	// rather than beside the first three — which is the property this guards.
 	expect(Object.keys(READS).sort()).toEqual([
+		'availability',
 		'board',
 		'digest',
 		'distance',

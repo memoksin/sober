@@ -1,6 +1,6 @@
 import type { Answer } from '@besober/schema'
 import { expect, test } from 'vitest'
-import { renderBrief, searchDecisions } from './brief.js'
+import { renderBrief, renderPlain, searchDecisions } from './brief.js'
 import type { Board } from './graph.js'
 import { aDecision, aNode } from './records.fixture.js'
 
@@ -138,4 +138,22 @@ test('an unanswered or unopened decision never appears in a search, whatever the
 
 test('a node the board does not hold has no brief', () => {
 	expect(renderBrief(board(), 'gone-node-x9y8')).toBe(null)
+})
+
+test('the plain block renders the four fields under their own headings, and nothing else', () => {
+	const rendered = renderPlain({
+		what: 'Adds a status field to the run record.',
+		why: 'So a rejected node can resume instead of paying for a fresh run.',
+		check: 'pnpm test packages/core/src/status passes.',
+		risk: 'none',
+	})
+
+	expect(rendered).toBe(
+		[
+			'## What changes\n\nAdds a status field to the run record.',
+			'## Why\n\nSo a rejected node can resume instead of paying for a fresh run.',
+			'## How it is checked\n\npnpm test packages/core/src/status passes.',
+			'## Risk\n\nnone',
+		].join('\n\n'),
+	)
 })

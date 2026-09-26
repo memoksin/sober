@@ -3,12 +3,15 @@ import {
 	type Candidate,
 	claudeModels,
 	codexModels,
+	findRoot,
 	installed,
+	knownAvailability,
 	liveModels,
 	openRouterModels,
+	paths,
 } from '@besober/core'
 import { openBoard, settingsOf } from './board.js'
-import { bold, columns, cyan, dim, fail, say } from './out.js'
+import { bold, columns, cyan, dim, fail, say, when } from './out.js'
 
 /**
  * What the installed hosts can reach, plus OpenRouter's catalogue, ready to
@@ -40,6 +43,8 @@ export const modelsFromSources = async (): Promise<void> => {
 }
 
 export const models = async ({ all }: { readonly all: boolean }): Promise<void> => {
+	const root = findRoot(process.cwd())
+	const availability = root === null ? null : await knownAvailability(paths(root))
 	const found: Candidate[] = []
 	if (installed('claude')) found.push(...claudeModels())
 	if (installed('codex')) found.push(...(await codexModels()))
@@ -63,6 +68,15 @@ export const models = async ({ all }: { readonly all: boolean }): Promise<void> 
 					: host,
 			),
 		)
+		const known = availability?.[host]
+		if (known?.windows != null) {
+			for (const [name, window] of Object.entries(known.windows))
+				say(
+					dim(
+						`  ${name}: ${Math.round(window.used * 100)}% used${window.resetsAt === null ? '' : `, resets ${when(new Date(window.resetsAt * 1000).toISOString())}`}`,
+					),
+				)
+		}
 		for (const line of columns(
 			mine.map((m) => [`  ${cyan(m.name)}`, m.run, dim(m.about.slice(0, 90))]),
 		))

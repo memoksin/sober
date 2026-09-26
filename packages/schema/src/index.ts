@@ -1,4 +1,4 @@
-export { Approval, AutoProvenance, Brief, byWhom, Criterion } from './brief.js'
+export { Approval, AutoProvenance, Brief, byWhom, Criterion, Plain } from './brief.js'
 export { Contributor, Contributors } from './contributors.js'
 export {
 	Answer,

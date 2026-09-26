@@ -78,7 +78,11 @@
 		// the models above. Needs JEV_API_KEY, and JEV_BASE_URL / JEV_MODEL
 		// for a router other than TypeSafe direct (ADR 0060).
 		"jevMode": true,
-		"jevSkills": ["ponytail", "engineering:testing-strategy"]
+		"jevSkills": ["ponytail"],
+
+		// Workers start without the operator's ~/.claude and keep only these
+		// plugins (ADR 0068). ponytail ships the skill above.
+		"plugins": ["ponytail@ponytail"]
 	},
 
 	"board": {
