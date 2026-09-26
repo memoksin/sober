@@ -37,6 +37,14 @@ the node was.
   deny rules for `git push`, `git merge`, `git switch`, and `gh pr merge` through
   Bash and PowerShell. `dispatch.workerSettings` may add settings, but cannot
   remove these denies. The rules were checked under `bypassPermissions` too.
+- **A Codex worker skips `~/.codex/config.toml`** under the same switch:
+  `codex exec --ignore-user-config` drops the operator's MCP servers, plugins and
+  default model, and keeps the login (`CODEX_HOME` still holds `auth.json`).
+  The Codex probe runs the same way. A plugin cannot be kept by name there: its
+  marketplace lives in the skipped file.
+- **A missing skill is said out loud.** When Claude's `init` event lists the
+  skills it loaded and one the prompt names is not among them, the run log says
+  so. The run goes on; the fix is `dispatch.plugins` or `dispatch.jevSkills`.
 
 ## Consequences
 
@@ -48,5 +56,11 @@ the node was.
   an option. Its saving is not proven yet: one single-task test showed no clear
   difference. The run record's `usage` (ADR 0069) is what decides whether the
   mapping stays.
-- Codex, OpenCode, Cursor and Cline are not isolated here. They read their own
+- An isolated Codex worker uses Codex's default model unless its line names one
+  (`codex --model …`), the same as Claude drops the model in user settings.
+- The Codex saving is not measured yet: the account was spent when this landed.
+  Compare `turn.completed` usage with and without the flag.
+- OpenCode, Cursor and Cline are not isolated here. They read their own
   configuration, and no measurement shows a problem there yet.
+- `sober status` shows spend by effort, and a node's last run with its turns,
+  peak context, cost and session. That table is what keeps or drops "auto".

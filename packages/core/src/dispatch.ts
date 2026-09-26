@@ -27,6 +27,7 @@ import {
 	EMPTY_TALLY,
 	type Event,
 	limitSpent,
+	missingSkills,
 	renderLine,
 	type Tally,
 	tally,
@@ -359,6 +360,7 @@ export const dispatch = async (
 	let sum: Tally = EMPTY_TALLY
 	// The host's own word on its account, free with every Claude run (ADR 0069).
 	let lastLimit: string | null = null
+	let skillsChecked = false
 	const emit = (raw: string): void => {
 		options.onLine?.(raw)
 		written = written.then(() => appendRunOutput(paths, id, `${raw}\n`))
@@ -386,12 +388,21 @@ export const dispatch = async (
 				} catch {
 					// Not JSON: a plain stderr line never counts as a tool call.
 				}
+				let missing: string[] | null = null
 				if (event !== null && typeof event === 'object') {
 					sum = tally(sum, event)
 					if (event.type === 'rate_limit_event') lastLimit = raw
 					if (!sawTool) sawTool = renderLine(event).some((l) => l.kind === 'tool')
+					if (!skillsChecked) missing = missingSkills(skills, event)
 				}
 				emit(raw)
+				if (missing === null) return
+				skillsChecked = true
+				// The prompt names these skills; a worker without them guesses instead.
+				if (missing.length > 0)
+					emit(
+						`the host did not load ${missing.join(', ')} — check \`dispatch.plugins\` and \`dispatch.jevSkills\``,
+					)
 			},
 		})
 	const cold = () => {

@@ -50,5 +50,6 @@
   compaction.
 - The Codex app-server protocol is marked experimental. The parse is covered by
   a test with the shape recorded from 0.156.1.
-- Not verified yet: how `claude -p --resume` behaves on a session that is over
-  100k tokens and more than an hour old. The interactive client asks there.
+- `claude -p --resume` on sessions over 100k tokens and hours old (109k, 164k)
+  resumed with no prompt; only the interactive client asks there. OpenCode's
+  `run --format json` stamps `sessionID` at the top of every event.

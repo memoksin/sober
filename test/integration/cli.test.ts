@@ -227,7 +227,15 @@ test('the loop closes: decide, brief, approve, run, logs, review, accept', () =>
 	// Thinking and a known tool get their own marks, never the unknown-kind dot.
 	expect(logged).toMatch(/… weighing the endpoints/)
 	expect(logged).toMatch(/✍ Write/)
-	expect(sober(created.dir, 'status')).toContain('in-review')
+	const board = sober(created.dir, 'status')
+	expect(board).toContain('in-review')
+	// What the host said the run spent, by effort on the board and in full on the node.
+	expect(board).toMatch(
+		/spend by effort\n\s+none\s+1 run\s+1 measured\s+3 turns\s+30k peak\s+\$0\.05/,
+	)
+	expect(sober(created.dir, 'status', 'auth-api-k7f2')).toMatch(
+		/last run .* · 3 turns · 30k peak · \$0\.05 · session fake/,
+	)
 
 	const review = sober(created.dir, 'review', 'auth-api-k7f2')
 	expect(review).toContain('The endpoints answer.')

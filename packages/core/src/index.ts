@@ -145,11 +145,13 @@ export {
 export { acceptNode, finishRun, recordOutcome, startRun } from './run.js'
 export { scanNode } from './scan.js'
 export {
+	type EffortSpend,
 	type Flags,
 	flagsOf,
 	lastRun,
 	openDecisions,
 	ready,
+	spendByEffort,
 	statusOf,
 	waitingOn,
 } from './status.js'

@@ -589,10 +589,12 @@ const codex: Adapter = {
 		if (/logged in/i.test(stdout)) return !/not logged in/i.test(stdout)
 		return null
 	},
-	// Codex's effort scale stops at `xhigh`.
+	// Codex's effort scale stops at `xhigh`. Isolated, it skips the operator's
+	// config.toml — MCP servers, plugins, default model — and keeps the login.
 	argv: (prompt, _attended, run = {}) => [
 		'exec',
 		...(run.resume == null ? [] : ['resume']),
+		...(run.plugins == null ? [] : ['--ignore-user-config']),
 		...(run.effort == null
 			? []
 			: ['-c', `model_reasoning_effort=${run.effort === 'max' ? 'xhigh' : run.effort}`]),
@@ -604,7 +606,7 @@ const codex: Adapter = {
 	// A minimal call on Codex's default model — the limit is the account's,
 	// not any one model's, so which model answers does not matter here.
 	availability: {
-		argv: ['exec', '--json', '--skip-git-repo-check', 'Reply with ok.'],
+		argv: ['exec', '--ignore-user-config', '--json', '--skip-git-repo-check', 'Reply with ok.'],
 		spent: codexSpent,
 	},
 	attendable: false,
@@ -1073,6 +1075,16 @@ export const tally = (sum: Tally, event: Event): Tally => {
 	}
 }
 
+/** The skills a run was told to use that its host's `init` did not load. Null when the event does not say. */
+export const missingSkills = (wanted: readonly string[], event: Event): string[] | null => {
+	if (event.type !== 'system' || event.subtype !== 'init' || !Array.isArray(event.skills))
+		return null
+	const loaded = event.skills
+	return wanted.filter(
+		(name) => !loaded.some((skill) => skill === name || skill.endsWith(`:${name}`)),
+	)
+}
+
 /** The union of what the five hosts write, read defensively at every level. */
 export interface Event {
 	readonly type?: string
@@ -1086,6 +1098,8 @@ export interface Event {
 	readonly sessionID?: string
 	/** Claude Code's `system`/`init` event: the id an alias like `opus` resolved to. */
 	readonly model?: string
+	/** Claude Code's `system`/`init` event: the skills it loaded, a plugin's as `plugin:skill`. */
+	readonly skills?: readonly string[]
 	/** Claude Code's final `result` event. */
 	readonly num_turns?: number
 	readonly total_cost_usd?: number

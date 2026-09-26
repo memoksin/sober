@@ -1,5 +1,13 @@
-import { flagsOf, lastRun, openDecisions, statusOf, unbound, waitingOn } from '@besober/core'
-import { ranLabel } from '@besober/schema'
+import {
+	flagsOf,
+	lastRun,
+	openDecisions,
+	spendByEffort,
+	statusOf,
+	unbound,
+	waitingOn,
+} from '@besober/core'
+import { type Run, ranLabel } from '@besober/schema'
 import { openBoard, readBoard } from './board.js'
 import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
 
@@ -60,6 +68,29 @@ export const status = async (only?: string): Promise<void> => {
 	})
 	say(columns(rows).join('\n'))
 
+	if (only !== undefined) {
+		const last = lastRun(board, only)
+		if (last !== null) say(dim(`  last run ${last.id} · ${spent(last.run)}`))
+	} else {
+		const efforts = spendByEffort(board.runs.values()).filter((group) => group.measured > 0)
+		if (efforts.length > 0) {
+			say()
+			say(bold('spend by effort'))
+			say(
+				columns(
+					efforts.map((g) => [
+						`  ${g.effort ?? 'none'}`,
+						`${g.runs} run${g.runs === 1 ? '' : 's'}`,
+						dim(`${g.measured} measured`),
+						`${Math.round(g.turns)} turns`,
+						`${Math.round(g.contextPeak / 1000)}k peak`,
+						`$${g.cost.toFixed(2)}`,
+					]),
+				).join('\n'),
+			)
+		}
+	}
+
 	const loose = unbound(board)
 	if (loose.length > 0) {
 		say()
@@ -77,6 +108,19 @@ export const status = async (only?: string): Promise<void> => {
 		say(columns(open.map(([id, decision]) => [`  ${magenta(id)}`, decision.question])).join('\n'))
 	}
 }
+
+/** A run's host, effort, what it said it spent, and the session a retry resumes (ADR 0068, 0069). */
+const spent = (run: Run): string =>
+	[
+		run.host,
+		run.effort === null ? null : `effort ${run.effort}`,
+		run.usage?.turns == null ? null : `${run.usage.turns} turns`,
+		run.usage?.contextPeak == null ? null : `${Math.round(run.usage.contextPeak / 1000)}k peak`,
+		run.usage?.cost == null ? null : `$${run.usage.cost.toFixed(2)}`,
+		run.session === null ? null : `session ${run.session}`,
+	]
+		.filter((part) => part !== null)
+		.join(' · ')
 
 /**
  * Who is on it. A claim is a fact and an assignment is a plan (§3.3), so the

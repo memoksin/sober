@@ -3,7 +3,7 @@ import { expect, test } from 'vitest'
 import type { Board } from './graph.js'
 import type { Feedback } from './local.js'
 import { aDecision, aNode, aRun } from './records.fixture.js'
-import { flagsOf, ready, statusOf, waitingOn } from './status.js'
+import { flagsOf, ready, spendByEffort, statusOf, waitingOn } from './status.js'
 
 const AT = '2026-09-04T00:00:00.000Z'
 const answer: Answer = {
@@ -296,4 +296,24 @@ test('a brief re-approved after a dismissal is what the flag is measured from', 
 
 	expect(flagsOf(moved('2026-09-04T03:00:00.000Z'), 'a').flagged).toBe(false)
 	expect(flagsOf(moved('2026-09-04T05:00:00.000Z'), 'a').flagged).toBe(true)
+})
+
+test('spend is grouped by effort, averaged over the runs whose host reported it', () => {
+	const runs = [
+		aRun('a', { effort: 'low', usage: { turns: 10, contextPeak: 40_000, cost: 0.2 } }),
+		aRun('b', { effort: 'low', usage: { turns: 20, contextPeak: 60_000, cost: 0.4 } }),
+		aRun('c', { effort: 'low', host: 'codex' }),
+		aRun('d', { usage: { turns: 30, contextPeak: 90_000, cost: 1 } }),
+	]
+	expect(spendByEffort(runs)).toEqual([
+		{ effort: null, runs: 1, measured: 1, turns: 30, contextPeak: 90_000, cost: 1 },
+		{
+			effort: 'low',
+			runs: 3,
+			measured: 2,
+			turns: 15,
+			contextPeak: 50_000,
+			cost: expect.closeTo(0.3),
+		},
+	])
 })

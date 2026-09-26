@@ -135,6 +135,8 @@ if (args.includes('--input-format')) {
 		type: 'result',
 		subtype: failing ? 'error_during_execution' : 'success',
 		is_error: failing,
+		num_turns: 3,
+		total_cost_usd: 0.05,
 	})
 	if (failing) process.stderr.write('the host gave up\n')
 	process.exit(failing ? 1 : 0)

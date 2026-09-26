@@ -261,7 +261,7 @@ Total ≈ 22 h of work, plus measurement windows after 2, 4 and 6.
 ## Open questions
 
 1. Was RTK active in workers? If yes, W1 removes it. Measure Bash output bytes before and after.
-2. How does `claude -p --resume` behave on a session that is >100k tokens and >1 h idle?
+2. ~~How does `claude -p --resume` behave on a session that is >100k tokens and >1 h idle?~~ It resumes with no prompt (109k and 164k, hours old).
 3. How stable is the Codex app-server between releases? Pin it with a test on the recorded response shape.
 4. Anthropic's terms about another program running the official CLI headless on the user's own
    subscription: this is the documented `-p` use, and SOBER never touches the token, but no page
@@ -281,11 +281,11 @@ Total ≈ 22 h of work, plus measurement windows after 2, 4 and 6.
 
 ## Next (not done)
 
-1. **Measure** — after ~10 runs per effort band, compare `usage` (turns, contextPeak, cost) with the baseline above. Keep or drop the `effort: "auto"` mapping (ADR 0068).
-2. **Verify on real hosts** — OpenCode's `sessionID` field name on `run --format json` events (assumed, not recorded); `claude -p --resume` on a session > 100k tokens and > 1 h old.
-3. **W3 remainder** — at dispatch, drop a `jevSkills` name the host's init event does not list (skipped: needs the host started first).
-4. **Codex isolation** — Codex still loads `~/.codex` config and MCP servers. Measure first.
-5. **M1 display** — the run record has `session` and `usage`; `sober status` does not show them yet.
+1. **Measure effort** — needs real runs. After ~10 runs per band, read `sober status` → "spend by effort" (`none` is the baseline). Keep or drop `effort: "auto"` (ADR 0068).
+2. **Measure Codex isolation** — the account was spent. Run `codex exec --json --skip-git-repo-check "Reply with exactly: ok"` with and without `--ignore-user-config`; compare `turn.completed` `usage.input_tokens`. Drop the flag if it saves nothing.
+3. [x] Verify on real hosts — OpenCode `sessionID` recorded; `claude -p --resume` over 100k and hours old works.
+4. [x] W3 remainder — the run log says when `init` did not load a named skill.
+5. [x] M1 display — `sober status` and `sober status <node>`.
 
 ## Log
 
@@ -303,3 +303,8 @@ Total ≈ 22 h of work, plus measurement windows after 2, 4 and 6.
   - Next steps, in order: 1) `pnpm typecheck`; 2) fix tests: hosts.test.ts needs `WORKER_DENY` in its import list, `codexRateLimitsSpent` weekly case now says `seven-day`, host.test.ts `recordAvailability` now takes the raw `rate_limit_event` line instead of a reason, cached entries now carry `windows`; 3) `sober models` prints `knownAvailability` windows (packages/cli/src/models.ts); 4) ADR 0068 security section (deny works under bypass; hooks via --settings do not fire), ADR 0069 threshold/compaction numbers; 5) full suite; 6) two commits — ADR 0067 WIP first (config.ts comment hunk, .sober/config.jsonc openrouter source, jev*.ts, dispatch.test.ts), then this work. The user approved committing without asking.
 - 2026-09-26 · Codex · L4 and handoff fixes: `sober models` and the dashboard show known window usage and reset times; fixed the test inputs and the L4 `ready` shadow; ADR 0068 and 0069 now record the measured safety and compaction decisions. `pnpm typecheck` and 63 focused tests passed. Full suite in progress.
 - 2026-09-27 · Claude Code · Reviewed Codex's handoff work and committed. `pnpm typecheck` clean; 26 affected test files, 405 passed. Full-suite failures seen earlier (`agent.test.ts` abort, `sync`/`conflict` timeouts) pass alone and come from load on Windows. `models.test.ts` Windows failure fixed (`installed` now checks PATHEXT).
+- 2026-09-27 · Claude Code · Closed the open items that need no waiting.
+  - Codex worker and probe run with `--ignore-user-config` when `dispatch.plugins` is not null (`hosts.ts`). Auth checked: the flag still reaches the account. Saving not measured — the Codex limit was spent until 02:09.
+  - `missingSkills` (`hosts.ts`): dispatch logs a skill the prompt names that Claude's `init` did not load. Real init lists plugin skills as `plugin:skill`.
+  - `spendByEffort` (`core/status.ts`); `sober status` prints "spend by effort", `sober status <node>` the last run's host, effort, turns, peak, cost, session. The fake Claude host now reports `num_turns` and `total_cost_usd`.
+  - ADR 0068 and 0069 updated. Tests: `hosts`, `host`, `status`, `dispatch`, `cli`, `resume` pass; typecheck clean.

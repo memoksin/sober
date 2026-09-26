@@ -7,6 +7,7 @@ import {
 	EMPTY_TALLY,
 	type Event,
 	limitSpent,
+	missingSkills,
 	renderLine,
 	summarize,
 	tally,
@@ -92,6 +93,19 @@ test('codex resumes by subcommand and caps effort at its own top', () => {
 	// The session id sits right before the prompt, the order `codex exec resume --help` gives.
 	expect(argv.at(-2)).toBe('th-1')
 	expect(adapterFor('codex').argv('fix it', false)[1]).toBe('--json')
+	// Isolated, it skips config.toml and keeps the login (`codex exec --help`, 0.156.1).
+	expect(adapterFor('codex').argv('fix it', false, { plugins: [] })[1]).toBe('--ignore-user-config')
+	expect(adapterFor('codex').argv('fix it', false, { plugins: null })).not.toContain(
+		'--ignore-user-config',
+	)
+})
+
+test('the skills a run was told to use are checked against what Claude loaded', () => {
+	// The shape of a real init: a plugin's skill is `plugin:skill`.
+	const init: Event = { type: 'system', subtype: 'init', skills: ['ponytail:ponytail', 'debug'] }
+	expect(missingSkills(['ponytail', 'debug', 'caveman'], init)).toEqual(['caveman'])
+	expect(missingSkills(['ponytail'], { type: 'system', subtype: 'init' })).toBeNull()
+	expect(missingSkills(['ponytail'], { type: 'assistant' })).toBeNull()
 })
 
 test('opencode resumes with --session', () => {
@@ -384,6 +398,7 @@ test('opencode and cursor have no availability table, so they are never spent', 
 test('codex names its own probe, and reads its own words for a spent account', () => {
 	expect(adapterFor('codex').availability?.argv).toEqual([
 		'exec',
+		'--ignore-user-config',
 		'--json',
 		'--skip-git-repo-check',
 		'Reply with ok.',

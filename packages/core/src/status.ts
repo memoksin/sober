@@ -154,3 +154,40 @@ export const waitingOn = (board: Board, id: string): Waiting[] => {
 
 export const ready = (board: Board): string[] =>
 	[...board.nodes.keys()].filter((id) => statusOf(board, id) === 'ready').sort()
+
+/** One effort's runs, and the averages over those whose host reported its spend. */
+export interface EffortSpend {
+	readonly effort: string | null
+	readonly runs: number
+	readonly measured: number
+	readonly turns: number
+	readonly contextPeak: number
+	readonly cost: number
+}
+
+/**
+ * What each effort cost across the board's runs (ADR 0068). Runs from before
+ * effort was passed group under null: the baseline the mapping is measured
+ * against. Only Claude Code reports spend, so `measured` may be below `runs`.
+ */
+export const spendByEffort = (runs: Iterable<Run>): EffortSpend[] => {
+	const groups = new Map<string | null, { runs: number; spent: NonNullable<Run['usage']>[] }>()
+	for (const run of runs) {
+		const group = groups.get(run.effort) ?? { runs: 0, spent: [] }
+		group.runs += 1
+		if (run.usage?.cost != null) group.spent.push(run.usage)
+		groups.set(run.effort, group)
+	}
+	const mean = (values: (number | null)[]) =>
+		values.length === 0 ? 0 : values.reduce<number>((sum, v) => sum + (v ?? 0), 0) / values.length
+	return [...groups]
+		.map(([effort, { runs: count, spent }]) => ({
+			effort,
+			runs: count,
+			measured: spent.length,
+			turns: mean(spent.map((u) => u.turns)),
+			contextPeak: mean(spent.map((u) => u.contextPeak)),
+			cost: mean(spent.map((u) => u.cost)),
+		}))
+		.sort((a, b) => (a.effort ?? '').localeCompare(b.effort ?? ''))
+}
