@@ -268,6 +268,47 @@ test('the CLI names a node with no reachable merge as unmeasurable, rather than 
 	expect(out).toMatch(/1 accepted node\(s\) are not attributable/)
 })
 
+test('a commit reading the exact `sober: <id>` subject that is not a merge is not attributable', async () => {
+	await board()
+	await node('lone-node-l3m4', 'Lone', ['src/**'])
+	// A plain, single-parent commit that happens to read the merge subject a
+	// real `mergeNode` would have written — never one, since it has one parent.
+	writeFileSync(join(paths.root, 'unrelated.txt'), 'noise\n')
+	git('add', '-A')
+	git('commit', '-m', 'sober: lone-node-l3m4')
+	const record = (await loadBoard(paths)).nodes.get('lone-node-l3m4')
+	if (record === undefined) throw new Error('node vanished')
+	await writeNode(paths, 'lone-node-l3m4', {
+		...record,
+		accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'none' },
+	})
+
+	const report = await declaredFileAccuracy(paths, await loadBoard(paths), 'main')
+	expect(report.nodes[0]).toMatchObject({ measurable: false })
+	expect(report.nodes[0]?.reason).toMatch(/is not a merge commit/)
+})
+
+/** A worktree with one committed addition, distinct per node so two can run without conflict. */
+const smallWork = async (id: string, file: string): Promise<void> => {
+	const { path } = await addWorktree(paths, id, 'main')
+	writeFileSync(join(path, file), 'export const x = 1\n')
+	execFileSync('git', ['add', '-A'], { cwd: path })
+	execFileSync('git', ['commit', '-m', 'feat: work'], { cwd: path })
+}
+
+test('rows sort by id regardless of the order nodes were declared in', async () => {
+	await board()
+	await node('zeta-node-z1z2', 'Zeta', ['src/**'])
+	await smallWork('zeta-node-z1z2', 'src/z.ts')
+	await acceptWork(paths, 'zeta-node-z1z2', { by: 'memoksin', base: 'main', scan: 'clean' })
+	await node('alpha-node-a1b2', 'Alpha', ['src/**'])
+	await smallWork('alpha-node-a1b2', 'src/a.ts')
+	await acceptWork(paths, 'alpha-node-a1b2', { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	const report = await declaredFileAccuracy(paths, await loadBoard(paths), 'main')
+	expect(report.nodes.map((row) => row.id)).toEqual(['alpha-node-a1b2', 'zeta-node-z1z2'])
+})
+
 test('a board with no accepted nodes says so', async () => {
 	await board()
 	await node('idle-node-i9j0', 'Idle', ['src/**'])
