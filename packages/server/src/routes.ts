@@ -13,6 +13,7 @@ import {
 	boardDistance,
 	claimChain,
 	claimNode,
+	createDecision,
 	createNode,
 	currentBranch,
 	digest,
@@ -48,6 +49,7 @@ import {
 } from '@besober/core'
 import {
 	Brief,
+	Category,
 	Contributor,
 	chainEnds,
 	type Digest,
@@ -353,6 +355,17 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 			files: z.array(z.string().min(1)).optional(),
 		}),
 		async (paths, opening) => createNode(paths, { ...opening, by: await whoami(paths.root) }),
+	),
+
+	// The question and the nodes it holds; the options still come from a
+	// session's `open_decision` (§2.6), so it arrives unopened.
+	create_decision: route(
+		z.strictObject({
+			question: z.string().min(1),
+			category: Category,
+			binds: z.array(Id).min(1),
+		}),
+		async (paths, opening) => createDecision(paths, { ...opening, by: await whoami(paths.root) }),
 	),
 
 	/**

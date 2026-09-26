@@ -170,6 +170,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'claim',
 			'contributors',
 			'correct_node',
+			'create_decision',
 			'decide',
 			'decisions',
 			'dismiss',
@@ -695,7 +696,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(29)
+		expect((await client.listTools()).tools.length).toBe(30)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -751,6 +752,24 @@ test('a decision with no options is opened before it is put to anyone', async ()
 	})
 	expect(await call(client, 'decisions')).toContain('Suggested: post')
 	expect(await call(client, 'decide', { decision, option: 'post' })).toContain('post')
+})
+
+test('a question opened by hand holds its node and waits for options', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'open_node', { title: 'The sign-up form', name: 'sign-up form' })
+	const [node] = [...(await loadBoard(paths)).nodes.keys()]
+
+	const opened = await call(client, 'create_decision', {
+		question: 'How does the form submit?',
+		category: 'data-flow',
+		binds: [node],
+	})
+	expect(opened).toContain('open_decision')
+	const after = await loadBoard(paths)
+	const [decision] = [...after.decisions.keys()]
+	expect(after.nodes.get(node as string)?.decisions).toEqual([decision])
+	expect(after.decisions.get(decision as string)?.options).toBeNull()
 })
 
 test('an unanswered decision has its options rewritten in place, and an answered one points at edit_decision', async () => {

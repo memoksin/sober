@@ -1,7 +1,9 @@
-import type { AutoProvenance, Brief, Decision, Handle, Node } from '@besober/schema'
+import type { AutoProvenance, Brief, Category, Decision, Handle, Node } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import { readConfig } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
+import { loadBoard } from './graph.js'
+import { newId, shortName } from './id.js'
 import { appendEvent } from './local.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
@@ -187,3 +189,61 @@ export const queueByDefault = async (paths: Paths): Promise<boolean> => {
 	const config = await readConfig(paths)
 	return config.kind === 'ok' && config.value.dispatch.queueByDefault
 }
+
+export interface Question {
+	readonly question: string
+	readonly category: Category
+	/** The nodes it holds. Every one reads `held` until the decision is answered. */
+	readonly binds: readonly string[]
+	readonly by: Handle
+}
+
+/**
+ * A question opened by a person who already knows they want it answered. The
+ * question, category and binding are theirs; the options are a model's and
+ * still come from a session's `open_decision` (§2.6), so it arrives unopened.
+ *
+ * Binding appends, like `bind` does with a full list: nothing else on a bound
+ * node moves, and an approved brief stays approved — the node is held by
+ * `statusOf` reading the unopened decision, not by anything written here.
+ */
+export const createDecision = (
+	paths: Paths,
+	opening: Question,
+): Promise<{ readonly id: string; readonly decision: Decision }> =>
+	withLock(paths, 'create-decision', async () => {
+		const question = opening.question.trim()
+		if (question === '')
+			throw new SoberError('no-question', 'a decision needs a question — it is what gets answered')
+		// A decision nothing binds holds nothing and reads as waiting for no
+		// reason (`unbound`).
+		if (opening.binds.length === 0)
+			throw new SoberError(
+				'no-binds',
+				'name at least one node the decision holds — one that holds nothing waits on you for no reason',
+			)
+
+		const board = await loadBoard(paths)
+		const binds = [...new Set(opening.binds)]
+		const bound = binds.map((node) => {
+			const record = board.nodes.get(node)
+			if (record === undefined) throw new NotOnBoardError('node', node)
+			return [node, record] as const
+		})
+
+		const id = newId(shortName(question))
+		const decision: Decision = {
+			category: opening.category,
+			question,
+			options: null,
+			suggested: null,
+			derived: null,
+			answer: null,
+			createdAt: new Date().toISOString(),
+		}
+		await writeDecision(paths, id, decision)
+		for (const [node, record] of bound)
+			await writeNode(paths, node, { ...record, decisions: [...record.decisions, id] })
+		await appendEvent(paths, { action: 'decision.created', decision: id, by: opening.by, binds })
+		return { id, decision }
+	})

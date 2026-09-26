@@ -226,3 +226,40 @@ test('the board read carries thinkingVerbs — the default pool absent, the conf
 	const withBrokenConfig = await READS.board.run(p, {})
 	expect((withBrokenConfig as { thinkingVerbs: unknown }).thinkingVerbs).toBeNull()
 })
+
+test('create_decision opens an unopened decision, and the node it binds reads held on the board read', async () => {
+	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
+	const run = (...args: string[]) =>
+		execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim()
+	run('init', '--initial-branch=main')
+	run('config', 'user.name', 'SOBER Test')
+	run('config', 'user.email', 'test@besober.dev')
+	run('config', 'commit.gpgsign', 'false')
+	writeFileSync(join(dir, 'README.md'), '# acme\n')
+	run('add', '-A')
+	run('commit', '-m', 'chore: first')
+
+	const p = paths(dir)
+	await OPS.init.run(p, { project: { title: 'acme', intent: '', constraints: [] } })
+	const { id: node } = (await OPS.create_node.run(p, { title: 'The auth API' })) as { id: string }
+
+	await expect(
+		OPS.create_decision.run(p, {
+			question: 'Where does state live?',
+			category: 'state',
+			binds: [],
+		}),
+	).rejects.toThrow()
+	const { id } = (await OPS.create_decision.run(p, {
+		question: 'Where does state live?',
+		category: 'state',
+		binds: [node],
+	})) as { id: string }
+
+	const board = (await READS.board.run(p, {})) as {
+		nodes: readonly { id: string; status: string; decisions: string[] }[]
+		decisions: readonly { id: string; options: unknown; answer: unknown }[]
+	}
+	expect(board.decisions).toEqual([expect.objectContaining({ id, options: null, answer: null })])
+	expect(board.nodes[0]).toMatchObject({ id: node, status: 'held', decisions: [id] })
+})

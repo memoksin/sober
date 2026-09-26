@@ -246,7 +246,7 @@ The category list is fixed at four (D17): `state`, `module-boundaries`, `data-fl
 
 ### 2.6 Options are generated on demand
 
-Decomposition produces a decision's question and category, not its options (D18). Options are requested when the decision is opened, by the session that opened it.
+Decomposition produces a decision's question and category, not its options (D18). Options are requested when the decision is opened, by the session that opened it. A person can open a question by hand on any surface; its options are still produced on demand by a session.
 
 Two reasons, both practical. A thirty-decision board would otherwise burn thirty option generations up front, most of them never read. And options generated at decomposition time are reasoned against a context that does not exist yet — the upstream decisions they depend on are still open. Asking late means asking with the answers already in hand.
 

@@ -62,6 +62,10 @@ export const OPERATIONS = [
 	'dismiss',
 	'reopen',
 	'create_node',
+	// A question opened by hand, bound to the nodes it holds. The question, its
+	// category and its binding are a person's; the options are a model's and
+	// stay behind `open_decision` in `AGENT_OPERATIONS`, so it arrives unopened.
+	'create_decision',
 	// The plan a session proposed, taken whole or taken off the board whole
 	// (ADR 0051). Two entries rather than one with a flag: putting a plan on
 	// the board and taking it off are different acts, and the second is the
@@ -108,7 +112,10 @@ export type Operation = (typeof OPERATIONS)[number]
  *
  * `open_decision` stays here although the question it opens is a human's: it
  * generates the options with a model (§2.6, ADR 0009), and a surface without
- * one could only open a decision with nothing to pick from.
+ * one could only open a decision with nothing to pick from. Opening the
+ * question is `create_decision` above — data entry, the line `create_node` sits
+ * on: a person writes the question, its category and the nodes it holds, and
+ * it waits unopened until a session produces the options.
  */
 export const AGENT_OPERATIONS = ['propose', 'open_decision', 'distribute'] as const
 

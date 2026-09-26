@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { BoardRead } from '../panel/data.js'
-import { decisionRows } from './data.js'
+import { askingBody, bindable, decisionRows, waiting } from './data.js'
 
 const options = [
 	{ id: 'a', label: 'A', reason: 'ra', costLater: 'ca' },
@@ -66,4 +66,39 @@ test('a decision no node binds still appears, with an empty node list', () => {
 		board([decision('d', {})], [{ id: 'n1', title: 'N', decisions: ['other'] }]),
 	)
 	expect(rows[0]?.nodes).toEqual([])
+})
+
+test('an unopened decision says it waits for options from a session, not for an answer', () => {
+	const rows = decisionRows(
+		board(
+			[decision('u', { options: null }), decision('o', {})],
+			[{ id: 'n1', title: 'N', decisions: ['u', 'o'] }],
+		),
+	)
+	const said = Object.fromEntries(rows.map((row) => [row.id, waiting(row)]))
+	expect(said.u).toContain('No options yet')
+	expect(said.u).toContain('/sober:decide')
+	expect(said.o).toBe('Unanswered · holds 1 node')
+})
+
+test('a done node is not offered to hold a new decision', () => {
+	const read = board(
+		[],
+		[
+			{ id: 'n1', title: 'Open', status: 'ready', decisions: [] },
+			{ id: 'n2', title: 'Done', status: 'done', decisions: [] },
+		],
+	)
+	expect(bindable(read)).toEqual([{ id: 'n1', title: 'Open' }])
+})
+
+test('the create_decision body is the trimmed question, its category and each node once', () => {
+	expect(
+		askingBody({ question: '  Where? ', category: 'data-flow', binds: ['n1', 'n2', 'n1'] }),
+	).toEqual({ question: 'Where?', category: 'data-flow', binds: ['n1', 'n2'] })
+})
+
+test('the form sends nothing without a question or a node to hold', () => {
+	expect(askingBody({ question: '   ', category: 'state', binds: ['n1'] })).toBeNull()
+	expect(askingBody({ question: 'Where?', category: 'state', binds: [] })).toBeNull()
 })

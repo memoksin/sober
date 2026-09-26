@@ -31,6 +31,7 @@ export const PENDING: Readonly<Record<string, string>> = {
 	dismiss: 'Setting it aside…',
 	reopen: 'Reopening it…',
 	open: 'Opening the node…',
+	create_decision: 'Opening the question…',
 }
 
 /** The fallback is a sentence, not silence: an unlisted operation still speaks. */

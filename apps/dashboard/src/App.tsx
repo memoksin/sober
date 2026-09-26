@@ -515,7 +515,15 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 				)}
 
 				{decisionsOpen && board !== null && (
-					<DecisionsScreen board={board} onClose={() => setDecisionsOpen(false)} />
+					<DecisionsScreen
+						board={board}
+						onAsk={async (body) => {
+							if (token === null) return
+							await wire(token).op('create_decision', body)
+							await refresh()
+						}}
+						onClose={() => setDecisionsOpen(false)}
+					/>
 				)}
 
 				{conflictsOpen && synced?.kind === 'conflicted' && token !== null && (
