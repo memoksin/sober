@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import { findRoot, loadEnv, paths as resolvePaths } from '@besober/core'
+import { accuracy } from './accuracy.js'
 import { init, openBoard } from './board.js'
 import { distribute } from './distribute.js'
 import { correct, dismiss, open, reopen } from './flag.js'
@@ -82,6 +83,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['accept <node>', 'land it — merge, and the node is done'],
 			['accept --green', 'land every node whose checks are all clean'],
 			['reject <node> -m "…"', 'send it back with what was wrong'],
+			['accuracy', 'how often accepted nodes’ declared files matched what they touched'],
 		],
 	],
 	[
@@ -285,6 +287,8 @@ const main = async (): Promise<void> => {
 			const text = values.message ?? fail('say what was wrong: sober reject <node> -m "…"')
 			return reject(node, text, values.clean === true, values.base)
 		}
+		case 'accuracy':
+			return accuracy(values.base)
 		case 'sync':
 			return sync(values['no-push'] === true)
 		case 'resolve':
