@@ -218,6 +218,55 @@ test('a spent host’s models never reach Jev, and the log names it', async () =
 	)
 })
 
+test('a nearly full host yields to a model with more runway', async () => {
+	const { readConfigFromBase } = await import('./config.js')
+	const { askJev } = await import('./jev.js')
+	const { liveModels } = await import('./models.js')
+	const { hostAvailability, startAgent } = await import('./host.js')
+	const built = [
+		{
+			name: 'claude',
+			run: 'claude --model opus',
+			complexity: [1, 10] as [number, number],
+			about: '',
+		},
+		{ name: 'codex', run: 'codex --model x', complexity: [1, 10] as [number, number], about: '' },
+	]
+	vi.mocked(readConfigFromBase).mockResolvedValue({
+		kind: 'ok',
+		value: {
+			...DEFAULT_CONFIG,
+			dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false, jevMode: true },
+		},
+	})
+	vi.mocked(liveModels).mockResolvedValue({ models: built, dropped: [] })
+	vi.mocked(askJev).mockResolvedValue({ complexity: 5, skills: [], model: 'codex', backup: null })
+	vi.mocked(hostAvailability).mockResolvedValue({
+		claude: {
+			state: 'ready',
+			reason: null,
+			windows: { 'seven-day': { used: 0.95, resetsAt: null } },
+		},
+		codex: {
+			state: 'ready',
+			reason: null,
+			windows: { 'seven-day': { used: 0.1, resetsAt: null } },
+		},
+	})
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(vi.mocked(askJev)).toHaveBeenCalledWith(expect.any(String), {
+		skills: [],
+		models: [built[1]],
+	})
+	expect(vi.mocked(startAgent)).toHaveBeenCalledWith(
+		expect.objectContaining({ host: 'codex --model x' }),
+	)
+	const { events } = await readLog(paths)
+	expect(events).toContainEqual(expect.objectContaining({ action: 'hosts', strained: ['claude'] }))
+})
+
 test('when every host is spent, dispatch refuses before the worktree, naming every reason', async () => {
 	const { readConfigFromBase } = await import('./config.js')
 	const { liveModels } = await import('./models.js')

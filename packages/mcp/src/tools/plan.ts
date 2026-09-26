@@ -20,6 +20,7 @@ import {
 	readConfig,
 	readProject,
 	renderBrief,
+	renderPlain,
 	paths as resolvePaths,
 	searchDecisions,
 	unlinked,
@@ -53,6 +54,19 @@ import {
 const CriterionInput = z.object({
 	run: z.string().describe('the command that proves it, exactly as it is typed'),
 	proves: z.string().describe('what passing it establishes'),
+})
+
+const PlainInput = z.object({
+	what: z
+		.string()
+		.max(400)
+		.describe('what changes, in everyday words, for someone with no repository knowledge'),
+	why: z.string().max(400).describe('why it changes'),
+	check: z.string().max(400).describe('how success is checked'),
+	risk: z
+		.string()
+		.max(400)
+		.describe('the meaningful trade-off or risk — say "none" if there is none'),
 })
 
 const OptionInput = z.object({
@@ -494,16 +508,24 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		tool(async ({ node }: { node: string }) => {
 			const paths = await openBoard(cwd)
 			const board = await loadBoard(paths)
-			const rendered = renderBrief(board, node)
-			if (rendered === null) return text(`${node} is not on this board.`)
-			const approval = board.nodes.get(node)?.brief?.approval
-			return text(
-				`${rendered}\n\n${
-					approval == null
-						? 'Not approved. Nothing runs without an approval, which is the human’s.'
-						: `Approved ${byWhom(approval)}${approval.queue ? ', and queued' : ''}.`
-				}`,
-			)
+			const record = board.nodes.get(node)
+			if (record === undefined) return text(`${node} is not on this board.`)
+			const approval = record.brief?.approval
+			const approvalLine =
+				approval == null
+					? 'Not approved. Nothing runs without an approval, which is the human’s.'
+					: `Approved ${byWhom(approval)}${approval.queue ? ', and queued' : ''}.`
+
+			// This is the brief the agent receives, so the technical text always
+			// comes back. The plain block follows, marked as the part a human is
+			// shown (ADR 0070); an older brief has none.
+			const rendered = renderBrief(board, node) ?? ''
+			const plain = record.brief?.plain
+			const forHuman =
+				plain == null
+					? ''
+					: `\n\n---\n\nWhen you ask a human to approve it, paste this block as it is:\n\n${renderPlain(plain)}`
+			return text(`${rendered}${forHuman}\n\n${approvalLine}`)
 		}),
 	)
 
@@ -512,12 +534,15 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		{
 			title: 'Write a node’s approach',
 			description:
-				'The written half of a brief: how you would do it, and what must be true when it is done. Writing one clears any approval on it — the approved thing was the old approach.',
+				'The written half of a brief: how you would do it, what must be true when it is done, and the same brief in plain words for someone with no repository knowledge. The result is a block rendered from `plain` — paste it as it is, then ask for approval with `approve`. Writing a brief clears any approval on it — the approved thing was the old approach.',
 			inputSchema: {
 				node: z.string(),
 				approach: z.string(),
 				complexity: z.int().min(1).max(10),
 				acceptance: z.array(CriterionInput).min(1),
+				plain: PlainInput.describe(
+					'the brief in everyday words, for someone with no repository knowledge — this is what gets pasted for approval',
+				),
 			},
 		},
 		tool(
@@ -526,20 +551,23 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				approach,
 				complexity,
 				acceptance,
+				plain,
 			}: {
 				node: string
 				approach: string
 				complexity: number
 				acceptance: z.infer<typeof CriterionInput>[]
+				plain: z.infer<typeof PlainInput>
 			}) => {
 				const paths = await openBoard(cwd)
 				await writeBrief(paths, node, {
 					approach,
 					complexity,
 					acceptance: acceptance.map((criterion) => ({ ...criterion })),
+					plain,
 				})
 				return text(
-					`${renderBrief(await loadBoard(paths), node) ?? ''}\n\n${node} has a brief. Explain its purpose, changes, checks, and meaningful risks in plain language, then ask the human for approval with the \`approve\` tool. The full technical brief is available in the dashboard; do not paste it into the conversation.`,
+					`${renderPlain(plain)}\n\n${node} has a brief. Paste this block as it is, then ask the human for approval with the \`approve\` tool.`,
 				)
 			},
 		),
@@ -550,7 +578,7 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 		{
 			title: 'Record the human’s approval of one brief',
 			description:
-				'Record that the human approved one node’s brief. Before calling, explain the written brief in plain language: what changes, why, how success is checked, and any meaningful trade-off or risk. The full technical brief is available in the dashboard; do not paste it into the conversation. Ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes to that explanation. The question must say whether a yes also starts the node when it becomes ready, which is the queue argument when given, otherwise the board’s dispatch.queueByDefault. Never on a yes they did not give, never on one carried over from earlier in the conversation, never a batch (ADR 0057).',
+				'Record that the human approved one node’s brief. Before calling, paste the block `write_brief` or `brief` returned, exactly as it is. An old brief written before `plain` existed returns no block — explain that one in plain language instead: what changes, why, how success is checked, and any meaningful trade-off or risk. Ask with this host’s own question tool — one question, a yes and a no — and call only on an explicit yes to that explanation. The question must say whether a yes also starts the node when it becomes ready, which is the queue argument when given, otherwise the board’s dispatch.queueByDefault. Never on a yes they did not give, never on one carried over from earlier in the conversation, never a batch (ADR 0057).',
 			inputSchema: {
 				node: z.string(),
 				confirmed: z.literal(true).describe('the human said yes to this brief, just now'),

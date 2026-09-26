@@ -36,6 +36,9 @@ const run = (node: string): Run => ({
 	backup: null,
 	ran: 'primary',
 	fellBack: null,
+	session: null,
+	effort: null,
+	usage: null,
 })
 
 beforeEach(async () => {

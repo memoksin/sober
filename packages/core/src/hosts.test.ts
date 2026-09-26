@@ -3,10 +3,16 @@ import { NO_HUMAN } from './host.js'
 import {
 	adapterFor,
 	capBody,
+	codexRateLimitsSpent,
+	EMPTY_TALLY,
+	type Event,
 	limitSpent,
+	missingSkills,
 	renderLine,
 	summarize,
+	tally,
 	UnknownHostError,
+	WORKER_DENY,
 } from './hosts.js'
 
 test('the adapter is chosen from the host command, whatever else is on the line', () => {
@@ -47,6 +53,82 @@ test('every adapter tells a headless run that nobody can answer it', () => {
 		const argv = adapterFor(host).argv('build the node', false)
 		expect(argv.join('\n'), host).toContain(NO_HUMAN)
 	}
+})
+
+test('a Claude worker runs isolated, at its effort, and on the session it resumes', () => {
+	// ADR 0068 and 0069, each flag read off `claude --help` (2.1.283).
+	const argv = adapterFor('claude').argv('fix it', false, {
+		effort: 'medium',
+		plugins: ['ponytail@ponytail'],
+		resume: 'abc',
+		settings: {
+			env: { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '50' },
+			permissions: { deny: ['Bash(rm -rf*)'] },
+		},
+	})
+	const after = (flag: string) => argv[argv.indexOf(flag) + 1]
+	expect(argv).toContain('--strict-mcp-config')
+	expect(after('--setting-sources')).toBe('project,local')
+	expect(JSON.parse(after('--settings') ?? '')).toEqual({
+		env: { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '50' },
+		permissions: { deny: [...WORKER_DENY, 'Bash(rm -rf*)'] },
+		enabledPlugins: { 'ponytail@ponytail': true },
+	})
+	expect(after('--effort')).toBe('medium')
+	expect(after('--resume')).toBe('abc')
+
+	// null plugins keeps the operator's whole environment — and still the deny rules.
+	const open = adapterFor('claude').argv('fix it', false, { plugins: null })
+	expect(open).not.toContain('--setting-sources')
+	expect(JSON.parse(open[open.indexOf('--settings') + 1] ?? '')).toEqual({
+		permissions: { deny: WORKER_DENY },
+	})
+	expect(WORKER_DENY).toContain('PowerShell(git push*)')
+})
+
+test('codex resumes by subcommand and caps effort at its own top', () => {
+	const argv = adapterFor('codex').argv('fix it', false, { effort: 'max', resume: 'th-1' })
+	expect(argv.slice(0, 2)).toEqual(['exec', 'resume'])
+	expect(argv[argv.indexOf('-c') + 1]).toBe('model_reasoning_effort=xhigh')
+	// The session id sits right before the prompt, the order `codex exec resume --help` gives.
+	expect(argv.at(-2)).toBe('th-1')
+	expect(adapterFor('codex').argv('fix it', false)[1]).toBe('--json')
+	// Isolated, it skips config.toml and keeps the login (`codex exec --help`, 0.156.1).
+	expect(adapterFor('codex').argv('fix it', false, { plugins: [] })[1]).toBe('--ignore-user-config')
+	expect(adapterFor('codex').argv('fix it', false, { plugins: null })).not.toContain(
+		'--ignore-user-config',
+	)
+})
+
+test('the skills a run was told to use are checked against what Claude loaded', () => {
+	// The shape of a real init: a plugin's skill is `plugin:skill`.
+	const init: Event = { type: 'system', subtype: 'init', skills: ['ponytail:ponytail', 'debug'] }
+	expect(missingSkills(['ponytail', 'debug', 'caveman'], init)).toEqual(['caveman'])
+	expect(missingSkills(['ponytail'], { type: 'system', subtype: 'init' })).toBeNull()
+	expect(missingSkills(['ponytail'], { type: 'assistant' })).toBeNull()
+})
+
+test('opencode resumes with --session', () => {
+	const argv = adapterFor('opencode').argv('fix it', false, { resume: 'ses_1' })
+	expect(argv[argv.indexOf('--session') + 1]).toBe('ses_1')
+})
+
+test('a tally keeps the first session and Claude’s turns, peak context and cost', () => {
+	const events: Event[] = [
+		{ type: 'system', subtype: 'init', session_id: 's-1' },
+		{ type: 'assistant', message: { usage: { input_tokens: 2, cache_read_input_tokens: 40_000 } } },
+		{ type: 'assistant', message: { usage: { cache_read_input_tokens: 90_000 } } },
+		{ type: 'system', subtype: 'init', session_id: 's-2' },
+		{ type: 'result', num_turns: 12, total_cost_usd: 0.42 },
+	]
+	expect(events.reduce(tally, EMPTY_TALLY)).toEqual({
+		session: 's-1',
+		turns: 12,
+		contextPeak: 90_000,
+		cost: 0.42,
+	})
+	expect(tally(EMPTY_TALLY, { type: 'thread.started', thread_id: 't-1' }).session).toBe('t-1')
+	expect(tally(EMPTY_TALLY, { type: 'text', sessionID: 'ses_9' }).session).toBe('ses_9')
 })
 
 test('the brief is an argument, never a shell string, in every adapter', () => {
@@ -316,6 +398,7 @@ test('opencode and cursor have no availability table, so they are never spent', 
 test('codex names its own probe, and reads its own words for a spent account', () => {
 	expect(adapterFor('codex').availability?.argv).toEqual([
 		'exec',
+		'--ignore-user-config',
 		'--json',
 		'--skip-git-repo-check',
 		'Reply with ok.',
@@ -328,15 +411,51 @@ test('codex names its own probe, and reads its own words for a spent account', (
 	).toBeNull()
 })
 
+test('codex app-server limits: runway is null, a full window or a refused account is spent', () => {
+	// Shape recorded off `account/rateLimits/read` on codex-cli 0.156.1.
+	const window = (usedPercent: number, windowDurationMins: number) => ({
+		usedPercent,
+		windowDurationMins,
+		resetsAt: 1_790_453_168,
+	})
+	expect(
+		codexRateLimitsSpent({
+			ordinaryUsageAllowed: true,
+			rateLimits: { primary: window(0, 300), secondary: window(76, 10080) },
+		}),
+	).toBeNull()
+	expect(
+		codexRateLimitsSpent({
+			ordinaryUsageAllowed: true,
+			rateLimits: { primary: window(100, 300), secondary: window(76, 10080) },
+		}),
+	).toMatch(/^five-hour limit, resets \d\d:\d\d$/)
+	expect(
+		codexRateLimitsSpent({
+			ordinaryUsageAllowed: false,
+			rateLimits: { primary: window(10, 300), secondary: window(99, 10080) },
+		}),
+	).toMatch(/^seven-day limit/)
+})
+
 test('claude reads its own rate_limit_event, and a window at 100% is spent even under allowed', () => {
 	expect(adapterFor('claude').availability?.argv).toEqual([
 		'-p',
-		'Reply with ok.',
+		'ok',
 		'--model',
 		'haiku',
 		'--output-format',
 		'stream-json',
 		'--verbose',
+		'--strict-mcp-config',
+		'--setting-sources',
+		'',
+		'--tools',
+		'',
+		'--system-prompt',
+		'Reply ok.',
+		'--disable-slash-commands',
+		'--no-session-persistence',
 	])
 
 	// Captured in `.sober/local/runs/*.log`.

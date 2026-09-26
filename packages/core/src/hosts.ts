@@ -137,6 +137,64 @@ export const ATTENDED_ARGS = [
 	A_HUMAN_IS_WATCHING,
 ] as const
 
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/** What one run adds to a host's invocation beyond the prompt. A host ignores what it has no flag for. */
+export interface RunArgs {
+	readonly effort?: Effort | null
+	/**
+	 * Claude only: launch without the operator's own settings, MCP servers and
+	 * plugins, keeping just these plugins. Null leaves the operator's environment in.
+	 */
+	readonly plugins?: readonly string[] | null
+	/** The host's session to continue instead of starting a new one. */
+	readonly resume?: string | null
+	/** Claude only: settings layered over the run, from `dispatch.workerSettings`. */
+	readonly settings?: Readonly<Record<string, unknown>> | null
+}
+
+/**
+ * What `HOW_IT_ENDS` tells every agent not to do, held by the host rather than
+ * by the prose: a deny rule applies under `bypassPermissions` too (measured on
+ * 2.1.283). Both shells, because Claude on Windows may run either.
+ */
+export const WORKER_DENY: readonly string[] = [
+	'git push*',
+	'git merge*',
+	'git switch*',
+	'gh pr merge*',
+].flatMap((command) => [`Bash(${command})`, `PowerShell(${command})`])
+
+/**
+ * One `--settings` for a Claude run: the deny rules, `workerSettings`, and —
+ * when isolated — the only plugins it keeps. Hooks go in the project's
+ * `.claude/settings.json` or a plugin: hooks passed here did not fire (2.1.283).
+ */
+const claudeSettings = (run: RunArgs): string => {
+	const extra = run.settings ?? {}
+	const permissions = (extra.permissions ?? {}) as { deny?: readonly string[] }
+	return JSON.stringify({
+		...extra,
+		permissions: { ...permissions, deny: [...WORKER_DENY, ...(permissions.deny ?? [])] },
+		...(run.plugins == null
+			? {}
+			: {
+					enabledPlugins: {
+						...(extra.enabledPlugins as Record<string, boolean> | undefined),
+						...Object.fromEntries(run.plugins.map((id) => [id, true])),
+					},
+				}),
+	})
+}
+
+/**
+ * The operator's `~/.claude` — global CLAUDE.md, hooks, MCP servers, every
+ * plugin — cost a worker ~8k tokens on every turn and leaked into what it did:
+ * a worker answered in the operator's language and could write to the board
+ * through the sober MCP server. Project settings still load (ADR 0068).
+ */
+const ISOLATED = ['--strict-mcp-config', '--setting-sources', 'project,local'] as const
+
 /**
  * One host, as an adapter (§2.9): how it is asked whether it can run, how it is
  * invoked for one node, and how the events it writes are read back.
@@ -178,13 +236,15 @@ export interface Adapter {
 		readonly argv: readonly string[]
 		/** The reason the limit is gone, read from the probe's output — or null when it isn't. */
 		readonly spent: (output: string) => string | null
+		/** How full each usage window is, read from the same output — null when it says nothing. */
+		readonly windows?: (output: string) => LimitWindows | null
 	}
 	/** How the user signs in, in the words they have to type (§8.7). */
 	readonly signIn: (host: string) => string
 	/** True, false, or null when the answer cannot be read — never a silent pass. */
 	readonly loggedIn: (stdout: string) => boolean | null
 	/** Argv after the host command, for one run. */
-	readonly argv: (prompt: string, attended: boolean) => readonly string[]
+	readonly argv: (prompt: string, attended: boolean, run?: RunArgs) => readonly string[]
 	/** Whether a watching human can reply to this host mid-run (ADR 0046). */
 	readonly attendable: boolean
 	/** One raw event, rendered — or null when the event is not this host's shape. */
@@ -209,17 +269,44 @@ const CLAUDE_WINDOWS: Readonly<Record<string, string>> = {
 }
 
 /** An epoch-seconds `resetsAt` as a clock time, in UTC so a test is never timezone-dependent. */
-const resetTime = (epochSeconds: unknown): string => {
+export const resetTime = (epochSeconds: unknown): string => {
 	if (typeof epochSeconds !== 'number') return 'an unknown time'
 	const at = new Date(epochSeconds * 1000)
 	return `${String(at.getUTCHours()).padStart(2, '0')}:${String(at.getUTCMinutes()).padStart(2, '0')}`
 }
 
+/** One usage window: how full it is, 0 to 1, and when it resets, in epoch seconds. */
+export interface LimitWindow {
+	readonly used: number
+	readonly resetsAt: number | null
+}
+
+export type LimitWindows = Readonly<Record<string, LimitWindow>>
+
 interface RateLimitInfo {
 	readonly status?: string
 	readonly resetsAt?: number
 	readonly rateLimitType?: string
-	readonly unifiedWindows?: Readonly<Record<string, { readonly utilization?: number }>>
+	readonly unifiedWindows?: Readonly<
+		Record<string, { readonly utilization?: number; readonly resetsAt?: number } | undefined>
+	>
+}
+
+/** The first `rate_limit_event` in a Claude run's output. */
+const rateLimitInfo = (output: string): RateLimitInfo | null => {
+	for (const rawLine of output.split('\n')) {
+		const line = rawLine.trim()
+		if (line.length === 0) continue
+		let event: { type?: string; rate_limit_info?: RateLimitInfo }
+		try {
+			event = JSON.parse(line) as typeof event
+		} catch {
+			continue
+		}
+		if (event.type === 'rate_limit_event' && event.rate_limit_info !== undefined)
+			return event.rate_limit_info
+	}
+	return null
 }
 
 /**
@@ -233,29 +320,33 @@ interface RateLimitInfo {
  * rejected event turns up.
  */
 const claudeSpent = (output: string): string | null => {
-	for (const rawLine of output.split('\n')) {
-		const line = rawLine.trim()
-		if (line.length === 0) continue
-		let event: { type?: string; rate_limit_info?: RateLimitInfo }
-		try {
-			event = JSON.parse(line) as typeof event
-		} catch {
-			continue
-		}
-		if (event.type !== 'rate_limit_event' || event.rate_limit_info === undefined) continue
+	const info = rateLimitInfo(output)
+	if (info === null) return null
+	const windows = info.unifiedWindows ?? {}
+	const full = Object.entries(windows).find(([, window]) => (window?.utilization ?? 0) >= 1)
+	const ready =
+		(info.status === 'allowed' || info.status === 'allowed_warning') && full === undefined
+	if (ready) return null
 
-		const info = event.rate_limit_info
-		const windows = info.unifiedWindows ?? {}
-		const full = Object.entries(windows).find(([, window]) => (window?.utilization ?? 0) >= 1)
-		const ready =
-			(info.status === 'allowed' || info.status === 'allowed_warning') && full === undefined
-		if (ready) return null
+	const key = full?.[0] ?? info.rateLimitType
+	const name = key === undefined ? 'usage' : (CLAUDE_WINDOWS[key] ?? key.replace(/_/g, '-'))
+	return `${name} limit, resets ${resetTime(full?.[1]?.resetsAt ?? info.resetsAt)}`
+}
 
-		const key = full?.[0] ?? info.rateLimitType
-		const name = key === undefined ? 'usage' : (CLAUDE_WINDOWS[key] ?? key.replace(/_/g, '-'))
-		return `${name} limit, resets ${resetTime(info.resetsAt)}`
-	}
-	return null
+/** Each of Claude's windows, with its own reset time (ADR 0069). */
+const claudeWindows = (output: string): LimitWindows | null => {
+	const info = rateLimitInfo(output)
+	const entries = Object.entries(info?.unifiedWindows ?? {}).flatMap(([key, window]) =>
+		typeof window?.utilization === 'number'
+			? [
+					[
+						CLAUDE_WINDOWS[key] ?? key.replace(/_/g, '-'),
+						{ used: window.utilization, resetsAt: window.resetsAt ?? null },
+					] as const,
+				]
+			: [],
+	)
+	return entries.length === 0 ? null : Object.fromEntries(entries)
 }
 
 /**
@@ -274,18 +365,39 @@ const claude: Adapter = {
 			return null
 		}
 	},
-	argv: (prompt, attended) => ['-p', prompt, ...(attended ? ATTENDED_ARGS : HOST_ARGS)],
+	argv: (prompt, attended, run = {}) => [
+		'-p',
+		prompt,
+		...(attended ? ATTENDED_ARGS : HOST_ARGS),
+		...(run.plugins == null ? [] : ISOLATED),
+		'--settings',
+		claudeSettings(run),
+		...(run.effort == null ? [] : ['--effort', run.effort]),
+		...(run.resume == null ? [] : ['--resume', run.resume]),
+	],
+	// Stripped to nothing but the request: the default environment made this
+	// ~26k tokens of context to read one `rate_limit_event`; this is ~400.
 	availability: {
 		argv: [
 			'-p',
-			'Reply with ok.',
+			'ok',
 			'--model',
 			'haiku',
 			'--output-format',
 			'stream-json',
 			'--verbose',
+			'--strict-mcp-config',
+			'--setting-sources',
+			'',
+			'--tools',
+			'',
+			'--system-prompt',
+			'Reply ok.',
+			'--disable-slash-commands',
+			'--no-session-persistence',
 		],
 		spent: claudeSpent,
+		windows: claudeWindows,
 	},
 	attendable: true,
 	line: (event) => {
@@ -390,6 +502,71 @@ const codexSpent = (output: string): string | null => {
 	return tail === null ? 'usage limit' : `usage limit, ${tail[0]}`
 }
 
+interface CodexWindow {
+	readonly usedPercent?: number
+	readonly windowDurationMins?: number
+	readonly resetsAt?: number
+}
+
+/**
+ * The spent reason in `account/rateLimits/read`'s answer from `codex
+ * app-server`, or null when there is runway. Shape recorded off codex-cli
+ * 0.156.1: `{ordinaryUsageAllowed, rateLimits: {primary, secondary,
+ * rateLimitReachedType}}`, where primary is the 300-minute window and
+ * secondary the 10080-minute one.
+ */
+export const codexRateLimitsSpent = (answer: {
+	readonly ordinaryUsageAllowed?: boolean
+	readonly rateLimits?: {
+		readonly primary?: CodexWindow | null
+		readonly secondary?: CodexWindow | null
+		readonly rateLimitReachedType?: string | null
+	}
+}): string | null => {
+	const limits = answer.rateLimits
+	const full = [limits?.primary, limits?.secondary].find(
+		(window): window is CodexWindow => (window?.usedPercent ?? 0) >= 100,
+	)
+	if (
+		full === undefined &&
+		answer.ordinaryUsageAllowed !== false &&
+		limits?.rateLimitReachedType == null
+	)
+		return null
+	const window = full ?? limits?.secondary ?? limits?.primary
+	const name =
+		window?.windowDurationMins === 300
+			? 'five-hour'
+			: window?.windowDurationMins === 10080
+				? 'seven-day'
+				: 'usage'
+	return `${name} limit, resets ${resetTime(window?.resetsAt)}`
+}
+
+/** Codex's two windows from `account/rateLimits/read`, named by their length. */
+export const codexWindows = (answer: {
+	readonly rateLimits?: {
+		readonly primary?: CodexWindow | null
+		readonly secondary?: CodexWindow | null
+	}
+}): LimitWindows | null => {
+	const entries = [answer.rateLimits?.primary, answer.rateLimits?.secondary].flatMap((window) =>
+		typeof window?.usedPercent === 'number'
+			? [
+					[
+						window.windowDurationMins === 300
+							? 'five-hour'
+							: window.windowDurationMins === 10080
+								? 'seven-day'
+								: `${window.windowDurationMins ?? '?'}-minute`,
+						{ used: window.usedPercent / 100, resetsAt: window.resetsAt ?? null },
+					] as const,
+				]
+			: [],
+	)
+	return entries.length === 0 ? null : Object.fromEntries(entries)
+}
+
 /**
  * Codex. `codex exec` takes the prompt as its last argument and has no flag for
  * the system prompt, so `NO_HUMAN` goes in front of the brief instead — the M2
@@ -412,11 +589,24 @@ const codex: Adapter = {
 		if (/logged in/i.test(stdout)) return !/not logged in/i.test(stdout)
 		return null
 	},
-	argv: (prompt) => ['exec', '--json', '--dangerously-bypass-approvals-and-sandbox', brief(prompt)],
+	// Codex's effort scale stops at `xhigh`. Isolated, it skips the operator's
+	// config.toml — MCP servers, plugins, default model — and keeps the login.
+	argv: (prompt, _attended, run = {}) => [
+		'exec',
+		...(run.resume == null ? [] : ['resume']),
+		...(run.plugins == null ? [] : ['--ignore-user-config']),
+		...(run.effort == null
+			? []
+			: ['-c', `model_reasoning_effort=${run.effort === 'max' ? 'xhigh' : run.effort}`]),
+		'--json',
+		'--dangerously-bypass-approvals-and-sandbox',
+		...(run.resume == null ? [] : [run.resume]),
+		brief(prompt),
+	],
 	// A minimal call on Codex's default model — the limit is the account's,
 	// not any one model's, so which model answers does not matter here.
 	availability: {
-		argv: ['exec', '--json', '--skip-git-repo-check', 'Reply with ok.'],
+		argv: ['exec', '--ignore-user-config', '--json', '--skip-git-repo-check', 'Reply with ok.'],
 		spent: codexSpent,
 	},
 	attendable: false,
@@ -492,7 +682,14 @@ const opencode: Adapter = {
 		const found = /(\d+)\s+credential/i.exec(stdout)
 		return found === null ? null : Number(found[1]) > 0
 	},
-	argv: (prompt) => ['run', '--format', 'json', '--auto', brief(prompt)],
+	argv: (prompt, _attended, run = {}) => [
+		'run',
+		'--format',
+		'json',
+		'--auto',
+		...(run.resume == null ? [] : ['--session', run.resume]),
+		brief(prompt),
+	],
 	attendable: false,
 	line: (event) => {
 		if (event.type === 'text') {
@@ -822,6 +1019,10 @@ export const adapterFor = (host: string): Adapter => {
 export const limitSpent = (host: string, output: string): string | null =>
 	adapterFor(host).availability?.spent(output) ?? null
 
+/** How full each of a host's usage windows is, from the same output as `limitSpent`. */
+export const limitWindows = (host: string, output: string): LimitWindows | null =>
+	adapterFor(host).availability?.windows?.(output) ?? null
+
 /**
  * One raw event, whatever host wrote it. Read in order, and the first adapter
  * that recognises the shape owns the line — which is what lets a run started
@@ -836,6 +1037,54 @@ export const renderLine = (event: Event): readonly LogLine[] => {
 	return []
 }
 
+/** What a run's events say about the session and its spend, folded one event at a time. */
+export interface Tally {
+	readonly session: string | null
+	readonly turns: number | null
+	readonly contextPeak: number | null
+	readonly cost: number | null
+}
+
+export const EMPTY_TALLY: Tally = { session: null, turns: null, contextPeak: null, cost: null }
+
+/**
+ * Only Claude Code reports turns, context and cost; the other hosts give a
+ * session id and nothing else here. The first session named wins: a resumed
+ * Claude session keeps its id, and nothing later may swap it for another.
+ */
+export const tally = (sum: Tally, event: Event): Tally => {
+	const session =
+		sum.session ??
+		(event.type === 'system' && event.subtype === 'init' ? event.session_id : undefined) ??
+		(event.type === 'thread.started' ? event.thread_id : undefined) ??
+		event.sessionID ??
+		null
+	const usage = event.type === 'assistant' ? event.message?.usage : undefined
+	const context =
+		usage === undefined
+			? null
+			: (usage.input_tokens ?? 0) +
+				(usage.cache_read_input_tokens ?? 0) +
+				(usage.cache_creation_input_tokens ?? 0)
+	const result = event.type === 'result'
+	return {
+		session,
+		turns: result && typeof event.num_turns === 'number' ? event.num_turns : sum.turns,
+		contextPeak: context === null ? sum.contextPeak : Math.max(sum.contextPeak ?? 0, context),
+		cost: result && typeof event.total_cost_usd === 'number' ? event.total_cost_usd : sum.cost,
+	}
+}
+
+/** The skills a run was told to use that its host's `init` did not load. Null when the event does not say. */
+export const missingSkills = (wanted: readonly string[], event: Event): string[] | null => {
+	if (event.type !== 'system' || event.subtype !== 'init' || !Array.isArray(event.skills))
+		return null
+	const loaded = event.skills
+	return wanted.filter(
+		(name) => !loaded.some((skill) => skill === name || skill.endsWith(`:${name}`)),
+	)
+}
+
 /** The union of what the five hosts write, read defensively at every level. */
 export interface Event {
 	readonly type?: string
@@ -843,9 +1092,24 @@ export interface Event {
 	readonly is_error?: boolean
 	/** Stamped by a host on its own events, never on an answer SOBER wrote. */
 	readonly session_id?: string
+	/** Codex's `thread.started`. */
+	readonly thread_id?: string
+	/** OpenCode stamps its session on every event. */
+	readonly sessionID?: string
 	/** Claude Code's `system`/`init` event: the id an alias like `opus` resolved to. */
 	readonly model?: string
+	/** Claude Code's `system`/`init` event: the skills it loaded, a plugin's as `plugin:skill`. */
+	readonly skills?: readonly string[]
+	/** Claude Code's final `result` event. */
+	readonly num_turns?: number
+	readonly total_cost_usd?: number
+	readonly result?: string
 	readonly message?: {
+		readonly usage?: {
+			readonly input_tokens?: number
+			readonly cache_read_input_tokens?: number
+			readonly cache_creation_input_tokens?: number
+		}
 		readonly content?: readonly {
 			readonly type?: string
 			readonly text?: string

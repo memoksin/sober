@@ -1,4 +1,4 @@
-import type { Option } from '@besober/schema'
+import type { Option, Plain } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import type { Board } from './graph.js'
 
@@ -34,6 +34,19 @@ export const renderBrief = (board: Board, id: string): string | null => {
 
 const section = (heading: string, body: string): string =>
 	body === '' ? '' : `## ${heading}\n\n${body}`
+
+/**
+ * The brief's human half, rendered once here and reused by every tool that
+ * asks for approval (`write_brief`, `brief`) — one block, pasted the same way
+ * by every model, instead of a summary each model writes differently (B1).
+ */
+export const renderPlain = (plain: Plain): string =>
+	[
+		section('What changes', plain.what),
+		section('Why', plain.why),
+		section('How it is checked', plain.check),
+		section('Risk', plain.risk),
+	].join('\n\n')
 
 const list = (lines: readonly string[]): string => lines.map((line) => `- ${line}`).join('\n')
 

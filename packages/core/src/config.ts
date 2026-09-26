@@ -82,6 +82,15 @@ export const Config = z.strictObject({
 		// next dispatch probes it again: too long and a spent host is still
 		// offered to Jev, too short and every dispatch pays for a probe.
 		probeSeconds: z.int().positive().default(900),
+		// ADR 0068: "auto" maps the node's score to low/medium/high; null passes no effort flag.
+		effort: z.enum(['auto', 'low', 'medium', 'high', 'xhigh', 'max']).nullable().default('auto'),
+		// ADR 0068: a Claude worker runs without the operator's own ~/.claude
+		// settings, MCP servers and plugins, keeping only these. null keeps them all.
+		plugins: z.array(z.string().min(1)).nullable().default([]),
+		// ADR 0068: Claude settings layered over every worker (permissions, env, …), read from the base.
+		workerSettings: z.record(z.string(), z.unknown()).default({}),
+		// ADR 0069: a host with a usage window this full (0–1) is skipped while another can run the node.
+		limitSoft: z.number().min(0).max(1).default(0.9),
 	}),
 	board: z.strictObject({
 		branch: z.string().min(1),
@@ -138,6 +147,10 @@ export const DEFAULT_CONFIG: Config = {
 		sources: {},
 		catalogueSeconds: 3600,
 		probeSeconds: 900,
+		effort: 'auto',
+		plugins: [],
+		workerSettings: {},
+		limitSoft: 0.9,
 	},
 	board: {
 		branch: 'sober-graph',
@@ -237,8 +250,9 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// complexity range it takes. Set, this wins over "tiers" and
 		// "thresholds" above. Order is preference: where ranges overlap, the
 		// first match runs. A score no entry covers runs "host", and the run
-		// record says so. "about" is the one line Jev reads when it chooses
-		// between the entries that cover the score (ADR 0061), for example:
+		// record says so. "about" is the one line Jev reads when "jevMode" is on
+		// and it chooses among every entry here, straight from the brief and not
+		// narrowed by the score (ADR 0067), for example:
 		//   { "name": "free",  "run": "opencode --model openrouter/qwen/qwen3-coder:free",
 		//     "complexity": [1, 3], "about": "Free. Small edits and tests." },
 		//   { "name": "codex", "run": "codex --model gpt-5.3-codex",
@@ -296,7 +310,33 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// it picks are named in the agent's prompt. Empty means the skill
 		// question is never asked. SOBER cannot discover what you have
 		// installed, so this list is yours to keep.
-		"jevSkills": []
+		"jevSkills": [],
+
+		// How hard the host thinks (ADR 0068). "auto" maps the node's score:
+		// 1-3 low, 4-7 medium, 8-10 high. Or one of low, medium, high, xhigh,
+		// max for every run, or null to pass nothing and keep the host's own.
+		"effort": "${DEFAULT_CONFIG.dispatch.effort}",
+
+		// A Claude worker starts without your own ~/.claude — global CLAUDE.md,
+		// hooks, MCP servers, plugins — which cost it context on every turn
+		// (ADR 0068). The project's .claude settings still load. List the
+		// plugins a worker keeps, for example the one that ships a skill in
+		// "jevSkills": ["ponytail@ponytail"]. null keeps your whole setup.
+		"plugins": [],
+
+		// Claude settings every worker gets on top, since your own are not
+		// loaded — for example {"env": {"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50"},
+		// "permissions": {"deny": ["Bash(rm -rf*)"]}}. SOBER always adds deny
+		// rules for git push, git merge, git switch and gh pr merge. Hooks do
+		// not take effect from here: put them in the project's
+		// .claude/settings.json or in a plugin listed above (ADR 0068).
+		"workerSettings": {},
+
+		// How full a host's five-hour or seven-day window may be, 0 to 1,
+		// before SOBER prefers another host for the next node. With no other
+		// host ready, the full one still runs. "sober models" shows the
+		// windows it last saw (ADR 0069).
+		"limitSoft": ${DEFAULT_CONFIG.dispatch.limitSoft}
 	},
 
 	"board": {

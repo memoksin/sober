@@ -220,7 +220,7 @@ test('next and brief carry no `decide` instruction at the approve/accept ask, an
 	}
 })
 
-test('decision questions keep the paste rule, while brief approvals use plain language', () => {
+test('decision questions keep the paste rule, while brief approvals paste the plain block', () => {
 	const rule =
 		'Before you ask, paste the block the tool returned into this conversation, whole — never a pointer to the board, the dashboard or the CLI.'
 	for (const skill of ['decide', 'plan', 'loop']) {
@@ -230,8 +230,9 @@ test('decision questions keep the paste rule, while brief approvals use plain la
 	}
 	for (const skill of ['brief', 'next']) {
 		const text = readFileSync(join(root, `plugins/skills/${skill}/SKILL.md`), 'utf8')
-		expect(text, skill).toContain('in plain language')
-		expect(text, skill).toContain('dashboard')
+		// ADR 0070: the approval block comes from `plain` and is pasted as it is.
+		expect(text, skill).toContain('`plain`')
+		expect(text, skill).toContain('as it is')
 		expect(text.split('3. **Run.**')[0], skill).not.toContain(rule)
 	}
 })

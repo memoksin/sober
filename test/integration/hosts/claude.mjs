@@ -28,6 +28,30 @@ if (args[0] === 'auth') {
 
 const prompt = args[args.indexOf('-p') + 1] ?? ''
 
+// Resume and compaction (ADR 0069), shaped after a real `claude -p --resume`:
+// an unknown session fails before any tool call, and `/compact` answers with a
+// `compact_boundary` and no assistant turn.
+if (process.env.FAKE_HOST_ARGV) {
+	const { appendFileSync } = await import('node:fs')
+	appendFileSync(process.env.FAKE_HOST_ARGV, `${JSON.stringify(args)}\n`)
+}
+if (args.includes('--resume') && process.env.FAKE_HOST_NO_SESSION === '1') {
+	process.stderr.write(
+		`No conversation found with session ID: ${args[args.indexOf('--resume') + 1]}\n`,
+	)
+	process.exit(1)
+}
+if (prompt.startsWith('/compact')) {
+	say({ type: 'system', subtype: 'init', session_id: 'fake' })
+	say({
+		type: 'system',
+		subtype: 'compact_boundary',
+		compact_metadata: { pre_tokens: 110000, post_tokens: 4000 },
+	})
+	say({ type: 'result', subtype: 'success', is_error: false })
+	process.exit(0)
+}
+
 /**
  * Attended mode (ADR 0046). Recorded off the same kind of real invocation as
  * everything else here: `--input-format stream-json` keeps the session open,
@@ -75,7 +99,13 @@ if (args.includes('--input-format')) {
 	say({ type: 'system', subtype: 'init', session_id: 'fake' })
 	say({
 		type: 'assistant',
-		message: { content: [{ type: 'thinking', thinking: 'weighing the endpoints' }] },
+		message: {
+			content: [{ type: 'thinking', thinking: 'weighing the endpoints' }],
+			usage: {
+				input_tokens: 2,
+				cache_read_input_tokens: Number(process.env.FAKE_HOST_CONTEXT ?? 30000),
+			},
+		},
 	})
 	say({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write' }] } })
 	say({
@@ -105,6 +135,8 @@ if (args.includes('--input-format')) {
 		type: 'result',
 		subtype: failing ? 'error_during_execution' : 'success',
 		is_error: failing,
+		num_turns: 3,
+		total_cost_usd: 0.05,
 	})
 	if (failing) process.stderr.write('the host gave up\n')
 	process.exit(failing ? 1 : 0)

@@ -45,6 +45,20 @@ const plan = {
 	skipped: [],
 }
 
+test('known host windows show usage and their reset times', async () => {
+	serving({
+		projection,
+		distribution: null,
+		digest: null,
+		availability: {
+			claude: { windows: { 'five-hour': { used: 0.92, resetsAt: 1_790_453_168 } } },
+		},
+	})
+	render(<App token="t" />)
+	await waitFor(() => expect(screen.getByText(/claude five-hour: 92% used/)).toBeTruthy())
+	expect(screen.getByText(/resets/)).toBeTruthy()
+})
+
 /**
  * The server, answered by hand. A read named in `reads` is served; one that is
  * not comes back as a refusal, which is how a failing plan read is arranged

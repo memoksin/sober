@@ -18,9 +18,21 @@ import {
 	HostError,
 	type HostReady,
 	hostAvailability,
+	recordAvailability,
 	startAgent,
 } from './host.js'
-import { adapterFor, limitSpent, renderLine, UnknownHostError } from './hosts.js'
+import {
+	adapterFor,
+	type Effort,
+	EMPTY_TALLY,
+	type Event,
+	limitSpent,
+	missingSkills,
+	renderLine,
+	type Tally,
+	tally,
+	UnknownHostError,
+} from './hosts.js'
 import { askJev, backupCandidates } from './jev.js'
 import {
 	appendEvent,
@@ -31,6 +43,7 @@ import {
 	markStopped,
 	readRun,
 	readRunInput,
+	readRunOutput,
 	readRunPid,
 	wasStopped,
 	writeRunPid,
@@ -40,6 +53,8 @@ import type { Paths } from './paths.js'
 import { type Published, publish } from './pr.js'
 import { readNode, readNodes } from './records.js'
 import { finishRun, startRun } from './run.js'
+import { lastRun } from './status.js'
+import { tail } from './tail.js'
 import { OverlapError, overlaps } from './team.js'
 import { addWorktree } from './worktree.js'
 
@@ -151,7 +166,7 @@ export const dispatch = async (
 
 	const removed: { host: string; reason: string }[] = []
 	const unknown: string[] = []
-	const available = built.models.filter((model) => {
+	const eligible = built.models.filter((model) => {
 		let id: string
 		try {
 			id = adapterFor(model.run).id
@@ -168,8 +183,26 @@ export const dispatch = async (
 			removed.push({ host: id, reason: state.reason ?? 'the usage limit is spent' })
 		return false
 	})
-	if (removed.length > 0 || unknown.length > 0)
-		await appendEvent(paths, { action: 'hosts', node, removed, unknown })
+	// A host whose window is nearly full is kept out while another host can
+	// take the node, so the last of a week is not spent on work that fits
+	// elsewhere (ADR 0069). With nothing else ready, it still runs.
+	const strained = Object.entries(spent)
+		.filter(([, state]) =>
+			Object.values(state.windows ?? {}).some((window) => window.used >= config.dispatch.limitSoft),
+		)
+		.map(([id]) => id)
+	const hostOf = (run: string): string | null => {
+		try {
+			return adapterFor(run).id
+		} catch {
+			return null
+		}
+	}
+	const roomy = eligible.filter((model) => !strained.includes(hostOf(model.run) ?? ''))
+	const available = roomy.length > 0 ? roomy : eligible
+	const held = roomy.length > 0 && roomy.length < eligible.length ? strained : []
+	if (removed.length > 0 || unknown.length > 0 || held.length > 0)
+		await appendEvent(paths, { action: 'hosts', node, removed, unknown, strained: held })
 	if (built.models.length > 0 && available.length === 0)
 		throw new HostError(
 			`${node} was not started: every host is out — ${removed
@@ -268,7 +301,21 @@ export const dispatch = async (
 			'or change',
 		)
 
-	const prompt = options.prompt ?? (await promptFor(paths, node, jev?.skills ?? []))
+	const effort = effortFor(config.dispatch, complexity)
+
+	// A node sent back by a human continues the session that built it, on the
+	// same host (DESIGN §6.4, ADR 0069). Without one to continue, the next
+	// attempt starts fresh from what the last one reported.
+	const board = await loadBoard(paths)
+	const previous = board.feedback.has(node) ? lastRun(board, node) : null
+	const resumable =
+		previous !== null && previous.run.session !== null && sameHost(previous.run.host, line)
+			? previous.run
+			: null
+	const handoff = previous === null ? null : await lastWords(paths, previous.id)
+	const skills = jev?.skills ?? []
+	const freshPrompt = options.prompt ?? (await promptFor(paths, node, skills, handoff))
+	const resumedPrompt = options.prompt ?? (await promptFor(paths, node, skills, null))
 
 	const worktree = await addWorktree(paths, node, options.base)
 	if (worktree.created && config.dispatch.setup !== null)
@@ -282,6 +329,7 @@ export const dispatch = async (
 		backup: backup?.run ?? null,
 		ran,
 		fellBack,
+		effort,
 	})
 	// The pid file holds the **agent's** pid and nothing else, written by
 	// `onStart` below. It used to be seeded with this process's, so a `sober
@@ -309,35 +357,92 @@ export const dispatch = async (
 	// and the tail of what it printed, for the host's own limit patterns.
 	let sawTool = false
 	let output = ''
+	let sum: Tally = EMPTY_TALLY
+	// The host's own word on its account, free with every Claude run (ADR 0069).
+	let lastLimit: string | null = null
+	let skillsChecked = false
 	const emit = (raw: string): void => {
 		options.onLine?.(raw)
 		written = written.then(() => appendRunOutput(paths, id, `${raw}\n`))
 	}
-	const launch = (host: string) =>
+	const launch = (host: string, prompt: string, resume: string | null, runEffort = effort) =>
 		startAgent({
 			host,
 			cwd: worktree.path,
 			prompt,
 			attended,
 			signal: control.signal,
+			run: {
+				effort: runEffort,
+				plugins: config.dispatch.plugins,
+				settings: config.dispatch.workerSettings,
+				resume,
+			},
 			onStart: (pid) => void writeRunPid(paths, id, pid),
 			onInput: (input) => relay?.start(input),
 			onLine: (raw) => {
 				output = `${output}${raw}\n`.slice(-OUTPUT_KEPT)
-				if (!sawTool) {
-					try {
-						sawTool = renderLine(JSON.parse(raw)).some((l) => l.kind === 'tool')
-					} catch {
-						// Not JSON: a plain stderr line never counts as a tool call.
-					}
+				let event: Event | null = null
+				try {
+					event = JSON.parse(raw) as Event
+				} catch {
+					// Not JSON: a plain stderr line never counts as a tool call.
+				}
+				let missing: string[] | null = null
+				if (event !== null && typeof event === 'object') {
+					sum = tally(sum, event)
+					if (event.type === 'rate_limit_event') lastLimit = raw
+					if (!sawTool) sawTool = renderLine(event).some((l) => l.kind === 'tool')
+					if (!skillsChecked) missing = missingSkills(skills, event)
 				}
 				emit(raw)
+				if (missing === null) return
+				skillsChecked = true
+				// The prompt names these skills; a worker without them guesses instead.
+				if (missing.length > 0)
+					emit(
+						`the host did not load ${missing.join(', ')} — check \`dispatch.plugins\` and \`dispatch.jevSkills\``,
+					)
 			},
 		})
+	const cold = () => {
+		sum = EMPTY_TALLY
+		return launch(line, freshPrompt, null)
+	}
 
 	try {
-		let exit = await launch(line)
+		let resume = resumable?.session ?? null
+		// A big session is compacted before it is resumed: resumed as it is, every
+		// turn of the retry would re-read the whole first attempt, which measured
+		// 1.8x a fresh retry over 26 retries (ADR 0069). The compaction itself is
+		// written at low effort: its output is most of what it costs.
+		if (
+			resume !== null &&
+			adapterFor(line).id === 'claude' &&
+			(resumable?.usage?.contextPeak ?? 0) > COMPACT_ABOVE
+		) {
+			emit(`compacting session ${resume} before resuming it`)
+			const compacted = await launch(line, COMPACT, resume, 'low')
+			await written
+			if (compacted.kind !== 'finished') resume = null
+		}
+		let exit = resume === null ? await cold() : await launch(line, resumedPrompt, resume)
 		await written
+
+		// A session that cannot be resumed — gone, or refused — fails before it
+		// touches anything. The node starts cold instead; it never tries the id
+		// again, because the run record now holds the fresh session's.
+		if (
+			resume !== null &&
+			exit.kind === 'failed' &&
+			!sawTool &&
+			!control.signal.aborted &&
+			!(await wasStopped(paths, id))
+		) {
+			emit(`session ${resume} could not be resumed: ${exit.reason} — starting a fresh one`)
+			exit = await cold()
+			await written
+		}
 
 		// A primary that stopped on a spent limit before touching anything runs
 		// once more on the backup, in the same worktree and under the same run.
@@ -359,7 +464,8 @@ export const dispatch = async (
 			line = backup.run
 			ran = 'backup'
 			fellBack = spentReason
-			exit = await launch(line)
+			sum = EMPTY_TALLY
+			exit = await launch(line, freshPrompt, null)
 			await written
 		}
 		relay?.stop()
@@ -397,12 +503,19 @@ export const dispatch = async (
 					})
 				: await unjudged(paths, node)
 
+		if (lastLimit !== null) await recordAvailability(paths, line, lastLimit)
+
 		const run = await finishRun(paths, id, {
 			...result,
 			...judged,
 			host: line,
 			ran,
 			...(fellBack === null ? {} : { fellBack }),
+			session: sum.session,
+			usage:
+				sum.turns === null && sum.contextPeak === null && sum.cost === null
+					? null
+					: { turns: sum.turns, contextPeak: sum.contextPeak, cost: sum.cost },
 		})
 		return {
 			run: id,
@@ -423,6 +536,45 @@ export const dispatch = async (
 
 /** How much of the primary's output is kept for the limit patterns to read. */
 const OUTPUT_KEPT = 64 * 1024
+
+/**
+ * Below this peak context a session is resumed as it is; above it, compacted
+ * first. Measured on four real worker sessions (ADR 0069): one compaction costs
+ * about one turn of the old context plus a 5–13k summary, and leaves ~35–44k.
+ * At 110k and up it pays back on the first retry turn with a cold cache; at
+ * 50–76k it needs 12–16 turns, more than a typical resumed retry takes.
+ */
+const COMPACT_ABOVE = 100_000
+
+const COMPACT =
+	'/compact Keep what the brief asked for, which files were changed and why, what was checked, and what is unfinished. Drop file contents and command output.'
+
+/** How long the last attempt's own report may be when it heads a fresh retry's prompt. */
+const HANDOFF_KEPT = 4000
+
+/** The score's tier, as an effort: the same bands `thresholds` draws for the tiers (ADR 0068). */
+const effortFor = (dispatch: Config['dispatch'], complexity: number | null): Effort | null => {
+	if (dispatch.effort !== 'auto') return dispatch.effort
+	const tier = tierFor(dispatch.thresholds, complexity)
+	return tier === null ? null : tier === 'mid' ? 'medium' : tier
+}
+
+/** The same host CLI, whatever model either line names: a session belongs to the host. */
+const sameHost = (left: string, right: string): boolean => {
+	try {
+		return adapterFor(left).id === adapterFor(right).id
+	} catch {
+		return false
+	}
+}
+
+/** The last thing a run's agent said — its own account of what it did and what is left. */
+const lastWords = async (paths: Paths, run: string): Promise<string | null> => {
+	const said = tail(await readRunOutput(paths, run))
+		.filter((line) => line.kind === 'text')
+		.at(-1)?.text
+	return said === undefined || said.trim() === '' ? null : said.trim().slice(0, HANDOFF_KEPT)
+}
 
 /** A backup line that names no host is not ready; it is never a crash. */
 const ready = async (line: string): Promise<boolean> => {
@@ -616,12 +768,18 @@ const HOW_IT_ENDS = `
 
 This is a headless run and nobody is watching it. The turn you end is the run you end: when you stop, the process exits, and nothing that was still running reports back. Run every command in the foreground and wait for it to finish — never background a command, schedule a wakeup, or stop to wait for a notification. Long commands (the full test suite, coverage) are part of the work; wait for them.
 
+Read files with an offset and a limit around what a search found. Read a whole file only when it is short: everything you read stays in the session for every turn after it.
+
 Commit your work on this branch. Nothing outside a commit is reviewed: SOBER
 reads \`git diff <base>...<this branch>\`, so uncommitted files are invisible to
 the human who has to accept them.
 
 Do not push, do not merge, and do not switch branches. Landing the work is a
 human's decision, made after the review.
+
+End with a short final message: the files you changed, the decisions you made,
+and anything left unfinished. If the node is sent back, that message is where
+the next attempt starts.
 `
 
 /**
@@ -684,6 +842,7 @@ const promptFor = async (
 	paths: Paths,
 	node: string,
 	skills: readonly string[],
+	handoff: string | null,
 ): Promise<string> => {
 	const board = await loadBoard(paths)
 	const brief = renderBrief(board, node)
@@ -692,9 +851,10 @@ const promptFor = async (
 	const body = `${brief}${skillsBlock(skills)}${HOW_IT_ENDS}`
 	const feedback = board.feedback.get(node)
 	if (feedback === undefined) return body
+	const reported = handoff === null ? '' : `\n\n# What the last attempt reported\n\n${handoff}`
 	return `# The last attempt was turned down
 
-${feedback.text}
+${feedback.text}${reported}
 
 What follows is the brief, unchanged.
 

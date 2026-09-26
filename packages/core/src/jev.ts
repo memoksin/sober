@@ -121,9 +121,11 @@ export const jevDecision = (body: unknown, skills: readonly string[]): JevDecisi
 }
 
 /**
- * The constraint reaches Jev as the set it is shown: only the entries covering
- * the score are on the list, so nothing it picks can be out of range. `about`
- * is what it reads; an entry with none is described by its command line.
+ * Every entry `askJev` was handed, never narrowed by the score (ADR 0067):
+ * Jev already read the brief once to produce that score, and a second read
+ * to pick a model should not be thrown away by a range it just landed
+ * outside of. `about` is what it reads; an entry with none is described by
+ * its command line.
  */
 export const modelQuestion = (eligible: readonly Model[]): Record<string, JevQuestion> => ({
 	model: {
@@ -224,25 +226,24 @@ const post = async (state: string, questions: Record<string, JevQuestion>): Prom
 }
 
 /**
- * Three round trips at most: the score, then — only when more than one entry
- * covers it — the choice among those, then — only when more than one entry
- * qualifies — the backup. One entry needs no question, and none leaves the
- * model null for dispatch to fall back on `dispatch.host`.
+ * Three round trips at most: the score, then — only when the list holds more
+ * than one entry — the choice among all of them, then — only when more than
+ * one candidate qualifies — the backup. One entry needs no question, and none
+ * leaves the model null for dispatch to fall back on `dispatch.host`.
  */
 export const askJev = async (state: string, ask: JevAsk): Promise<JevDecision> => {
 	const decision = jevDecision(await post(state, jevQuestions(ask.skills)), ask.skills)
-	const eligible = modelsFor(ask.models, decision.complexity)
 	const name =
-		eligible.length > 1
+		ask.models.length > 1
 			? jevChoice(
-					await post(state, modelQuestion(eligible)),
-					eligible.map((m) => m.name),
+					await post(state, modelQuestion(ask.models)),
+					ask.models.map((m) => m.name),
 				)
-			: eligible[0]?.name
-	const primary = eligible.find((m) => m.name === name)
+			: ask.models[0]?.name
+	const primary = ask.models.find((m) => m.name === name)
 	if (primary === undefined) return decision
 
-	const candidates = backupCandidates(ask.models, primary.run, decision.complexity)
+	const candidates = backupCandidates(ask.models, primary.run, null)
 	const backup =
 		candidates.length > 1
 			? jevChoice(

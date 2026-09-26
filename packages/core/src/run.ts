@@ -29,6 +29,7 @@ export const startRun = (
 		backup = null,
 		ran = 'primary',
 		fellBack = null,
+		effort = null,
 	}: {
 		readonly attended?: boolean
 		readonly tier?: Run['tier']
@@ -36,6 +37,7 @@ export const startRun = (
 		readonly backup?: Run['backup']
 		readonly ran?: Run['ran']
 		readonly fellBack?: Run['fellBack']
+		readonly effort?: Run['effort']
 	} = {},
 ): Promise<StartedRun> =>
 	withLock(paths, 'run', async () => {
@@ -71,6 +73,9 @@ export const startRun = (
 			backup,
 			ran,
 			fellBack,
+			session: null,
+			effort,
+			usage: null,
 		}
 		await writeRun(paths, id, run)
 		await appendEvent(paths, { action: 'run.started', node, run: id, host })
@@ -88,6 +93,8 @@ export interface RunResult {
 	readonly host?: string
 	readonly ran?: Run['ran']
 	readonly fellBack?: string
+	readonly session?: string | null
+	readonly usage?: Run['usage']
 }
 
 export const finishRun = (paths: Paths, id: string, result: RunResult): Promise<Run> =>
@@ -100,6 +107,8 @@ export const finishRun = (paths: Paths, id: string, result: RunResult): Promise<
 			host: result.host ?? record.value.host,
 			ran: result.ran ?? record.value.ran,
 			fellBack: result.fellBack ?? record.value.fellBack,
+			session: result.session ?? record.value.session,
+			usage: result.usage ?? record.value.usage,
 			endedAt: new Date().toISOString(),
 			exit: result.exit,
 			error: result.error ?? null,

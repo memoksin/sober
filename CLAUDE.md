@@ -1,5 +1,9 @@
 # sober
 
+## Open work
+
+- `docs/RUN-COST-TODO.md` — shared todo for run cost, limits and sessions. Read it before you start. Take the next item, tick it, and log it.
+
 ## Branch model
 
 - Every change goes to `development` unless the user explicitly says otherwise.

@@ -25,6 +25,9 @@ test('parses a run still in flight', () => {
 		backup: null,
 		ran: 'primary',
 		fellBack: null,
+		session: null,
+		effort: null,
+		usage: null,
 	})
 })
 

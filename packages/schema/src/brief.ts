@@ -14,6 +14,21 @@ export const Criterion = z.strictObject({
 export type Criterion = z.infer<typeof Criterion>
 
 /**
+ * The brief's human half: what a person with no repository knowledge is told
+ * before approving (B1). Optional so a brief written before this field
+ * existed still parses — that brief falls back to an ad-hoc explanation
+ * instead of a rendered block.
+ */
+export const Plain = z.strictObject({
+	what: z.string().min(1).max(400),
+	why: z.string().min(1).max(400),
+	check: z.string().min(1).max(400),
+	risk: z.string().min(1).max(400),
+})
+
+export type Plain = z.infer<typeof Plain>
+
+/**
  * An approval or acceptance made under `sober:auto` rather than by a person
  * (ADR 0065 §6). `invokedBy` is who ran the invocation; the record's own `by`
  * is that same handle and never reads as their approval. Absent means a human.
@@ -63,6 +78,7 @@ export const Brief = z.strictObject({
 	complexity: z.int().min(1).max(10).nullable(),
 	acceptance: z.array(Criterion).min(1),
 	approval: Approval.nullable(),
+	plain: Plain.optional(),
 })
 
 export type Brief = z.infer<typeof Brief>

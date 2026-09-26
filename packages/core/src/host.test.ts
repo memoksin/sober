@@ -11,6 +11,7 @@ import {
 	NO_HUMAN,
 	npmShimTarget,
 	program,
+	recordAvailability,
 	startAgent,
 } from './host.js'
 import { paths } from './paths.js'
@@ -224,17 +225,17 @@ test('a probe is cached, reused while fresh, and run again once stale', async ()
 	const runFn = vi.fn(async () => ({ stdout: 'ok\n', stderr: '' }))
 
 	const first = await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
-	expect(first).toEqual({ claude: { state: 'ready', reason: null } })
+	expect(first).toEqual({ claude: { state: 'ready', reason: null, windows: null } })
 	expect(runFn).toHaveBeenCalledTimes(1)
 
 	now += 100_000
 	const second = await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
-	expect(second).toEqual({ claude: { state: 'ready', reason: null } })
+	expect(second).toEqual({ claude: { state: 'ready', reason: null, windows: null } })
 	expect(runFn).toHaveBeenCalledTimes(1)
 
 	now += 1_000_000
 	const third = await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
-	expect(third).toEqual({ claude: { state: 'ready', reason: null } })
+	expect(third).toEqual({ claude: { state: 'ready', reason: null, windows: null } })
 	expect(runFn).toHaveBeenCalledTimes(2)
 
 	const written = JSON.parse(await readFile(p.hosts, 'utf8')) as { at: number }
@@ -250,12 +251,47 @@ test('probing a new host does not renew another host’s cached result', async (
 	await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
 	now += 100_000
 	await hostAvailability(p, ['claude', 'codex'], 900, { run: runFn as never, now: () => now })
-	const written = JSON.parse(await readFile(p.hosts, 'utf8')) as { hosts: Record<string, unknown> }
-	expect(written.hosts).toHaveProperty('codex')
-	expect(written.hosts).not.toHaveProperty('claude')
+	expect(runFn).toHaveBeenCalledTimes(2)
+	const written = JSON.parse(await readFile(p.hosts, 'utf8')) as {
+		hosts: Record<string, { at: number }>
+	}
+	expect(written.hosts.codex?.at).toBe(1_100_000)
+	expect(written.hosts.claude?.at).toBe(1_000_000)
 
-	await hostAvailability(p, ['claude'], 900, { run: runFn as never, now: () => now })
+	// Past claude's own window, though codex's is still open.
+	now = 1_000_000 + 900_001
+	await hostAvailability(p, ['claude', 'codex'], 900, { run: runFn as never, now: () => now })
 	expect(runFn).toHaveBeenCalledTimes(3)
+})
+
+test('a run’s own rate_limit_event stands in for a probe, for its host only', async () => {
+	const root = await tmpRoot('sober-hosts-')
+	const p = paths(root)
+	const runFn = vi.fn(async () => ({ stdout: 'ok\n', stderr: '' }))
+
+	await recordAvailability(
+		p,
+		'claude',
+		JSON.stringify({
+			type: 'rate_limit_event',
+			rate_limit_info: {
+				status: 'rejected',
+				unifiedWindows: { five_hour: { utilization: 1, resetsAt: 1_790_453_168 } },
+			},
+		}),
+		1_000_000,
+	)
+	const result = await hostAvailability(p, ['claude', 'codex'], 900, {
+		run: runFn as never,
+		now: () => 1_100_000,
+	})
+	expect(result.claude).toEqual({
+		state: 'spent',
+		reason: 'five-hour limit, resets 20:06',
+		windows: { 'five-hour': { used: 1, resetsAt: 1_790_453_168 } },
+	})
+	// Only codex was asked: claude's answer came free with the run.
+	expect(runFn).toHaveBeenCalledTimes(1)
 })
 
 test('a probe that errors or times out is unknown, kept, never a silent ready or spent', async () => {
@@ -292,7 +328,7 @@ test('a limit-spent probe is classified from the same table `limitSpent` reads',
 
 	const result = await hostAvailability(p, ['codex'], 900, { run: runFn as never, now: () => 1 })
 	expect(result).toEqual({
-		codex: { state: 'spent', reason: 'usage limit, try again at 2:59 PM' },
+		codex: { state: 'spent', reason: 'usage limit, try again at 2:59 PM', windows: null },
 	})
 })
 
@@ -306,7 +342,7 @@ test('a nonzero probe exit still classifies a printed limit', async () => {
 	})
 
 	expect(await hostAvailability(p, ['codex'], 900, { run: runFn as never, now: () => 1 })).toEqual({
-		codex: { state: 'spent', reason: 'usage limit, try again at 2:59 PM' },
+		codex: { state: 'spent', reason: 'usage limit, try again at 2:59 PM', windows: null },
 	})
 })
 

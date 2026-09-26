@@ -30,6 +30,7 @@ exports[`schema exports nothing new without a reviewer seeing it 1`] = `
   "Node",
   "OPERATIONS",
   "Option",
+  "Plain",
   "Project",
   "ProjectedNode",
   "Projection",

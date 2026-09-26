@@ -4,7 +4,16 @@ import { readFile } from 'node:fs/promises'
 import { basename, delimiter, join } from 'node:path'
 import { promisify } from 'node:util'
 import { SoberError } from './errors.js'
-import { adapterFor, hostCommand, limitSpent } from './hosts.js'
+import {
+	adapterFor,
+	codexRateLimitsSpent,
+	codexWindows,
+	hostCommand,
+	type LimitWindows,
+	limitSpent,
+	limitWindows,
+	type RunArgs,
+} from './hosts.js'
 import type { Paths } from './paths.js'
 import { writeAtomic } from './write.js'
 
@@ -137,11 +146,18 @@ export interface HostAvailability {
 	readonly state: 'ready' | 'spent' | 'unknown'
 	/** What is out, in the words the user has to act on (§8.7) — null when ready or unknown. */
 	readonly reason: string | null
+	/** How full each usage window was when this was learned, when the host says (L4). */
+	readonly windows?: LimitWindows | null
 }
 
+/**
+ * Each entry carries its own time: a run's own `rate_limit_event` refreshes
+ * one host without making the others look fresh (ADR 0069). `at` on the file
+ * is what entries written before that fall back to.
+ */
 interface HostsCache {
 	readonly at: number
-	readonly hosts: Readonly<Record<string, HostAvailability>>
+	readonly hosts: Readonly<Record<string, HostAvailability & { readonly at?: number }>>
 }
 
 const readHostsCache = async (file: string): Promise<HostsCache> => {
@@ -155,7 +171,56 @@ const readHostsCache = async (file: string): Promise<HostsCache> => {
 export interface HostAvailabilityDeps {
 	readonly run?: typeof run
 	readonly now?: () => number
+	/** Asks a host's own server for its limits with no model call; null when it cannot. */
+	readonly rpc?: (id: string, command: string) => Promise<HostAvailability | null>
 }
+
+const RPC_TIMEOUT_MS = 15_000
+
+/**
+ * Codex's limits from `codex app-server` (`account/rateLimits/read`): the
+ * answer the `exec` probe pays a model call for, for free. The protocol is
+ * marked experimental, so anything unexpected is null and the probe runs.
+ */
+export const readRateLimits = (id: string, command: string): Promise<HostAvailability | null> =>
+	new Promise((resolve) => {
+		if (id !== 'codex') return resolve(null)
+		const [file, lead] = program(command)
+		const child = spawn(file, [...lead, 'app-server'], { shell: false, stdio: 'pipe' })
+		const done = (value: HostAvailability | null) => {
+			clearTimeout(timer)
+			child.kill()
+			resolve(value)
+		}
+		const timer = setTimeout(() => done(null), RPC_TIMEOUT_MS)
+		const send = (message: object) => child.stdin.write(`${JSON.stringify(message)}\n`)
+		child.on('error', () => done(null))
+		child.on('close', () => done(null))
+		lines(child.stdout, (line) => {
+			let message: { id?: number; result?: unknown; error?: unknown }
+			try {
+				message = JSON.parse(line)
+			} catch {
+				return
+			}
+			if (message.id === 1) {
+				send({ method: 'initialized' })
+				send({ id: 2, method: 'account/rateLimits/read', params: null })
+			}
+			if (message.id !== 2) return
+			if (message.result === undefined || message.result === null) return done(null)
+			const reason = codexRateLimitsSpent(
+				message.result as Parameters<typeof codexRateLimitsSpent>[0],
+			)
+			const windows = codexWindows(message.result as Parameters<typeof codexWindows>[0])
+			done(
+				reason === null
+					? { state: 'ready', reason: null, windows }
+					: { state: 'spent', reason, windows },
+			)
+		})
+		send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'sober', version: '0' } } })
+	})
 
 /**
  * Whether each host's *account* — not any one model — still has runway, per
@@ -175,9 +240,14 @@ export const hostAvailability = async (
 	deps: HostAvailabilityDeps = {},
 ): Promise<Record<string, HostAvailability>> => {
 	const runFn = deps.run ?? run
+	// A test that fakes the probe gets no real server behind its back.
+	const rpcFn = deps.rpc ?? (deps.run === undefined ? readRateLimits : null)
 	const now = deps.now?.() ?? Date.now()
 	const cache = await readHostsCache(paths.hosts)
-	const fresh = now < cache.at + probeSeconds * 1000
+	const freshAt = (id: string): boolean => {
+		const entry = cache.hosts[id]
+		return entry !== undefined && now < (entry.at ?? cache.at) + probeSeconds * 1000
+	}
 
 	// One entry per adapter id — the first host line naming it is what says
 	// which binary to spawn, and the probe itself is fixed from there.
@@ -198,13 +268,20 @@ export const hostAvailability = async (
 		const adapter = adapterFor(host)
 		if (adapter.availability === undefined) continue
 
-		if (fresh && cache.hosts[id] !== undefined) {
-			result[id] = cache.hosts[id]
+		const cached = cache.hosts[id]
+		if (freshAt(id) && cached !== undefined) {
+			result[id] = { state: cached.state, reason: cached.reason, windows: cached.windows }
 			continue
 		}
 
 		changed = true
 		const [command] = hostCommand(host)
+		const answered = rpcFn === null ? null : await rpcFn(id, adapter.command ?? command)
+		if (answered !== null) {
+			result[id] = answered
+			probed[id] = answered
+			continue
+		}
 		try {
 			const { stdout } = await runFn(adapter.command ?? command, [...adapter.availability.argv], {
 				encoding: 'utf8',
@@ -215,14 +292,14 @@ export const hostAvailability = async (
 				probed[id] = result[id]
 				continue
 			}
-			const reason = limitSpent(id, stdout)
-			result[id] = reason === null ? { state: 'ready', reason: null } : { state: 'spent', reason }
+			result[id] = availabilityOf(id, stdout)
 		} catch (error) {
 			// execFile rejects on a nonzero exit, including when the host prints
 			// its limit message and exits. Classify that output before falling back.
 			const failed = error as Error & { stdout?: string; stderr?: string }
-			const reason = limitSpent(id, `${failed.stdout ?? ''}\n${failed.stderr ?? ''}`)
-			if (reason !== null) result[id] = { state: 'spent', reason }
+			const output = `${failed.stdout ?? ''}\n${failed.stderr ?? ''}`
+			const found = availabilityOf(id, output)
+			if (found.state === 'spent') result[id] = found
 			else {
 				console.error(`sober: ${id}'s availability could not be probed: ${failed.message}`)
 				result[id] = { state: 'unknown', reason: null }
@@ -231,13 +308,66 @@ export const hostAvailability = async (
 		probed[id] = result[id]
 	}
 
-	if (changed) {
-		// The timestamp belongs to this set of probes. Carrying an older
-		// unrequested host forward would make its stale answer look fresh.
-		await writeAtomic(paths.hosts, JSON.stringify({ at: now, hosts: probed }))
-	}
+	if (changed) await writeHosts(paths, cache, probed, now)
 
 	return result
+}
+
+/** What a probe's or a run's output says about the host's account. */
+const availabilityOf = (host: string, output: string): HostAvailability => {
+	const reason = limitSpent(host, output)
+	const windows = limitWindows(host, output)
+	return reason === null
+		? { state: 'ready', reason: null, windows }
+		: { state: 'spent', reason, windows }
+}
+
+/**
+ * Writes what one run's own `rate_limit_event` said about its host: the
+ * answer a probe would have paid a request for.
+ *
+ * ponytail: read-then-write with no lock, so two runs ending together can drop
+ * one's entry. The next probe or run puts it back; a lock if that matters.
+ */
+export const recordAvailability = async (
+	paths: Paths,
+	host: string,
+	output: string,
+	now = Date.now(),
+): Promise<void> => {
+	const id = adapterFor(host).id
+	await writeHosts(
+		paths,
+		await readHostsCache(paths.hosts),
+		{ [id]: availabilityOf(host, output) },
+		now,
+	)
+}
+
+/** The last thing learned about each host's account, however old, for a person to read. */
+export const knownAvailability = async (
+	paths: Paths,
+): Promise<Readonly<Record<string, HostAvailability & { readonly at: number }>>> => {
+	const cache = await readHostsCache(paths.hosts)
+	return Object.fromEntries(
+		Object.entries(cache.hosts).map(([id, entry]) => [id, { ...entry, at: entry.at ?? cache.at }]),
+	)
+}
+
+const writeHosts = (
+	paths: Paths,
+	cache: HostsCache,
+	fresh: Readonly<Record<string, HostAvailability>>,
+	now: number,
+): Promise<void> => {
+	// Entries written before per-host times inherit the file's, so none looks fresher than it is.
+	const kept = Object.fromEntries(
+		Object.entries(cache.hosts).map(([id, entry]) => [id, { ...entry, at: entry.at ?? cache.at }]),
+	)
+	const stamped = Object.fromEntries(
+		Object.entries(fresh).map(([id, entry]) => [id, { ...entry, at: now }]),
+	)
+	return writeAtomic(paths.hosts, JSON.stringify({ at: now, hosts: { ...kept, ...stamped } }))
 }
 
 export type AgentExit =
@@ -265,6 +395,8 @@ export interface AgentOptions {
 	 * Only called in attended mode — a headless host has no stdin to write to.
 	 */
 	readonly onInput?: (input: AgentInput) => void
+	/** Effort, isolation and the session to resume, for the adapter to put on the line. */
+	readonly run?: RunArgs
 }
 
 /** Talking to a live session: one message, or the end of the conversation. */
@@ -286,17 +418,21 @@ export const startAgent = (options: AgentOptions): Promise<AgentExit> =>
 		const adapter = adapterFor(options.host)
 		const attended = options.attended === true && adapter.attendable
 		const [file, lead] = program(adapter.command ?? command)
-		const child = spawn(file, [...lead, ...args, ...adapter.argv(options.prompt, attended)], {
-			cwd: options.cwd,
-			// Never a shell: a brief carrying a backtick is text, not a second command.
-			shell: false,
-			// stdin is closed for a headless run, and the reason is measurable: a
-			// `claude -p` with an open stdin waits three seconds for input that
-			// never comes, and `codex exec` says so out loud — "Reading additional
-			// input from stdin...". An attended run is the case where something
-			// does come.
-			stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-		})
+		const child = spawn(
+			file,
+			[...lead, ...args, ...adapter.argv(options.prompt, attended, options.run)],
+			{
+				cwd: options.cwd,
+				// Never a shell: a brief carrying a backtick is text, not a second command.
+				shell: false,
+				// stdin is closed for a headless run, and the reason is measurable: a
+				// `claude -p` with an open stdin waits three seconds for input that
+				// never comes, and `codex exec` says so out loud — "Reading additional
+				// input from stdin...". An attended run is the case where something
+				// does come.
+				stdio: [attended ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+			},
+		)
 
 		if (child.pid !== undefined) options.onStart?.(child.pid)
 

@@ -24,6 +24,7 @@ import {
 	followRun,
 	impactOf,
 	initBoard,
+	knownAvailability,
 	lastRun,
 	loadBoard,
 	NotOnBoardError,
@@ -404,6 +405,7 @@ export const GAPS = [
  * from.
  */
 export const READS: Readonly<Record<string, Route>> = {
+	availability: route(nothing, (paths) => knownAvailability(paths)),
 	// How far the board branch is from its remote. A read with a side effect:
 	// it takes a clean fast-forward, which cannot conflict and is what the
 	// accepted decision chose over a "3 behind" the user must press away.

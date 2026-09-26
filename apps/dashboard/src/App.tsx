@@ -32,6 +32,17 @@ import { wire } from './wire.js'
  */
 const POLL_MS = 2000
 
+type Availability = Readonly<
+	Record<
+		string,
+		{
+			readonly windows?: Readonly<
+				Record<string, { readonly used: number; readonly resetsAt: number | null }>
+			> | null
+		}
+	>
+>
+
 export const App = ({ token }: { readonly token: string | null }): React.JSX.Element => {
 	const [projection, setProjection] = useState<Projection | null>(null)
 	const [board, setBoard] = useState<BoardRead | null>(null)
@@ -65,6 +76,19 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [conflictsOpen, setConflictsOpen] = useState(false)
 	// Read on load and after a sync, never on the poll: it fetches the remote.
 	const [distance, setDistance] = useState<BoardDistance | null>(null)
+	const [availability, setAvailability] = useState<Availability>({})
+
+	useEffect(() => {
+		if (token === null) return
+		const read = () =>
+			void wire(token)
+				.read<Availability>('availability')
+				.then(setAvailability)
+				.catch(() => {})
+		read()
+		const timer = setInterval(read, 30_000)
+		return () => clearInterval(timer)
+	}, [token])
 
 	// The full board is only read while something is open. The canvas needs the
 	// slim projection every couple of seconds (ADR 0008); a drawer that is not
@@ -419,6 +443,21 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 					{withDone ? 'showing done' : `${hidden} done hidden`}
 				</button>
 			</header>
+
+			{Object.entries(availability).some(([, host]) => host.windows != null) && (
+				<div className="flex shrink-0 flex-wrap gap-x-4 border-[var(--line)] border-b px-4 py-1 text-[var(--ink-dim)] text-xs tabular-nums">
+					{Object.entries(availability).flatMap(([host, state]) =>
+						Object.entries(state.windows ?? {}).map(([name, window]) => (
+							<span key={`${host}-${name}`}>
+								{host} {name}: {Math.round(window.used * 100)}% used
+								{window.resetsAt === null
+									? ''
+									: ` · resets ${new Date(window.resetsAt * 1000).toLocaleString()}`}
+							</span>
+						)),
+					)}
+				</div>
+			)}
 
 			{digest !== null && (
 				<Digest

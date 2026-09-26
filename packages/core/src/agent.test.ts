@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { LogLineInput as LogLine } from '@besober/schema'
@@ -452,6 +452,54 @@ test('a stop that lands between two tool calls is honoured before the second one
 	})
 	expect(exit).toEqual({ kind: 'stopped' })
 	expect(seen).toBe(1)
+})
+
+test('a git push, sudo, and an out-of-tree write are refused without running, then a plain command runs', async () => {
+	const cwd = setup()
+	const { fetchFn, toolResults } = scripted([
+		{ tool: 'bash', args: { command: 'git push origin main' } },
+		{ tool: 'bash', args: { command: 'sudo rm -rf /' } },
+		{ tool: 'bash', args: { command: 'echo leaked > ../outside.txt' } },
+		{ tool: 'bash', args: { command: 'echo hi' } },
+	])
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+	})
+
+	expect(exit).toEqual({ kind: 'finished' })
+	expect(toolResults[0]).toContain('refused')
+	expect(toolResults[0]).toContain('git push')
+	expect(toolResults[1]).toContain('refused')
+	expect(toolResults[1]).toContain('sudo')
+	expect(toolResults[2]).toContain('refused')
+	expect(toolResults[2]).toContain('outside the working directory')
+	expect(toolResults[3]).toContain('hi')
+	expect(existsSync(join(cwd, '..', 'outside.txt'))).toBe(false)
+})
+
+test('a refused command is followed by a successful turn once the model corrects its command', async () => {
+	const cwd = setup()
+	const { fetchFn, toolResults } = scripted([
+		{ tool: 'bash', args: { command: 'git push' } },
+		{ tool: 'bash', args: { command: 'echo corrected' } },
+	])
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+	})
+
+	expect(exit).toEqual({ kind: 'finished' })
+	expect(toolResults[0]).toContain('refused')
+	expect(toolResults[1]).toContain('exit code: 0')
 })
 
 test('a tool line carries its call and argument, and its result follows as an output line', async () => {
