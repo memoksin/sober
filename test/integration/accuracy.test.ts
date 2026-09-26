@@ -177,6 +177,51 @@ test('an accepted node with no reachable sober merge is reported unmeasurable, a
 	})
 })
 
+test('a rename from an undeclared path into a declared one counts both the source and the destination, regardless of the user\'s `diff.renames`', async () => {
+	await board()
+	// A user-level rename-detection config a contributor might have set —
+	// the accuracy report must not vary with it (`git diff` without
+	// `--no-renames` would otherwise fold this into one destination-only entry).
+	git('config', 'diff.renames', 'true')
+	// The source path must already exist on `main` before this node's branch —
+	// otherwise merge^1..merge sees no source to rename from and it's a plain
+	// addition either way, which would not exercise the bug this test guards.
+	mkdirSync(join(paths.root, 'undeclared'), { recursive: true })
+	const body = 'export const moved = 1\n'.repeat(50)
+	writeFileSync(join(paths.root, 'undeclared/moved.ts'), body)
+	git('add', '-A')
+	git('commit', '-m', 'chore: add file that will move')
+
+	await node('rename-node-r1e2', 'Renamed', ['src/alpha/**'])
+	const { path } = await addWorktree(paths, 'rename-node-r1e2', 'main')
+	mkdirSync(join(path, 'src/alpha'), { recursive: true })
+	execFileSync('git', ['mv', 'undeclared/moved.ts', 'src/alpha/moved.ts'], { cwd: path })
+	execFileSync('git', ['commit', '-m', 'feat: move into declared dir'], { cwd: path })
+	await acceptWork(paths, 'rename-node-r1e2', { by: 'memoksin', base: 'main', scan: 'clean' })
+
+	// Confirm the setup actually exercises rename detection before trusting
+	// the assertion below to mean anything.
+	const merge = git('log', 'main', '--format=%H%x09%s')
+		.split('\n')
+		.find((line) => line.endsWith('sober: rename-node-r1e2'))
+		?.split('\t')[0] as string
+	const renameStat = git('diff', '--find-renames', '--name-status', `${merge}^1`, merge)
+	expect(renameStat).toMatch(/^R/m)
+
+	const report = await declaredFileAccuracy(paths, await loadBoard(paths), 'main')
+	const row = report.nodes[0]
+	expect(row).toMatchObject({
+		id: 'rename-node-r1e2',
+		measurable: true,
+		declaredGlobs: 1,
+		// Both the deleted undeclared source and the added declared destination —
+		// a rename collapsed to its destination only would read 1 here.
+		touchedFiles: 2,
+		undeclaredFiles: 1,
+		unmatchedGlobs: 0,
+	})
+})
+
 test('two commits reading the same `sober: <id>` subject are not attributable to one merge', async () => {
 	await board()
 	await node('dup-node-d7e8', 'Duplicate', ['src/**'])

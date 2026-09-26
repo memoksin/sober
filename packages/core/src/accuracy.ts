@@ -33,6 +33,34 @@ export interface AccuracyReport {
 	readonly totals: AccuracyTotals
 }
 
+interface CommitEntry {
+	readonly commit: string
+	readonly parents: readonly string[]
+}
+
+/**
+ * Every commit reachable from `base`, keyed by subject, with its parents —
+ * read once regardless of how many accepted nodes there are. `findMergeCommit`
+ * used to run a fresh `git log <base>` plus a parent lookup per node: 83
+ * accepted nodes meant 83 full history walks for the same history.
+ */
+const loadMergeIndex = async (root: string, base: string): Promise<ReadonlyMap<string, CommitEntry[]>> => {
+	const log = await git(root, 'log', base, '--format=%H%x09%P%x09%s')
+	const bySubject = new Map<string, CommitEntry[]>()
+	for (const line of log.split('\n')) {
+		if (line.length === 0) continue
+		const first = line.indexOf('\t')
+		const second = line.indexOf('\t', first + 1)
+		const commit = line.slice(0, first)
+		const parents = line.slice(first + 1, second).split(/\s+/).filter((parent) => parent.length > 0)
+		const subject = line.slice(second + 1)
+		const list = bySubject.get(subject) ?? []
+		list.push({ commit, parents })
+		bySubject.set(subject, list)
+	}
+	return bySubject
+}
+
 /**
  * Every accepted node's exact `sober: <id>` merge commit, found on `base`
  * (`mergeNode` in `merge.ts` is the only place that writes one). Zero matches,
@@ -40,21 +68,13 @@ export interface AccuracyReport {
  * fact: this node's work is not attributable to one reachable local merge, and
  * a caller must not guess which commit — or count it as zero — instead.
  */
-const findMergeCommit = async (
-	root: string,
+const findMergeCommit = (
+	index: ReadonlyMap<string, CommitEntry[]>,
 	base: string,
 	id: string,
-): Promise<{ readonly commit: string } | { readonly reason: string }> => {
+): { readonly commit: string } | { readonly reason: string } => {
 	const subject = `sober: ${id}`
-	const log = await git(root, 'log', base, '--format=%H%x09%s')
-	const matches = log
-		.split('\n')
-		.filter((line) => line.length > 0)
-		.map((line) => {
-			const tab = line.indexOf('\t')
-			return { commit: line.slice(0, tab), subject: line.slice(tab + 1) }
-		})
-		.filter((entry) => entry.subject === subject)
+	const matches = index.get(subject) ?? []
 
 	if (matches.length === 0) return { reason: `no \`${subject}\` commit is reachable from ${base}` }
 	if (matches.length > 1)
@@ -62,17 +82,22 @@ const findMergeCommit = async (
 			reason: `${matches.length} commits read \`${subject}\` reachable from ${base} — not one merge to attribute this to`,
 		}
 
-	const commit = matches[0]?.commit as string
-	const parents = (await git(root, 'log', '-1', '--format=%P', commit)).trim()
-	if (parents.split(/\s+/).filter((parent) => parent.length > 0).length < 2)
+	const match = matches[0] as CommitEntry
+	if (match.parents.length < 2)
 		return { reason: `the \`${subject}\` commit reachable from ${base} is not a merge commit` }
 
-	return { commit }
+	return { commit: match.commit }
 }
 
-/** First-parent-to-merge diff: what the merge brought in, additions, deletions and renames alike. */
+/**
+ * First-parent-to-merge diff: what the merge brought in, additions, deletions
+ * and renames alike. `--no-renames` matters here: without it, a move from an
+ * undeclared directory into a declared one lists only the destination path,
+ * so the source's own directory is never counted as touched — a rename would
+ * silently read more "accurate" than the same change written as delete+add.
+ */
 const touchedPaths = async (root: string, merge: string): Promise<readonly string[]> =>
-	(await gitVerbatim(root, 'diff', '--name-only', '-z', `${merge}^1`, merge))
+	(await gitVerbatim(root, 'diff', '--no-renames', '--name-only', '-z', `${merge}^1`, merge))
 		.split('\0')
 		.filter((path) => path.length > 0)
 
@@ -90,9 +115,11 @@ export const declaredFileAccuracy = async (
 		.filter(([, node]) => node.accepted !== null)
 		.sort(([a], [b]) => a.localeCompare(b))
 
+	const index = await loadMergeIndex(paths.root, base)
+
 	const nodes: NodeAccuracy[] = []
 	for (const [id, node] of accepted) {
-		const found = await findMergeCommit(paths.root, base, id)
+		const found = findMergeCommit(index, base, id)
 		if ('reason' in found) {
 			nodes.push({
 				id,
