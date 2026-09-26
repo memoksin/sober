@@ -17,6 +17,7 @@ const CLICKABLE = [
 	'audit',
 	'decide',
 	'edit_decision',
+	'create_decision',
 	'impact',
 	...FLAG_ACTIONS.map((action) => action.does),
 ] as const

@@ -777,3 +777,26 @@ test('models add appends an entry to dispatch.models and refuses a bad range or 
 	)
 	expect(failed(dir, 'models', 'add', 'x')).toContain('sober models add')
 })
+
+test('a question opened from the terminal holds the node it binds until a session gives it options', () => {
+	const created = project()
+	const cli = (...args: string[]) => sober(created.dir, ...args)
+	cli('init', '--title', 'Acme', '--intent', 'Ship sign-in')
+	const node = /[a-z0-9-]+-[a-z0-9]{4}/.exec(cli('open', '--title', 'auth api'))?.[0] as string
+
+	expect(failed(created.dir, 'question', 'Where does state live?', '--binds', node)).toContain(
+		'--category is one of',
+	)
+	expect(failed(created.dir, 'question', 'Where?', '--category', 'state')).toContain(
+		'name at least one node',
+	)
+
+	const opened = cli('question', 'Where does state live?', '--category', 'state', '--binds', node)
+	expect(opened).toContain('/sober:decide')
+	const decision = /✓ (\S+)/.exec(opened)?.[1] as string
+	const record = JSON.parse(
+		readFileSync(join(created.dir, '.sober/nodes', `${node}.json`), 'utf8'),
+	) as { decisions: string[] }
+	expect(record.decisions).toEqual([decision])
+	expect(cli('status', node)).toContain('held')
+})

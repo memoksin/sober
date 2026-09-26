@@ -31,6 +31,9 @@ export const ERROR_CODES = [
 	// for what is missing, like `no-brief` and `no-board` above.
 	'no-reason',
 	'no-title',
+	// A decision opened by hand with no question, or holding no node.
+	'no-question',
+	'no-binds',
 	'not-finished',
 	// A correction to a node's own words with none in it, or a name out of bounds.
 	'nothing-to-correct',

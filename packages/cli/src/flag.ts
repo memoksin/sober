@@ -1,4 +1,5 @@
-import { correctNode, createNode, dismissFlag, reopenNode, whoami } from '@besober/core'
+import { correctNode, createDecision, createNode, dismissFlag, reopenNode, whoami } from '@besober/core'
+import { CATEGORIES, Category } from '@besober/schema'
 import { openBoard } from './board.js'
 import { bold, dim, green, refuse, say } from './out.js'
 
@@ -69,6 +70,30 @@ export const open = async (
 	// It lands on `needs-brief`, and nothing runs without an approved brief
 	// (§3.2). Writing one needs an agent, which a terminal does not have.
 	say(dim(`Next: a brief. Ask for one in a session, then ${bold(`sober approve ${id}`)}.`))
+}
+
+/**
+ * A question a person already knows they want answered, holding the nodes it
+ * names. The options still come from a session (§2.6), so it arrives unopened.
+ */
+export const question = async (
+	asked: string,
+	given: { category?: string; binds?: string },
+): Promise<void> => {
+	const category = Category.safeParse(given.category)
+	if (!category.success) return refuse(new Error(`--category is one of ${CATEGORIES.join(', ')}`))
+	const paths = await openBoard()
+	const { id } = await createDecision(paths, {
+		question: asked,
+		category: category.data,
+		binds: list(given.binds) ?? [],
+		by: await whoami(paths.root),
+	}).catch(refuse)
+
+	say(`${green('✓')} ${id}`)
+	say()
+	say(dim('It holds what it binds until it is answered, and it has no options yet.'))
+	say(dim(`Next: ask a session for them (${bold('/sober:decide')}), then ${bold(`sober decide ${id} <option>`)}.`))
 }
 
 /** `--decisions a,b` — the same spelling `sober bind` takes. */

@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util'
 import { findRoot, loadEnv, paths as resolvePaths } from '@besober/core'
 import { init, openBoard } from './board.js'
 import { distribute } from './distribute.js'
-import { correct, dismiss, open, reopen } from './flag.js'
+import { correct, dismiss, open, question, reopen } from './flag.js'
 import { hook } from './hook.js'
 import { widen } from './name.js'
 import { bold, columns, dim, fail, refuse, say } from './out.js'
@@ -41,6 +41,10 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 		[
 			['decisions', 'every decision still waiting on you'],
 			['decisions --all', 'every decision, answered ones included'],
+			[
+				'question "…" --category <c> --binds <ids>',
+				'open a question that holds those nodes — a session gives it options',
+			],
 			['decide <id> <option>', 'answer one, and unblock what it holds'],
 			['edit <id> <option>', 'change an answer — it shows what that reaches first'],
 			['edit <id> <option> --anyway', 'apply it'],
@@ -178,6 +182,8 @@ const options = {
 	write: { type: 'string' },
 	decisions: { type: 'string' },
 	'depends-on': { type: 'string' },
+	category: { type: 'string' },
+	binds: { type: 'string' },
 	queue: { type: 'boolean' },
 	anyway: { type: 'boolean' },
 	all: { type: 'boolean' },
@@ -314,6 +320,11 @@ const main = async (): Promise<void> => {
 			const title = values.title ?? fail('what is it? sober open --title "…"')
 			return open(title, { decisions: values.decisions, dependsOn: values['depends-on'] })
 		}
+		case 'question':
+			return question(rest[0] ?? fail('what is the question? sober question "…"'), {
+				category: values.category,
+				binds: values.binds,
+			})
 		case 'correct':
 			return correct(need('node'), {
 				title: values.title,

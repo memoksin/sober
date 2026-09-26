@@ -44,6 +44,8 @@ export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, 
 	dismiss: 'dismiss',
 	reopen: 'reopen',
 	create_node: 'open',
+	// The question and what it holds; a session still gives it options (§2.6).
+	create_decision: 'question',
 	// One command, both ways out of a plan: `--accept` assigns it, `--drop`
 	// takes it off the board. Proposing is not here — a terminal has no agent
 	// (ADR 0051, and ADR 0009's line before it).
