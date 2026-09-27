@@ -32,6 +32,9 @@ export const ERROR_CODES = [
 	'no-reason',
 	'no-title',
 	'not-finished',
+	// A decision opened by hand with no question, or holding no node.
+	'no-question',
+	'binds-nothing',
 	// A correction to a node's own words with none in it, or a name out of bounds.
 	'nothing-to-correct',
 	'bad-name',

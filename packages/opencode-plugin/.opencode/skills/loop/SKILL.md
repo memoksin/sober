@@ -51,6 +51,8 @@ Approval is the user's, one node at a time. Nothing runs without it. Rewriting a
 
 `run` cuts the node its own worktree and branch, prepares it with the configured setup command, and hands the agent the brief — rendered at the moment it runs, with the answered decisions in it and the last rejection above it. Nothing outlives its time limit.
 
+`run` is normally blocking under the configured host timeout. If this host ends the tool call before it, the run is still going: consult `board` and `logs` for the same node until it reads `in-review` or failed, and never call `run` again while it is `running`.
+
 A run that fails is read, not retried blind: `logs` says what happened.
 
 ## Review is checks, not reading

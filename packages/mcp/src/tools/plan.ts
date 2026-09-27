@@ -6,6 +6,7 @@ import {
 	type Board,
 	bind,
 	createBoardBranch,
+	createDecision,
 	currentBranch,
 	detectSetup,
 	editDecision,
@@ -364,6 +365,34 @@ export const registerPlanning = (server: McpServer, cwd: string): void => {
 				})
 				return text(
 					`${decision} now has ${options.length} options. Put the question to the human with the \`decide\` tool — it asks them directly, one decision at a time.`,
+				)
+			},
+		),
+	)
+
+	server.registerTool(
+		'create_decision',
+		{
+			title: 'Open a question a person wants answered',
+			description:
+				'Open a question a person already knows they want answered, bound to the nodes it holds — each reads held from this call on. It arrives with no options: produce them with `open_decision`. Use `propose` when the question comes with new work.',
+			inputSchema: {
+				question: z.string().min(1),
+				category: z.enum(CATEGORIES),
+				binds: z.array(z.string()).min(1).describe('the node ids this decision holds'),
+			},
+		},
+		tool(
+			async (input: {
+				question: string
+				category: (typeof CATEGORIES)[number]
+				binds: string[]
+			}) => {
+				const paths = await openBoard(cwd)
+				const { id } = await createDecision(paths, { ...input, by: await whoami(paths.root) })
+				const board = await loadBoard(paths)
+				return text(
+					`${id} is open and holds ${namedAll(board, input.binds)}. It has no options yet — produce them with \`open_decision\`.`,
 				)
 			},
 		),

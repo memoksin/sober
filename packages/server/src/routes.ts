@@ -13,6 +13,8 @@ import {
 	boardDistance,
 	claimChain,
 	claimNode,
+	correctNode,
+	createDecision,
 	createNode,
 	currentBranch,
 	digest,
@@ -49,6 +51,7 @@ import {
 } from '@besober/core'
 import {
 	Brief,
+	Category,
 	Contributor,
 	chainEnds,
 	type Digest,
@@ -345,6 +348,17 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 		reopenNode(paths, id, await whoami(paths.root)),
 	),
 
+	correct_node: route(
+		z.strictObject({
+			node: Id,
+			title: z.string().optional(),
+			name: z.string().optional(),
+			description: z.string().optional(),
+		}),
+		async (paths, { node: id, title, name, description }) =>
+			correctNode(paths, id, { title, name, description, by: await whoami(paths.root) }),
+	),
+
 	create_node: route(
 		z.strictObject({
 			title: z.string().min(1),
@@ -354,6 +368,20 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 			files: z.array(z.string().min(1)).optional(),
 		}),
 		async (paths, opening) => createNode(paths, { ...opening, by: await whoami(paths.root) }),
+	),
+
+	/**
+	 * A question opened by hand (§2.6). It arrives with no options — this
+	 * surface has no model to produce them, so they stay a session's
+	 * `open_decision` — and every node it binds is held from this write on.
+	 */
+	create_decision: route(
+		z.strictObject({
+			question: z.string().min(1),
+			category: Category,
+			binds: z.array(Id).min(1),
+		}),
+		async (paths, question) => createDecision(paths, { ...question, by: await whoami(paths.root) }),
 	),
 
 	/**
@@ -387,7 +415,6 @@ export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
  * sends it.
  */
 export const GAPS = [
-	'correct_node',
 	'add_model',
 	'start_dispatcher',
 	'stop_dispatcher',

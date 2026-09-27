@@ -23,7 +23,7 @@ Then, for that one node:
 
 2. **Approve.** `write_brief` returns a block rendered from `plain`. Paste that block into the conversation as it is, then ask a yes or a no about it: Ask with AskUserQuestion, this host's own question tool — one question, a yes and a no. A yes in the chat is a yes, silence is not, never answer on their behalf. Say whether yes also starts the node when it becomes ready, according to the `queue` argument or the board's `dispatch.queueByDefault`. Call `approve` with `confirmed: true` only on an explicit yes; on a no, do nothing.
 
-3. **Run.** `run` cuts the node's worktree, prepares it and works. It blocks for as long as the work takes and streams what the agent is doing. If it fails, read `logs` and say what happened — do not silently start it again.
+3. **Run.** `run` cuts the node's worktree, prepares it and works. It blocks for as long as the work takes and streams what the agent is doing. If this host ends the tool call before `run` returns, the run keeps going: consult `board` and `logs` for the same node until it reads `in-review` or failed, and never call `run` again while it is `running`. If it fails, read `logs` and say what happened — do not silently start it again.
 
 4. **Review.** `review` gives you the scan, then the acceptance criteria, then the files. Read the findings first. Ask for the diff only if the findings or the criteria give you a reason to; reading every line to find the problem is doing the scan's job by hand.
 

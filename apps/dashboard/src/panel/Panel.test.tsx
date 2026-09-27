@@ -41,6 +41,7 @@ const panel = (one: BoardRead['nodes'][number]) =>
 			onDismiss={nothing}
 			onReopen={nothing}
 			onOpen={nothing}
+			onCorrect={nothing}
 		/>,
 	)
 

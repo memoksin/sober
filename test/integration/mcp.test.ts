@@ -184,6 +184,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 			'claim',
 			'contributors',
 			'correct_node',
+			'create_decision',
 			'decide',
 			'decisions',
 			'dismiss',
@@ -716,7 +717,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(29)
+		expect((await client.listTools()).tools.length).toBe(30)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()
@@ -1595,4 +1596,27 @@ test('init on a fresh clone takes the team’s board instead of making a second'
 	})
 	expect(localHead).toBe(remoteHead)
 	expect(await call(client, 'init')).toContain('already a board here')
+})
+
+test('a question opened by hand arrives with no options and holds what it binds', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', PROPOSAL)
+	const billing = [...(await loadBoard(paths)).nodes].find(
+		([, node]) => node.title === 'The billing screen',
+	)?.[0] as string
+
+	const said = await call(client, 'create_decision', {
+		question: 'Who owns the invoice numbers?',
+		category: 'data-flow',
+		binds: [billing],
+	})
+	expect(said).toContain('open_decision')
+
+	const after = await loadBoard(paths)
+	const [id, decision] = [...after.decisions].find(
+		([, one]) => one.question === 'Who owns the invoice numbers?',
+	) as [string, { options: unknown }]
+	expect(decision.options).toBeNull()
+	expect(after.nodes.get(billing)?.decisions).toEqual([id])
 })

@@ -8,10 +8,9 @@ import { type Resolve, sameShape, stylesheet } from './paint.js'
  * How far the hand moves before anything follows it (ADR 0039 §7).
  *
  * A property of the hand, not of an edge. It was an edge's maximum length, and
- * that was a number the placed layout never satisfied — rings put connected
- * nodes on chords, and on a real 39-node board 38 of 45 edges opened longer
- * than it — so the constraint had something to correct from the first frame
- * anything was touched.
+ * that was a number the placed layout never satisfied (ADR 0040), so the
+ * constraint had something to correct from the first frame anything was
+ * touched.
  *
  * Around half a node's spacing: far enough that a nudge is a nudge, close
  * enough that a real drag brings its neighbours.
@@ -25,9 +24,9 @@ const SLACK = 60
 const SPACING = 112
 
 /**
- * The float. Small enough that ADR 0040's no-overlap arithmetic still holds —
- * the gap between two placed nodes is around 94px and this closes at most ten
- * of them — and slow enough that no frame moves anything a whole pixel.
+ * The float. Small enough that `pack`'s no-overlap guarantee still holds —
+ * the narrowest gap between two placed nodes is around 38px and this closes at
+ * most seven of them — and slow enough that no frame moves anything a whole pixel.
  */
 const AMPLITUDE = 3.5
 const PERIOD = 7000
@@ -88,9 +87,12 @@ const number = (name: string): number =>
 
 export const Canvas = ({
 	projection,
+	picked = null,
 	onPick,
 }: {
 	readonly projection: Projection
+	/** The node the panel is open on. Its neighbours stay marked while it is. */
+	readonly picked?: string | null
 	/** A node was tapped, or the background was. Null is "nothing is selected". */
 	readonly onPick?: (id: string | null) => void
 }): React.JSX.Element => {
@@ -330,7 +332,10 @@ export const Canvas = ({
 		// (ADR 0016), so they are computed fresh every time the shape changes —
 		// and computing them is a loop over the nodes, not a settling animation
 		// nobody wanted to watch.
-		const placed = pack(projection, { spacing: SPACING })
+		// Dependencies run along the screen's long side, so a phone scrolls a
+		// board down rather than zooming it out until no label is left.
+		const flow = instance.height() > instance.width() ? 'down' : 'right'
+		const placed = pack(projection, { spacing: SPACING, flow })
 		rest.current = placed
 		wires.current = projection.nodes.flatMap((node) =>
 			node.dependsOn.filter((from) => placed.has(from)).map((from) => [from, node.id] as const),
@@ -359,6 +364,23 @@ export const Canvas = ({
 			instance.center()
 		}
 	}, [projection])
+
+	// Selection follows the panel rather than the pointer, so a node reached
+	// from the panel, or dropped with Escape, lands here too. Keyed on the
+	// projection as well: a new shape is a new set of elements to mark.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: a new projection is new elements to mark
+	useEffect(() => {
+		const instance = cy.current
+		if (instance === null) return
+		instance.batch(() => {
+			instance.elements().removeClass('near')
+			instance.nodes().unselect()
+			const node = picked === null ? null : instance.getElementById(picked)
+			if (node === null || node.empty()) return
+			node.select()
+			node.closedNeighborhood().difference(node).addClass('near')
+		})
+	}, [picked, projection])
 
 	return (
 		<div className="relative h-full w-full">

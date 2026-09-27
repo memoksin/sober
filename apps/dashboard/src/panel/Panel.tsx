@@ -2,6 +2,8 @@ import { byWhom } from '@besober/schema'
 import { useState } from 'react'
 import { Inline, Markdown } from '../markdown.js'
 import { pending } from '../pending.js'
+import type { CorrectionInput } from './Correct.js'
+import { Correct } from './Correct.js'
 import type { Action, BoardRead } from './data.js'
 import { actions, held, nextMove } from './data.js'
 import { Flag } from './Flag.js'
@@ -26,6 +28,7 @@ export const Panel = ({
 	onDismiss,
 	onReopen,
 	onOpen,
+	onCorrect,
 }: {
 	readonly board: BoardRead
 	readonly id: string
@@ -42,6 +45,7 @@ export const Panel = ({
 	readonly onDismiss: (reason: string) => Promise<void>
 	readonly onReopen: () => Promise<void>
 	readonly onOpen: (title: string) => Promise<void>
+	readonly onCorrect: (correction: CorrectionInput) => Promise<void>
 }): React.JSX.Element => {
 	const node = board.nodes.find((one) => one.id === id)
 
@@ -77,6 +81,8 @@ export const Panel = ({
 							×
 						</button>
 					</header>
+
+					<Correct node={node} onCorrect={onCorrect} />
 
 					{/*
 					  Above the ordinary actions, because it is the reason the

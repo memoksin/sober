@@ -139,5 +139,10 @@ if (args.includes('--input-format')) {
 		total_cost_usd: 0.05,
 	})
 	if (failing) process.stderr.write('the host gave up\n')
+	// Holds the process open, unlike FAKE_HOST_HANG's forever: a test proving two
+	// runs overlap needs both to still be running at the same instant, which a
+	// host that exits in a few milliseconds cannot demonstrate.
+	const delay = Number(process.env.FAKE_HOST_DELAY_MS ?? 0)
+	if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
 	process.exit(failing ? 1 : 0)
 }

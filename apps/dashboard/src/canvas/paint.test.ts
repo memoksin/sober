@@ -66,6 +66,31 @@ test('the click overlay is turned off', () => {
 	expect(active?.style['overlay-opacity']).toBe(0)
 })
 
+test('the selected node marks its neighbours, and hovering elsewhere still wins', () => {
+	// The mark lasts as long as the panel, so it must not hide what a hover
+	// asks for: it sits under `.faded` and `edge.traced`, and over `edge`.
+	const rules = stylesheet(token)
+	const order = rules.map((rule) => rule.selector)
+	const at = (selector: string) => order.indexOf(selector)
+
+	expect(at('edge.near')).toBeGreaterThan(at('edge'))
+	expect(at('node.near')).toBeGreaterThan(at('node'))
+	expect(at('edge.near')).toBeLessThan(at('.faded'))
+	expect(at('edge.near')).toBeLessThan(at('edge.traced'))
+
+	const near = rules.find((rule) => rule.selector === 'edge.near')
+	expect(JSON.stringify(near)).not.toMatch(/--status-/)
+	expect(near?.style['line-color']).toBe('resolved(var(--ink-dim))')
+})
+
+test('an edge shows which way it points', () => {
+	// A head in the line's own grey reads as a thickening, not a direction.
+	const edge = stylesheet(token).find((rule) => rule.selector === 'edge')
+
+	expect(edge?.style['target-arrow-shape']).toBe('triangle')
+	expect(edge?.style['target-arrow-color']).not.toBe(edge?.style['line-color'])
+})
+
 const board = (
 	nodes: readonly (readonly [string, string, string[]])[],
 	status = 'ready',

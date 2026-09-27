@@ -233,6 +233,18 @@ test('no surface routes what an agent authors — planning stays in the session'
 })
 
 /**
+ * §2.6's split: the question is a person's and is on every surface, the options
+ * are a model's and stay behind `open_decision` above. The dashboard's claim is
+ * held to an actual `op` call, not only to its manifest.
+ */
+test('every surface opens a question by hand', () => {
+	for (const covers of [CLI_COVERS, MCP_COVERS, DASHBOARD_COVERS])
+		expect(Object.keys(covers)).toContain('create_decision')
+	expect(SERVER_COVERS).toContain('create_decision')
+	expect(dashboard.calls).toContain('create_decision')
+})
+
+/**
  * ADR 0051's split, which no check above can see: `accept_distribution` and
  * `drop_distribution` are in `OPERATIONS`, so parity already covers them — but
  * nothing says that only a session can *propose* one. That is the half a

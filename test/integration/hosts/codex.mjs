@@ -69,5 +69,10 @@ if (process.env.FAKE_HOST_HANG === '1') {
 		process.exit(1)
 	}
 	say({ type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } })
+	// Holds the process open, unlike FAKE_HOST_HANG's forever: a test proving two
+	// runs overlap needs both to still be running at the same instant, which a
+	// host that exits in a few milliseconds cannot demonstrate.
+	const delay = Number(process.env.FAKE_HOST_DELAY_MS ?? 0)
+	if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
 	process.exit(0)
 }

@@ -4,6 +4,9 @@
 - **Date:** 2026-09-06
 - **Supersedes:** part of [ADR 0038](0038-the-canvas-is-cytoscape.md) — Cytoscape
   stays; its `cose` layout does not.
+- **Superseded in part by** [ADR 0072](0072-the-layout-runs-in-the-direction-of-the-work.md):
+  placed, not simulated, still holds. The rings do not — positions are now
+  columns by dependency depth.
 
 ## Context
 

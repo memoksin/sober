@@ -1,7 +1,9 @@
-import type { AutoProvenance, Brief, Decision, Handle, Node } from '@besober/schema'
+import type { AutoProvenance, Brief, Category, Decision, Handle, Node } from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import { readConfig } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
+import { loadBoard } from './graph.js'
+import { newId, shortName } from './id.js'
 import { appendEvent } from './local.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
@@ -83,6 +85,59 @@ export const answerDecision = (
 		await writeDecision(paths, id, answered)
 		await appendEvent(paths, { action: 'decision.answered', decision: id, by: options.by })
 		return answered
+	})
+
+export interface Question {
+	readonly question: string
+	readonly category: Category
+	/** The nodes it holds. At least one: a decision nothing binds holds nothing (`unbound`). */
+	readonly binds: readonly string[]
+	readonly by: Handle
+}
+
+/**
+ * A question a person already knows they want answered, opened by hand. It
+ * arrives with no options — those are a model's, produced on demand by a
+ * session's `open_decision` (§2.6) — so it reads `unopened`, and every node it
+ * binds reads `held` from this write on.
+ */
+export const createDecision = (
+	paths: Paths,
+	opening: Question,
+): Promise<{ readonly id: string; readonly decision: Decision }> =>
+	withLock(paths, 'create-decision', async () => {
+		const question = opening.question.trim()
+		if (question === '')
+			throw new SoberError('no-question', 'a decision needs a question — it is what gets answered')
+		if (opening.binds.length === 0)
+			throw new SoberError(
+				'binds-nothing',
+				'a decision needs at least one node to hold — one that binds nothing blocks no work and waits on you for no reason',
+			)
+
+		const board = await loadBoard(paths)
+		const binds = [...new Set(opening.binds)]
+		const nodes = binds.map((id) => {
+			const node = board.nodes.get(id)
+			if (node === undefined) throw new NotOnBoardError('node', id)
+			return [id, node] as const
+		})
+
+		const id = newId(shortName(question))
+		const decision: Decision = {
+			category: opening.category,
+			question,
+			options: null,
+			suggested: null,
+			derived: null,
+			answer: null,
+			createdAt: new Date().toISOString(),
+		}
+		await writeDecision(paths, id, decision)
+		for (const [node, record] of nodes)
+			await writeNode(paths, node, { ...record, decisions: [...record.decisions, id] })
+		await appendEvent(paths, { action: 'decision.created', decision: id, by: opening.by, binds })
+		return { id, decision }
 	})
 
 export class NoBriefError extends SoberError {
