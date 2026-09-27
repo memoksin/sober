@@ -2,7 +2,15 @@ import { useState } from 'react'
 import { Inline } from '../markdown.js'
 import { Overlay } from '../Overlay.js'
 import type { BoardRead } from '../panel/data.js'
-import { decisionRows } from './data.js'
+import type { DecisionFilter } from './data.js'
+import { decisionRows, filterDecisionRows } from './data.js'
+
+const FILTERS: readonly { readonly value: DecisionFilter; readonly label: string }[] = [
+	{ value: 'all', label: 'All' },
+	{ value: 'open', label: 'Open' },
+	{ value: 'answered', label: 'Answered' },
+	{ value: 'derived', label: 'Derived' },
+]
 
 /** Every decision on the board and what was chosen. Read-only: answering stays on `deciding`. */
 export const DecisionsScreen = ({
@@ -13,8 +21,10 @@ export const DecisionsScreen = ({
 	readonly onClose: () => void
 }): React.JSX.Element => {
 	const [expanded, setExpanded] = useState<string | null>(null)
+	const [filter, setFilter] = useState<DecisionFilter>('all')
 	const rows = decisionRows(board)
 	const open = rows.filter((row) => row.state === 'open').length
+	const visible = filterDecisionRows(rows, filter)
 
 	return (
 		<Overlay label="Every decision" width={720} onClose={onClose}>
@@ -25,14 +35,28 @@ export const DecisionsScreen = ({
 				<p className="mt-1 text-[var(--ink-dim)] text-xs">
 					{rows.length} decisions · {open} still open
 				</p>
+				<label className="mt-2 flex items-center gap-2 text-[var(--ink-dim)] text-xs">
+					Filter
+					<select
+						value={filter}
+						onChange={(event) => setFilter(event.target.value as DecisionFilter)}
+						className="border border-[var(--line)] bg-transparent px-1.5 py-0.5 text-[var(--ink)] text-xs"
+					>
+						{FILTERS.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</select>
+				</label>
 			</header>
 
 			<div className="flex-1 overflow-y-auto px-5 py-4">
-				{rows.length === 0 ? (
-					<p className="text-[var(--ink-dim)] text-xs">No decisions on this board yet.</p>
+				{visible.length === 0 ? (
+					<p className="text-[var(--ink-dim)] text-xs">No decisions match this filter.</p>
 				) : (
 					<ul className="flex flex-col gap-3">
-						{rows.map((row) => (
+						{visible.map((row) => (
 							<li key={row.id} className="flex flex-col gap-1">
 								<button
 									type="button"
@@ -45,7 +69,7 @@ export const DecisionsScreen = ({
 											<Inline text={row.question} />
 										</span>
 										<span className="ml-auto font-mono text-[10px] text-[var(--ink-faint)]">
-											{row.state}
+											{row.category} · {row.state}
 										</span>
 									</span>
 									{row.chosen !== null && row.answer !== null ? (
@@ -53,12 +77,12 @@ export const DecisionsScreen = ({
 										<>
 											<span className="flex items-baseline gap-2 text-[var(--ink)] text-xs">
 												{row.chosen.label}
-												{row.answer.derived !== null && (
-													<span title={row.answer.derived} className="text-[var(--ink-faint)]">
-														derived
-													</span>
-												)}
 											</span>
+											{row.answer.derived !== null && (
+												<span className="break-words text-[var(--ink-faint)] text-xs">
+													read off: {row.answer.derived}
+												</span>
+											)}
 											<span className="text-[var(--ink-dim)] text-xs leading-[var(--leading-prose)]">
 												<Inline text={row.answer.rationale} />
 											</span>

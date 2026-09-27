@@ -1,3 +1,4 @@
+import type { Board } from '@besober/core'
 import { SoberError } from '@besober/core'
 
 /**
@@ -37,6 +38,18 @@ export const refuse = (error: unknown): never =>
 	error instanceof SoberError
 		? fail(error.message)
 		: fail(String((error as Error).message ?? error))
+
+/**
+ * A node as every surface names it: the id verbatim, then its name in
+ * parentheses. The id is what a person types back into a command and the file
+ * name on disk (ADR 0020), so the name explains it and never replaces it. A
+ * node the board does not hold is its bare id. Mirrors
+ * packages/mcp/src/render.ts's `named`, so the terminal and the plugin agree.
+ */
+export const named = (board: Board, id: string): string => {
+	const name = board.nodes.get(id)?.name
+	return name === undefined ? id : `${id} (${name})`
+}
 
 const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 

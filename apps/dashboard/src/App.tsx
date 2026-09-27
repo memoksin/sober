@@ -18,6 +18,7 @@ import { readPlan, waiting } from './distribute/data.js'
 import { mergeThinkingVerbs, THINKING_VERBS } from './logs/data.js'
 import { LogScreen } from './logs/Logs.js'
 import { ModelsScreen } from './models/Models.js'
+import type { CorrectionInput } from './panel/Correct.js'
 import { DecisionScreen } from './panel/Decision.js'
 import type { Action, BoardRead, FlagAction } from './panel/data.js'
 import { flagOp } from './panel/data.js'
@@ -336,6 +337,20 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	)
 
 	/**
+	 * The node's own words, rewritten in place. The panel keeps the drawer open
+	 * on the same node — a correction never changes which node is selected — and
+	 * the poll that follows is what shows the brief dropping to `needs-approval`.
+	 */
+	const onCorrect = useCallback(
+		async (node: string, correction: CorrectionInput): Promise<void> => {
+			if (token === null) return
+			await wire(token).op('correct_node', { node, ...correction })
+			await refresh()
+		},
+		[token, refresh],
+	)
+
+	/**
 	 * §3.3's plan, taken whole or taken off the board. Both close the screen: the
 	 * record they were about is gone either way, and the poll is what says so.
 	 */
@@ -527,7 +542,11 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			)}
 
 			<main className="relative min-h-0 flex-1">
-				{shown === null ? <Waiting /> : <Canvas projection={shown} onPick={setPicked} />}
+				{shown === null ? (
+					<Waiting />
+				) : (
+					<Canvas projection={shown} picked={picked} onPick={setPicked} />
+				)}
 
 				{picked !== null && board !== null && (
 					<Panel
@@ -541,6 +560,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 						onDismiss={(reason) => onFlag(picked, 'dismiss', reason)}
 						onReopen={() => onFlag(picked, 'reopen')}
 						onOpen={(title) => onFlag(picked, 'open', title)}
+						onCorrect={(correction) => onCorrect(picked, correction)}
 					/>
 				)}
 

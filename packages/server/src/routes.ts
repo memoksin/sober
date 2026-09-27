@@ -14,6 +14,7 @@ import {
 	boardDistance,
 	claimChain,
 	claimNode,
+	correctNode,
 	createNode,
 	currentBranch,
 	digest,
@@ -351,6 +352,17 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 		reopenNode(paths, id, await whoami(paths.root)),
 	),
 
+	correct_node: route(
+		z.strictObject({
+			node: Id,
+			title: z.string().optional(),
+			name: z.string().optional(),
+			description: z.string().optional(),
+		}),
+		async (paths, { node: id, title, name, description }) =>
+			correctNode(paths, id, { title, name, description, by: await whoami(paths.root) }),
+	),
+
 	create_node: route(
 		z.strictObject({
 			title: z.string().min(1),
@@ -407,14 +419,10 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
 
 /**
- * What has no route yet. Rewording a node and the dispatcher came to the
- * command line first; each gets its route with the screen that sends it.
+ * What has no route yet. The dispatcher came to the command line first; it
+ * gets its route with the screen that sends it.
  */
-export const GAPS = [
-	'correct_node',
-	'start_dispatcher',
-	'stop_dispatcher',
-] as const satisfies readonly Operation[]
+export const GAPS = ['start_dispatcher', 'stop_dispatcher'] as const satisfies readonly Operation[]
 
 /**
  * Reads. Four now: what the canvas draws, what `sober status` says, what a

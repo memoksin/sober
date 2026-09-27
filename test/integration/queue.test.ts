@@ -11,6 +11,8 @@ import {
 	initBoard,
 	OverlapError,
 	type Paths,
+	readNodes,
+	readRuns,
 	rejectWork,
 	runQueue,
 	SoberError,
@@ -28,6 +30,8 @@ import { createTempRepo, type TempRepo } from './fixture.js'
  * feeding. Real git, real child processes, the host faked (ADR 0014).
  */
 const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
+/** A second, differently-shaped host for the tiers that name more than one adapter. */
+const FAKE_CODEX = `${process.execPath} ${fileURLToPath(new URL('./hosts/codex.mjs', import.meta.url))}`
 
 let repo: TempRepo | undefined
 
@@ -293,6 +297,39 @@ test('a queued node that cannot start is reported, not thrown', async () => {
 	const queued = await runQueue(paths, 'main')
 	expect(queued.started).toEqual(['auth-api-k7f2'])
 	expect(queued.dispatched[0]).toBeInstanceOf(SoberError)
+})
+
+/** Sets a node's score after it is approved, so the queue has a tier to pick. */
+const scoreTier = async (paths: Paths, id: string, complexity: number): Promise<void> => {
+	const node = (await readNodes(paths)).records.get(id)
+	if (node?.brief == null) throw new Error('no brief')
+	await writeNode(paths, id, { ...node, brief: { ...node.brief, complexity } })
+}
+
+test('two queued nodes on two tiers each start on their own host — the queue never runs a batch on one', async () => {
+	const paths = await board()
+	writeFileSync(
+		paths.config,
+		setSetting(
+			setSetting(readFileSync(paths.config, 'utf8'), ['dispatch', 'concurrency'], 2),
+			['dispatch', 'tiers'],
+			{ high: FAKE_HOST, mid: FAKE_CODEX, low: null },
+		),
+	)
+	repo?.git('commit', '-q', '-am', 'chore: two tiers')
+
+	await approved(paths, 'auth-api-k7f2', { files: ['src/auth/**'] }, true)
+	await approved(paths, 'billing-ui-p3x9', { files: ['src/billing/**'] }, true)
+	await scoreTier(paths, 'auth-api-k7f2', 9) // high tier -> claude
+	await scoreTier(paths, 'billing-ui-p3x9', 5) // mid tier -> codex
+
+	const queued = await runQueue(paths, 'main')
+
+	expect([...queued.started].sort()).toEqual(['auth-api-k7f2', 'billing-ui-p3x9'])
+	const { records } = await readRuns(paths)
+	const runFor = (node: string) => [...records.values()].find((run) => run.node === node)
+	expect(runFor('auth-api-k7f2')).toMatchObject({ host: FAKE_HOST, tier: 'high' })
+	expect(runFor('billing-ui-p3x9')).toMatchObject({ host: FAKE_CODEX, tier: 'mid' })
 })
 
 test('a node someone else has claimed is theirs to start, not the queue’s', async () => {

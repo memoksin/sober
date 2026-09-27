@@ -121,32 +121,150 @@ const apart = (positions: ReadonlyMap<string, { x: number; y: number }>): number
 	return least
 }
 
+/** The closest two nodes are allowed: a row, across the flow. */
+const ROW = SPACING / 2
+
+/**
+ * A dense join: six layers of eight, every node waiting on three of the layer
+ * before, picked by a fixed stride so the board is the same every run. Listed
+ * backwards, so the breadth-first walk starts at the far end.
+ */
+const dense = linked(
+	Array.from({ length: 48 }, (_, i) => {
+		const layer = Math.floor(i / 8)
+		const deps =
+			layer === 0 ? [] : [0, 3, 5].map((k) => `d${(layer - 1) * 8 + ((i * 5 + k * 3) % 8)}`)
+		return [`d${i}`, [...new Set(deps)]] as const
+	}).reverse(),
+)
+
+const edgesOf = (projection: Projection) =>
+	projection.nodes.flatMap((node) => node.dependsOn.map((from) => [from, node.id] as const))
+
+/** How many pairs of straight edges cross. Shared ends are touching, not crossing. */
+const crossings = (
+	placed: ReadonlyMap<string, { x: number; y: number }>,
+	projection: Projection,
+) => {
+	const segments = edgesOf(projection).flatMap(([a, b]) => {
+		const p = placed.get(a)
+		const q = placed.get(b)
+		return p && q ? [{ a, b, p, q }] : []
+	})
+	const side = (
+		o: { x: number; y: number },
+		p: { x: number; y: number },
+		q: { x: number; y: number },
+	) => Math.sign((p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x))
+	let count = 0
+	for (let i = 0; i < segments.length; i++)
+		for (let j = i + 1; j < segments.length; j++) {
+			const s = segments[i]
+			const t = segments[j]
+			if (s === undefined || t === undefined) continue
+			if (s.a === t.a || s.a === t.b || s.b === t.a || s.b === t.b) continue
+			if (
+				side(s.p, s.q, t.p) * side(s.p, s.q, t.q) < 0 &&
+				side(t.p, t.q, s.p) * side(t.p, t.q, s.q) < 0
+			)
+				count++
+		}
+	return count
+}
+
 test('every node is placed', () => {
 	expect(pack(islands(40), { spacing: SPACING }).size).toBe(40)
+	expect(pack(dense, { spacing: SPACING }).size).toBe(48)
 })
 
 test('no two nodes are ever laid on top of each other', () => {
-	// The whole reason this exists. A simulation settles into overlaps and only
-	// separates them when something nudges it; rings cannot overlap, because
-	// each one is given exactly as many places as it has room for.
-	for (const count of [1, 2, 7, 40, 200]) {
-		const placed = pack(islands(count), { spacing: SPACING })
-		if (count > 1) expect(apart(placed), `${count} nodes`).toBeGreaterThanOrEqual(SPACING - 0.001)
-	}
+	// The whole reason this is placed rather than simulated (ADR 0040). Rows
+	// and columns are integer steps, and pieces are packed with a gap between.
+	const mixed = linked([
+		...dense.nodes.map((node) => [node.id, node.dependsOn] as const),
+		['a', []],
+		['b', ['a']],
+		['c', ['b']],
+		['p', []],
+		['q', ['p']],
+		...Array.from({ length: 30 }, (_, i) => [`x${i}`, []] as const),
+	])
+	for (const board of [islands(1), islands(2), islands(7), islands(200), dense, mixed])
+		for (const flow of ['right', 'down'] as const) {
+			const placed = pack(board, { spacing: SPACING, flow })
+			if (placed.size > 1)
+				expect(apart(placed), `${placed.size} nodes, ${flow}`).toBeGreaterThanOrEqual(ROW - 0.001)
+		}
+})
+
+test('a label never sits on the node beside it', () => {
+	// A label is under its node and 96px wide. Side by side, two nodes need a
+	// whole spacing; stacked, half of one is enough.
+	for (const flow of ['right', 'down'] as const)
+		for (const board of [dense, islands(40)]) {
+			const all = [...pack(board, { spacing: SPACING, flow }).values()]
+			for (const a of all)
+				for (const b of all)
+					if (a !== b && Math.abs(a.y - b.y) < ROW - 0.001)
+						expect(Math.abs(a.x - b.x)).toBeGreaterThanOrEqual(SPACING - 0.001)
+		}
 })
 
 test('it stays compact — 200 nodes fit in a square a screen could show', () => {
 	// A force layout on a board of islands spreads until `fit` has to zoom out
 	// past the point where a label can be read.
 	const placed = [...pack(islands(200), { spacing: SPACING }).values()]
-	const reach = Math.max(...placed.map((at) => Math.hypot(at.x, at.y)))
+	const span = (axis: 'x' | 'y') =>
+		Math.max(...placed.map((at) => at[axis])) - Math.min(...placed.map((at) => at[axis]))
 
-	expect(reach).toBeLessThan(SPACING * 9)
+	expect(span('x')).toBeLessThan(SPACING * 14)
+	expect(span('y')).toBeLessThan(SPACING * 14)
+})
+
+test('every dependency points the same way', () => {
+	// What waits on what is the thing a board is read for. With every edge
+	// going the same way, the direction is on the screen before any arrow is.
+	for (const flow of ['right', 'down'] as const) {
+		const placed = pack(dense, { spacing: SPACING, flow })
+		const axis = flow === 'right' ? 'x' : 'y'
+		for (const [from, to] of edgesOf(dense))
+			expect(placed.get(to)?.[axis] ?? 0, `${from}->${to}`).toBeGreaterThan(
+				placed.get(from)?.[axis] ?? 0,
+			)
+	}
+})
+
+test('a dense join is untangled rather than drawn in the order it arrived', () => {
+	// The same layers, seated in the order the walk found them, cross 435
+	// times; swept, 316. A board this dense crosses somewhere whatever is done.
+	expect(crossings(pack(dense, { spacing: SPACING }), dense)).toBeLessThan(350)
+})
+
+test('a root sits next to what waits on it, not at the far start', () => {
+	const late = linked([
+		['a', []],
+		['b', ['a']],
+		['c', ['b']],
+		['d', ['c', 'r']],
+		['r', []],
+	])
+	const placed = pack(late, { spacing: SPACING })
+
+	expect(placed.get('r')?.x).toBe(placed.get('c')?.x)
+})
+
+test('a cycle is drawn rather than taking the board down', () => {
+	// `core` can report one, and one bad record does not take down a board.
+	const loop = linked([
+		['a', ['c']],
+		['b', ['a']],
+		['c', ['b']],
+	])
+
+	expect(pack(loop, { spacing: SPACING }).size).toBe(3)
 })
 
 test('nodes that depend on each other land near each other', () => {
-	// Rings are the shape; the order around them is the graph. Without it a
-	// chain becomes chords across the whole circle.
 	const chain = linked([
 		['a', []],
 		['b', ['a']],
@@ -160,20 +278,14 @@ test('nodes that depend on each other land near each other', () => {
 		return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : Number.POSITIVE_INFINITY
 	}
 
-	expect(gap('a', 'b')).toBeLessThan(SPACING * 2.2)
-	expect(gap('b', 'c')).toBeLessThan(SPACING * 2.2)
+	expect(gap('a', 'b')).toBeLessThan(SPACING * 2)
+	expect(gap('b', 'c')).toBeLessThan(SPACING * 2)
 })
 
 test('the same board is placed the same way twice', () => {
 	// Positions are not board state (ADR 0016), so they are recomputed on every
 	// open. Recomputed differently every time is a board that moves under you.
-	const twice = linked([
-		['a', []],
-		['b', ['a']],
-		['c', []],
-	])
-
-	expect(pack(twice, { spacing: SPACING })).toEqual(pack(twice, { spacing: SPACING }))
+	expect(pack(dense, { spacing: SPACING })).toEqual(pack(dense, { spacing: SPACING }))
 })
 
 test('an empty board is placed nowhere, not at the origin', () => {
