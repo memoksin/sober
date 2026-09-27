@@ -67,64 +67,200 @@ export const elementsOf = (projection: Projection): Element[] => {
 }
 
 export interface PackOptions {
-	/** Centre-to-centre distance between two nodes that end up side by side. */
+	/** The room one label needs, centre to centre. Every gap is a share of it. */
 	readonly spacing: number
+	/**
+	 * Which way dependencies run. The long axis of the board goes on the long
+	 * axis of the screen: `right` for a wide one, `down` for a phone.
+	 */
+	readonly flow?: 'right' | 'down'
 }
 
 /**
- * Where every node sits when the board opens: rings, filled from the middle
- * out, ordered so that connected nodes are neighbours on the ring.
+ * Where every node sits when the board opens (ADR 0072): each connected piece
+ * of the graph in columns by dependency depth, the pieces packed onto shelves,
+ * and the nodes that touch nothing in a grid after them.
  *
- * Placed rather than simulated. A force layout has no term forbidding two
- * nodes from sharing a point, so a board opens with nodes on top of each other
- * and only separates them when something nudges the simulation — and given a
- * board of islands, which is what a young one is, it spreads until `fit` has
- * to zoom out past the size a label can be read at. Ring `k` is handed exactly
- * as many places as its circumference has room for, so nothing can overlap and
- * the whole thing is `O(n)`.
- *
- * The order around the rings is the graph: a breadth-first walk of each
- * component, biggest first. Without it a chain becomes chords across the whole
- * circle; with it a chain is an arc.
+ * Placed rather than simulated, for ADR 0040's reasons — no two nodes share a
+ * point, the same board opens the same way, and nothing settles. What changed
+ * is the shape: rings put a dense join on chords across the circle, and the
+ * one thing a person reads a board for — what waits on what — had no
+ * direction on screen. Here every edge points the same way.
  */
-export const pack = (projection: Projection, { spacing }: PackOptions): Map<string, Point> => {
+export const pack = (
+	projection: Projection,
+	{ spacing, flow = 'right' }: PackOptions,
+): Map<string, Point> => {
+	// Along the flow, and across it. A label sits under its node and is wide
+	// and short, so the room it needs depends on which side the neighbour is.
+	const along = flow === 'right' ? spacing * 1.5 : spacing * 0.75
+	const across = flow === 'right' ? spacing / 2 : spacing
+
+	const { before, after } = links(projection)
+	const blocks: Block[] = []
+	const islands: string[] = []
+	for (const component of components(projection)) {
+		if (component.length === 1) islands.push(...component)
+		else blocks.push(layered(component, before, after, along, across))
+	}
+	// Islands last: the structure is what there is to read, and it goes where
+	// reading starts.
+	if (islands.length > 0) blocks.push(grid(islands, along, across))
+
+	/// Shelves about as long as the screen is against its short side: a/n/t// monitor is 16:10, a phone is about 1:2.
+	const area = blocks.reduce((sum, b) => sum + (b.long + along) * (b.wide + across * 2), 0)
+	const reach = Math.max(
+		...blocks.map((b) => b.long),
+		Math.sqrt(area) * (flow === 'right' ? 1.25 : 2),
+	)
+
 	const placed = new Map<string, Point>()
-	let ring = 0
-	let seat = 0
-	let seats = 1
-
-	for (const id of order(projection)) {
-		// Ring 0 is the middle and holds one. Ring k has room for as many as fit
-		// at `spacing` apart around a circle of radius `k * spacing`, which is
-		// `2πk` — and the chord between two of them is never under `spacing`.
-		if (seat === seats) {
-			ring += 1
-			seat = 0
-			seats = Math.floor(2 * Math.PI * ring)
+	let a = 0
+	let c = 0
+	let shelf = 0
+	for (const block of blocks) {
+		if (a > 0 && a + block.long > reach) {
+			a = 0
+			c += shelf + across * 2
+			shelf = 0
 		}
-
-		const angle = (2 * Math.PI * seat) / seats
-		const radius = ring * spacing
-		placed.set(id, { x: radius * Math.cos(angle), y: radius * Math.sin(angle) })
-		seat += 1
+		for (const [id, at] of block.at) {
+			const x = a + at.a
+			const y = c + at.c
+			placed.set(id, flow === 'right' ? { x, y } : { x: y, y: x })
+		}
+		a += block.long + along
+		shelf = Math.max(shelf, block.wide)
 	}
 
 	return placed
 }
 
-/** Components, biggest first; within one, breadth-first from its first node. */
-const order = (projection: Projection): string[] => {
+/** A piece of the board, in along/across coordinates starting at zero. */
+interface Block {
+	readonly at: ReadonlyMap<string, { readonly a: number; readonly c: number }>
+	/** From the first node's centre to the last, along the flow. */
+	readonly long: number
+	readonly wide: number
+}
+
+/** Each node's dependencies and dependants, among the nodes that are here. */
+const links = (projection: Projection) => {
+	const before = new Map<string, string[]>(projection.nodes.map((node) => [node.id, []]))
+	const after = new Map<string, string[]>(projection.nodes.map((node) => [node.id, []]))
+	for (const node of projection.nodes)
+		for (const from of node.dependsOn) {
+			if (!before.has(from)) continue
+			before.get(node.id)?.push(from)
+			after.get(from)?.push(node.id)
+		}
+	return { before, after }
+}
+
+/**
+ * One component in columns. A node's column is the longest chain of
+ * dependencies under it, so every edge points forward; a root is then pulled
+ * up next to the first thing that waits on it, so a late root is not a line
+ * across the whole piece.
+ *
+ * The order down each column is the mean of the neighbours already placed,
+ * swept forward and back — it is what takes the crossings out of a dense
+ * join. The first order is the breadth-first walk and every sort is stable, so
+ * the same board lands the same way twice.
+ */
+const layered = (
+	component: readonly string[],
+	before: ReadonlyMap<string, readonly string[]>,
+	after: ReadonlyMap<string, readonly string[]>,
+	along: number,
+	across: number,
+): Block => {
+	const layer = new Map<string, number>()
+	// `core` can report a cycle, and §8.4 says one bad record does not take
+	// down a board: an edge back into the walk is not followed.
+	const depth = (id: string, walking: Set<string>): number => {
+		const known = layer.get(id)
+		if (known !== undefined) return known
+		walking.add(id)
+		let at = 0
+		for (const from of before.get(id) ?? [])
+			if (!walking.has(from)) at = Math.max(at, depth(from, walking) + 1)
+		walking.delete(id)
+		layer.set(id, at)
+		return at
+	}
+	for (const id of component) depth(id, new Set())
+	for (const id of component)
+		if ((before.get(id) ?? []).length === 0) {
+			const next = Math.min(...(after.get(id) ?? []).map((to) => layer.get(to) ?? 1))
+			if (Number.isFinite(next)) layer.set(id, Math.max(0, next - 1))
+		}
+
+	const rows: string[][] = []
+	for (const id of component) {
+		const at = layer.get(id) ?? 0
+		rows[at] = [...(rows[at] ?? []), id]
+	}
+	const columns = rows.filter((row) => row !== undefined)
+
+	const slot = new Map<string, number>()
+	const seat = (row: readonly string[]): void =>
+		row.forEach((id, i) => {
+			slot.set(id, i - (row.length - 1) / 2)
+		})
+	columns.forEach(seat)
+
+	const mean = (id: string, toward: ReadonlyMap<string, readonly string[]>): number => {
+		const known = (toward.get(id) ?? []).flatMap((other) => slot.get(other) ?? [])
+		return known.length === 0
+			? (slot.get(id) ?? 0)
+			: known.reduce((sum, at) => sum + at, 0) / known.length
+	}
+	for (let sweep = 0; sweep < 4; sweep++) {
+		const forward = sweep % 2 === 0
+		for (const row of forward ? columns : [...columns].reverse()) {
+			const key = new Map(row.map((id) => [id, mean(id, forward ? before : after)]))
+			row.sort((a, b) => (key.get(a) ?? 0) - (key.get(b) ?? 0))
+			seat(row)
+		}
+	}
+
+	// ponytail: a column is as tall as its layer, so a join of fifty is one tall
+	// column that `fit` zooms out for. Wrap wide layers if real boards get there.
+	const tallest = Math.max(...columns.map((row) => row.length))
+	const at = new Map<string, { a: number; c: number }>()
+	columns.forEach((row, i) => {
+		for (const id of row)
+			at.set(id, { a: i * along, c: ((slot.get(id) ?? 0) + (tallest - 1) / 2) * across })
+	})
+
+	return { at, long: (columns.length - 1) * along, wide: (tallest - 1) * across }
+}
+
+/** The nodes that touch nothing, in a grid about as long as it is wide. */
+const grid = (ids: readonly string[], along: number, across: number): Block => {
+	const count = Math.ceil(Math.sqrt((ids.length * across) / along))
+	return {
+		at: new Map(
+			ids.map((id, i) => [id, { a: (i % count) * along, c: Math.floor(i / count) * across }]),
+		),
+		long: (Math.min(count, ids.length) - 1) * along,
+		wide: (Math.ceil(ids.length / count) - 1) * across,
+	}
+}
+
+/** Connected components, biggest first; within one, breadth-first. */
+const components = (projection: Projection): string[][] => {
 	const near = new Map<string, string[]>(projection.nodes.map((node) => [node.id, []]))
 	for (const node of projection.nodes)
 		for (const from of node.dependsOn) {
-			// Undirected here: which way a dependency points says nothing about
-			// which two circles want to be drawn next to each other.
+			// Undirected here: a component is what touches what, either way.
 			near.get(from)?.push(node.id)
 			near.get(node.id)?.push(from)
 		}
 
 	const seen = new Set<string>()
-	const components: string[][] = []
+	const found: string[][] = []
 
 	for (const root of projection.nodes) {
 		if (seen.has(root.id)) continue
@@ -142,13 +278,12 @@ const order = (projection: Projection): string[] => {
 				queue.push(next)
 			}
 		}
-		components.push(component)
+		found.push(component)
 	}
 
-	// Biggest in the middle: it is the part with structure to read, and the
-	// middle is where the eye starts. Ties keep the order `core` reported, so
-	// the same board is placed the same way twice.
-	return components.sort((a, b) => b.length - a.length).flat()
+	// Ties keep the order `core` reported, so the same board is placed the
+	// same way twice.
+	return found.sort((a, b) => b.length - a.length)
 }
 
 export interface DriftOptions {

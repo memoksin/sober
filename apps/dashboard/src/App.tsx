@@ -516,7 +516,11 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			)}
 
 			<main className="relative min-h-0 flex-1">
-				{shown === null ? <Waiting /> : <Canvas projection={shown} onPick={setPicked} />}
+				{shown === null ? (
+					<Waiting />
+				) : (
+					<Canvas projection={shown} picked={picked} onPick={setPicked} />
+				)}
 
 				{picked !== null && board !== null && (
 					<Panel
