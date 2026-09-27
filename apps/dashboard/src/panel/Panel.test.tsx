@@ -12,6 +12,7 @@ const node = (over: Partial<BoardRead['nodes'][number]> = {}) =>
 	({
 		id: 'auth-api-k7f2',
 		title: 'The auth API',
+		name: 'Auth API',
 		description: '',
 		notes: '',
 		dependsOn: [],
@@ -53,6 +54,14 @@ test('a node with no brief says where a brief comes from', () => {
 	panel(node({ status: 'needs-brief' }))
 
 	expect(screen.getByText(nextMove('needs-brief') as string)).toBeTruthy()
+})
+
+/** The terminal and the panel must not disagree on what a node is called. */
+test('the panel shows the node name beside its id', () => {
+	panel(node({ status: 'needs-brief' }))
+
+	expect(screen.getByText('auth-api-k7f2')).toBeTruthy()
+	expect(screen.getByText('(Auth API)')).toBeTruthy()
 })
 
 test('a node with a button still says what the button is for', () => {

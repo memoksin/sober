@@ -1,6 +1,7 @@
 import { boardDistance, findRoot, loadBoard, paths as resolve, statusOf } from '@besober/core'
 import { decisionState } from '@besober/schema'
 import { settingsOf } from './board.js'
+import { named } from './out.js'
 
 /**
  * Hook enforcement (ADR 0009, ADR 0047): the plugin's guard against the one
@@ -67,8 +68,8 @@ const decide = async (event: string | undefined, payload: Payload): Promise<Verd
 
 	const warning = board.broken.length === 0 ? {} : { systemMessage: didNotRun(broken(board)) }
 
-	if (event === 'session') return { ...warning, ...live(held, await behind(root)) }
-	if (event === 'spawn') return { ...warning, ...denial(held, aimedAt(payload)) }
+	if (event === 'session') return { ...warning, ...live(board, held, await behind(root)) }
+	if (event === 'spawn') return { ...warning, ...denial(board, held, aimedAt(payload)) }
 	return warning
 }
 
@@ -116,12 +117,16 @@ const names = (haystack: string, id: string): boolean =>
 
 type Held = { id: string; decisions: { id: string; question: string }[] }
 
-const denial = (held: readonly Held[], text: string): Verdict => {
+const denial = (
+	board: Awaited<ReturnType<typeof loadBoard>>,
+	held: readonly Held[],
+	text: string,
+): Verdict => {
 	const aimed = held.filter((node) => names(text, node.id))
 	if (aimed.length === 0) return {}
 
 	const lines = aimed.flatMap((node) => [
-		`${node.id} is held.`,
+		`${named(board, node.id)} is held.`,
 		...node.decisions.map((decision) => `  ${decision.id} is unanswered: ${decision.question}`),
 	])
 	const first = aimed[0]?.decisions[0]?.id ?? '<id>'
@@ -147,7 +152,11 @@ const denial = (held: readonly Held[], text: string): Verdict => {
  * (`DESIGN.md` §2.9). So the one that is installed says so once, at the start,
  * where a session can be believed rather than assumed.
  */
-const live = (held: readonly Held[], distance: string | null): Verdict => ({
+const live = (
+	board: Awaited<ReturnType<typeof loadBoard>>,
+	held: readonly Held[],
+	distance: string | null,
+): Verdict => ({
 	hookSpecificOutput: {
 		hookEventName: 'SessionStart',
 		additionalContext: [
@@ -156,7 +165,8 @@ const live = (held: readonly Held[], distance: string | null): Verdict => ({
 				? 'Nothing is held right now.'
 				: `Held now: ${held
 						.map(
-							(node) => `${node.id} (waiting on ${node.decisions.map((one) => one.id).join(', ')})`,
+							(node) =>
+								`${named(board, node.id)} (waiting on ${node.decisions.map((one) => one.id).join(', ')})`,
 						)
 						.join('; ')}.`,
 			...(distance === null ? [] : [distance]),

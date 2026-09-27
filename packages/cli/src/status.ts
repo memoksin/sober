@@ -9,7 +9,7 @@ import {
 } from '@besober/core'
 import { type Run, ranLabel } from '@besober/schema'
 import { openBoard, readBoard } from './board.js'
-import { blue, bold, columns, cyan, dim, green, magenta, red, say, yellow } from './out.js'
+import { blue, bold, columns, cyan, dim, green, magenta, named, red, say, yellow } from './out.js'
 
 /**
  * One colour language across every command: magenta is a decision, cyan is a
@@ -149,7 +149,10 @@ const waiting = (board: Awaited<ReturnType<typeof readBoard>>, id: string): stri
 
 	if (first !== undefined) {
 		const same = held.filter((one) => one.kind === first.kind)
-		const names = same.map((one) => (one.archived ? `${one.id} (archived)` : one.id))
+		const names = same.map((one) => {
+			const label = one.kind === 'node' ? named(board, one.id) : one.id
+			return one.archived ? `${label} (archived)` : label
+		})
 		return dim(`waiting on ${names.join(', ')}`)
 	}
 

@@ -598,7 +598,7 @@ test('accepting starts what was approved and queued behind it', () => {
 	const accepted = sober(created.dir, 'accept', 'auth-api-k7f2')
 	expect(accepted).toContain('auth-api-k7f2 is done')
 	expect(accepted).toContain('1 queued node starting')
-	expect(accepted).toContain('session-ui-m3q8 finished')
+	expect(accepted).toContain('session-ui-m3q8 (The session panel) finished')
 })
 
 test('a review of a node already accepted says so, and offers no second accept', () => {

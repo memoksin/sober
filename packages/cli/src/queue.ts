@@ -1,5 +1,6 @@
 import {
 	acquire,
+	type Board,
 	type Config,
 	LockBusyError,
 	lastRun,
@@ -10,7 +11,7 @@ import {
 	SoberError,
 	whoami,
 } from '@besober/core'
-import { columns, cyan, dim, green, red, say, spinner, yellow } from './out.js'
+import { columns, cyan, dim, green, named, red, say, spinner, yellow } from './out.js'
 
 /**
  * "Approve and queue" (D26, ADR 0017). The graph has just moved — a node was
@@ -26,6 +27,7 @@ export const drain = async (
 	base: string,
 	options: { readonly quietWhenIdle?: boolean } = {},
 ): Promise<{ readonly failed: boolean }> => {
+	const board = await loadBoard(paths)
 	const spin = spinner('the queue')
 	const queued = await runQueue(paths, base, {
 		onStart: (nodes) => {
@@ -34,7 +36,7 @@ export const drain = async (
 			say(
 				`${dim('·')} ${nodes.length} queued node${nodes.length === 1 ? '' : 's'} ${dim(`starting on ${base} — approved ahead of time`)}`,
 			)
-			say(dim(`  ${nodes.join(', ')}`))
+			say(dim(`  ${nodes.map((id) => named(board, id)).join(', ')}`))
 		},
 	}).finally(() => spin.stop())
 	if (options.quietWhenIdle === true && queued.started.length === 0) return { failed: false }
@@ -44,15 +46,15 @@ export const drain = async (
 	for (const [index, result] of queued.dispatched.entries()) {
 		const node = queued.started[index] ?? ''
 		if (result instanceof SoberError) {
-			say(`${red('×')} ${node}: ${result.message}`)
+			say(`${red('×')} ${named(board, node)}: ${result.message}`)
 			failed = true
 			continue
 		}
 		if (result.exit !== 'finished') failed = true
 		say(
 			result.exit === 'finished'
-				? `${green('✓')} ${node} finished — review it with \`sober review ${node}\``
-				: `${red('×')} ${node} ${result.exit}${result.error === null ? '' : `: ${result.error}`}`,
+				? `${green('✓')} ${named(board, node)} finished — review it with \`sober review ${node}\``
+				: `${red('×')} ${named(board, node)} ${result.exit}${result.error === null ? '' : `: ${result.error}`}`,
 		)
 	}
 	if (queued.dispatched.length < queued.started.length)
@@ -67,15 +69,18 @@ export const drain = async (
 	say(
 		`${yellow('·')} ${queued.held.length} queued node${queued.held.length === 1 ? '' : 's'} waiting for you`,
 	)
-	say(heldLines(queued.held))
+	say(heldLines(board, queued.held))
 	say(
 		dim('  Start one yourself with `sober run <node>`, which says if anything else is in the way.'),
 	)
 	return { failed }
 }
 
-const heldLines = (held: readonly { readonly id: string; readonly why: string }[]): string =>
-	columns(held.map((one) => [`  ${cyan(one.id)}`, dim(one.why)])).join('\n')
+const heldLines = (
+	board: Board,
+	held: readonly { readonly id: string; readonly why: string }[],
+): string =>
+	columns(held.map((one) => [`  ${cyan(named(board, one.id))}`, dim(one.why)])).join('\n')
 
 /**
  * A reader beside the dispatcher: what it is holding and why, what it started
@@ -98,8 +103,9 @@ export const queue = async (
 		say(await liveness(paths, options.config))
 		const board = await loadBoard(paths)
 		const { start, held } = plan(board, await whoami(paths.root))
-		for (const id of start) say(`  ${cyan(id)} ${dim('ready — the next cycle starts it')}`)
-		if (held.length > 0) say(heldLines(held))
+		for (const id of start)
+			say(`  ${cyan(named(board, id))} ${dim('ready — the next cycle starts it')}`)
+		if (held.length > 0) say(heldLines(board, held))
 		const ran = [...board.nodes]
 			.filter(
 				([id, node]) =>
@@ -114,8 +120,8 @@ export const queue = async (
 			if (last === null) continue
 			say(
 				last.run.endedAt === null
-					? `  ${cyan(id)} ${yellow('running')} ${dim(last.id)}`
-					: `  ${cyan(id)} ${last.run.exit === 'finished' ? green('finished') : red(last.run.exit ?? 'ended')} ${dim(last.id)}`,
+					? `  ${cyan(named(board, id))} ${yellow('running')} ${dim(last.id)}`
+					: `  ${cyan(named(board, id))} ${last.run.exit === 'finished' ? green('finished') : red(last.run.exit ?? 'ended')} ${dim(last.id)}`,
 			)
 		}
 		if (start.length + held.length + ran.length === 0) say(dim('  nothing is queued'))

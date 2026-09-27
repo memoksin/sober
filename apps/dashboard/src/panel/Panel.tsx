@@ -66,6 +66,7 @@ export const Panel = ({
 								<code className="font-[family-name:var(--font-mono)] text-[var(--ink-faint)]">
 									{node.id}
 								</code>
+								<span className="text-[var(--ink-faint)]">({node.name})</span>
 							</p>
 						</div>
 						<button
