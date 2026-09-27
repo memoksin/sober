@@ -1,5 +1,5 @@
 import {
-	applySetting,
+	addModel as addToConfig,
 	type Candidate,
 	claudeModels,
 	codexModels,
@@ -9,6 +9,7 @@ import {
 	liveModels,
 	openRouterModels,
 	paths,
+	removeModel as removeFromConfig,
 } from '@besober/core'
 import { openBoard, settingsOf } from './board.js'
 import { bold, columns, cyan, dim, fail, say, when } from './out.js'
@@ -96,17 +97,21 @@ export const addModel = async (
 	const paths = await openBoard()
 	const range = /^(\d+)-(\d+)$/.exec(options.complexity ?? '')
 	if (range === null) return fail('which scores? --complexity 1-3')
-	const complexity = [Number(range[1]), Number(range[2])]
-	const [low, high] = complexity as [number, number]
-	if (low < 1 || high > 10 || low > high) return fail('a range runs from 1 to 10, low end first')
-	const config = await settingsOf(paths)
-	if (config.dispatch.models.some((m) => m.name === name))
-		return fail(`${name} is already in dispatch.models`)
-	await applySetting(paths, ['dispatch', 'models', config.dispatch.models.length], {
+	const { model } = await addToConfig(paths, {
 		name,
 		run,
-		complexity,
-		about: options.about ?? '',
+		complexity: [Number(range[1]), Number(range[2])],
+		about: options.about,
 	})
-	say(`${name} added to dispatch.models, for scores ${complexity[0]}–${complexity[1]}`)
+	say(`${name} added to dispatch.models, for scores ${model.complexity[0]}–${model.complexity[1]}`)
+}
+
+/** The dashboard's remove, from the command line: a pin is deleted, a sourced model denied. */
+export const removeModel = async (name: string): Promise<void> => {
+	const removed = await removeFromConfig(await openBoard(), name)
+	say(
+		removed.kind === 'unpinned'
+			? `${name} removed from dispatch.models`
+			: `${removed.id} added to dispatch.sources.${removed.host}.deny`,
+	)
 }

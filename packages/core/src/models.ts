@@ -2,7 +2,8 @@ import { accessSync, constants, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import type { Config, Model } from './config.js'
+import { applySetting, type Config, type Model, readConfig } from './config.js'
+import { SoberError } from './errors.js'
 import { adapterFor } from './hosts.js'
 import type { Paths } from './paths.js'
 import { writeAtomic } from './write.js'
@@ -233,62 +234,281 @@ export interface LiveModelsDeps {
 	readonly now?: () => number
 }
 
+export const HOSTS = ['claude', 'codex', 'openrouter'] as const
+export type Host = (typeof HOSTS)[number]
+
+type SourceRule = NonNullable<Config['dispatch']['sources'][Host]>
+
+const namedSources = (dispatch: Config['dispatch']): Host[] =>
+	HOSTS.filter((source) => dispatch.sources[source] !== undefined)
+
+/**
+ * The catalogues of `hosts`, cached at `paths.catalogue` and fresh for
+ * `dispatch.catalogueSeconds`. A source that fails to fetch is logged and
+ * treated as unreachable, never thrown — an OpenRouter outage must not stop a
+ * dispatch. A host not asked for is unreachable too, so a pin on it is kept
+ * unchecked rather than read as retired.
+ */
+const cataloguesFor = async (
+	paths: Paths,
+	dispatch: Config['dispatch'],
+	hosts: readonly Host[],
+	deps: LiveModelsDeps,
+): Promise<Catalogues> => {
+	const found: Partial<Record<Host, readonly Candidate[] | null>> = {}
+	if (hosts.length > 0) {
+		const now = deps.now?.() ?? Date.now()
+		const cache = await readCatalogueCache(paths.catalogue)
+		const fresh = now < cache.at + dispatch.catalogueSeconds * 1000
+
+		const fetchOne = async (source: Host): Promise<readonly Candidate[] | null> => {
+			try {
+				if (source === 'claude') return claudeModels()
+				if (source === 'codex') return await codexModels(deps.home ?? homedir())
+				return await openRouterModels(deps.fetch ?? fetch)
+			} catch (error) {
+				console.error(
+					`sober: the ${source} catalogue could not be reached: ${(error as Error).message}`,
+				)
+				return null
+			}
+		}
+
+		let fetched = false
+		for (const source of hosts) {
+			const known = fresh ? cache.models[source] : undefined
+			if (known !== undefined) {
+				found[source] = known
+			} else {
+				fetched = true
+				found[source] = await fetchOne(source)
+			}
+		}
+
+		if (fetched) {
+			const merged = { ...cache.models, ...found }
+			await writeAtomic(paths.catalogue, JSON.stringify({ at: now, models: merged }))
+		}
+	}
+	return {
+		claude: found.claude ?? [],
+		codex: found.codex ?? null,
+		openrouter: found.openrouter ?? null,
+	}
+}
+
 /**
  * `candidatesFor`, fed by the catalogues `dispatch.sources` actually names —
- * nothing is fetched for a source nobody configured. Cached at
- * `paths.catalogue`, fresh for `dispatch.catalogueSeconds`. A source that fails
- * to fetch is logged and treated as unreachable, never thrown — an OpenRouter
- * outage must not stop a dispatch.
+ * nothing is fetched for a source nobody configured.
  */
 export const liveModels = async (
 	paths: Paths,
 	dispatch: Config['dispatch'],
 	deps: LiveModelsDeps = {},
-): Promise<BuiltModels> => {
-	const named = (['claude', 'codex', 'openrouter'] as const).filter(
-		(source) => dispatch.sources[source] !== undefined,
-	)
-	if (named.length === 0) return candidatesFor(dispatch, { claude: [], codex: [], openrouter: [] })
+): Promise<BuiltModels> =>
+	candidatesFor(dispatch, await cataloguesFor(paths, dispatch, namedSources(dispatch), deps))
 
-	const now = deps.now?.() ?? Date.now()
-	const cache = await readCatalogueCache(paths.catalogue)
-	const fresh = now < cache.at + dispatch.catalogueSeconds * 1000
+export interface ListedModel extends Model {
+	/** The adapter the run line names, e.g. `claude`; null when none does. */
+	readonly host: string | null
+	/** Its `--model` argument — what a `deny` entry names. */
+	readonly id: string | null
+	/** In `dispatch.models`, rather than brought by `dispatch.sources`. */
+	readonly pinned: boolean
+}
 
-	const fetchOne = async (
-		source: 'claude' | 'codex' | 'openrouter',
-	): Promise<readonly Candidate[] | null> => {
-		try {
-			if (source === 'claude') return claudeModels()
-			if (source === 'codex') return await codexModels(deps.home ?? homedir())
-			return await openRouterModels(deps.fetch ?? fetch)
-		} catch (error) {
-			console.error(
-				`sober: the ${source} catalogue could not be reached: ${(error as Error).message}`,
-			)
-			return null
-		}
+/**
+ * The dashboard's model screen: the list Jev would see, each entry with its
+ * host and where it came from, and every host's whole catalogue to add from —
+ * a host `dispatch.sources` does not name included.
+ */
+export interface ModelList {
+	readonly models: readonly ListedModel[]
+	readonly dropped: readonly string[]
+	readonly sources: Config['dispatch']['sources']
+	readonly catalogues: Catalogues
+}
+
+const hostOf = (run: string): string | null => {
+	try {
+		return adapterFor(run).id
+	} catch {
+		return null
 	}
+}
 
-	const found: Partial<Record<'claude' | 'codex' | 'openrouter', readonly Candidate[] | null>> = {}
-	let fetched = false
-	for (const source of named) {
-		const known = fresh ? cache.models[source] : undefined
-		if (known !== undefined) {
-			found[source] = known
-		} else {
-			fetched = true
-			found[source] = await fetchOne(source)
-		}
-	}
+const settings = async (paths: Paths): Promise<Config['dispatch']> => {
+	const config = await readConfig(paths)
+	if (config.kind !== 'ok')
+		throw new SoberError('schema', `${config.file} cannot be read: ${config.reason}`)
+	return config.value.dispatch
+}
 
-	if (fetched) {
-		const merged = { ...cache.models, ...found }
-		await writeAtomic(paths.catalogue, JSON.stringify({ at: now, models: merged }))
-	}
-
-	return candidatesFor(dispatch, {
-		claude: found.claude ?? [],
-		codex: found.codex ?? null,
-		openrouter: found.openrouter ?? null,
+const listOf = async (
+	paths: Paths,
+	dispatch: Config['dispatch'],
+	deps: LiveModelsDeps,
+): Promise<ModelList> => {
+	const all = await cataloguesFor(paths, dispatch, HOSTS, deps)
+	const named = namedSources(dispatch)
+	// From the named sources only, so the list is the one a dispatch sees.
+	const built = candidatesFor(dispatch, {
+		claude: named.includes('claude') ? all.claude : [],
+		codex: named.includes('codex') ? all.codex : null,
+		openrouter: named.includes('openrouter') ? all.openrouter : null,
 	})
+	const pins = new Set(dispatch.models.map((m) => m.name))
+	return {
+		models: built.models.map((m) => ({
+			...m,
+			host: hostOf(m.run),
+			id: modelIdOf(m.run),
+			pinned: pins.has(m.name),
+		})),
+		dropped: built.dropped,
+		sources: dispatch.sources,
+		catalogues: all,
+	}
+}
+
+export const listModels = async (paths: Paths, deps: LiveModelsDeps = {}): Promise<ModelList> =>
+	listOf(paths, await settings(paths), deps)
+
+type Range = readonly [number, number]
+
+const checkRange = ([low, high]: Range): [number, number] => {
+	if (!Number.isInteger(low) || !Number.isInteger(high) || low < 1 || high > 10 || low > high)
+		throw new SoberError('bad-model', 'a range runs from 1 to 10, low end first')
+	return [low, high]
+}
+
+/** The source's filters, less any `deny` entry that is exactly this id. */
+const passes = (rule: SourceRule, id: string): boolean =>
+	(rule.only === undefined || rule.only.some((glob) => globToRegExp(glob).test(id))) &&
+	!(rule.deny ?? []).some((glob) => glob !== id && globToRegExp(glob).test(id))
+
+export type AddModel =
+	| { readonly host: Host; readonly id: string; readonly complexity?: Range }
+	| {
+			readonly name: string
+			readonly run: string
+			readonly complexity: Range
+			readonly about?: string
+	  }
+
+export type Added =
+	| { readonly kind: 'pinned'; readonly model: Model }
+	/** Exact `deny` entries were taken out, and the source brings the model back. */
+	| { readonly kind: 'lifted'; readonly model: Model; readonly host: Host }
+
+/**
+ * One model more for Jev. Typed by hand, it is a pin. Picked from a host's
+ * catalogue with no range given, the smallest change wins: lifting an exact
+ * `deny` entry when the source's filters then let it through, and a pin when
+ * they still keep it out. Every write goes through `applySetting`, so the
+ * config keeps its comments.
+ */
+export const addModel = async (
+	paths: Paths,
+	adding: AddModel,
+	deps: LiveModelsDeps = {},
+): Promise<Added> => {
+	const dispatch = await settings(paths)
+	const pin = async (model: Model): Promise<Added> => {
+		if (dispatch.models.some((m) => m.name === model.name))
+			throw new SoberError('bad-model', `${model.name} is already in dispatch.models`)
+		await applySetting(paths, ['dispatch', 'models', dispatch.models.length], model)
+		return { kind: 'pinned', model }
+	}
+
+	if ('name' in adding) {
+		if (adding.name.trim() === '' || adding.run.trim() === '')
+			throw new SoberError('bad-model', 'a model needs a name and a run line')
+		return pin({
+			name: adding.name,
+			run: adding.run,
+			complexity: checkRange(adding.complexity),
+			about: adding.about ?? '',
+		})
+	}
+
+	const list = await listOf(paths, dispatch, deps)
+	const candidate = list.catalogues[adding.host]?.find((c) => c.id === adding.id)
+	if (candidate === undefined)
+		throw new SoberError('bad-model', `${adding.id} is not in the ${adding.host} catalogue`)
+	if (list.models.some((m) => m.run === candidate.run))
+		throw new SoberError('bad-model', `${candidate.name} is already a model Jev can pick`)
+
+	const rule = dispatch.sources[adding.host]
+	if (
+		rule !== undefined &&
+		adding.complexity === undefined &&
+		passes(rule, candidate.id) &&
+		!list.models.some((m) => m.name === candidate.name)
+	) {
+		const deny = rule.deny ?? []
+		// From the end, so each index still points where it did when read.
+		for (let at = deny.length - 1; at >= 0; at--)
+			if (deny[at] === candidate.id)
+				await applySetting(paths, ['dispatch', 'sources', adding.host, 'deny', at], undefined)
+		return {
+			kind: 'lifted',
+			host: adding.host,
+			model: {
+				name: candidate.name,
+				run: candidate.run,
+				complexity: rule.complexity,
+				about: candidate.about,
+			},
+		}
+	}
+
+	const complexity = adding.complexity ?? rule?.complexity
+	if (complexity === undefined)
+		throw new SoberError(
+			'bad-model',
+			`${adding.host} is not in dispatch.sources, so say which scores ${candidate.name} takes`,
+		)
+	return pin({
+		name: candidate.name,
+		run: candidate.run,
+		complexity: checkRange(complexity),
+		about: candidate.about,
+	})
+}
+
+export type Removed =
+	| { readonly kind: 'unpinned'; readonly name: string }
+	/** A source brought it, so its id is now in that source's `deny`. */
+	| { readonly kind: 'denied'; readonly name: string; readonly host: Host; readonly id: string }
+
+/**
+ * One model fewer for Jev, by the name the list shows. A pin is deleted from
+ * `dispatch.models`; a model a source brought is denied by its exact id in that
+ * source's `dispatch.sources` block, so the next catalogue refresh does not
+ * bring it back.
+ */
+export const removeModel = async (
+	paths: Paths,
+	name: string,
+	deps: LiveModelsDeps = {},
+): Promise<Removed> => {
+	const dispatch = await settings(paths)
+	const at = dispatch.models.findIndex((m) => m.name === name)
+	if (at !== -1) {
+		await applySetting(paths, ['dispatch', 'models', at], undefined)
+		return { kind: 'unpinned', name }
+	}
+
+	const listed = (await listOf(paths, dispatch, deps)).models.find((m) => m.name === name)
+	const host = HOSTS.find((h) => h === listed?.host)
+	const rule = host === undefined ? undefined : dispatch.sources[host]
+	if (listed?.id == null || host === undefined || rule === undefined)
+		throw new SoberError('bad-model', `${name} is not a model Jev can pick`)
+	await applySetting(
+		paths,
+		['dispatch', 'sources', host, 'deny', ...(rule.deny === undefined ? [] : [rule.deny.length])],
+		rule.deny === undefined ? [listed.id] : listed.id,
+	)
+	return { kind: 'denied', name, host, id: listed.id }
 }

@@ -17,6 +17,7 @@ import { DistributionScreen } from './distribute/Distribution.js'
 import { readPlan, waiting } from './distribute/data.js'
 import { mergeThinkingVerbs, THINKING_VERBS } from './logs/data.js'
 import { LogScreen } from './logs/Logs.js'
+import { ModelsScreen } from './models/Models.js'
 import type { CorrectionInput } from './panel/Correct.js'
 import { DecisionScreen } from './panel/Decision.js'
 import type { Action, BoardRead, FlagAction } from './panel/data.js'
@@ -62,6 +63,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 	const [plan, setPlan] = useState<Distribution | null>(null)
 	const [planOpen, setPlanOpen] = useState(false)
 	const [decisionsOpen, setDecisionsOpen] = useState(false)
+	const [modelsOpen, setModelsOpen] = useState(false)
 	// A plan that will not parse is the bar's problem and never the canvas's
 	// (§8.4): one bad record has never taken the board down, and a read added to
 	// the poll is exactly how that stops being true.
@@ -173,6 +175,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 			// One layer at a time: a screen opened from a node goes back to that
 			// node rather than clearing the board out from under it.
 			if (planOpen) setPlanOpen(false)
+			else if (modelsOpen) setModelsOpen(false)
 			else if (decisionsOpen) setDecisionsOpen(false)
 			else if (watching !== null) setWatching(null)
 			else if (reviewing !== null) setReviewing(null)
@@ -181,7 +184,7 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 		}
 		addEventListener('keydown', back)
 		return () => removeEventListener('keydown', back)
-	}, [deciding, decisionsOpen, planOpen, reviewing, watching])
+	}, [deciding, decisionsOpen, modelsOpen, planOpen, reviewing, watching])
 
 	/**
 	 * What the board says now, after something changed it. Read rather than
@@ -429,6 +432,14 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 
 				<button
 					type="button"
+					onClick={() => setModelsOpen(true)}
+					className="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-[var(--ink-dim)] text-xs hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+				>
+					models
+				</button>
+
+				<button
+					type="button"
 					onClick={() => void sync()}
 					disabled={syncing}
 					className="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-[var(--ink-dim)] text-xs hover:bg-[var(--surface)] hover:text-[var(--ink)] disabled:opacity-50"
@@ -571,6 +582,10 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 						onClose={() => setWatching(null)}
 						verbs={mergeThinkingVerbs(THINKING_VERBS, board?.thinkingVerbs ?? null)}
 					/>
+				)}
+
+				{modelsOpen && surface !== null && (
+					<ModelsScreen surface={surface} onClose={() => setModelsOpen(false)} />
 				)}
 
 				{decisionsOpen && board !== null && (

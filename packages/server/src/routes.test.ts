@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { currentBranch, paths, SoberError } from '@besober/core'
@@ -37,10 +37,11 @@ test('a read is never spelled like an operation', () => {
 	for (const read of Object.keys(READS)) expect(OPERATIONS, read).not.toContain(read)
 })
 
-test('every read a screen asked for, and no speculative seventh', () => {
+test('every read a screen asked for, and no speculative extra', () => {
 	// The digest is the fourth, the impact preview the fifth and the waiting
-	// distribution the sixth, and each was written when its screen asked for it
-	// rather than beside the first three — which is the property this guards.
+	// distribution the sixth, the model list the model screen's, and each was
+	// written when its screen asked for it rather than beside the first three —
+	// which is the property this guards.
 	expect(Object.keys(READS).sort()).toEqual([
 		'availability',
 		'board',
@@ -48,6 +49,7 @@ test('every read a screen asked for, and no speculative seventh', () => {
 		'distance',
 		'distribution',
 		'impact',
+		'models',
 		'projection',
 		'review',
 	])
@@ -282,4 +284,37 @@ test('the board read carries thinkingVerbs — the default pool absent, the conf
 	writeFileSync(p.config, '{ not valid json')
 	const withBrokenConfig = await READS.board.run(p, {})
 	expect((withBrokenConfig as { thinkingVerbs: unknown }).thinkingVerbs).toBeNull()
+})
+
+test('add_model takes a catalogue pick or a typed pin, and refuses a bad range or host', () => {
+	const accepts = OPS.add_model.accepts
+	expect(accepts.safeParse({ host: 'claude', id: 'opus' }).success).toBe(true)
+	expect(
+		accepts.safeParse({ name: 'fable', run: 'claude --model fable', complexity: [8, 10] }).success,
+	).toBe(true)
+	expect(accepts.safeParse({ host: 'cursor', id: 'x' }).success).toBe(false)
+	expect(accepts.safeParse({ name: 'x', run: 'claude', complexity: [9, 2] }).success).toBe(false)
+	expect(accepts.safeParse({ name: 'x', run: 'claude', complexity: [0, 11] }).success).toBe(false)
+	expect(accepts.safeParse({ name: 'x', run: 'claude' }).success).toBe(false)
+})
+
+test('add_model and remove_model write through core, keeping the config comments', async () => {
+	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
+	const p = paths(dir)
+	mkdirSync(join(dir, '.sober'))
+	writeFileSync(p.config, '{\n\t// kept\n\t"dispatch": { "models": [] }\n}\n')
+
+	await OPS.add_model.run(p, { name: 'fable', run: 'claude --model fable', complexity: [8, 10] })
+	expect(readFileSync(p.config, 'utf8')).toContain('"run": "claude --model fable"')
+	await expect(
+		OPS.add_model.run(p, { name: 'fable', run: 'claude', complexity: [1, 2] }),
+	).rejects.toBeInstanceOf(SoberError)
+
+	expect(await OPS.remove_model.run(p, { name: 'fable' })).toEqual({
+		kind: 'unpinned',
+		name: 'fable',
+	})
+	const text = readFileSync(p.config, 'utf8')
+	expect(text).not.toContain('fable')
+	expect(text).toContain('// kept')
 })

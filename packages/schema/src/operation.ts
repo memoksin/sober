@@ -72,8 +72,11 @@ export const OPERATIONS = [
 	// Rewording a node already on the board: its title, its description or its
 	// name. Its place in the graph does not move.
 	'correct_node',
-	// One entry in `dispatch.models`, with the scores the router reads it by.
+	// One model more for the router, pinned in `dispatch.models` or let back in
+	// from a source's catalogue, and one fewer: a pin deleted, a sourced model
+	// denied by id.
 	'add_model',
+	'remove_model',
 	// The dispatcher that starts queued nodes as they become ready. Two entries,
 	// like the plan's two: a surface that can start it and not stop it is a
 	// surface with no way out of it.

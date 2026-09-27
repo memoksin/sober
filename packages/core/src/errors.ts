@@ -44,6 +44,9 @@ export const ERROR_CODES = [
 	// A sober:auto transition the gate turned down (ADR 0065 §3). Named apart so
 	// a surface can hand the node back to the human rather than report a crash.
 	'auto-refused',
+	// A `dispatch.models` change that names nothing, repeats a name, or gives
+	// a range outside 1–10.
+	'bad-model',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

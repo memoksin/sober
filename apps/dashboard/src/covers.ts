@@ -33,6 +33,8 @@ export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, 
 	create_node: 'panel: Open a node for the fix',
 	accept_distribution: 'distribution: Assign all',
 	drop_distribution: 'distribution: Drop it',
+	add_model: 'models: Add from a catalogue, or Pin one typed by hand',
+	remove_model: 'models: Remove',
 }
 
 export const GAPS = [
@@ -45,7 +47,6 @@ export const GAPS = [
 	'assign',
 	'claim',
 	'release',
-	'add_model',
 	'start_dispatcher',
 	'stop_dispatcher',
 ] as const satisfies readonly Operation[]
