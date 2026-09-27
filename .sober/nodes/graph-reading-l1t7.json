@@ -11,11 +11,44 @@
 		"apps/dashboard/src/App.tsx",
 		"docs/adr/**"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Keep the existing preset Cytoscape layout. In apps/dashboard/src/canvas/graph.ts, replace ring seating in pack/order with a deterministic dependency-layer placement: derive layers from dependsOn, keep components together, order within layers by adjacent nodes, and leave spacing for labels. Preserve stable tie-breaking and no-overlap for islands, chains and dense joins. In apps/dashboard/src/canvas/Canvas.tsx preserve drag/tow, filters, selection, keyboard controls and reduced-motion behavior; adjust only fit/position handling needed by the coordinates. In apps/dashboard/src/canvas/paint.ts clarify dependency direction and selected-node neighbors within the existing palette. Update graph.test.ts and paint.test.ts with dense-DAG layout and visibility assertions. Inspect a dense demo board visually at desktop and narrow widths; document any change to ADR 0040's ring rationale in a new ADR. Use targeted checks, then commit.",
+		"complexity": 7,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src/canvas/graph.test.ts apps/dashboard/src/canvas/paint.test.ts",
+				"proves": "Layout is stable and nonoverlapping on dense and sparse boards, and dependency and selected-neighbor styling stays readable."
+			},
+			{
+				"run": "pnpm exec biome check apps/dashboard/src/canvas docs/adr && pnpm --filter @besober/dashboard build",
+				"proves": "Canvas code, tests and the layout ADR pass style checks and the dashboard compiles."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-27T10:26:30.002Z",
+			"queue": true
+		},
+		"plain": {
+			"what": "Arrange nodes by their dependencies so dense boards are easier to read, while keeping current interactions.",
+			"why": "The present ring placement creates long, crossing lines in dense dependency groups.",
+			"check": "Run only canvas tests and dashboard build checks, then inspect a dense board at desktop and narrow sizes.",
+			"risk": "A new layout changes where nodes appear; stable ordering and interaction checks guard against confusing jumps."
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T10:28:21.865Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T11:57:05.250Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-24T07:08:31.919Z"
 }

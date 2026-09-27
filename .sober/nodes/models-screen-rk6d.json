@@ -17,11 +17,48 @@
 		"apps/dashboard/src/wire.ts",
 		"test/integration/contract.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Move CLI-only addModel write logic from packages/cli/src/models.ts into a shared core model mutation in packages/core/src/models.ts using config.ts applySetting/setSetting so comments survive. Add core operations to remove a model by name: a pinned dispatch.models entry is removed from that array; a catalogue candidate is excluded by appending its exact id to the corresponding dispatch.sources.<host>.deny list. Add a model by catalogue id by lifting an exact deny, or pinning it when only filters still exclude it; typed custom pins accept name, run line and complexity 1–10 with existing validation. Add matching `sober models remove <name>` CLI path. In packages/server/src/routes.ts expose one read returning liveModels plus per-host catalogue/pin/deny state and add/remove write operations, with strict schemas and route tests. In apps/dashboard/src/models/ build a host-grouped screen (claude/codex/openrouter) showing available models, coverage range, add and remove controls, and explicit feedback on pending/errors; wire from App.tsx and remove add_model from dashboard and server GAPS. Update operation schema/contract coverage for remove_model. Reuse existing styling and run only targeted tests.",
+		"complexity": 8,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src/models.test.ts packages/cli/src/models.test.ts packages/server/src/routes.test.ts",
+				"proves": "Catalog and pin additions/removals retain config comments and server/CLI use the same behavior."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/contract.test.ts test/integration/cli.test.ts",
+				"proves": "Dashboard operations and CLI add/remove commands satisfy the public contract."
+			},
+			{
+				"run": "pnpm build && pnpm exec biome check packages/core/src/models.ts packages/cli/src/models.ts packages/server/src/routes.ts apps/dashboard/src/models apps/dashboard/src/App.tsx test/integration/contract.test.ts",
+				"proves": "The changed model surfaces compile and pass style checks."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-27T11:01:09.881Z",
+			"queue": true
+		},
+		"plain": {
+			"what": "Show available models by host in the dashboard and let users add or remove them there and in the CLI.",
+			"why": "Model selection currently needs manual CLI/config work and cannot remove an entry.",
+			"check": "Run focused core, CLI, server and contract tests plus build and style checks.",
+			"risk": "A removal can change future dispatch choices; config writes must preserve comments and distinguish catalogue denies from pinned entries."
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T15:03:07.583Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T15:53:59.083Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T06:52:14.657Z"
 }

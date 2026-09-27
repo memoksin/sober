@@ -14,10 +14,41 @@
 		"packages/server/src/routes.ts",
 		"apps/dashboard/src/decisions/**"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Create a single read-only Markdown renderer in packages/core/src/report.ts that takes loadBoard(paths), selects answered decisions, sorts by answer timestamp (with id as stable tie-breaker), and writes each question, chosen option and rationale, derived provenance, every unchosen option with reason and costLater, and the bound node names/ids it released. Escape Markdown text from board records so one answer cannot break report structure. Export the renderer from packages/core/src/index.ts. Add `sober why` (or `sober decisions --report`) in packages/cli/src/index.ts to print that exact string to stdout. Expose the same string via a read-only packages/server/src/routes.ts operation and wire a Copy Markdown button into apps/dashboard/src/decisions/Decisions.tsx; do not duplicate formatting in the browser. Update schema and surface coverage only for the new operation. Test ordering, alternatives, empty board, escaping and the CLI/server/dashboard path with focused tests.",
+		"complexity": 5,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/core/src/report.test.ts apps/dashboard/src/decisions/data.test.ts",
+				"proves": "Report ordering, complete alternatives, provenance, node bindings and empty output are deterministic."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/cli.test.ts test/integration/contract.test.ts",
+				"proves": "CLI and dashboard/server surfaces expose the same core Markdown report."
+			},
+			{
+				"run": "pnpm build && pnpm exec biome check packages/core/src/report.ts packages/core/src/index.ts packages/cli/src/index.ts packages/server/src/routes.ts apps/dashboard/src/decisions test/integration/cli.test.ts test/integration/contract.test.ts",
+				"proves": "Touched core, CLI and dashboard paths compile and pass style checks."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-27T10:51:56.041Z",
+			"queue": true
+		},
+		"plain": {
+			"what": "Add one Markdown report of answered decisions, including choices, alternatives, costs and affected nodes, available from CLI and dashboard.",
+			"why": "The current decisions list names the choice but leaves out the reasoning and rejected options needed to understand it later.",
+			"check": "Run focused report, CLI and contract tests plus build and style checks.",
+			"risk": "Board text must be escaped before Markdown output; the renderer is shared so CLI and dashboard cannot drift."
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T12:53:06.174Z"
+	},
 	"accepted": null,
 	"dismissal": null,
 	"createdAt": "2026-09-23T06:48:48.055Z"

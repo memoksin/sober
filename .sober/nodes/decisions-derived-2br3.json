@@ -8,11 +8,44 @@
 	"files": [
 		"apps/dashboard/src/decisions/**"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Keep decisionRows in apps/dashboard/src/decisions/data.ts as the existing projection and add a small `filterDecisionRows(rows, filter)` helper for all/open/answered/derived, where derived means an answered row with non-null answer.derived. In apps/dashboard/src/decisions/Decisions.tsx add a labelled four-option filter control backed by useState; apply it to the projected rows while keeping the total and open counts based on all rows. Show row.category near its state and replace the faint hover-only `derived` tag with inline `read off: <source>` text that wraps on narrow screens. Reuse current text styles and keyboard-accessible native buttons/select. Add cases to apps/dashboard/src/decisions/data.test.ts for every filter and derived provenance; avoid changes outside the decisions screen.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run apps/dashboard/src/decisions/data.test.ts",
+				"proves": "All/open/answered/derived filters select the right rows and retain the answer source."
+			},
+			{
+				"run": "pnpm exec biome check apps/dashboard/src/decisions && pnpm --filter @besober/dashboard build",
+				"proves": "Decision screen code passes style checks and dashboard compilation."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-27T10:55:25.244Z",
+			"queue": true
+		},
+		"plain": {
+			"what": "Show each decision's category and derived source directly, and add four filters to the decisions screen.",
+			"why": "The source is currently hidden in a hover hint, and the list cannot be narrowed by state.",
+			"check": "Run only decision data tests, then dashboard style and build checks.",
+			"risk": "Small screen text may wrap; the source remains visible and the filter uses a native control."
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T10:57:03.135Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T11:52:28.390Z",
+		"flagged": false,
+		"scan": "clean",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-23T08:51:45.377Z"
 }

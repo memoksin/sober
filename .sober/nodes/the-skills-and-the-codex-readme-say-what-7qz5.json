@@ -17,11 +17,44 @@
 		"packages/codex-plugin/README.md",
 		"test/integration/plugin.test.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Update source plugins/skills/next/SKILL.md run step and plugins/skills/loop/SKILL.md Running section: `run` is normally blocking under the configured host timeout; if this host ends the tool call first, consult `board` and `logs` for the same node until it is `in-review` or failed, and never call `run` again while it is `running`. This follows the answered decision to keep run blocking and raise the configured Codex tool limit; it adds recovery guidance for hosted clients that still cap calls. In packages/codex-plugin/README.md, add one concise sentence under the existing tool-call timeout paragraph explaining that a hosted call may time out while the underlying run continues and `board`/`logs` are the safe continuation path. Run `pnpm plugins` to regenerate packaged skills. The first run's implementation is already present in its worktree; only repair if checks find a defect. No run implementation or timeout config changes.",
+		"complexity": 2,
+		"acceptance": [
+			{
+				"run": "pnpm plugins && pnpm exec vitest run --project integration test/integration/plugin.test.ts",
+				"proves": "Generated host skills match their sources and the plugin contract remains valid."
+			},
+			{
+				"run": "git diff --check",
+				"proves": "Changed documentation and generated files contain no whitespace errors."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-27T10:45:59.154Z",
+			"queue": true
+		},
+		"plain": {
+			"what": "Tell agents how to follow a run after a host cuts off the tool call, and state the Codex limit in its README.",
+			"why": "A timed-out tool call can leave the node still running, so repeating run would start the wrong recovery path.",
+			"check": "Regenerate plugin files, run only the plugin integration test, and check the diff for whitespace errors.",
+			"risk": "Documentation only; a hosted client's own limit can still end the visible tool call."
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T10:52:49.974Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T11:54:22.272Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-14T11:39:12.254Z"
 }

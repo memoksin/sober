@@ -21,11 +21,48 @@
 		"apps/dashboard/src/panel/Panel.tsx",
 		"apps/dashboard/src/**/*.test.*"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Use the already answered decision: add one node-id/name formatter in packages/cli/src/out.ts, accepting the node record or board so call sites do not hand-build labels. Update bare-id output in packages/cli/src/queue.ts (including drain and held lines), distribute.ts, hook.ts, status.ts and board.ts; keep packages/cli/src/sync.ts's path-specific named() behavior for record paths, but use the formatter for any node ids it prints. Fetch/pass the board where these call sites currently hold only ids. On the dashboard, apps/dashboard/src/canvas/graph.ts already puts node.title in data(label) and paint.ts renders that label, so do not add a second canvas label. In apps/dashboard/src/panel/Panel.tsx show the short name beside the id in the existing metadata row, keeping title as the primary heading. Add focused CLI output tests and a panel render test for the new label; do not touch graph layout or node correction behavior.",
+		"complexity": 4,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run packages/cli/src/queue.test.ts apps/dashboard/src/panel/Panel.test.tsx",
+				"proves": "Queue wording and the panel show each short name consistently."
+			},
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/cli.test.ts",
+				"proves": "The CLI's end-user messages render names with ids in real command flows."
+			},
+			{
+				"run": "pnpm exec biome check packages/cli/src/out.ts packages/cli/src/queue.ts packages/cli/src/distribute.ts packages/cli/src/hook.ts packages/cli/src/status.ts packages/cli/src/board.ts apps/dashboard/src/panel/Panel.tsx && pnpm build",
+				"proves": "Changed CLI and dashboard code passes style checks and builds."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-27T10:50:09.071Z",
+			"queue": true
+		},
+		"plain": {
+			"what": "Show each node's short name with its id in terminal messages and the dashboard panel.",
+			"why": "The plugin already uses names; terminal and dashboard readers need the same vocabulary.",
+			"check": "Run focused queue, panel and CLI integration tests, then style and build checks.",
+			"risk": "Longer terminal lines need to stay readable; the canvas keeps its existing title label."
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T12:33:03.995Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T15:40:13.999Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-08T12:35:02.425Z"
 }

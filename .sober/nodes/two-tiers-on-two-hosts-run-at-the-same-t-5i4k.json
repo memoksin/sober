@@ -13,11 +13,44 @@
 		"packages/core/src/run.ts",
 		"packages/core/src/dispatch.ts"
 	],
-	"brief": null,
+	"brief": {
+		"approach": "Add a real-git integration case in test/integration/dispatch.test.ts using two existing fake host adapters from test/integration/hosts. Configure dispatch.concurrency=2, score two approved nodes into distinct dispatch.tiers, and call the CLI run wave. Assert overlap in their run intervals, each run record's host and tier, and each host-specific rendered log. Exercise attended refusal for the Codex-tier host and attended acceptance for the Claude-tier host. Add the same pair to test/integration/queue.test.ts with queue approvals and verify each queued run resolves its own host. Trace any failure to packages/core/src/dispatch.ts dispatchWave/resolveHost or packages/core/src/queue.ts runQueue and fix only the shared assumption; avoid new configuration or UI. Use narrow tests during development; commit only after the checks pass.",
+		"complexity": 6,
+		"acceptance": [
+			{
+				"run": "pnpm exec vitest run --project integration test/integration/dispatch.test.ts test/integration/queue.test.ts",
+				"proves": "Two simultaneous ready nodes and the queued pair use their own tier hosts, preserve host-specific records and logs, and enforce attended capability per node."
+			},
+			{
+				"run": "pnpm exec biome check test/integration/dispatch.test.ts test/integration/queue.test.ts packages/core/src/dispatch.ts packages/core/src/queue.ts && pnpm --filter @besober/core build",
+				"proves": "Touched integration and core code passes style checks and core builds."
+			}
+		],
+		"approval": {
+			"by": "Mehmet Yiğit Keskin",
+			"at": "2026-09-27T10:25:15.237Z",
+			"queue": true
+		},
+		"plain": {
+			"what": "Prove that one board can run nodes on two different hosts at the same time, and fix any shared-host assumption the test exposes.",
+			"why": "The queue and run wave already select hosts per node, but no combined test protects that behavior.",
+			"check": "Run only the dispatch and queue integration tests, then style and core build checks.",
+			"risk": "The test may expose a shared-host assumption in dispatch or queue; changes stay within those paths."
+		}
+	},
 	"outcome": null,
 	"assignee": null,
-	"claim": null,
-	"accepted": null,
+	"claim": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T10:26:26.666Z"
+	},
+	"accepted": {
+		"by": "Mehmet Yiğit Keskin",
+		"at": "2026-09-27T11:54:53.365Z",
+		"flagged": false,
+		"scan": "findings",
+		"audit": "passed"
+	},
 	"dismissal": null,
 	"createdAt": "2026-09-12T17:41:57.651Z"
 }
