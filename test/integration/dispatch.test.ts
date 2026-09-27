@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+	answerRun,
 	checkHost,
 	dispatch,
 	dispatchWave,
@@ -22,6 +23,7 @@ import {
 	writeRun,
 	writeRunPid,
 } from '@besober/core'
+import type { Run } from '@besober/schema'
 import { afterEach, expect, test, vi } from 'vitest'
 import { createTempRepo, type TempRepo } from './fixture.js'
 
@@ -32,6 +34,8 @@ import { createTempRepo, type TempRepo } from './fixture.js'
  * worktree, the setup command, the run record, the log, the kill — is real.
  */
 const FAKE_HOST = `${process.execPath} ${fileURLToPath(new URL('./hosts/claude.mjs', import.meta.url))}`
+/** A second, differently-shaped host for the tiers that name more than one adapter. */
+const FAKE_CODEX = `${process.execPath} ${fileURLToPath(new URL('./hosts/codex.mjs', import.meta.url))}`
 
 const aNode = (title: string) => ({
 	title,
@@ -62,6 +66,7 @@ afterEach(() => {
 	delete process.env.FAKE_HOST_LOGGED_OUT
 	delete process.env.FAKE_HOST_WRITE
 	delete process.env.FAKE_HOST_COMMIT
+	delete process.env.FAKE_HOST_DELAY_MS
 	delete process.env.SOBER_GH
 	delete process.env.FAKE_GH_STATE
 })
@@ -396,14 +401,18 @@ test('a run that did not finish verifies nothing — there is nothing to verify'
 })
 
 /** Scores the node, so dispatch has a tier to pick. */
-const score = async (paths: Paths, complexity: number | null): Promise<void> => {
-	await writeBrief(paths, 'auth-api-k7f2', {
+const score = async (
+	paths: Paths,
+	complexity: number | null,
+	id = 'auth-api-k7f2',
+): Promise<void> => {
+	await writeBrief(paths, id, {
 		approach: 'Add the endpoints.',
 		acceptance: [{ run: 'npm test', proves: 'They answer.' }],
 	})
-	const node = (await readNodes(paths)).records.get('auth-api-k7f2')
+	const node = (await readNodes(paths)).records.get(id)
 	if (node?.brief == null) throw new Error('no brief')
-	await writeNode(paths, 'auth-api-k7f2', { ...node, brief: { ...node.brief, complexity } })
+	await writeNode(paths, id, { ...node, brief: { ...node.brief, complexity } })
 }
 
 const TIERS = {
@@ -593,4 +602,115 @@ test('tiers are read from the base, never from the working copy', async () => {
 	await dispatch(paths, 'auth-api-k7f2', { base: 'main', prompt: 'go' })
 
 	expect(await ran(paths)).toMatchObject({ host: FAKE_HOST, tier: 'high', fallback: true })
+})
+
+/**
+ * Two tiers naming two different host CLIs, burning under one
+ * `dispatch.concurrency` — the shape this whole node exists to prove: nothing
+ * in a wave may assume every member runs on the same host.
+ */
+const TWO_HOSTS = { high: FAKE_HOST, mid: FAKE_CODEX, low: null }
+
+const runFor = async (paths: Paths, node: string): Promise<readonly [string, Run]> => {
+	const { records } = await readRuns(paths)
+	const found = [...records.entries()].find(([, run]) => run.node === node)
+	if (found === undefined) throw new Error(`${node} never ran`)
+	return found
+}
+
+/** Scores a node with a silent acceptance criterion, so the audit adds nothing but its own two markers to the log. */
+const scoreQuiet = async (paths: Paths, id: string, complexity: number): Promise<void> => {
+	await writeBrief(paths, id, {
+		approach: 'Add it.',
+		acceptance: [{ run: 'exit 0', proves: 'it does not crash' }],
+	})
+	const node = (await readNodes(paths)).records.get(id)
+	if (node?.brief == null) throw new Error('no brief')
+	await writeNode(paths, id, { ...node, brief: { ...node.brief, complexity } })
+}
+
+test('two nodes scored to two tiers run on two hosts at the same time, each keeping its own record and log', async () => {
+	const paths = await board({ concurrency: 2, tiers: TWO_HOSTS })
+	await writeNode(paths, 'billing-ui-p3x9', { ...aNode('Billing'), files: ['src/billing.ts'] })
+	await scoreQuiet(paths, 'auth-api-k7f2', 9) // high tier -> claude
+	await scoreQuiet(paths, 'billing-ui-p3x9', 5) // mid tier -> codex
+	// Held open past the point both have started, so the overlap below is real
+	// concurrency and not two runs that happened to be measured close together.
+	process.env.FAKE_HOST_DELAY_MS = '150'
+
+	const running = dispatchWave(
+		paths,
+		[
+			{ node: 'auth-api-k7f2', options: { base: 'main' } },
+			{ node: 'billing-ui-p3x9', options: { base: 'main' } },
+		],
+		'main',
+	)
+
+	await until(async () => {
+		const { records } = await readRuns(paths)
+		return [...records.values()].filter((run) => run.exit === null).length === 2
+	})
+
+	const results = await running
+	expect(results).toHaveLength(2)
+	expect(results.every((result) => !(result instanceof Error) && result.exit === 'finished')).toBe(
+		true,
+	)
+
+	const [authId, authRun] = await runFor(paths, 'auth-api-k7f2')
+	const [billingId, billingRun] = await runFor(paths, 'billing-ui-p3x9')
+	expect(authRun).toMatchObject({ host: FAKE_HOST, tier: 'high' })
+	expect(billingRun).toMatchObject({ host: FAKE_CODEX, tier: 'mid' })
+
+	// Each run's log renders through its own adapter (`renderLine`, `hosts.ts`):
+	// Claude Code's shape and Codex's do not read alike.
+	const authLog = tail(readFileSync(runLog(paths, authId), 'utf8'))
+	const billingLog = tail(readFileSync(runLog(paths, billingId), 'utf8'))
+	expect(authLog.map((line) => line.kind)).toEqual([
+		'started',
+		'thinking',
+		'tool',
+		'text',
+		'result',
+		'check',
+		'checked',
+	])
+	expect(billingLog.map((line) => line.kind)).toEqual([
+		'started',
+		'raw',
+		'tool',
+		'output',
+		'text',
+		'result',
+		'check',
+		'checked',
+	])
+})
+
+test('an attended run is refused on the codex-tier host, which cannot hear a human while it runs', async () => {
+	const paths = await board({ tiers: TWO_HOSTS })
+	await score(paths, 5) // mid tier -> codex
+
+	const refusal = dispatch(paths, 'auth-api-k7f2', { base: 'main', attended: true })
+
+	await expect(refusal).rejects.toBeInstanceOf(HostError)
+	await expect(refusal).rejects.toThrow(
+		/^auth-api-k7f2 was not started \(the mid tier\): .*takes one message and exits.*or change `dispatch\.tiers\.mid`$/,
+	)
+	expect(existsSync(join(paths.local, 'worktrees', 'auth-api-k7f2'))).toBe(false)
+})
+
+test('an attended run is accepted on the claude-tier host, and the human can answer it', async () => {
+	const paths = await board({ tiers: TWO_HOSTS })
+	await score(paths, 9) // high tier -> claude
+
+	const running = dispatch(paths, 'auth-api-k7f2', { base: 'main', attended: true })
+	await until(async () => (await readRuns(paths)).records.size === 1)
+	await answerRun(paths, 'auth-api-k7f2', 'go ahead', { done: true })
+	const result = await running
+
+	expect(result.exit).toBe('finished')
+	const [, run] = await runFor(paths, 'auth-api-k7f2')
+	expect(run).toMatchObject({ host: FAKE_HOST, tier: 'high', attended: true })
 })
