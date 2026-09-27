@@ -106,6 +106,27 @@ test('a finished run pushes the branch and opens one draft pull request', async 
 	)
 })
 
+test('a local base ahead of its remote pushes nothing: CI would judge the branch against a base it lacks', async () => {
+	const paths = await board()
+	writeFileSync(join(paths.root, 'CHANGELOG.md'), '# unpushed\n')
+	repo?.git('add', 'CHANGELOG.md')
+	repo?.git('commit', '-m', 'chore: unpushed')
+
+	const published = await publish(paths, 'auth-api-k7f2', 'main')
+
+	expect(published).toEqual({
+		kind: 'skipped',
+		reason:
+			'main is 1 commits ahead of origin/main — push it first, or CI judges this branch against a base it does not have',
+	})
+	expect(repo?.git('ls-remote', '--heads', 'origin', 'sober/auth-api-k7f2')).toBe('')
+
+	// With no remote-tracking ref there is nothing to compare against, and the
+	// push goes on as before.
+	repo?.git('update-ref', '-d', 'refs/remotes/origin/main')
+	expect(await publish(paths, 'auth-api-k7f2', 'main')).toMatchObject({ kind: 'opened' })
+})
+
 test('a branch with nothing on it opens nothing — there is no diff to review', async () => {
 	const created = createTempRepo()
 	repo = created

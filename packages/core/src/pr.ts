@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { Checks, PullRequest } from '@besober/schema'
 import { SoberError } from './errors.js'
-import { git, remoteName } from './git.js'
+import { git, refExists, remoteName } from './git.js'
 import type { Paths } from './paths.js'
 import { readNode } from './records.js'
 import { branchOf } from './worktree.js'
@@ -98,6 +98,21 @@ export const publish = async (paths: Paths, node: string, base: string): Promise
 	const commits = await git(paths.root, 'rev-list', '--count', `${base}..${branch}`)
 	if (commits.trim() === '0')
 		return { kind: 'skipped', reason: 'the branch has nothing committed on it yet' }
+
+	// CI merges the branch into the remote's base, not this one. A local base
+	// ahead of its remote puts every unpushed commit into this branch's diff as
+	// CI sees it — found when a development 23 commits ahead sent node after
+	// node to CI failing on coverage and snapshots none of them had touched. No
+	// remote-tracking ref means nothing to compare against, so the push goes on.
+	const tracking = `${remote}/${base}`
+	if (await refExists(paths.root, `refs/remotes/${tracking}`)) {
+		const ahead = (await git(paths.root, 'rev-list', '--count', `${tracking}..${base}`)).trim()
+		if (ahead !== '0')
+			return {
+				kind: 'skipped',
+				reason: `${base} is ${ahead} commits ahead of ${tracking} — push it first, or CI judges this branch against a base it does not have`,
+			}
+	}
 
 	const unreachable = await reachable(paths.root)
 	if (unreachable !== null) return { kind: 'skipped', reason: unreachable }

@@ -9,9 +9,10 @@ import type {
 	Review,
 	ScanResult,
 } from '@besober/schema'
+import { judge } from './audit.js'
 import { DEFAULT_CONFIG, readConfig } from './config.js'
 import { NotOnBoardError } from './errors.js'
-import { git, refExists } from './git.js'
+import { git, isAncestor, refExists } from './git.js'
 import { type Board, loadBoard } from './graph.js'
 import { appendEvent, type Feedback, writeFeedback } from './local.js'
 import { deleteBranch, type Merged, MergeRefusedError, mergeNode, unmergeNode } from './merge.js'
@@ -186,8 +187,8 @@ export const acceptWork = async (
 	// pull request. It governs neither how a run is prepared nor how it is
 	// judged, so it is read normally rather than from the base (§5.2).
 	const config = await readConfig(paths)
-	const through =
-		config.kind === 'ok' ? config.value.dispatch.accept : DEFAULT_CONFIG.dispatch.accept
+	const settings = config.kind === 'ok' ? config.value.dispatch : DEFAULT_CONFIG.dispatch
+	const through = settings.accept
 
 	const accepted = {
 		by: options.by,
@@ -220,6 +221,7 @@ export const acceptWork = async (
 	// Read before the branch goes: the pull request is found by its branch.
 	const openPr = await pullRequestOf(paths, node).catch(() => null)
 	const merged = await mergeNode(paths, node, options.base)
+	if (settings.verify !== null) await verifyMerged(paths, merged, settings.verify)
 	try {
 		await acceptNode(paths, node, accepted, options.guard)
 	} catch (error) {
@@ -234,6 +236,32 @@ export const acceptWork = async (
 	await removeWorktree(paths, node)
 	await deleteBranch(paths, node)
 	return { kind: 'merged', ...merged, openPr }
+}
+
+/**
+ * A run is verified alone, on its own branch. Three nodes accepted one after
+ * another were each green that way, and together broke the base — shared route
+ * lists, one entry file's imports, snapshots — because nothing ever ran on the
+ * combination. So the merged tree is verified before the record is written.
+ *
+ * Only when the base moved since the branch was cut: otherwise the merge holds
+ * exactly the tree the run's own verify already judged.
+ */
+const verifyMerged = async (paths: Paths, merged: Merged, verify: string): Promise<void> => {
+	if (await isAncestor(paths.root, `${merged.commit}^1`, merged.branch)) return
+	const judged = await judge(paths.root, verify)
+	// A command that could not run is silence, as it is for the run's own verify.
+	if (judged.result === null || judged.result.exit === 0) return
+
+	const output = judged.output.trimEnd().split('\n').slice(-40).join('\n')
+	const fix = `merge ${merged.base} into ${merged.branch} and fix it there, or reject the node`
+	if (await unmergeNode(paths, merged))
+		throw new MergeRefusedError(
+			`${merged.branch} merged with the current ${merged.base} fails dispatch.verify (\`${verify}\`), so ${merged.base} was put back where it was — ${fix}:\n${output}`,
+		)
+	throw new MergeRefusedError(
+		`${merged.branch} merged with the current ${merged.base} fails dispatch.verify (\`${verify}\`), and the checkout changed while it ran, so the merge (${merged.commit}) was not taken back: undo it by hand (\`git reset --keep ${merged.commit}^1\`), then ${fix}:\n${output}`,
+	)
 }
 
 /** Refusing here beats writing an `accepted` record for work that cannot land. */

@@ -209,6 +209,63 @@ test('accepting lands the work, records how the scan read, and takes the worktre
 	expect(readFileSync(join(paths.root, 'src/auth/token.ts'), 'utf8')).toContain('sign')
 })
 
+/** Sets `dispatch.verify` on main and commits it — which is also a commit the base gains. */
+const verifying = async (paths: Paths, command: string) => {
+	await applySetting(paths, ['dispatch', 'verify'], command)
+	git('add', '-A')
+	git('commit', '-m', `chore: verify ${command}`)
+}
+
+const acceptedOf = async (paths: Paths) => (await loadBoard(paths)).nodes.get(NODE)?.accepted
+
+test('a base that moved since the cut is verified merged, and a failure puts the base back', async () => {
+	const paths = await board()
+	await work(paths)
+	await verifying(paths, 'echo broken-by-the-pair && exit 3')
+	const before = git('rev-parse', 'HEAD')
+
+	const refused = acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+	await expect(refused).rejects.toThrow(/fails dispatch\.verify/)
+	await expect(refused).rejects.toThrow(/broken-by-the-pair/)
+	await expect(refused).rejects.toThrow(`merge main into sober/${NODE} and fix it there`)
+	expect(git('rev-parse', 'HEAD')).toBe(before)
+	expect(await acceptedOf(paths)).toBeNull()
+
+	await verifying(paths, 'exit 0')
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+	expect(await acceptedOf(paths)).not.toBeNull()
+})
+
+test('a base that has not moved is not verified again: the run already judged that tree', async () => {
+	const paths = await board()
+	await verifying(paths, 'exit 3')
+	await work(paths)
+
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+	expect(await acceptedOf(paths)).not.toBeNull()
+})
+
+test('a verify command that cannot run on the merged tree does not refuse it', async () => {
+	const paths = await board()
+	await work(paths)
+	await verifying(paths, 'sober-no-such-tool-k7f2')
+
+	await acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' })
+	expect(await acceptedOf(paths)).not.toBeNull()
+})
+
+test('a failing verify that changed the checkout leaves the merge and says how to undo it', async () => {
+	const paths = await board()
+	await work(paths)
+	await verifying(paths, 'echo touched >> README.md && exit 1')
+
+	await expect(
+		acceptWork(paths, NODE, { by: 'memoksin', base: 'main', scan: 'clean' }),
+	).rejects.toThrow(/was not taken back: undo it by hand/)
+	expect(git('log', '-1', '--format=%s')).toBe(`sober: ${NODE}`)
+	expect(await acceptedOf(paths)).toBeNull()
+})
+
 test('an autonomous accept merges into the configured base and records who invoked it', async () => {
 	const paths = await board()
 	git('checkout', '-b', 'development')

@@ -1313,6 +1313,40 @@ test('a wave asks once about every node it warned on, and starts them when the h
 	for (const node of nodes) expect(ran).toContain(`${node}: finished`)
 })
 
+test('a wave keeps the host informed: every node’s lines arrive as progress that only goes up', async () => {
+	const { repo: created, paths } = await board()
+	const client = await connect(created.dir)
+	await call(client, 'propose', {
+		nodes: [
+			{ key: 'a', title: 'Node A', name: 'Node A', files: ['src/a/**'] },
+			{ key: 'b', title: 'Node B', name: 'Node B', files: ['src/b/**'] },
+		],
+	})
+	const nodes = [...(await loadBoard(paths)).nodes.keys()]
+	for (const node of nodes) {
+		await call(client, 'write_brief', {
+			node,
+			complexity: 3,
+			approach: 'Write it.',
+			acceptance: [{ run: 'true', proves: 'it works' }],
+		})
+		await call(client, 'approve', { node, confirmed: true })
+	}
+
+	const seen: { progress: number; message?: string }[] = []
+	const ran = said(
+		await client.callTool({ name: 'run', arguments: { nodes, base: 'main' } }, undefined, {
+			onprogress: (one) => seen.push(one),
+		}),
+	)
+	for (const node of nodes) expect(ran).toContain(`${node}: finished`)
+	for (const node of nodes)
+		expect(seen.some((one) => one.message?.startsWith(`${node}: `))).toBe(true)
+	const counts = seen.map((one) => one.progress)
+	expect(counts).toEqual([...counts].sort((x, y) => x - y))
+	expect(new Set(counts).size).toBe(counts.length)
+})
+
 /**
  * DESIGN §7.2's three actions, in a session. The flag itself is `core`'s and
  * proven there; what this asks is whether a host can reach all three — the

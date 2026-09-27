@@ -59,6 +59,26 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 				const ref = base ?? (await currentBranch(paths.root))
 				const board = await loadBoard(paths)
 
+				// The progress notification is what keeps a run of several minutes
+				// from timing out in the host, and it is also the only thing the
+				// human sees while it works — for a wave as much as for one node: a
+				// wave sent none, and a client gave up on one after half an hour of
+				// silence while its runs went on. The count only goes up, because
+				// the spec lets a client ignore a notification that does not.
+				// Codex does not reset its timer on it, so that host instead gets a
+				// longer built-in limit: `tool_timeout_sec` in
+				// packages/codex-plugin/.mcp.json (README there says what to change
+				// if dispatch.timeoutMinutes goes up).
+				let sent = 0
+				const progress =
+					(prefix: string) =>
+					(line: string): void => {
+						const [rendered] = tail(line)
+						if (rendered === undefined) return
+						sent += 1
+						void notify(extra, sent, `${prefix}${rendered.kind}: ${rendered.text}`)
+					}
+
 				for (const node of nodes) {
 					const state = statusOf(board, node)
 					if (state === null) return text(`${node} is not on this board.`)
@@ -74,7 +94,10 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 					const results = [
 						...(await dispatchWave(
 							paths,
-							nodes.map((node) => ({ node, options: { base: ref } })),
+							nodes.map((node) => ({
+								node,
+								options: { base: ref, onLine: progress(`${node}: `) },
+							})),
 							ref,
 						)),
 					]
@@ -87,9 +110,11 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 					if (met.length > 0 && (await anyway(server, board, met)))
 						for (const node of met) {
 							const at = nodes.indexOf(node)
-							results[at] = await dispatch(paths, node, { base: ref, anyway: true }).catch(
-								(error: SoberError) => error,
-							)
+							results[at] = await dispatch(paths, node, {
+								base: ref,
+								anyway: true,
+								onLine: progress(`${node}: `),
+							}).catch((error: SoberError) => error)
 						}
 
 					const lines = results.map((result, index) =>
@@ -109,17 +134,7 @@ export const registerBuilding = (server: McpServer, cwd: string): void => {
 					dispatch(paths, node, {
 						base: ref,
 						anyway: confirmed,
-						// The progress notification is what keeps a run of several
-						// minutes from timing out in the host, and it is also the only
-						// thing the human sees while it works. Codex does not reset its
-						// timer on it, so that host instead gets a longer built-in limit:
-						// `tool_timeout_sec` in packages/codex-plugin/.mcp.json (README
-						// there says what to change if dispatch.timeoutMinutes goes up).
-						onLine: (line) => {
-							const [rendered] = tail(line)
-							if (rendered === undefined) return
-							void notify(extra, `${rendered.kind}: ${rendered.text}`)
-						},
+						onLine: progress(''),
 					})
 
 				const result = await go(false).catch(async (error: unknown) => {
@@ -204,12 +219,12 @@ interface Progress {
 	_meta?: { progressToken?: string | number }
 }
 
-const notify = async (extra: Progress, message: string): Promise<void> => {
+const notify = async (extra: Progress, progress: number, message: string): Promise<void> => {
 	const token = extra._meta?.progressToken
 	const send = extra.sendNotification
 	if (token === undefined || typeof send !== 'function') return
 	await (send as (notification: unknown) => Promise<void>)({
 		method: 'notifications/progress',
-		params: { progressToken: token, progress: 0, message },
+		params: { progressToken: token, progress, message },
 	}).catch(() => undefined)
 }
