@@ -136,6 +136,10 @@ const withinCwd = (cwd: string, path: string): string | null => {
 }
 
 const DENY_GIT_SUBCOMMANDS = new Set(['push'])
+/** git option flags that take a separate value token, so that value isn't read as the subcommand. */
+const GIT_OPTS_WITH_VALUE = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace'])
+/** Strips a leading redirect operator (`>`, `>>`, `2>`, `&>`, `<`, …) so the path underneath can be checked. */
+const stripRedirect = (token: string): string => token.replace(/^\d*&?>{1,2}|^</, '')
 
 /**
  * Textually inspects a bash command for prohibited remote-changing git
@@ -154,14 +158,27 @@ const refuseBash = (command: string, cwd: string): string | null => {
 
 		const gitIndex = tokens.indexOf('git')
 		if (gitIndex !== -1) {
-			const sub = tokens.slice(gitIndex + 1).find((token) => !token.startsWith('-'))
+			let sub: string | undefined
+			for (let i = gitIndex + 1; i < tokens.length; i++) {
+				const token = tokens[i] ?? ''
+				if (GIT_OPTS_WITH_VALUE.has(token)) {
+					i++
+					continue
+				}
+				if (token.startsWith('-')) continue
+				sub = token
+				break
+			}
 			if (sub !== undefined && DENY_GIT_SUBCOMMANDS.has(sub))
 				return `refused: git ${sub} changes the remote and is not permitted`
 		}
 
 		for (const rawToken of tokens) {
-			const token = rawToken.replace(/^['"]|['"]$/g, '')
-			if (token.startsWith('-') || (!token.includes('/') && !token.includes('..'))) continue
+			const quoted = rawToken.replace(/^['"]|['"]$/g, '')
+			if (quoted.startsWith('-')) continue
+			const token = stripRedirect(quoted)
+			if (token === '/dev/null') continue
+			if (!token.includes('/') && !token.includes('..')) continue
 			if (withinCwd(cwd, token) === null)
 				return `refused: '${token}' resolves outside the working directory`
 		}

@@ -461,6 +461,7 @@ test('a git push, sudo, and an out-of-tree write are refused without running, th
 		{ tool: 'bash', args: { command: 'sudo rm -rf /' } },
 		{ tool: 'bash', args: { command: 'echo leaked > ../outside.txt' } },
 		{ tool: 'bash', args: { command: 'echo hi' } },
+		{ tool: 'bash', args: { command: 'ls > /dev/null 2>&1' } },
 	])
 	const exit = await runAgent({
 		model: 'm',
@@ -479,7 +480,27 @@ test('a git push, sudo, and an out-of-tree write are refused without running, th
 	expect(toolResults[2]).toContain('refused')
 	expect(toolResults[2]).toContain('outside the working directory')
 	expect(toolResults[3]).toContain('hi')
+	expect(toolResults[4]).toContain('exit code: 0')
 	expect(existsSync(join(cwd, '..', 'outside.txt'))).toBe(false)
+})
+
+test('a git command with an option flag that takes a value still finds push as the subcommand', async () => {
+	const cwd = setup()
+	const { fetchFn, toolResults } = scripted([
+		{ tool: 'bash', args: { command: 'git -c user.name=x push' } },
+	])
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+	})
+
+	expect(exit).toEqual({ kind: 'finished' })
+	expect(toolResults[0]).toContain('refused')
+	expect(toolResults[0]).toContain('git push')
 })
 
 test('a refused command is followed by a successful turn once the model corrects its command', async () => {

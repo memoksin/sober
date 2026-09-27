@@ -25,6 +25,17 @@ comes back as the tool result, the same shape as a file tool's refusal, so
 the model sees it on the next turn and can correct its command instead of
 the run dying.
 
+Two adjustments keep this from misfiring on ordinary commands:
+
+- **`/dev/null` is always allowed as a path operand**, including inside a
+  redirect token such as `2>/dev/null` or `&>/dev/null` — the check strips a
+  leading redirect operator before comparing, so `ls > /dev/null 2>&1`
+  passes rather than being read as writing outside the worktree.
+- **git's own option flags that take a separate value** — `-c`, `-C`,
+  `--git-dir`, `--work-tree`, `--namespace` — have their value token skipped
+  before the subcommand search, so `git -c user.name=x push` is still read
+  as `push`, not `-c`'s value.
+
 This is a string check on the command as written, not sandboxing the
 process it would spawn. It stops the direct, literal form of each prohibited
 pattern and nothing more. It does **not** stop:
