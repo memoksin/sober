@@ -148,6 +148,17 @@ export const Impact = z.strictObject({
 export type Impact = z.infer<typeof Impact>
 
 /**
+ * Every answered decision, rendered as one markdown document (`/read/report`):
+ * the question, what was chosen and why, every option not taken and what it
+ * would have cost later, and the nodes it released. `core` renders the string
+ * once — the CLI writes it to stdout, this is the same string carried over the
+ * wire so the dashboard never grows a second copy of the formatting (ADR 0024).
+ */
+export const DecisionReport = z.strictObject({ markdown: z.string() })
+
+export type DecisionReport = z.infer<typeof DecisionReport>
+
+/**
  * One rendered line of a run log, as it travels (§5.5). The raw log is the
  * host's own JSON — machine-facing, like every internal format (`PR-09-03`) —
  * and this is what a person reads.

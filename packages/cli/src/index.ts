@@ -12,7 +12,19 @@ import { accept, acceptGreen, archive, audit, reject, review } from './review.js
 import { status } from './status.js'
 import { sync } from './sync.js'
 import { assign, claim, contributors, release } from './team.js'
-import { answer, approve, bind, brief, decide, decisions, edit, logs, run, stop } from './work.js'
+import {
+	answer,
+	approve,
+	bind,
+	brief,
+	decide,
+	decisions,
+	edit,
+	logs,
+	run,
+	stop,
+	why,
+} from './work.js'
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -45,6 +57,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['edit <id> <option>', 'change an answer — it shows what that reaches first'],
 			['edit <id> <option> --anyway', 'apply it'],
 			['bind <node> --decisions <ids>', 'say which decisions hold a node'],
+			['why', 'every answered decision, with the alternatives and their cost'],
 		],
 	],
 	[
@@ -242,6 +255,8 @@ const main = async (): Promise<void> => {
 			return status(rest[0])
 		case 'decisions':
 			return decisions(values.all === true)
+		case 'why':
+			return why()
 		case 'decide': {
 			const id = need('decision')
 			const option = rest[1] ?? fail(`which option? \`sober decisions\` lists them`)

@@ -13,6 +13,7 @@ import {
 	type Published,
 	readRunOutput,
 	renderBrief,
+	renderDecisionReport,
 	SoberError,
 	statusOf,
 	stopRun,
@@ -101,6 +102,13 @@ const ORDER = { open: 0, unopened: 1, answered: 2 } as const
 
 // `all` is off by default: the bare command is how a person finds their next
 // move, and a month of settled decisions in front of that is a worse default.
+/** Every answered decision as one markdown report, printed as-is so a script can pipe it straight through. */
+export const why = async (): Promise<void> => {
+	const paths = await openBoard()
+	const board = await readBoard(paths)
+	process.stdout.write(renderDecisionReport(board))
+}
+
 export const decisions = async (all = false): Promise<void> => {
 	const paths = await openBoard()
 	const board = await readBoard(paths)

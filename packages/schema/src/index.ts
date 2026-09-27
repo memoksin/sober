@@ -41,6 +41,7 @@ export {
 export { CommandResult, RUN_EXITS, Run, RunExit } from './run.js'
 export { STATUSES, type Status } from './status.js'
 export {
+	DecisionReport,
 	Delta,
 	Digest,
 	Impact,

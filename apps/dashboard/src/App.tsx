@@ -1,5 +1,6 @@
 import type { BoardDistance, Resolution, SyncResult } from '@besober/core'
 import type {
+	DecisionReport,
 	Digest as DigestRead,
 	Distribution,
 	Impact,
@@ -553,8 +554,12 @@ export const App = ({ token }: { readonly token: string | null }): React.JSX.Ele
 					/>
 				)}
 
-				{decisionsOpen && board !== null && (
-					<DecisionsScreen board={board} onClose={() => setDecisionsOpen(false)} />
+				{decisionsOpen && board !== null && token !== null && (
+					<DecisionsScreen
+						board={board}
+						onCopyReport={async () => (await wire(token).read<DecisionReport>('report')).markdown}
+						onClose={() => setDecisionsOpen(false)}
+					/>
 				)}
 
 				{conflictsOpen && synced?.kind === 'conflicted' && token !== null && (
