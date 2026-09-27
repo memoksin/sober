@@ -125,6 +125,7 @@ exports[`core exports nothing new without a reviewer seeing it 1`] = `
   "searchDecisions",
   "setSetting",
   "showFromRef",
+  "spendByEffort",
   "startRun",
   "statusOf",
   "stopRun",
