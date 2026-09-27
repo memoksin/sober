@@ -503,6 +503,25 @@ test('a git command with an option flag that takes a value still finds push as t
 	expect(toolResults[0]).toContain('git push')
 })
 
+test('git send-pack is refused as another remote-changing subcommand', async () => {
+	const cwd = setup()
+	const { fetchFn, toolResults } = scripted([
+		{ tool: 'bash', args: { command: 'git send-pack origin HEAD' } },
+	])
+	const exit = await runAgent({
+		model: 'm',
+		apiKey: 'k',
+		cwd,
+		prompt: 'p',
+		onLine: () => {},
+		fetch: fetchFn,
+	})
+
+	expect(exit).toEqual({ kind: 'finished' })
+	expect(toolResults[0]).toContain('refused')
+	expect(toolResults[0]).toContain('git send-pack')
+})
+
 test('a refused command is followed by a successful turn once the model corrects its command', async () => {
 	const cwd = setup()
 	const { fetchFn, toolResults } = scripted([

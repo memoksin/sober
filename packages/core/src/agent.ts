@@ -135,7 +135,7 @@ const withinCwd = (cwd: string, path: string): string | null => {
 	return target
 }
 
-const DENY_GIT_SUBCOMMANDS = new Set(['push'])
+const DENY_GIT_SUBCOMMANDS = new Set(['push', 'send-pack'])
 /** git option flags that take a separate value token, so that value isn't read as the subcommand. */
 const GIT_OPTS_WITH_VALUE = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace'])
 /** Strips a leading redirect operator (`>`, `>>`, `2>`, `&>`, `<`, …) so the path underneath can be checked. */

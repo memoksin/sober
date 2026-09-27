@@ -18,7 +18,7 @@ absolute or `..` path was passed straight to the shell.
 **`bash` gains a textual pre-check, `refuseBash`, run before the command is
 spawned.** It rejects a command whose top-level segments (split on `&&`,
 `||`, `|`, `;`) contain: `sudo`; `git` followed by a remote-changing
-subcommand (`push`); or a token that looks like a path (contains `/` or
+subcommand (`push`, `send-pack`); or a token that looks like a path (contains `/` or
 `..`, and is not a flag) and resolves outside cwd via the same `withinCwd`
 the file tools use. A refused command is never spawned — its refusal string
 comes back as the tool result, the same shape as a file tool's refusal, so
