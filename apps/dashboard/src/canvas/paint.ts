@@ -88,11 +88,14 @@ export const stylesheet = (resolve: Resolve): Rule[] => [
 		selector: 'edge',
 		style: {
 			width: 1,
-			'line-color': resolve('var(--line)'),
+			'line-color': resolve('var(--edge)'),
 			'curve-style': 'straight',
+			// The head a shade darker than the line and clear of the rim: at 0.6
+			// in the line's own grey it was a thickening nobody read as a direction.
 			'target-arrow-shape': 'triangle',
-			'target-arrow-color': resolve('var(--line)'),
-			'arrow-scale': 0.6,
+			'target-arrow-color': resolve('var(--ink-faint)'),
+			'arrow-scale': 0.8,
+			'target-distance-from-node': 2,
 		},
 	},
 	// Everything below is a state, and states come last. Cytoscape resolves by
@@ -108,6 +111,23 @@ export const stylesheet = (resolve: Resolve): Rule[] => [
 		// overlay of its own: killing the default must not kill that.
 		selector: ':active',
 		style: { 'overlay-opacity': 0 },
+	},
+	{
+		// What the selected node touches, for as long as its panel is open.
+		// Hover answers the same question and is gone when the pointer moves;
+		// this one has to survive reading the panel, so it is quieter than
+		// `traced` and fades nothing. Below `.faded` and `traced`, so hovering
+		// somewhere else still wins.
+		selector: 'node.near',
+		style: { color: resolve('var(--ink)') },
+	},
+	{
+		selector: 'edge.near',
+		style: {
+			width: 1.4,
+			'line-color': resolve('var(--ink-dim)'),
+			'target-arrow-color': resolve('var(--ink-dim)'),
+		},
 	},
 	{
 		// Everything that is not the hovered node or one of its neighbours. The
