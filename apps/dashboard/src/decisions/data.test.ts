@@ -105,11 +105,13 @@ test('an unopened decision says it waits for options from a session, not for an 
 	expect(label.o).toBe('Unanswered · holds 1 node')
 })
 
-test('a new question can hold any node that is not done', () => {
+test('a new question can hold any node that has not run to review or done', () => {
 	const nodes = [
 		{ id: 'n1', title: 'One', status: 'ready', decisions: [] },
 		{ id: 'n2', title: 'Two', status: 'done', decisions: [] },
 		{ id: 'n3', title: 'Three', status: 'held', decisions: [] },
+		{ id: 'n4', title: 'Four', status: 'running', decisions: [] },
+		{ id: 'n5', title: 'Five', status: 'in-review', decisions: [] },
 	]
 	expect(bindable(board([], nodes)).map((node) => node.id)).toEqual(['n1', 'n3'])
 })

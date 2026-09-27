@@ -4,9 +4,9 @@ import { initBoard } from './board.js'
 import { answerDecision, approveBrief, createDecision } from './decide.js'
 import { loadBoard } from './graph.js'
 import { editDecision } from './impact.js'
-import { readLog } from './local.js'
+import { readLog, writeRun } from './local.js'
 import type { Paths } from './paths.js'
-import { aDecision, aNode } from './records.fixture.js'
+import { aDecision, aNode, aRun } from './records.fixture.js'
 import { readDecision, readNode, writeDecision, writeNode } from './records.js'
 import { statusOf } from './status.js'
 import { tmpRoot } from './tmp.fixture.js'
@@ -144,4 +144,57 @@ test.each([
 	const board = await loadBoard(paths)
 	expect(board.decisions.size).toBe(0)
 	expect(board.nodes.get('auth-api-k7f2')?.decisions).toEqual([])
+})
+
+const AT = '2026-09-04T00:00:00.000Z'
+
+test.each([
+	[
+		'done',
+		async () => {
+			await writeNode(
+				paths,
+				'auth-api-k7f2',
+				aNode({
+					accepted: { by: 'memoksin', at: AT, flagged: false, scan: 'clean', audit: 'passed' },
+				}),
+			)
+		},
+	],
+	[
+		'running',
+		async () => {
+			await writeNode(paths, 'auth-api-k7f2', aNode())
+			await writeRun(paths, 'run-1', aRun('auth-api-k7f2'))
+		},
+	],
+	[
+		'in-review',
+		async () => {
+			await writeNode(paths, 'auth-api-k7f2', aNode())
+			await writeRun(paths, 'run-1', aRun('auth-api-k7f2', { endedAt: AT, exit: 'finished' }))
+		},
+	],
+])('a %s node cannot be held by a new question, and nothing is written', async (status, setup) => {
+	await setup()
+	await writeNode(paths, 'auth-ui-m3p1', aNode())
+	const before = await readNode(paths, 'auth-api-k7f2')
+
+	await expect(
+		createDecision(paths, {
+			question: 'Where?',
+			category: 'state',
+			binds: ['auth-ui-m3p1', 'auth-api-k7f2'],
+			by: 'memoksin',
+		}),
+	).rejects.toMatchObject({ code: 'not-bindable' })
+
+	const board = await loadBoard(paths)
+	expect(statusOf(board, 'auth-api-k7f2')).toBe(status)
+	expect(board.decisions.size).toBe(0)
+	expect(await readNode(paths, 'auth-api-k7f2')).toEqual(before)
+	expect(board.nodes.get('auth-ui-m3p1')?.decisions).toEqual([])
+	expect((await readLog(paths)).events.some((event) => event.action === 'decision.created')).toBe(
+		false,
+	)
 })

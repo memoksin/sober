@@ -65,12 +65,18 @@ export const waitingLabel = (row: DecisionRow): string => {
 		: `Unanswered · ${holds}`
 }
 
-/** The nodes a new question can hold. A done node has nothing left to hold back. */
+/**
+ * The nodes a new question can hold — the ones core accepts. A done, running or
+ * in-review node would not read held, so core refuses it; offering it would
+ * only turn the pick into a refusal.
+ */
 export const bindable = (
 	board: BoardRead,
 ): readonly { readonly id: string; readonly title: string }[] =>
 	board.nodes
-		.filter((node) => node.status !== 'done')
+		.filter(
+			(node) => node.status !== 'done' && node.status !== 'running' && node.status !== 'in-review',
+		)
 		.map((node) => ({ id: node.id, title: node.title }))
 
 export interface QuestionForm {

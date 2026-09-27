@@ -1,4 +1,12 @@
-import type { AutoProvenance, Brief, Category, Decision, Handle, Node } from '@besober/schema'
+import type {
+	AutoProvenance,
+	Brief,
+	Category,
+	Decision,
+	Handle,
+	Node,
+	Status,
+} from '@besober/schema'
 import { decisionState } from '@besober/schema'
 import { readConfig } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
@@ -8,6 +16,7 @@ import { appendEvent } from './local.js'
 import { withLock } from './lock.js'
 import type { Paths } from './paths.js'
 import { readDecision, readNode, writeDecision, writeNode } from './records.js'
+import { statusOf } from './status.js'
 
 /**
  * Answering is for a decision with no answer. Changing one that has an answer is
@@ -99,8 +108,12 @@ export interface Question {
  * A question a person already knows they want answered, opened by hand. It
  * arrives with no options — those are a model's, produced on demand by a
  * session's `open_decision` (§2.6) — so it reads `unopened`, and every node it
- * binds reads `held` from this write on.
+ * binds reads `held` from this write on (a `blocked` one once its upstream lands).
+ * A node whose status outranks `held` is refused: a done one would never read
+ * it, and a running or in-review one could still be accepted past the question.
  */
+const UNBINDABLE: ReadonlySet<Status> = new Set(['done', 'running', 'in-review'])
+
 export const createDecision = (
 	paths: Paths,
 	opening: Question,
@@ -120,6 +133,12 @@ export const createDecision = (
 		const nodes = binds.map((id) => {
 			const node = board.nodes.get(id)
 			if (node === undefined) throw new NotOnBoardError('node', id)
+			const status = statusOf(board, id)
+			if (status !== null && UNBINDABLE.has(status))
+				throw new SoberError(
+					'not-bindable',
+					`${id} is ${status} — a new question cannot hold it; open it on a node that has not run yet, or reject the run first`,
+				)
 			return [id, node] as const
 		})
 

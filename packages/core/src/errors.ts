@@ -32,9 +32,11 @@ export const ERROR_CODES = [
 	'no-reason',
 	'no-title',
 	'not-finished',
-	// A decision opened by hand with no question, or holding no node.
+	// A decision opened by hand with no question, holding no node, or holding one
+	// whose status outranks `held` — done, running or in review.
 	'no-question',
 	'binds-nothing',
+	'not-bindable',
 	// A correction to a node's own words with none in it, or a name out of bounds.
 	'nothing-to-correct',
 	'bad-name',

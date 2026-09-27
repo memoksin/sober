@@ -1606,12 +1606,12 @@ test('a question opened by hand arrives with no options and holds what it binds'
 		([, node]) => node.title === 'The billing screen',
 	)?.[0] as string
 
-	const said = await call(client, 'create_decision', {
+	const opened = await call(client, 'create_decision', {
 		question: 'Who owns the invoice numbers?',
 		category: 'data-flow',
 		binds: [billing],
 	})
-	expect(said).toContain('open_decision')
+	expect(opened).toContain('open_decision')
 
 	const after = await loadBoard(paths)
 	const [id, decision] = [...after.decisions].find(
@@ -1619,4 +1619,27 @@ test('a question opened by hand arrives with no options and holds what it binds'
 	) as [string, { options: unknown }]
 	expect(decision.options).toBeNull()
 	expect(after.nodes.get(billing)?.decisions).toEqual([id])
+
+	// A running node could finish and be accepted past a new question: refused, nothing written.
+	await writeRun(paths, 'run-billing-k7f2', {
+		node: billing,
+		host: 'claude-code',
+		branch: `sober/${billing}`,
+		worktree: '/tmp/worktree',
+		startedAt: new Date().toISOString(),
+		endedAt: null,
+		exit: null,
+		error: null,
+		verify: null,
+		acceptance: [],
+	})
+	const refused = await client.callTool({
+		name: 'create_decision',
+		arguments: { question: 'Who prints them?', category: 'data-flow', binds: [billing] },
+	})
+	expect(refused.isError).toBe(true)
+	expect(said(refused)).toContain('running')
+	const unchanged = await loadBoard(paths)
+	expect([...unchanged.decisions.keys()]).toEqual([...after.decisions.keys()])
+	expect(unchanged.nodes.get(billing)).toEqual(after.nodes.get(billing))
 })

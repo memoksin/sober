@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { currentBranch, paths, SoberError } from '@besober/core'
+import { currentBranch, loadBoard, paths, SoberError, writeRun } from '@besober/core'
 import { AGENT_OPERATIONS, OPERATIONS } from '@besober/schema'
 import { afterEach, expect, test } from 'vitest'
 import { COVERS, GAPS, OPS, READS, WATCHES } from './routes.js'
@@ -315,4 +315,28 @@ test('create_decision opens an unopened decision, and the node it binds reads he
 	await expect(
 		OPS.create_decision.run(p, { question: 'Where?', category: 'state', binds: [] }),
 	).rejects.toThrow()
+
+	// A node in review could still be accepted past a new question, so core refuses it outright.
+	const { id: reviewed } = (await OPS.create_node.run(p, { title: 'The auth UI' })) as {
+		id: string
+	}
+	await writeRun(p, 'run-1', {
+		node: reviewed,
+		host: 'claude-code',
+		branch: `sober/${reviewed}`,
+		worktree: dir,
+		startedAt: '2026-09-04T00:00:00.000Z',
+		endedAt: '2026-09-04T01:00:00.000Z',
+		exit: 'finished',
+		error: null,
+		verify: null,
+		acceptance: [],
+	})
+	const before = await loadBoard(p)
+	await expect(
+		OPS.create_decision.run(p, { question: 'Who?', category: 'state', binds: [reviewed] }),
+	).rejects.toMatchObject({ code: 'not-bindable' })
+	const after = await loadBoard(p)
+	expect([...after.decisions.keys()]).toEqual([id])
+	expect(after.nodes.get(reviewed)).toEqual(before.nodes.get(reviewed))
 })
