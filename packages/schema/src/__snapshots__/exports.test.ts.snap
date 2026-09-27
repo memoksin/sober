@@ -16,6 +16,7 @@ exports[`schema exports nothing new without a reviewer seeing it 1`] = `
   "Contributors",
   "Criterion",
   "Decision",
+  "DecisionReport",
   "Delta",
   "Digest",
   "Dismissal",
