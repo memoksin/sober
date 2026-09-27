@@ -1,16 +1,19 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, test, vi } from 'vitest'
-import { DEFAULT_CONFIG } from './config.js'
+import { DEFAULT_CONFIG, DEFAULT_CONFIG_TEXT, readConfig, setSetting } from './config.js'
 import {
+	addModel,
 	type Candidate,
 	candidatesFor,
 	claudeModels,
 	codexModels,
 	installed,
+	listModels,
 	liveModels,
 	openRouterModels,
+	removeModel,
 } from './models.js'
 import { paths } from './paths.js'
 import { tmpRoot } from './tmp.fixture.js'
@@ -322,4 +325,78 @@ test('a fetch failure is logged, never thrown, and that source is treated as unr
 	expect(built).toEqual({ models: dispatch.models, dropped: [] })
 	expect(spy).toHaveBeenCalledOnce()
 	spy.mockRestore()
+})
+
+const board = async (sources: object = {}) => {
+	const root = await tmpRoot('sober-edit-')
+	const p = paths(root)
+	mkdirSync(join(root, '.sober'), { recursive: true })
+	writeFileSync(p.config, setSetting(DEFAULT_CONFIG_TEXT, ['dispatch', 'sources'], sources))
+	const deps = {
+		home: root,
+		fetch: (async () => new Response(JSON.stringify({ data: [] }))) as unknown as typeof fetch,
+	}
+	const config = async () => {
+		const read = await readConfig(p)
+		if (read.kind !== 'ok') throw new Error('config does not parse')
+		return read.value.dispatch
+	}
+	const text = () => readFileSync(p.config, 'utf8')
+	return { p, deps, config, text }
+}
+
+test('a typed pin is added and removed, and the comments around it stay', async () => {
+	const { p, deps, config, text } = await board()
+
+	const added = await addModel(p, {
+		name: 'fable',
+		run: 'claude --model fable',
+		complexity: [8, 10],
+	})
+	expect(added.kind).toBe('pinned')
+	expect((await config()).models.map((m) => m.name)).toEqual(['fable'])
+	await expect(
+		addModel(p, { name: 'fable', run: 'claude --model x', complexity: [1, 2] }),
+	).rejects.toThrow('already in dispatch.models')
+	await expect(addModel(p, { name: 'big', run: 'claude', complexity: [9, 2] })).rejects.toThrow(
+		'1 to 10',
+	)
+
+	expect(await removeModel(p, 'fable', deps)).toEqual({ kind: 'unpinned', name: 'fable' })
+	expect((await config()).models).toEqual([])
+	expect(text()).toContain("// SOBER's machine settings")
+	await expect(removeModel(p, 'fable', deps)).rejects.toThrow('not a model Jev can pick')
+})
+
+test('a sourced model is removed by denying its id, and adding it back lifts the deny', async () => {
+	const { p, deps, config, text } = await board({ claude: { complexity: [4, 10] } })
+
+	expect((await listModels(p, deps)).models.map((m) => m.name)).toContain('opus')
+	expect(await removeModel(p, 'opus', deps)).toEqual({
+		kind: 'denied',
+		name: 'opus',
+		host: 'claude',
+		id: 'opus',
+	})
+	expect((await config()).sources.claude?.deny).toEqual(['opus'])
+	expect((await listModels(p, deps)).models.map((m) => m.name)).not.toContain('opus')
+
+	await removeModel(p, 'sonnet', deps)
+	expect((await config()).sources.claude?.deny).toEqual(['opus', 'sonnet'])
+
+	const back = await addModel(p, { host: 'claude', id: 'opus' }, deps)
+	expect(back.kind).toBe('lifted')
+	expect((await config()).sources.claude?.deny).toEqual(['sonnet'])
+	expect((await config()).models).toEqual([])
+	expect(text()).toContain("// SOBER's machine settings")
+})
+
+test('a catalogue model a filter still keeps out is pinned instead', async () => {
+	const { p, deps, config } = await board({ claude: { complexity: [4, 10], only: ['sonnet'] } })
+
+	const added = await addModel(p, { host: 'claude', id: 'opus' }, deps)
+	expect(added).toMatchObject({ kind: 'pinned', model: { name: 'opus', complexity: [4, 10] } })
+	expect((await config()).models.map((m) => m.run)).toEqual(['claude --model opus'])
+	await expect(addModel(p, { host: 'claude', id: 'opus' }, deps)).rejects.toThrow('already')
+	await expect(addModel(p, { host: 'codex', id: 'nope' }, deps)).rejects.toThrow('not in the codex')
 })

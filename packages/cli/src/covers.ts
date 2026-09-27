@@ -51,6 +51,7 @@ export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, 
 	drop_distribution: 'distribute',
 	correct_node: 'correct',
 	add_model: 'models',
+	remove_model: 'models',
 	start_dispatcher: 'dispatch',
 	// Ctrl-C on the process `sober dispatch` holds is the stop, which its help
 	// line already says.

@@ -55,6 +55,7 @@ const GROUPS: readonly (readonly [string, readonly (readonly [string, string])[]
 			['models [--all]', 'what the installed hosts can run, for dispatch.models'],
 			['models --sources', 'what Jev would see at the next dispatch, from dispatch.sources'],
 			['models add <name> "<run>" --complexity 1-3', 'add one entry, with the scores it takes'],
+			['models remove <name>', 'take one out: a pin is deleted, a sourced model denied'],
 		],
 	],
 	[
@@ -323,8 +324,10 @@ const main = async (): Promise<void> => {
 		case 'archive':
 			return archive(need('node or decision'))
 		case 'models': {
-			const { addModel, models, modelsFromSources } = await import('./models.js')
+			const { addModel, models, modelsFromSources, removeModel } = await import('./models.js')
 			if (values.sources === true) return modelsFromSources()
+			if (rest[0] === 'remove')
+				return removeModel(rest[1] ?? fail('which one? sober models remove <name>'))
 			if (rest[0] !== 'add') return models({ all: values.all === true })
 			const [, name, run] = rest
 			if (name === undefined || run === undefined)

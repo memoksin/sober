@@ -784,4 +784,10 @@ test('models add appends an entry to dispatch.models and refuses a bad range or 
 		'already in',
 	)
 	expect(failed(dir, 'models', 'add', 'x')).toContain('sober models add')
+
+	expect(sober(dir, 'models', 'remove', 'free')).toContain('free removed from dispatch.models')
+	const after = readFileSync(join(dir, '.sober/config.jsonc'), 'utf8')
+	expect(after).not.toContain('"run": "opencode --model x:free"')
+	expect(after).toContain("// SOBER's machine settings")
+	expect(failed(dir, 'models', 'remove')).toContain('sober models remove')
 })

@@ -2,6 +2,7 @@ import {
 	acceptDistribution,
 	acceptWork,
 	addContributor,
+	addModel,
 	adoptBoard,
 	answerDecision,
 	answerRun,
@@ -22,10 +23,12 @@ import {
 	editDecision,
 	flagsOf,
 	followRun,
+	HOSTS,
 	impactOf,
 	initBoard,
 	knownAvailability,
 	lastRun,
+	listModels,
 	loadBoard,
 	NotOnBoardError,
 	type Paths,
@@ -36,6 +39,7 @@ import {
 	releaseChain,
 	releaseNode,
 	removeContributor,
+	removeModel,
 	reopenNode,
 	resolveConflict,
 	reviewNode,
@@ -106,6 +110,8 @@ const boardBranch = async (paths: Paths): Promise<string> => {
 
 const node = z.strictObject({ node: Id })
 const nothing = z.strictObject({})
+const score = z.number().int().min(1).max(10)
+const range = z.tuple([score, score]).refine(([low, high]) => low <= high, 'low end first')
 
 /**
  * A node, or the run of linked nodes between two of them (ADR 0050). One field
@@ -370,6 +376,25 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 	drop_distribution: route(z.strictObject({}), async (paths) => ({
 		dropped: await dropDistribution(paths),
 	})),
+
+	// The same core calls `sober models add` and `sober models remove` make, so
+	// the screen and the command line cannot write different configs.
+	add_model: route(
+		z.union([
+			z.strictObject({ host: z.enum(HOSTS), id: z.string().min(1), complexity: range.optional() }),
+			z.strictObject({
+				name: z.string().min(1),
+				run: z.string().min(1),
+				complexity: range,
+				about: z.string().optional(),
+			}),
+		]),
+		(paths, adding) => addModel(paths, adding),
+	),
+
+	remove_model: route(z.strictObject({ name: z.string().min(1) }), (paths, { name }) =>
+		removeModel(paths, name),
+	),
 }
 
 /**
@@ -382,13 +407,11 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
 
 /**
- * What has no route yet. Rewording a node, the model list and the dispatcher
- * came to the command line first; each gets its route with the screen that
- * sends it.
+ * What has no route yet. Rewording a node and the dispatcher came to the
+ * command line first; each gets its route with the screen that sends it.
  */
 export const GAPS = [
 	'correct_node',
-	'add_model',
 	'start_dispatcher',
 	'stop_dispatcher',
 ] as const satisfies readonly Operation[]
@@ -421,6 +444,10 @@ export const READS: Readonly<Record<string, Route>> = {
 	// projection: the canvas asks every two seconds and a plan changes once a
 	// week (ADR 0051).
 	distribution: route(z.strictObject({}), (paths) => readDistribution(paths)),
+
+	// Every model Jev could pick, by host, and each host's whole catalogue to
+	// add from. The model screen's, and nothing else asks for it.
+	models: route(nothing, (paths) => listModels(paths)),
 
 	// The `done` filter is a view filter (ADR 0016), so it is not applied here.
 	// Filtering on the server would make "show me everything" a second request.

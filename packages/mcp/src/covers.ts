@@ -60,6 +60,7 @@ export const COVERS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, 
 export const GAPS = [
 	'audit',
 	'add_model',
+	'remove_model',
 	'start_dispatcher',
 	'stop_dispatcher',
 ] as const satisfies readonly Operation[]
