@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { BoardRead } from '../panel/data.js'
-import { decisionRows } from './data.js'
+import { decisionRows, filterDecisionRows } from './data.js'
 
 const options = [
 	{ id: 'a', label: 'A', reason: 'ra', costLater: 'ca' },
@@ -66,4 +66,29 @@ test('a decision no node binds still appears, with an empty node list', () => {
 		board([decision('d', {})], [{ id: 'n1', title: 'N', decisions: ['other'] }]),
 	)
 	expect(rows[0]?.nodes).toEqual([])
+})
+
+test('filterDecisionRows selects the right rows for each filter', () => {
+	const rows = decisionRows(
+		board([
+			decision('open', {}),
+			decision('answered', { answer: answer('a') }),
+			decision('derived', { answer: answer('a', 'src/store.ts') }),
+		]),
+	)
+
+	expect(filterDecisionRows(rows, 'all').map((row) => row.id)).toEqual([
+		'open',
+		'answered',
+		'derived',
+	])
+	expect(filterDecisionRows(rows, 'open').map((row) => row.id)).toEqual(['open'])
+	expect(filterDecisionRows(rows, 'answered').map((row) => row.id)).toEqual(['answered', 'derived'])
+	expect(filterDecisionRows(rows, 'derived').map((row) => row.id)).toEqual(['derived'])
+})
+
+test('filterDecisionRows keeps the answer source on derived rows', () => {
+	const rows = decisionRows(board([decision('d', { answer: answer('a', 'src/store.ts') })]))
+	const [row] = filterDecisionRows(rows, 'derived')
+	expect(row?.answer?.derived).toBe('src/store.ts')
 })
