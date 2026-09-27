@@ -11,6 +11,7 @@ import {
 	tierFor,
 } from './config.js'
 import { NotOnBoardError, SoberError } from './errors.js'
+import { git, isDirty } from './git.js'
 import { loadBoard } from './graph.js'
 import {
 	type AgentInput,
@@ -79,6 +80,24 @@ export class SetupFailedError extends SoberError {
 	}
 }
 
+/**
+ * A node gets one agent at a time. Found on why-report-mglr: a queued wave
+ * member started a second run in the worktree the first was still writing to,
+ * failed, and became the run the review read. `run` is null for a second copy
+ * of a node in one wave, which has no run of its own to name yet.
+ */
+export class AlreadyRunningError extends SoberError {
+	constructor(
+		readonly node: string,
+		readonly run: string | null,
+	) {
+		super(
+			'running',
+			`${node} ${run === null ? 'is already in this wave' : `already has run ${run} running`} — \`sober stop ${node}\` or wait for it to end`,
+		)
+	}
+}
+
 export interface DispatchOptions {
 	/** The ref the node's branch is cut from, and the ref its settings are read from. */
 	readonly base: string
@@ -119,6 +138,13 @@ export const dispatch = async (
 	node: string,
 	options: DispatchOptions,
 ): Promise<Dispatched> => {
+	// Checked here and not by the caller: a wave looks at statuses when it is
+	// called, and a member queued behind others starts minutes later.
+	const board = await loadBoard(paths)
+	const current = lastRun(board, node)
+	if (current !== null && current.run.exit === null && current.run.endedAt === null)
+		throw new AlreadyRunningError(node, current.id)
+
 	// Before the worktree, the setup command and the invoice: two nodes heading
 	// for the same files are heading for the same merge, and §3.4 wants a human
 	// to have seen that before either one starts.
@@ -306,16 +332,16 @@ export const dispatch = async (
 	// A node sent back by a human continues the session that built it, on the
 	// same host (DESIGN §6.4, ADR 0069). Without one to continue, the next
 	// attempt starts fresh from what the last one reported.
-	const board = await loadBoard(paths)
-	const previous = board.feedback.has(node) ? lastRun(board, node) : null
+	const previous = board.feedback.has(node) ? current : null
 	const resumable =
 		previous !== null && previous.run.session !== null && sameHost(previous.run.host, line)
 			? previous.run
 			: null
 	const handoff = previous === null ? null : await lastWords(paths, previous.id)
 	const skills = jev?.skills ?? []
-	const freshPrompt = options.prompt ?? (await promptFor(paths, node, skills, handoff))
-	const resumedPrompt = options.prompt ?? (await promptFor(paths, node, skills, null))
+	const verify = config.dispatch.verify
+	const freshPrompt = options.prompt ?? (await promptFor(paths, node, skills, handoff, verify))
+	const resumedPrompt = options.prompt ?? (await promptFor(paths, node, skills, null, verify))
 
 	const worktree = await addWorktree(paths, node, options.base)
 	if (worktree.created && config.dispatch.setup !== null)
@@ -360,6 +386,9 @@ export const dispatch = async (
 	let sum: Tally = EMPTY_TALLY
 	// The host's own word on its account, free with every Claude run (ADR 0069).
 	let lastLimit: string | null = null
+	// Claude's final `result` when it is the limit: the only line naming it once
+	// the account is out, and the `rate_limit_event` before it may still say allowed.
+	let limitResult: string | null = null
 	let skillsChecked = false
 	const emit = (raw: string): void => {
 		options.onLine?.(raw)
@@ -392,6 +421,8 @@ export const dispatch = async (
 				if (event !== null && typeof event === 'object') {
 					sum = tally(sum, event)
 					if (event.type === 'rate_limit_event') lastLimit = raw
+					if (event.type === 'result' && event.is_error === true && limitSpent(host, raw) !== null)
+						limitResult = raw
 					if (!sawTool) sawTool = renderLine(event).some((l) => l.kind === 'tool')
 					if (!skillsChecked) missing = missingSkills(skills, event)
 				}
@@ -465,6 +496,10 @@ export const dispatch = async (
 			ran = 'backup'
 			fellBack = spentReason
 			sum = EMPTY_TALLY
+			// The primary's limit must not read as the backup's own.
+			output = ''
+			lastLimit = null
+			limitResult = null
 			exit = await launch(line, freshPrompt, null)
 			await written
 		}
@@ -478,6 +513,9 @@ export const dispatch = async (
 		// signal is not portable evidence: Windows has none to report, so the
 		// second process writes the fact down and this reads it.
 		const asked = !timedOut && (await wasStopped(paths, id))
+		// "exited with code 1" says nothing a person can act on; the host's own
+		// words for a spent limit do (why-report-mglr-bnzb).
+		const limit = exit.kind === 'failed' ? limitSpent(line, output) : null
 		const result =
 			timedOut && exit.kind === 'stopped'
 				? {
@@ -486,7 +524,20 @@ export const dispatch = async (
 					}
 				: asked
 					? { exit: 'stopped' as const, error: undefined }
-					: { exit: exit.kind, error: exit.kind === 'failed' ? exit.reason : undefined }
+					: exit.kind === 'failed'
+						? {
+								exit: exit.kind,
+								error:
+									limit === null || exit.reason.includes(limit)
+										? exit.reason
+										: `${exit.reason}: ${limit}`,
+							}
+						: { exit: exit.kind, error: undefined }
+
+		// A run killed at its limit keeps only what it committed, and review reads
+		// commits (decision-open's pt1y lost eight files this way). Never for a
+		// stop: somebody asked for the work to end where it was.
+		if (result.exit === 'failed') await keepUncommitted(worktree.path, id, emit)
 
 		// The run is judged where it worked (§6.0): `dispatch.verify` first, then
 		// every acceptance criterion the human approved, each in the node's own
@@ -495,19 +546,39 @@ export const dispatch = async (
 		//
 		// A run that did not finish is not judged, and says so criterion by
 		// criterion: nothing ran, and nothing ran is not nothing to run.
-		const judged =
-			result.exit === 'finished'
-				? await runAudit(paths, node, id, {
-						base: options.base,
-						verify: config.dispatch.verify,
-					})
-				: await unjudged(paths, node)
+		const audit = () => runAudit(paths, node, id, { base: options.base, verify })
+		let judged = result.exit === 'finished' ? await audit() : null
 
-		if (lastLimit !== null) await recordAvailability(paths, line, lastLimit)
+		// A red `dispatch.verify` goes back to the session that wrote the work,
+		// once, before a human sees it. An attended session is left alone: it
+		// waits for its human, and nobody asked them.
+		if (
+			judged?.verify != null &&
+			judged.verify.exit !== 0 &&
+			sum.session !== null &&
+			!attended &&
+			!timedOut &&
+			!(await wasStopped(paths, id))
+		) {
+			emit(
+				`dispatch.verify exited ${judged.verify.exit} — resuming session ${sum.session} once to fix it`,
+			)
+			await launch(line, verifyFailed(verify, judged.verifyOutput), sum.session)
+			await written
+			// A fix cut short by a stop or the time limit keeps the first verdict:
+			// judging a half-done fix is minutes spent to say what is already known.
+			if (timedOut) await keepUncommitted(worktree.path, id, emit)
+			else if (!(await wasStopped(paths, id))) judged = await audit()
+		}
+		const { verify: verified, acceptance } = judged ?? (await unjudged(paths, node))
+
+		const said = [lastLimit, limitResult].filter((raw) => raw !== null).join('\n')
+		if (said !== '') await recordAvailability(paths, line, said)
 
 		const run = await finishRun(paths, id, {
 			...result,
-			...judged,
+			verify: verified,
+			acceptance,
 			host: line,
 			ran,
 			...(fellBack === null ? {} : { fellBack }),
@@ -574,6 +645,37 @@ const lastWords = async (paths: Paths, run: string): Promise<string | null> => {
 		.filter((line) => line.kind === 'text')
 		.at(-1)?.text
 	return said === undefined || said.trim() === '' ? null : said.trim().slice(0, HANDOFF_KEPT)
+}
+
+/** How much of a failed `dispatch.verify`'s output goes back to the session: its tail is where the failure is. */
+const VERIFY_KEPT = 6000
+
+const verifyFailed = (command: string | null, output: string): string =>
+	`dispatch.verify failed; fix the cause, commit, and stop — do not weaken tests, snapshots or coverage baselines to pass.
+
+\`${command}\` ended with this:
+
+${output.slice(-VERIFY_KEPT)}`
+
+/**
+ * Commits whatever a failed run left in its worktree, on the node's branch.
+ * Nothing here can fail a run: a commit that is refused leaves the files where
+ * they were, which is where they would have been anyway.
+ */
+const keepUncommitted = async (
+	cwd: string,
+	run: string,
+	emit: (line: string) => void,
+): Promise<void> => {
+	try {
+		// Untracked counts too: a new file is work, and `add -A` takes it.
+		if (!(await isDirty(cwd))) return
+		await git(cwd, 'add', '-A')
+		await git(cwd, 'commit', '-m', `chore: keep uncommitted work from run ${run}`)
+		emit(`committed the work run ${run} left uncommitted, so the review can see it`)
+	} catch (error) {
+		emit(`could not commit the work run ${run} left uncommitted: ${(error as Error).message}`)
+	}
 }
 
 /** A backup line that names no host is not ready; it is never a crash. */
@@ -708,6 +810,11 @@ export const dispatchWave = async (
 	const members = wave.map((item) => item.node)
 	const { records } = await readNodes(paths)
 	for (const [index, item] of wave.entries()) {
+		// A second copy would start before the first has a run record to refuse it.
+		if (members.indexOf(item.node) < index) {
+			results[index] = new AlreadyRunningError(item.node, null)
+			continue
+		}
 		if (item.options.anyway === true) continue
 		const found = overlaps(records, item.node, members)
 		if (found.length > 0) results[index] = new OverlapError(item.node, found)
@@ -760,7 +867,7 @@ export const dispatchWave = async (
  * It is not part of the brief. The brief is what a human approves, and this is
  * a fact about the machinery around the run.
  */
-const HOW_IT_ENDS = `
+const howItEnds = (verify: string | null): string => `
 
 ---
 
@@ -770,16 +877,29 @@ This is a headless run and nobody is watching it. The turn you end is the run yo
 
 Read files with an offset and a limit around what a search found. Read a whole file only when it is short: everything you read stays in the session for every turn after it.
 
-Commit your work on this branch. Nothing outside a commit is reviewed: SOBER
-reads \`git diff <base>...<this branch>\`, so uncommitted files are invisible to
-the human who has to accept them.
-
+Commit your work on this branch after each step that works, not only at the
+end: a run killed at its time limit keeps only what was committed. Nothing
+outside a commit is reviewed: SOBER reads \`git diff <base>...<this branch>\`,
+so uncommitted files are invisible to the human who has to accept them.
+${verifyLine(verify)}
 Do not push, do not merge, and do not switch branches. Landing the work is a
 human's decision, made after the review.
 
 End with a short final message: the files you changed, the decisions you made,
 and anything left unfinished. If the node is sent back, that message is where
 the next attempt starts.
+`
+
+/** Named only when there is one: the command that decides the review is worth knowing before the last turn. */
+const verifyLine = (verify: string | null): string =>
+	verify === null
+		? ''
+		: `
+After the run, SOBER runs \`${verify}\` in this worktree, and its result decides
+the review; if it fails, this session is resumed once with its output. It can
+take longer than your time limit, so before your final message run the parts of
+it that cover what you changed (the project's instructions say which) and make
+them pass. Do not weaken tests, snapshots or coverage baselines to make it pass.
 `
 
 /**
@@ -843,12 +963,13 @@ const promptFor = async (
 	node: string,
 	skills: readonly string[],
 	handoff: string | null,
+	verify: string | null,
 ): Promise<string> => {
 	const board = await loadBoard(paths)
 	const brief = renderBrief(board, node)
 	if (brief === null) throw new NotOnBoardError('node', node)
 
-	const body = `${brief}${skillsBlock(skills)}${HOW_IT_ENDS}`
+	const body = `${brief}${skillsBlock(skills)}${howItEnds(verify)}`
 	const feedback = board.feedback.get(node)
 	if (feedback === undefined) return body
 	const reported = handoff === null ? '' : `\n\n# What the last attempt reported\n\n${handoff}`

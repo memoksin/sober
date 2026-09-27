@@ -1,7 +1,12 @@
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { judge, posixShell, posixShellFor } from './audit.js'
+import { judge, posixShell, posixShellFor, runAudit } from './audit.js'
+import { initBoard } from './board.js'
+import { aNode } from './records.fixture.js'
+import { writeNode } from './records.js'
 import { tmpRoot } from './tmp.fixture.js'
+import { worktreeOf } from './worktree.js'
 
 test('a single-quoted command with < and spaces survives the shell', async () => {
 	const cwd = await tmpRoot('sober-audit-')
@@ -98,4 +103,19 @@ test('on win32, `git --exec-path` throwing is null, never a crash', () => {
 		() => true,
 	)
 	expect(shell).toBeNull()
+})
+
+test('runAudit hands back what dispatch.verify printed, beside the exit codes', async () => {
+	const root = await tmpRoot('sober-audit-')
+	const { paths } = await initBoard(root, { title: 'Acme', intent: 'ship', constraints: [] })
+	await writeNode(paths, 'auth-api-k7f2', aNode())
+	await mkdir(worktreeOf(paths, 'auth-api-k7f2'), { recursive: true })
+
+	const audit = await runAudit(paths, 'auth-api-k7f2', 'run-1', {
+		base: 'main',
+		verify: 'node -e "console.log(\'2 tests failed\'); process.exit(1)"',
+	})
+
+	expect(audit.verify).toEqual({ exit: 1 })
+	expect(audit.verifyOutput).toContain('2 tests failed')
 })

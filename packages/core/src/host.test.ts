@@ -294,6 +294,34 @@ test('a run’s own rate_limit_event stands in for a probe, for its host only', 
 	expect(runFn).toHaveBeenCalledTimes(1)
 })
 
+test('a run’s limit result marks claude spent even beside an allowed rate_limit_event', async () => {
+	const p = paths(await tmpRoot('sober-hosts-'))
+	const said = [
+		JSON.stringify({
+			type: 'rate_limit_event',
+			rate_limit_info: { status: 'allowed', unifiedWindows: { five_hour: { utilization: 0.4 } } },
+		}),
+		JSON.stringify({
+			type: 'result',
+			is_error: true,
+			api_error_status: 429,
+			result: 'You’ve hit your session limit · resets 5:50pm',
+		}),
+	].join('\n')
+
+	await recordAvailability(p, 'claude --model sonnet', said, 1_000_000)
+
+	const result = await hostAvailability(p, ['claude'], 900, {
+		run: vi.fn() as never,
+		now: () => 1_000_001,
+	})
+	expect(result.claude).toEqual({
+		state: 'spent',
+		reason: 'You’ve hit your session limit · resets 5:50pm',
+		windows: { 'five-hour': { used: 0.4, resetsAt: null } },
+	})
+})
+
 test('a probe that errors or times out is unknown, kept, never a silent ready or spent', async () => {
 	const root = await tmpRoot('sober-hosts-')
 	const p = paths(root)

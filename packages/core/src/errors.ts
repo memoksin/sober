@@ -47,6 +47,9 @@ export const ERROR_CODES = [
 	// A `dispatch.models` change that names nothing, repeats a name, or gives
 	// a range outside 1–10.
 	'bad-model',
+	// A dispatch for a node whose last run has not ended. Two agents in one
+	// worktree overwrite each other, and the later one becomes the last run.
+	'running',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

@@ -505,6 +505,38 @@ test('claude reads its own rate_limit_event, and a window at 100% is spent even 
 	expect(limitSpent('claude', utilizationFull)).toBe('seven-day limit, resets 11:20')
 })
 
+test('claude reads a limit from its final error result, even when the rate_limit_event said allowed', () => {
+	const allowed = JSON.stringify({
+		type: 'rate_limit_event',
+		rate_limit_info: { status: 'allowed', unifiedWindows: { five_hour: { utilization: 0.5 } } },
+	})
+	// Captured on why-report-mglr-bnzb, trimmed to the fields read.
+	const session = JSON.stringify({
+		type: 'result',
+		subtype: 'success',
+		is_error: true,
+		api_error_status: 429,
+		result: 'You’ve hit your session limit · resets 5:50pm (Europe/Istanbul)',
+	})
+	expect(limitSpent('claude', `null\n${allowed}\n${session}`)).toBe(
+		'You’ve hit your session limit · resets 5:50pm (Europe/Istanbul)',
+	)
+
+	const worded = JSON.stringify({
+		type: 'result',
+		is_error: true,
+		result: "You've hit your weekly limit",
+	})
+	expect(limitSpent('claude', worded)).toBe("You've hit your weekly limit")
+	const bare = JSON.stringify({ type: 'result', is_error: true, api_error_status: 429 })
+	expect(limitSpent('claude', bare)).toBe('usage limit (429)')
+
+	// Any other error, and a success, is not a limit.
+	const turns = JSON.stringify({ type: 'result', subtype: 'error_max_turns', is_error: true })
+	const ok = JSON.stringify({ type: 'result', is_error: false, result: 'hit your limit' })
+	expect(limitSpent('claude', `${allowed}\n${turns}\n${ok}`)).toBeNull()
+})
+
 test('openrouter reads the spent line `sober agent --check` already classified', () => {
 	expect(adapterFor('openrouter').availability?.argv).toEqual(['agent', '--check'])
 	expect(limitSpent('openrouter', 'ok\n')).toBeNull()

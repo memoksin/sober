@@ -158,7 +158,7 @@ export const runAudit = async (
 	node: string,
 	id: string,
 	options: { readonly base: string; readonly verify?: string | null },
-): Promise<Audit> => {
+): Promise<Audit & { readonly verifyOutput: string }> => {
 	const cwd = worktreeOf(paths, node)
 	const verify =
 		options.verify === undefined ? await verifyCommand(paths, options.base) : options.verify
@@ -181,7 +181,9 @@ export const runAudit = async (
 		)
 		acceptance.push(judged.result)
 	}
-	return { verify: judgedVerify.result, acceptance }
+	// The output rides beside the audit, never in it: dispatch hands it back to
+	// the session when verify is red, and the record stays exit codes only.
+	return { verify: judgedVerify.result, acceptance, verifyOutput: judgedVerify.output }
 }
 
 /**
@@ -220,7 +222,8 @@ export const auditNode = async (
 	const run = lastRun(board, node)
 	if (run === null) return null
 
-	const audit = await runAudit(paths, node, run.id, { base })
+	const { verify, acceptance } = await runAudit(paths, node, run.id, { base })
+	const audit: Audit = { verify, acceptance }
 	await recordAudit(paths, run.id, audit)
 	await appendEvent(paths, { action: 'run.audited', node, run: run.id })
 	return { run: run.id, audit }

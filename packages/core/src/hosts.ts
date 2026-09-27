@@ -310,6 +310,28 @@ const rateLimitInfo = (output: string): RateLimitInfo | null => {
 }
 
 /**
+ * Claude's final `result` when the account is out, in its own words. Captured
+ * on why-report-mglr-bnzb: `is_error`, `api_error_status: 429`, and "You've hit
+ * your session limit · resets 5:50pm" — while the run's `rate_limit_event`
+ * never said anything but allowed.
+ */
+const limitResult = (output: string): string | null => {
+	for (const rawLine of output.split('\n')) {
+		let event: { type?: string; is_error?: boolean; api_error_status?: number; result?: string }
+		try {
+			event = JSON.parse(rawLine) as typeof event
+		} catch {
+			continue
+		}
+		if (event?.type !== 'result' || event.is_error !== true) continue
+		const text = typeof event.result === 'string' ? event.result.trim() : ''
+		if (event.api_error_status === 429 || /hit your .*limit/i.test(text))
+			return text === '' ? 'usage limit (429)' : text
+	}
+	return null
+}
+
+/**
  * Claude Code emits `rate_limit_event` on every run (captured in
  * `.sober/local/runs/*.log`). `status` is `allowed` or `allowed_warning` on a
  * window with runway left; anything else, or a window at 100% utilization
@@ -320,6 +342,8 @@ const rateLimitInfo = (output: string): RateLimitInfo | null => {
  * rejected event turns up.
  */
 const claudeSpent = (output: string): string | null => {
+	const refused = limitResult(output)
+	if (refused !== null) return refused
 	const info = rateLimitInfo(output)
 	if (info === null) return null
 	const windows = info.unifiedWindows ?? {}

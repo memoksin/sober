@@ -1,9 +1,11 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { initBoard } from './board.js'
 import { applySetting, type Config, DEFAULT_CONFIG } from './config.js'
-import { dispatch, stopRun } from './dispatch.js'
+import { AlreadyRunningError, dispatch, dispatchWave, stopRun } from './dispatch.js'
 import { NotOnBoardError } from './errors.js'
 import { loadBoard } from './graph.js'
 import { HostError } from './host.js'
@@ -560,4 +562,214 @@ test('an attended run still falls to a backup that can hear the human', async ()
 		backup: 'claude --model sonnet',
 		ran: 'backup',
 	})
+})
+
+const plain = async (dispatchConfig: Partial<Config['dispatch']> = {}) => {
+	const { readConfigFromBase } = await import('./config.js')
+	const { liveModels } = await import('./models.js')
+	vi.mocked(readConfigFromBase).mockResolvedValue({
+		kind: 'ok',
+		value: {
+			...DEFAULT_CONFIG,
+			dispatch: { ...DEFAULT_CONFIG.dispatch, draftPr: false, ...dispatchConfig },
+		},
+	})
+	vi.mocked(liveModels).mockResolvedValue({ models: [], dropped: [] })
+	const { startAgent } = await import('./host.js')
+	return vi.mocked(startAgent)
+}
+
+test('a node whose last run is still running is refused before the worktree, naming the run', async () => {
+	await plain()
+	const { id } = await startRun(paths, 'auth-api-k7f2', 'claude')
+	const { addWorktree } = await import('./worktree.js')
+
+	const refused = dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	await expect(refused).rejects.toBeInstanceOf(AlreadyRunningError)
+	await expect(refused).rejects.toThrow(
+		`auth-api-k7f2 already has run ${id} running — \`sober stop auth-api-k7f2\` or wait for it to end`,
+	)
+	expect(vi.mocked(addWorktree)).not.toHaveBeenCalled()
+})
+
+test('a node named twice in one wave runs once; the second copy is refused', async () => {
+	const startAgent = await plain()
+
+	const results = await dispatchWave(
+		paths,
+		[
+			{ node: 'auth-api-k7f2', options: { base: 'main' } },
+			{ node: 'auth-api-k7f2', options: { base: 'main' } },
+		],
+		'main',
+	)
+
+	expect(results[0]).toMatchObject({ exit: 'finished' })
+	expect(results[1]).toBeInstanceOf(AlreadyRunningError)
+	expect(startAgent).toHaveBeenCalledTimes(1)
+})
+
+test('the prompt names dispatch.verify; a red verify resumes the session once with its tail, then re-audits', async () => {
+	const startAgent = await plain({ verify: 'pnpm test' })
+	const { runAudit } = await import('./audit.js')
+	vi.mocked(runAudit)
+		.mockResolvedValueOnce({
+			verify: { exit: 1 },
+			acceptance: [],
+			verifyOutput: `${'x'.repeat(10_000)}FAIL src/a.test.ts`,
+		})
+		.mockResolvedValueOnce({ verify: { exit: 0 }, acceptance: [], verifyOutput: '' })
+	startAgent.mockImplementationOnce(async ({ onStart, onLine }) => {
+		onStart?.(1)
+		onLine(JSON.stringify({ type: 'system', subtype: 'init', session_id: 'sess-1' }))
+		return { kind: 'finished' }
+	})
+
+	const done = await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	const [first, fix] = startAgent.mock.calls.map(([options]) => options)
+	expect(first?.prompt).toContain('after each step that works')
+	expect(first?.prompt).toContain('SOBER runs `pnpm test` in this worktree')
+	expect(fix?.run?.resume).toBe('sess-1')
+	expect(fix?.prompt).toContain('dispatch.verify failed; fix the cause, commit, and stop')
+	expect(fix?.prompt).toContain('FAIL src/a.test.ts')
+	expect(fix?.prompt.length).toBeLessThan(6500)
+	expect(startAgent).toHaveBeenCalledTimes(2)
+	expect(runAudit).toHaveBeenCalledTimes(2)
+	expect(await onlyRun()).toMatchObject({ exit: 'finished', verify: { exit: 0 } })
+	const { readRunOutput } = await import('./local.js')
+	expect(await readRunOutput(paths, done.run)).toContain(
+		'dispatch.verify exited 1 — resuming session sess-1 once to fix it',
+	)
+})
+
+test('a verify fix that is stopped keeps the first verdict and is not judged again', async () => {
+	const startAgent = await plain({ verify: 'pnpm test' })
+	const { runAudit } = await import('./audit.js')
+	vi.mocked(runAudit).mockResolvedValueOnce({
+		verify: { exit: 1 },
+		acceptance: [],
+		verifyOutput: 'FAIL src/a.test.ts',
+	})
+	startAgent.mockImplementationOnce(async ({ onStart, onLine }) => {
+		onStart?.(1)
+		onLine(JSON.stringify({ type: 'system', subtype: 'init', session_id: 'sess-1' }))
+		return { kind: 'finished' }
+	})
+	startAgent.mockImplementationOnce(async () => {
+		const { markStopped } = await import('./local.js')
+		const started = (await readLog(paths)).events.find((e) => e.action === 'run.started')
+		await markStopped(paths, String(started?.run))
+		return { kind: 'stopped' }
+	})
+
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(startAgent).toHaveBeenCalledTimes(2)
+	expect(runAudit).toHaveBeenCalledTimes(1)
+	expect(await onlyRun()).toMatchObject({ verify: { exit: 1 } })
+})
+
+test('a failed run’s uncommitted work is committed on the node branch; a clean one adds nothing', async () => {
+	const startAgent = await plain()
+	const repo = await tmpRoot('sober-keep-')
+	const { git } = await import('./git.js')
+	await git(repo, 'init', '-q')
+	await git(repo, 'config', 'user.name', 'test')
+	await git(repo, 'config', 'user.email', 'test@example.com')
+	await writeFile(join(repo, 'a.txt'), 'one\n')
+	await git(repo, 'add', '-A')
+	await git(repo, 'commit', '-qm', 'chore: start')
+	const { addWorktree } = await import('./worktree.js')
+	vi.mocked(addWorktree).mockResolvedValue({ path: repo, branch: 'x', created: false })
+	startAgent.mockImplementationOnce(async ({ onStart, cwd }) => {
+		onStart?.(1)
+		await writeFile(join(cwd, 'a.txt'), 'two\n')
+		await writeFile(join(cwd, 'new.txt'), 'new\n')
+		return { kind: 'failed', reason: 'claude exited with code 1' }
+	})
+
+	const done = await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(done.exit).toBe('failed')
+	expect(await git(repo, 'log', '-1', '--format=%s')).toBe(
+		`chore: keep uncommitted work from run ${done.run}`,
+	)
+	expect(await git(repo, 'status', '--porcelain')).toBe('')
+	const { readRunOutput } = await import('./local.js')
+	expect(await readRunOutput(paths, done.run)).toContain(
+		`committed the work run ${done.run} left uncommitted`,
+	)
+
+	startAgent.mockImplementationOnce(async ({ onStart }) => {
+		onStart?.(2)
+		return { kind: 'failed', reason: 'claude exited with code 1' }
+	})
+	await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+	expect(await git(repo, 'rev-list', '--count', 'HEAD')).toBe('2')
+})
+
+test('a limit result after a tool call fails the run in the host’s words, marks claude spent, and never falls back', async () => {
+	const { checkHost, startAgent } = await withBackup([
+		{ name: 'sonnet', run: 'claude --model sonnet', complexity: [1, 10], about: '' },
+		{ name: 'gpt', run: 'codex --model gpt', complexity: [1, 10], about: '' },
+	])
+	checkHost.mockResolvedValue({ ok: true, reason: null })
+	startAgent.mockImplementationOnce(async ({ onStart, onLine }) => {
+		onStart?.(1)
+		onLine(
+			JSON.stringify({
+				type: 'assistant',
+				message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] },
+			}),
+		)
+		onLine(
+			JSON.stringify({
+				type: 'rate_limit_event',
+				rate_limit_info: { status: 'allowed', unifiedWindows: { five_hour: { utilization: 0.9 } } },
+			}),
+		)
+		onLine(
+			JSON.stringify({
+				type: 'result',
+				subtype: 'success',
+				is_error: true,
+				api_error_status: 429,
+				result: 'You’ve hit your session limit · resets 5:50pm',
+			}),
+		)
+		return { kind: 'failed', reason: 'claude --model sonnet exited with code 1' }
+	})
+
+	const done = await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(done.error).toBe(
+		'claude --model sonnet exited with code 1: You’ve hit your session limit · resets 5:50pm',
+	)
+	expect(startAgent).toHaveBeenCalledTimes(1)
+	const { knownAvailability } = await import('./host.js')
+	expect((await knownAvailability(paths)).claude).toMatchObject({
+		state: 'spent',
+		reason: 'You’ve hit your session limit · resets 5:50pm',
+	})
+})
+
+test('a failure reason that already carries the limit is not repeated', async () => {
+	const { checkHost, startAgent } = await withBackup([
+		{ name: 'gpt', run: 'codex --model gpt', complexity: [1, 10], about: '' },
+	])
+	checkHost.mockResolvedValue({ ok: true, reason: null })
+	startAgent.mockImplementationOnce(async ({ onStart, onLine }) => {
+		onStart?.(1)
+		onLine(CODEX_SPENT)
+		return {
+			kind: 'failed',
+			reason: 'codex --model gpt exited with code 1: usage limit, try again at 2:59 PM',
+		}
+	})
+
+	const done = await dispatch(paths, 'auth-api-k7f2', { base: 'main' })
+
+	expect(done.error).toBe('codex --model gpt exited with code 1: usage limit, try again at 2:59 PM')
 })
