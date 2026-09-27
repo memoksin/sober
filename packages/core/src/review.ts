@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import type {
 	AuditResult,
 	AutoProvenance,
@@ -12,13 +13,14 @@ import type {
 import { judge } from './audit.js'
 import { DEFAULT_CONFIG, readConfig } from './config.js'
 import { NotOnBoardError } from './errors.js'
-import { git, isAncestor, refExists } from './git.js'
+import { git, hasUncommitted, isAncestor, refExists } from './git.js'
 import { type Board, loadBoard } from './graph.js'
 import { appendEvent, type Feedback, writeFeedback } from './local.js'
+import { withLock } from './lock.js'
 import { deleteBranch, type Merged, MergeRefusedError, mergeNode, unmergeNode } from './merge.js'
 import type { Paths } from './paths.js'
 import { checksOf, pullRequestOf, readyAndMerge } from './pr.js'
-import { readNode } from './records.js'
+import { readNode, writeNode } from './records.js'
 import { acceptNode } from './run.js'
 import { scanNode } from './scan.js'
 import { flagsOf, lastRun, statusOf } from './status.js'
@@ -154,7 +156,12 @@ export const acceptWork = async (
 	paths: Paths,
 	node: string,
 	options: AcceptOptions,
-): Promise<Landed> => {
+): Promise<Landed> =>
+	withLock({ ...paths, lock: join(paths.local, 'accept.lock') }, 'merge acceptance', () =>
+		acceptOne(paths, node, options),
+	)
+
+const acceptOne = async (paths: Paths, node: string, options: AcceptOptions): Promise<Landed> => {
 	// Nothing to land is not something to accept. Found in the M1 gate: an agent
 	// wrote its files and never committed them, the branch held no commit past
 	// the base, and `git merge` on an ancestor succeeds by doing nothing — so
@@ -206,6 +213,10 @@ export const acceptWork = async (
 	await options.guard?.()
 
 	if (through === 'pull-request') {
+		if (settings.waveVerify !== null)
+			throw new MergeRefusedError(
+				'dispatch.waveVerify requires local merge acceptance; a pull-request landing needs its full CI gate',
+			)
 		// The pull request has to be there before the record is written: a done
 		// node whose work never landed is the one state this order prevents.
 		await requirePullRequest(paths, node)
@@ -221,7 +232,8 @@ export const acceptWork = async (
 	// Read before the branch goes: the pull request is found by its branch.
 	const openPr = await pullRequestOf(paths, node).catch(() => null)
 	const merged = await mergeNode(paths, node, options.base)
-	if (settings.verify !== null) await verifyMerged(paths, merged, settings.verify)
+	const verify = settings.waveVerify ?? settings.verify
+	if (verify !== null) await verifyMerged(paths, merged, verify, settings.waveVerify !== null)
 	try {
 		await acceptNode(paths, node, accepted, options.guard)
 	} catch (error) {
@@ -247,11 +259,16 @@ export const acceptWork = async (
  * Only when the base moved since the branch was cut: otherwise the merge holds
  * exactly the tree the run's own verify already judged.
  */
-const verifyMerged = async (paths: Paths, merged: Merged, verify: string): Promise<void> => {
-	if (await isAncestor(paths.root, `${merged.commit}^1`, merged.branch)) return
+const verifyMerged = async (
+	paths: Paths,
+	merged: Merged,
+	verify: string,
+	force = false,
+): Promise<void> => {
+	if (!force && (await isAncestor(paths.root, `${merged.commit}^1`, merged.branch))) return
 	const judged = await judge(paths.root, verify)
-	// A command that could not run is silence, as it is for the run's own verify.
-	if (judged.result === null || judged.result.exit === 0) return
+	if (judged.result === null && !force) return
+	if (judged.result?.exit === 0) return
 
 	const output = judged.output.trimEnd().split('\n').slice(-40).join('\n')
 	const fix = `merge ${merged.base} into ${merged.branch} and fix it there, or reject the node`
@@ -262,6 +279,169 @@ const verifyMerged = async (paths: Paths, merged: Merged, verify: string): Promi
 	throw new MergeRefusedError(
 		`${merged.branch} merged with the current ${merged.base} fails dispatch.verify (\`${verify}\`), and the checkout changed while it ran, so the merge (${merged.commit}) was not taken back: undo it by hand (\`git reset --keep ${merged.commit}^1\`), then ${fix}:\n${output}`,
 	)
+}
+
+/** Merge at most four reviewed nodes, verify their combined tree once, then mark them done. */
+export const acceptWave = async (
+	paths: Paths,
+	nodes: readonly string[],
+	options: Pick<AcceptOptions, 'by' | 'base'>,
+): Promise<readonly Landed[]> =>
+	withLock({ ...paths, lock: join(paths.local, 'accept.lock') }, 'wave acceptance', () =>
+		landWave(paths, nodes, options),
+	)
+
+const landWave = async (
+	paths: Paths,
+	nodes: readonly string[],
+	options: Pick<AcceptOptions, 'by' | 'base'>,
+): Promise<readonly Landed[]> => {
+	if (nodes.length === 0 || nodes.length > 4 || new Set(nodes).size !== nodes.length)
+		throw new MergeRefusedError('a wave needs one to four distinct nodes')
+	const config = await readConfig(paths)
+	const settings = config.kind === 'ok' ? config.value.dispatch : DEFAULT_CONFIG.dispatch
+	if (settings.accept !== 'merge')
+		throw new MergeRefusedError('wave acceptance requires dispatch.accept = "merge"')
+	const verify = settings.waveVerify
+	if (verify === null)
+		throw new MergeRefusedError('configure dispatch.waveVerify before accepting a wave')
+	const board = await loadBoard(paths)
+	const reviews: Review[] = []
+	const branches = new Map<string, string>()
+	for (const node of nodes) {
+		const found = await reviewNode(paths, node, options.base)
+		const run = lastRun(board, node)?.run
+		if (
+			found === null ||
+			statusOf(board, node) !== 'in-review' ||
+			found.flagged ||
+			found.accepted !== null ||
+			run?.exit !== 'finished' ||
+			run.verify?.exit !== 0 ||
+			found.scan.result !== 'clean' ||
+			found.uncommitted.length > 0 ||
+			found.acceptance.length === 0 ||
+			found.acceptance.some((criterion) => criterion.result?.exit !== 0)
+		)
+			throw new MergeRefusedError(`${node} has not passed its node checks and clean review`)
+		if (found.ci.kind !== 'none' && found.ci.kind !== 'passing')
+			throw new MergeRefusedError(`${node} CI is ${found.ci.kind}`)
+		reviews.push(found)
+		branches.set(node, await git(paths.root, 'rev-parse', branchOf(node)))
+		if (
+			(
+				await git(paths.root, 'rev-list', '--count', `${options.base}..${branchOf(node)}`)
+			).trim() === '0'
+		)
+			throw new MergeRefusedError(`${node} has no new commits to merge`)
+	}
+	const before = await git(paths.root, 'rev-parse', 'HEAD')
+	const merged: Merged[] = []
+	let recordsWritten = false
+	try {
+		for (const node of nodes) {
+			if (
+				(
+					await git(paths.root, 'rev-list', '--count', `${options.base}..${branchOf(node)}`)
+				).trim() === '0'
+			)
+				throw new MergeRefusedError(`${node} has no new commits after the preceding wave merges`)
+			merged.push(await mergeNode(paths, node, options.base))
+		}
+		const head = merged.at(-1)?.commit
+		const changed = await git(paths.root, 'diff', '--name-only', before, 'HEAD')
+		if (
+			settings.setup !== null &&
+			changed
+				.split('\n')
+				.some((file) => /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/.test(file))
+		) {
+			const setup = await judge(paths.root, settings.setup)
+			if (setup.result?.exit !== 0)
+				throw new MergeRefusedError(`wave setup failed:\n${setup.output}`)
+		}
+		const judged = await judge(paths.root, verify)
+		if (judged.result?.exit !== 0)
+			throw new MergeRefusedError(
+				`wave verification failed; no node was accepted:\n${judged.output.trimEnd().split('\n').slice(-40).join('\n')}`,
+			)
+		await withLock(paths, 'accept wave', async () => {
+			if (
+				(await git(paths.root, 'rev-parse', 'HEAD')) !== head ||
+				(await hasUncommitted(paths.root))
+			)
+				throw new MergeRefusedError(
+					'the checkout moved during wave verification; no node was accepted',
+				)
+			const current = await loadBoard(paths)
+			for (const found of reviews) {
+				if (statusOf(current, found.node) !== 'in-review' || flagsOf(current, found.node).flagged)
+					throw new MergeRefusedError(`${found.node} left review during wave verification`)
+				const record = await readNode(paths, found.node)
+				if (
+					record.kind !== 'ok' ||
+					JSON.stringify(record.value) !== JSON.stringify(board.nodes.get(found.node))
+				)
+					throw new MergeRefusedError(`${found.node} changed during wave verification`)
+				if (
+					(await git(paths.root, 'rev-parse', branchOf(found.node))) !== branches.get(found.node) ||
+					JSON.stringify(lastRun(current, found.node)) !==
+						JSON.stringify(lastRun(board, found.node))
+				)
+					throw new MergeRefusedError(
+						`${found.node} branch or run changed during wave verification`,
+					)
+			}
+			const written: string[] = []
+			try {
+				for (const found of reviews) {
+					const record = board.nodes.get(found.node)
+					if (!record) throw new MergeRefusedError(`${found.node} disappeared`)
+					await writeNode(paths, found.node, {
+						...record,
+						accepted: {
+							by: options.by,
+							at: new Date().toISOString(),
+							flagged: false,
+							scan: found.scan.result,
+							audit: auditResultOf(found.acceptance),
+						},
+					})
+					written.push(found.node)
+					recordsWritten = true
+				}
+				await appendEvent(paths, { action: 'wave.accepted', nodes, by: options.by, commit: head })
+			} catch (error) {
+				for (const node of written) {
+					const original = board.nodes.get(node)
+					if (original) await writeNode(paths, node, original)
+				}
+				recordsWritten = false
+				throw error
+			}
+		})
+	} catch (error) {
+		if (recordsWritten)
+			throw new MergeRefusedError(
+				`wave records could not be restored; its merges were kept for manual recovery: ${String(error)}`,
+			)
+		for (const merge of [...merged].reverse()) {
+			if (!(await unmergeNode(paths, merge)))
+				throw new MergeRefusedError(
+					`wave failed and the checkout changed; its merges were kept for manual recovery: ${String(error)}`,
+				)
+		}
+		throw error
+	}
+	const landed: Landed[] = []
+	for (const [index, node] of nodes.entries()) {
+		await removeWorktree(paths, node)
+		await deleteBranch(paths, node)
+		const merge = merged[index]
+		if (!merge) throw new MergeRefusedError(`${node} has no wave merge`)
+		landed.push({ kind: 'merged', ...merge, openPr: reviews[index]?.pr ?? null })
+	}
+	return landed
 }
 
 /** Refusing here beats writing an `accepted` record for work that cannot land. */
@@ -329,12 +509,14 @@ export interface Green {
  */
 export const greenNodes = async (paths: Paths, base: string): Promise<Green> => {
 	const board = await loadBoard(paths)
+	const config = await readConfig(paths)
+	const wave = config.kind === 'ok' && config.value.dispatch.waveVerify !== null
 	const green: string[] = []
 	const held: { id: string; why: string }[] = []
 
 	for (const id of [...board.nodes.keys()].sort()) {
 		if (statusOf(board, id) !== 'in-review') continue
-		const why = await notGreen(paths, board, id, base)
+		const why = await notGreen(paths, board, id, base, wave)
 		if (why === null) green.push(id)
 		else held.push({ id, why })
 	}
@@ -346,12 +528,15 @@ const notGreen = async (
 	board: Board,
 	id: string,
 	base: string,
+	wave = false,
 ): Promise<string | null> => {
 	const run = lastRun(board, id)?.run
 	if (run === undefined || run.exit !== 'finished') return 'its last run did not finish'
+	if (wave && run.verify?.exit !== 0) return 'node verification has not passed'
 	if (run.verify !== null && run.verify.exit !== 0) return 'verification failed'
 
 	const criteria = board.nodes.get(id)?.brief?.acceptance ?? []
+	if (wave && criteria.length === 0) return 'it has no acceptance criteria'
 	for (const [at, criterion] of criteria.entries()) {
 		const result = run.acceptance[at]
 		if (result === undefined || result === null) return `\`${criterion.run}\` did not run`
@@ -360,6 +545,8 @@ const notGreen = async (
 
 	const found = await reviewNode(paths, id, base)
 	if (found === null) return 'it is not on this board'
+	if (wave && found.flagged) return 'its decision flag needs individual review'
+	if (wave && found.diff === '') return 'its branch has no new changes to merge'
 	if (found.scan.result !== 'clean')
 		return found.scan.result === 'did-not-run' ? 'the scan did not run' : 'the scan has findings'
 	if (found.uncommitted.length > 0) return 'its worktree holds work nobody committed'

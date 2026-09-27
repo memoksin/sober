@@ -174,6 +174,7 @@ test('every state-changing operation the CLI has, the session has too', async ()
 	expect(names).toEqual(
 		[
 			'accept',
+			'accept_wave',
 			'answer',
 			'approve',
 			'archive',
@@ -716,7 +717,7 @@ test('`sober mcp` starts from the published bundle and speaks the protocol', asy
 	})
 	await client.connect(transport)
 	try {
-		expect((await client.listTools()).tools.length).toBe(29)
+		expect((await client.listTools()).tools.length).toBe(30)
 		expect(said(await client.callTool({ name: 'board', arguments: {} }))).toContain('No nodes yet')
 	} finally {
 		await client.close()

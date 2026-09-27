@@ -1,4 +1,5 @@
 import {
+	acceptWave,
 	acceptWork,
 	archiveDecision,
 	archiveNode,
@@ -21,6 +22,29 @@ import { namedAll, renderReview } from '../render.js'
  * and the agent relays their yes (ADR 0057).
  */
 export const registerReview = (server: McpServer, cwd: string): void => {
+	server.registerTool(
+		'accept_wave',
+		{
+			title: 'Accept a reviewed wave',
+			description:
+				'Accept one to four nodes together after one verification of their merged tree. Show every node review to the human and obtain explicit acceptance of this exact list before calling. A failed verification restores the base and accepts none of the nodes.',
+			inputSchema: {
+				nodes: z.array(z.string()).min(1).max(4),
+				base: z.string().nullish(),
+				confirmed: z
+					.literal(true)
+					.describe('the human explicitly accepted this exact list of reviewed nodes'),
+			},
+		},
+		tool(async ({ nodes, base }: { nodes: string[]; base?: string | null }) => {
+			const paths = await openBoard(cwd)
+			const ref = base ?? (await currentBranch(paths.root))
+			await acceptWave(paths, nodes, { by: await whoami(paths.root), base: ref })
+			return text(
+				`${nodes.join(', ')} are done — their combined tree passed wave verification.${await drained(paths, ref)}`,
+			)
+		}),
+	)
 	server.registerTool(
 		'review',
 		{

@@ -31,6 +31,8 @@ Shared work list for any agent (Claude Code, Codex, …) on `development`. Same 
 
 ## Open
 
+- [x] **Focused node checks and one full check per four-node wave.** Local CLI/MCP batch acceptance, deterministic changed-package selection, and focused node PR CI implemented. Full verification and coverage remain at the wave/development gate (ADR 0073).
+
 - [ ] **Coverage below baseline on `development` (blocks every node's verify).** Measured on clean HEAD 89fe877; none of it comes from the 2026-09-27 changes:
 
   | Package | Baseline | HEAD 89fe877 |
@@ -68,5 +70,7 @@ Shared work list for any agent (Claude Code, Codex, …) on `development`. Same 
   - Re-run CI on the open draft PRs #88–#98 after `development` is pushed.
 
 ## Log
+
+- 2026-09-28 · Codex · wave-verify-jmwo implemented: focused node checks, max-four combined acceptance with rollback, and full development CI. Core/CLI/MCP package tests passed; review/MCP/contract/plugin integration tests passed; latest wave/selector checks passed 15 tests. Typecheck, touched-file Biome, boundaries, secretlint and diff check passed. Repository lint remains blocked by pre-existing `skills-lock.json` formatting. Core export snapshot intentionally updated only for core. Coverage baseline is unchanged; no commit, push or live CI run.
 
 - 2026-09-27 · Claude Code · Research (Jev-ranked) and all recommendations implemented. Full `pnpm verify`: 1340 tests pass in 10 min; the ratchet fails only on the pre-existing drops above.

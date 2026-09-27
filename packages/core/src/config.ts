@@ -33,6 +33,7 @@ export const Config = z.strictObject({
 		host: z.string().min(1),
 		setup: z.string().nullable(),
 		verify: z.string().nullable(),
+		waveVerify: z.string().nullable().default(null),
 		timeoutMinutes: z.int().positive(),
 		concurrency: z.int().positive(),
 		base: z.string().min(1).nullable(),
@@ -132,6 +133,7 @@ export const DEFAULT_CONFIG: Config = {
 		host: 'claude',
 		setup: null,
 		verify: null,
+		waveVerify: null,
 		timeoutMinutes: 30,
 		concurrency: 3,
 		base: null,
@@ -190,6 +192,11 @@ export const DEFAULT_CONFIG_TEXT = `{
 		// Shell command run in the worktree when the agent finishes.
 		// null runs nothing.
 		"verify": null,
+
+		// Optional full command for combined acceptance of up to four reviewed
+		// nodes. accept --green and MCP accept_wave run it once per wave.
+		// Local merge acceptance only; null keeps the individual accept flow.
+		"waveVerify": null,
 
 		// A run past this is killed and recorded as failed. Only this caps
 		// how long one run burns.

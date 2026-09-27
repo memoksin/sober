@@ -137,6 +137,11 @@ Steps 2 to 4 are the loop below, run once each. From then on you repeat
 
 ## The loop
 
+For projects with fast `dispatch.verify` and a full `dispatch.waveVerify`, review
+the ready nodes and use `sober accept --green`. It accepts waves of up to four,
+running the full check once per combined tree. Agents can use `accept_wave` after
+you explicitly accept the reviewed list. A failed wave keeps its nodes in review.
+
 Always in this order. Nothing skips a step.
 
 ```

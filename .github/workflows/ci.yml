@@ -3,7 +3,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, development]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -91,17 +91,24 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm verify:node
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'sober/') && github.base_ref == 'development'
       - run: pnpm test --coverage
+        if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'sober/') || github.base_ref != 'development'
       - name: coverage did not drop
+        if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'sober/') || github.base_ref != 'development'
         run: pnpm coverage:check
 
   integration:
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'sober/') || github.base_ref != 'development'
     strategy:
       fail-fast: false
       matrix:

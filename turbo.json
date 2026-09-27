@@ -4,6 +4,9 @@
 	// The fake host in test/integration reads these; naming them here keeps
 	// caching correct and the lint rule quiet.
 	"globalPassThroughEnv": [
+		"SOBER_VERIFY_BASE",
+		"GITHUB_BASE_REF",
+		"GITHUB_EVENT_NAME",
 		"FAKE_GH_CHECKS",
 		"FAKE_GH_FAIL",
 		"FAKE_GH_STATE",

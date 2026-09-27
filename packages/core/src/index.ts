@@ -153,6 +153,7 @@ export {
 	writeNode,
 } from './records.js'
 export {
+	acceptWave,
 	acceptWork,
 	type Green,
 	greenNodes,

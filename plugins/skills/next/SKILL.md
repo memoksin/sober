@@ -28,3 +28,9 @@ Then, for that one node:
 5. **Accept or reject.** Write every finding of the review in the chat, and what you would do. Before you ask, paste the block the tool returned into this conversation, whole — never a pointer to the board, the dashboard or the CLI. Then ask a yes or a no: {{askYes}} Call `accept` with `confirmed: true` only on an explicit yes — it merges. On a no, merge nothing and offer `reject`, with what was wrong in the words the next run should read. Rejecting deletes nothing.
 
 Then say what moved off `blocked`, and stop. One node per invocation.
+
+When the user explicitly asks to accept several reviewed nodes together, show
+each review and ask about the exact list. On their yes, use `accept_wave` with
+one to four node ids and `confirmed: true`. It verifies their combined tree once
+before marking any of them done. Keep brief approval per node. Never add nodes
+to the accepted list on the human's behalf.

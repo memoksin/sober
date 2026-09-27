@@ -1,11 +1,13 @@
 import type { Paths } from '@besober/core'
 import {
+	acceptWave,
 	acceptWork,
 	archiveDecision,
 	archiveNode,
 	auditNode,
 	greenNodes,
 	type Landed,
+	readConfig,
 	rejectWork,
 	reviewNode,
 	whoami,
@@ -250,7 +252,19 @@ export const acceptGreen = async (base?: string): Promise<void> => {
 	if (ready.length === 0 && held.length === 0)
 		return say(`${green('✓')} nothing is waiting on a review`)
 
-	for (const node of ready) await land(paths, node, ref)
+	const config = await readConfig(paths)
+	if (config.kind === 'ok' && config.value.dispatch.waveVerify !== null) {
+		for (let start = 0; start < ready.length; start += 4) {
+			const nodes = ready.slice(start, start + 4)
+			say(`Verifying wave: ${nodes.join(', ')}`)
+			const landed = await acceptWave(paths, nodes, {
+				by: await whoami(paths.root),
+				base: ref,
+			}).catch(refuse)
+			for (const [index, result] of landed.entries())
+				say(`${green('✓')} ${nodes[index]} is done — ${where(result)}`)
+		}
+	} else for (const node of ready) await land(paths, node, ref)
 
 	if (held.length > 0) {
 		say()
