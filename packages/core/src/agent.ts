@@ -135,6 +135,40 @@ const withinCwd = (cwd: string, path: string): string | null => {
 	return target
 }
 
+const DENY_GIT_SUBCOMMANDS = new Set(['push'])
+
+/**
+ * Textually inspects a bash command for prohibited remote-changing git
+ * subcommands, sudo, and absolute or `..` path operands that resolve
+ * outside cwd. This is not a sandbox — see ADR 0071 for what it cannot stop
+ * (quoting, shell expansion, runtime-built commands, symlinks, subprocesses).
+ */
+const refuseBash = (command: string, cwd: string): string | null => {
+	for (const segment of command.split(/&&|\|\||[|;]/)) {
+		const tokens = segment
+			.trim()
+			.split(/\s+/)
+			.filter((token) => token.length > 0)
+		if (tokens.length === 0) continue
+		if (tokens.includes('sudo')) return `refused: sudo is not permitted`
+
+		const gitIndex = tokens.indexOf('git')
+		if (gitIndex !== -1) {
+			const sub = tokens.slice(gitIndex + 1).find((token) => !token.startsWith('-'))
+			if (sub !== undefined && DENY_GIT_SUBCOMMANDS.has(sub))
+				return `refused: git ${sub} changes the remote and is not permitted`
+		}
+
+		for (const rawToken of tokens) {
+			const token = rawToken.replace(/^['"]|['"]$/g, '')
+			if (token.startsWith('-') || (!token.includes('/') && !token.includes('..'))) continue
+			if (withinCwd(cwd, token) === null)
+				return `refused: '${token}' resolves outside the working directory`
+		}
+	}
+	return null
+}
+
 const runBash = (command: string, cwd: string, signal?: AbortSignal): Promise<string> =>
 	new Promise((resolvePromise) => {
 		let done = false
@@ -176,7 +210,12 @@ const runTool = async (
 		return `invalid arguments: ${rawArgs}`
 	}
 
-	if (name === 'bash') return runBash(String(args.command ?? ''), cwd, signal)
+	if (name === 'bash') {
+		const command = String(args.command ?? '')
+		const refusal = refuseBash(command, cwd)
+		if (refusal !== null) return refusal
+		return runBash(command, cwd, signal)
+	}
 
 	if (name === 'read_file') {
 		const target = withinCwd(cwd, String(args.path ?? ''))
