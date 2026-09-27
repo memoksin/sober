@@ -15,8 +15,9 @@
 		"setup": "pnpm install --frozen-lockfile",
 
 		// Shell command run in the worktree when the agent finishes.
-		// null runs nothing.
-		"verify": null,
+		// null runs nothing. `pnpm verify` is exactly what CI's
+		// lint/typecheck/boundaries/coverage jobs gate.
+		"verify": "pnpm verify",
 
 		// A run past this is killed and recorded as failed. Only this caps
 		// how long one run burns.

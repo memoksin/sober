@@ -18,6 +18,7 @@
 		"demo:cli": "pnpm --filter @besober/cli build && node scripts/demo-cli.mjs",
 		"coverage": "turbo run build && vitest run --coverage",
 		"coverage:check": "node scripts/coverage-ratchet.mjs",
+		"verify": "pnpm lint && pnpm typecheck && pnpm boundaries && pnpm coverage && pnpm coverage:check",
 		"coverage:update": "vitest run --coverage && node scripts/coverage-ratchet.mjs --update",
 		"demo:mcp": "pnpm --filter @besober/cli build && node scripts/demo-mcp.mjs",
 		"release": "node scripts/release.mjs",

@@ -16,8 +16,10 @@ const EXCLUDED = new Set(['schema', 'tsconfig'])
 // exactly the tolerance is allowed on paper and refused in binary floating
 // point, so the gate fired on the one drop it was written to let through.
 const DROP_TOLERANCE = 0.01
-// Below this the baseline is stale and has to be refreshed in the same commit,
-// or a rise today silently pays for a fall tomorrow.
+// Above this a rise is only noticed, not failed: parallel branches would
+// otherwise all need to rewrite the same baseline file to pass, and a node
+// that adds well-tested code would fail for being too good. The floor still
+// only moves on development, via `pnpm coverage:update`.
 const RISE_TOLERANCE = 1
 
 const percentages = (summary) => {
@@ -94,7 +96,9 @@ for (const [name, pct] of Object.entries(current)) {
 		const worst = worstFiles(name)
 		failures.push(`${name}: ${was}% -> ${pct}% — coverage dropped${worst ? `\n${worst}` : ''}`)
 	} else if (pct > was + RISE_TOLERANCE) {
-		failures.push(`${name}: ${was}% -> ${pct}% — run pnpm coverage:update and commit it`)
+		console.log(
+			`${name}: ${pct}% (baseline ${was}%) — above the baseline; pnpm coverage:update on development raises the floor`,
+		)
 	} else {
 		console.log(`${name}: ${pct}% (baseline ${was}%)`)
 	}

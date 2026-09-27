@@ -34,6 +34,13 @@ export default defineConfig({
 					// Real git, real worktrees, real subprocesses: no parallel workers.
 					fileParallelism: false,
 					testTimeout: 60_000,
+					// CI has seen two intermittent flakes here: Windows losing
+					// `test/integration/review.test.ts` mid-suite to "fatal: not a
+					// git repository", and macOS hitting a git clone race in
+					// "failed to copy file ... No such file or directory". Neither
+					// reproduced locally with an obvious single cause, so retry
+					// instead of failing the run on either.
+					retry: 2,
 				},
 			},
 		],

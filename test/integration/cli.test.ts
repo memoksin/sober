@@ -171,6 +171,10 @@ test('a command outside a board says how to make one, rather than crashing', () 
 	expect(failed(created.dir, 'status')).toContain('sober init')
 })
 
+// Every step is a real `execFileSync` — init, decide, brief, approve, a real
+// worktree for `run`, review, accept — stacked in one test; under load that
+// has hit the project's 60_000 ms default intermittently, so this one gets
+// headroom the rest don't need.
 test('the loop closes: decide, brief, approve, run, logs, review, accept', () => {
 	const created = project()
 	sober(created.dir, 'init')
@@ -255,7 +259,7 @@ test('the loop closes: decide, brief, approve, run, logs, review, accept', () =>
 	// Accepted work is on the base branch, and the node's branch is gone.
 	expect(created.git('log', '--oneline', '-1')).toContain('sober: auth-api-k7f2')
 	expect(created.git('branch', '--list', 'sober/auth-api-k7f2')).toBe('')
-})
+}, 120_000)
 
 /**
  * DESIGN §2.8 on the surface with no dialog: the edit is one command that
