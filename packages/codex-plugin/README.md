@@ -47,7 +47,8 @@ timeout fires first and a run ends as `failed` for its own reason, never cut
 by the host. Raising `timeoutMinutes` past 30 needs `tool_timeout_sec` raised
 to match — in this file if it is yours to edit, otherwise under
 `[mcp_servers.sober]` in `~/.codex/config.toml`. The hosted ChatGPT client may
-still cap a call regardless of this setting.
+still cap a call regardless of this setting — when it does, the run continues
+past the cut-off call, and `board`/`logs` are the safe way to follow it.
 
 ## Do not edit the skills here
 
