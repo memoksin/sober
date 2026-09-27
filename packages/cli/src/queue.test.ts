@@ -29,6 +29,16 @@ let dir: string
 let paths: Paths
 let out: string[]
 
+const emptyBoard = {
+	project: null,
+	nodes: new Map(),
+	decisions: new Map(),
+	archivedDecisions: new Set(),
+	runs: new Map(),
+	feedback: new Map(),
+	broken: [],
+} as unknown as Board
+
 beforeEach(() => {
 	dir = mkdtempSync(join(tmpdir(), 'sober-dispatch-'))
 	paths = { lock: join(dir, 'lock'), root: dir } as Paths
@@ -37,6 +47,7 @@ beforeEach(() => {
 		out.push(String(chunk))
 		return true
 	})
+	vi.mocked(loadBoard).mockResolvedValue(emptyBoard)
 })
 
 afterEach(() => {
@@ -102,8 +113,9 @@ test('a second dispatcher refuses while the first holds the lock, and names it',
 
 const AT = '2026-09-04T00:00:00.000Z'
 
-const node = (claim: string | null) =>
+const node = (claim: string | null, name = 'a-node') =>
 	({
+		name,
 		dependsOn: [],
 		decisions: [],
 		files: [],
@@ -117,10 +129,10 @@ const node = (claim: string | null) =>
 		},
 	}) as never
 
-const aBoard = (claim: string | null, run: object | null): Board =>
+const aBoard = (claim: string | null, run: object | null, name?: string): Board =>
 	({
 		project: null,
-		nodes: new Map([['a-node', node(claim)]]),
+		nodes: new Map([['a-node', node(claim, name)]]),
 		decisions: new Map(),
 		archivedDecisions: new Set(),
 		runs: new Map(run === null ? [] : [['run-1', { node: 'a-node', startedAt: AT, ...run }]]),
@@ -129,6 +141,20 @@ const aBoard = (claim: string | null, run: object | null): Board =>
 	}) as never
 
 const lineOf = (text: string) => text.split('\n').find((line) => line.includes('a-node'))
+
+test('a held node is named, not just its bare id, in the queue', async () => {
+	const board = aBoard('someone-else', null, 'Terminal names')
+	vi.mocked(loadBoard).mockResolvedValue(board)
+	vi.mocked(runQueue).mockResolvedValue({
+		started: [],
+		dispatched: [],
+		held: plan(board, 'me').held,
+	})
+
+	await queue(paths, { config })
+
+	expect(lineOf(out.join(''))).toContain('a-node (Terminal names)')
+})
 
 test('a held node reads the same in the queue as in the drain', async () => {
 	const board = aBoard('someone-else', null)

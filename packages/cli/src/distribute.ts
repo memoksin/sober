@@ -1,6 +1,12 @@
-import { acceptDistribution, dropDistribution, loadBoard, readDistribution } from '@besober/core'
+import {
+	acceptDistribution,
+	type Board,
+	dropDistribution,
+	loadBoard,
+	readDistribution,
+} from '@besober/core'
 import { openBoard } from './board.js'
-import { bold, columns, cyan, dim, green, refuse, say, when, yellow } from './out.js'
+import { bold, columns, cyan, dim, green, named, refuse, say, when, yellow } from './out.js'
 
 /**
  * The plan a session proposed, read and settled from a terminal (ADR 0051).
@@ -27,14 +33,19 @@ export const distribute = async (how: 'show' | 'accept' | 'drop'): Promise<void>
 		const landed = await acceptDistribution(paths).catch(refuse)
 		if (landed === null) return nothing()
 
+		const board = await loadBoard(paths).catch(refuse)
 		say(
 			landed.matches.length === 0
 				? `${yellow('·')} nothing was assigned`
 				: `${green('✓')} ${landed.matches.length} node${landed.matches.length === 1 ? '' : 's'} assigned`,
 		)
 		if (landed.matches.length > 0)
-			say(columns(landed.matches.map((one) => [`  ${cyan(one.node)}`, one.handle])).join('\n'))
-		return passedOver(landed.skipped)
+			say(
+				columns(
+					landed.matches.map((one) => [`  ${cyan(named(board, one.node))}`, one.handle]),
+				).join('\n'),
+			)
+		return passedOver(board, landed.skipped)
 	}
 
 	const waiting = await readDistribution(paths).catch(refuse)
@@ -47,10 +58,12 @@ export const distribute = async (how: 'show' | 'accept' | 'drop'): Promise<void>
 	// and a reader should not have to join two tables to find it.
 	for (const one of waiting.matches) {
 		say()
-		say(`  ${bold(one.handle)}  ${cyan(one.node)}  ${dim(board.nodes.get(one.node)?.title ?? '')}`)
+		say(
+			`  ${bold(one.handle)}  ${cyan(named(board, one.node))}  ${dim(board.nodes.get(one.node)?.title ?? '')}`,
+		)
 		say(dim(`    ${one.because}`))
 	}
-	passedOver(waiting.skipped)
+	passedOver(board, waiting.skipped)
 	say()
 	say(dim(`Nothing is assigned yet. ${bold('sober distribute --accept')}, or ${bold('--drop')}.`))
 }
@@ -62,12 +75,12 @@ const nothing = (): void => {
 }
 
 /** Decision 4 of ADR 0051, said out loud: a claim is a fact and this is a plan. */
-const passedOver = (skipped: readonly string[]): void => {
+const passedOver = (board: Board, skipped: readonly string[]): void => {
 	if (skipped.length === 0) return
 	say()
 	say(
 		`${dim('·')} ${dim(
-			`passed over ${skipped.length} node${skipped.length === 1 ? '' : 's'} — somebody is already on ${skipped.length === 1 ? 'it' : 'them'}, or ${skipped.length === 1 ? 'it is' : 'they are'} done: ${skipped.join(', ')}`,
+			`passed over ${skipped.length} node${skipped.length === 1 ? '' : 's'} — somebody is already on ${skipped.length === 1 ? 'it' : 'them'}, or ${skipped.length === 1 ? 'it is' : 'they are'} done: ${skipped.map((id) => named(board, id)).join(', ')}`,
 		)}`,
 	)
 }
