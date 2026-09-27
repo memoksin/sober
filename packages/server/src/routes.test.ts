@@ -37,10 +37,11 @@ test('a read is never spelled like an operation', () => {
 	for (const read of Object.keys(READS)) expect(OPERATIONS, read).not.toContain(read)
 })
 
-test('every read a screen asked for, and no speculative seventh', () => {
-	// The digest is the fourth, the impact preview the fifth and the waiting
-	// distribution the sixth, and each was written when its screen asked for it
-	// rather than beside the first three — which is the property this guards.
+test('every read a screen asked for, and no speculative eighth', () => {
+	// The digest is the fourth, the impact preview the fifth, the waiting
+	// distribution the sixth and the decision report the seventh, and each was
+	// written when its screen asked for it rather than beside the first three —
+	// which is the property this guards.
 	expect(Object.keys(READS).sort()).toEqual([
 		'availability',
 		'board',
@@ -49,6 +50,7 @@ test('every read a screen asked for, and no speculative seventh', () => {
 		'distribution',
 		'impact',
 		'projection',
+		'report',
 		'review',
 	])
 })

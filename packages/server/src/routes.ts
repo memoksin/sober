@@ -36,6 +36,7 @@ import {
 	releaseChain,
 	releaseNode,
 	removeContributor,
+	renderDecisionReport,
 	reopenNode,
 	resolveConflict,
 	reviewNode,
@@ -51,6 +52,7 @@ import {
 	Brief,
 	Contributor,
 	chainEnds,
+	type DecisionReport,
 	type Digest,
 	ID_PATTERN,
 	Id,
@@ -394,11 +396,11 @@ export const GAPS = [
 ] as const satisfies readonly Operation[]
 
 /**
- * Reads. Four now: what the canvas draws, what `sober status` says, what a
- * human reads before accepting, and what changed since they last looked. The
- * panel and the decision screen added none — `board` already carried what they
- * needed — which is what "a read written before a screen asks for it is a shape
- * guessed from nothing" was protecting.
+ * Reads. Five now: what the canvas draws, what `sober status` says, what a
+ * human reads before accepting, what changed since they last looked, and the
+ * decision report the CLI already prints. The panel added none — `board`
+ * already carried what it needed — which is what "a read written before a
+ * screen asks for it is a shape guessed from nothing" was protecting.
  *
  * A read is a `GET`, so its input is the query string rather than a body, and
  * the same `Route` carries it: the only difference is where the object comes
@@ -498,6 +500,14 @@ export const READS: Readonly<Record<string, Route>> = {
 	digest: route(
 		z.strictObject({ fetch: z.stringbool().default(false) }),
 		async (paths, { fetch }): Promise<Digest> => digest(paths, { fetch }),
+	),
+
+	/** The decisions screen's Copy Markdown button — same string `sober why` prints (ADR 0024). */
+	report: route(
+		nothing,
+		async (paths): Promise<DecisionReport> => ({
+			markdown: renderDecisionReport(await loadBoard(paths)),
+		}),
 	),
 }
 

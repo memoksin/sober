@@ -134,6 +134,7 @@ export {
 	writeDecision,
 	writeNode,
 } from './records.js'
+export { renderDecisionReport } from './report.js'
 export {
 	acceptWork,
 	type Green,

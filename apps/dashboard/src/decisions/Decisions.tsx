@@ -7,24 +7,44 @@ import { decisionRows } from './data.js'
 /** Every decision on the board and what was chosen. Read-only: answering stays on `deciding`. */
 export const DecisionsScreen = ({
 	board,
+	onCopyReport,
 	onClose,
 }: {
 	readonly board: BoardRead
+	/** Fetches `/read/report`'s markdown — the same string `sober why` prints. */
+	readonly onCopyReport: () => Promise<string>
 	readonly onClose: () => void
 }): React.JSX.Element => {
 	const [expanded, setExpanded] = useState<string | null>(null)
+	const [copied, setCopied] = useState(false)
 	const rows = decisionRows(board)
 	const open = rows.filter((row) => row.state === 'open').length
 
+	const copyReport = async (): Promise<void> => {
+		const markdown = await onCopyReport()
+		await navigator.clipboard.writeText(markdown)
+		setCopied(true)
+		setTimeout(() => setCopied(false), 2000)
+	}
+
 	return (
 		<Overlay label="Every decision" width={720} onClose={onClose}>
-			<header className="border-[var(--line)] border-b px-5 py-4">
-				<h2 className="font-medium text-[length:var(--text-sm)] text-[var(--ink)]">
-					What this project has decided
-				</h2>
-				<p className="mt-1 text-[var(--ink-dim)] text-xs">
-					{rows.length} decisions · {open} still open
-				</p>
+			<header className="flex items-start justify-between gap-3 border-[var(--line)] border-b px-5 py-4">
+				<div>
+					<h2 className="font-medium text-[length:var(--text-sm)] text-[var(--ink)]">
+						What this project has decided
+					</h2>
+					<p className="mt-1 text-[var(--ink-dim)] text-xs">
+						{rows.length} decisions · {open} still open
+					</p>
+				</div>
+				<button
+					type="button"
+					onClick={copyReport}
+					className="shrink-0 rounded-[var(--radius-sm)] border border-[var(--line)] px-2 py-1 text-[var(--ink-dim)] text-xs hover:text-[var(--ink)]"
+				>
+					{copied ? 'Copied' : 'Copy Markdown'}
+				</button>
 			</header>
 
 			<div className="flex-1 overflow-y-auto px-5 py-4">

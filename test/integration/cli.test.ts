@@ -192,6 +192,11 @@ test('the loop closes: decide, brief, approve, run, logs, review, accept', () =>
 	expect(sober(created.dir, 'decisions', '--all')).toMatch(
 		/A cookie[\s\S]*Nothing to run[\s\S]*Redis/,
 	)
+	// `why` is the same education pillar as a markdown report: chosen option,
+	// why, what it costs, and the alternative not taken with its own cost.
+	expect(sober(created.dir, 'why')).toMatch(
+		/Where does session state live\?[\s\S]*Chosen: \*\*A cookie\*\*[\s\S]*Nothing to run[\s\S]*Redis[\s\S]*A service to run/,
+	)
 	// Answering is once. Changing an answer is a different command, because it
 	// withdraws every brief built on the answer it replaces (§2.8).
 	expect(failed(created.dir, 'decide', 'session-store-k7f2', 'redis')).toContain(
