@@ -17,6 +17,21 @@ export interface DecisionRow {
 // Open first: the list answers "what is still holding things" before "what was decided".
 const ORDER: Record<DecisionState, number> = { open: 0, unopened: 1, answered: 2 }
 
+export type DecisionFilter = 'all' | 'open' | 'answered' | 'derived'
+
+export const filterDecisionRows = (rows: DecisionRow[], filter: DecisionFilter): DecisionRow[] => {
+	switch (filter) {
+		case 'all':
+			return rows
+		case 'open':
+			return rows.filter((row) => row.state === 'open')
+		case 'answered':
+			return rows.filter((row) => row.state === 'answered')
+		case 'derived':
+			return rows.filter((row) => row.state === 'answered' && row.answer?.derived != null)
+	}
+}
+
 export const decisionRows = (board: BoardRead): DecisionRow[] =>
 	board.decisions
 		.filter((decision) => !decision.archived)
