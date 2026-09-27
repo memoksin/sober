@@ -13,6 +13,7 @@ import {
 	boardDistance,
 	claimChain,
 	claimNode,
+	correctNode,
 	createNode,
 	currentBranch,
 	digest,
@@ -345,6 +346,17 @@ export const OPS: Readonly<Record<Exclude<Operation, (typeof GAPS)[number]>, Rou
 		reopenNode(paths, id, await whoami(paths.root)),
 	),
 
+	correct_node: route(
+		z.strictObject({
+			node: Id,
+			title: z.string().optional(),
+			name: z.string().optional(),
+			description: z.string().optional(),
+		}),
+		async (paths, { node: id, title, name, description }) =>
+			correctNode(paths, id, { title, name, description, by: await whoami(paths.root) }),
+	),
+
 	create_node: route(
 		z.strictObject({
 			title: z.string().min(1),
@@ -387,7 +399,6 @@ export const COVERS: readonly Operation[] = Object.keys(OPS) as Operation[]
  * sends it.
  */
 export const GAPS = [
-	'correct_node',
 	'add_model',
 	'start_dispatcher',
 	'stop_dispatcher',
