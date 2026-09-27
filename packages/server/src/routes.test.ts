@@ -192,6 +192,62 @@ test('audit refuses a node that is not on the board', async () => {
 	)
 })
 
+test('correcting a node updates title, name and description, keeps the id and unrelated fields, and clears an approved brief', async () => {
+	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
+	const run = (...args: string[]) =>
+		execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim()
+	run('init', '--initial-branch=main')
+	run('config', 'user.name', 'SOBER Test')
+	run('config', 'user.email', 'test@besober.dev')
+	run('config', 'commit.gpgsign', 'false')
+	writeFileSync(join(dir, 'README.md'), '# acme\n')
+	run('add', '-A')
+	run('commit', '-m', 'chore: first')
+
+	const p = paths(dir)
+	await OPS.init.run(p, { project: { title: 'acme', intent: '', constraints: [] } })
+	await OPS.create_node.run(p, { title: 'The auth API', description: 'Sign in.' })
+	const created = (await READS.board.run(p, {})) as {
+		nodes: readonly { id: string; name: string; description: string }[]
+	}
+	const node = created.nodes[0]
+	if (node === undefined) throw new Error('no node was created')
+
+	await OPS.write_brief.run(p, {
+		node: node.id,
+		brief: {
+			approach: 'Write the endpoints.',
+			acceptance: [{ run: 'pnpm test', proves: 'They answer.' }],
+		},
+	})
+	await OPS.approve.run(p, { node: node.id })
+
+	const corrected = (await OPS.correct_node.run(p, {
+		node: node.id,
+		title: 'The right title',
+	})) as { title: string; name: string; description: string; brief: { approval: unknown } }
+
+	expect(corrected.title).toBe('The right title')
+	expect(corrected.name).toBe(node.name)
+	expect(corrected.description).toBe('Sign in.')
+	expect(corrected.brief.approval).toBeNull()
+
+	const renamed = (await OPS.correct_node.run(p, {
+		node: node.id,
+		name: 'renamed-node',
+		description: 'Now with the right words.',
+	})) as { title: string; name: string; description: string }
+
+	expect(renamed.title).toBe('The right title')
+	expect(renamed.name).toBe('renamed-node')
+	expect(renamed.description).toBe('Now with the right words.')
+
+	// The id — the map key `board` and every citation are keyed on — never
+	// moves, even though the name it was seeded from changed underneath it.
+	const after = (await READS.board.run(p, {})) as { nodes: readonly { id: string }[] }
+	expect(after.nodes.map((one) => one.id)).toEqual([node.id])
+})
+
 test('the board read carries thinkingVerbs — the default pool absent, the configured one set, null when the config is broken', async () => {
 	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
 	const run = (...args: string[]) =>
