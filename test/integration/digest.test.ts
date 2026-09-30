@@ -95,7 +95,7 @@ const alice = async (): Promise<{ created: TempRepo; paths: Paths }> => {
 const bob = async (remote: string): Promise<Paths> => {
 	const dir = join(remote, '..', 'bob')
 	clone = dir
-	execFileSync('git', ['clone', '--quiet', remote, dir])
+	execFileSync('git', ['clone', '--quiet', '--no-local', remote, dir])
 	git(dir, 'config', 'user.name', 'Bob')
 	git(dir, 'config', 'user.email', 'bob@example.com')
 	git(dir, 'config', 'commit.gpgsign', 'false')

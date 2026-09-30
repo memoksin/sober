@@ -72,7 +72,7 @@ const pair = async (): Promise<{ ours: Paths; theirs: Paths }> => {
 
 	const dir = join(created.remote, '..', 'clone')
 	clone = dir
-	execFileSync('git', ['clone', '--quiet', created.remote, dir])
+	execFileSync('git', ['clone', '--quiet', '--no-local', created.remote, dir])
 	git(dir, 'config', 'user.name', 'Bob')
 	git(dir, 'config', 'user.email', 'bob@example.com')
 	git(dir, 'config', 'commit.gpgsign', 'false')

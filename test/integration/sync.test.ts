@@ -99,7 +99,7 @@ const node = (dir: string, id: string, title: string, dependsOn: string[] = []):
 const bob = (remote: string): string => {
 	const dir = join(remote, '..', 'bob')
 	second = dir
-	execFileSync('git', ['clone', '--quiet', remote, dir], { encoding: 'utf8' })
+	execFileSync('git', ['clone', '--quiet', '--no-local', remote, dir], { encoding: 'utf8' })
 	git(dir, 'config', 'user.name', 'Bob')
 	git(dir, 'config', 'user.email', 'bob@example.com')
 	git(dir, 'config', 'commit.gpgsign', 'false')

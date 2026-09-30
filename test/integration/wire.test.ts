@@ -549,7 +549,7 @@ test('init on a fresh clone takes the team’s board instead of writing a second
 	repo.git('push', '-u', 'origin', 'main')
 	sober(repo.dir, 'sync')
 	const clone = join(repo.remote, '..', 'fresh')
-	execFileSync('git', ['clone', '--quiet', repo.remote, clone])
+	execFileSync('git', ['clone', '--quiet', '--no-local', repo.remote, clone])
 	const cloned = paths(clone)
 	server = await serve({ paths: cloned })
 

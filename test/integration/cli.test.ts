@@ -457,7 +457,7 @@ test('a session is told at the start whether the guard is live', () => {
 /** A second clone of the same remote, with the board joined. */
 const clone = (remote: string): string => {
 	const dir = join(dirname(remote), 'bob')
-	execFileSync('git', ['clone', '--quiet', remote, dir])
+	execFileSync('git', ['clone', '--quiet', '--no-local', remote, dir])
 	for (const [key, value] of [
 		['user.name', 'Bob'],
 		['user.email', 'bob@example.com'],
@@ -636,7 +636,7 @@ test('a clone that has no board yet is told which command takes the team’s', (
 	sober(created.dir, 'sync')
 
 	const bob = join(dirname(created.dir), 'bob')
-	execFileSync('git', ['clone', '-q', created.remote, bob])
+	execFileSync('git', ['clone', '-q', '--no-local', created.remote, bob])
 
 	const said = failed(bob, 'status')
 	expect(said).toContain('sober init')

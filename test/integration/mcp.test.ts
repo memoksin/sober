@@ -985,7 +985,7 @@ const teammate = async (created: TempRepo) => {
 	}
 	created.git('push', '-u', 'origin', 'main')
 	const dir = join(created.remote, '..', 'teammate')
-	execFileSync('git', ['clone', '--quiet', created.remote, dir])
+	execFileSync('git', ['clone', '--quiet', '--no-local', created.remote, dir])
 	execFileSync('git', ['config', 'user.name', 'Bob'], { cwd: dir })
 	execFileSync('git', ['config', 'user.email', 'bob@example.com'], { cwd: dir })
 	execFileSync('git', ['config', 'commit.gpgsign', 'false'], { cwd: dir })
@@ -1589,7 +1589,7 @@ const freshClone = async () => {
 	await sync(paths, 'sober-graph')
 	created.git('push', '-u', 'origin', 'main')
 	const dir = join(created.remote, '..', 'fresh')
-	execFileSync('git', ['clone', '--quiet', created.remote, dir])
+	execFileSync('git', ['clone', '--quiet', '--no-local', created.remote, dir])
 	execFileSync('git', ['config', 'user.name', 'Bob'], { cwd: dir })
 	execFileSync('git', ['config', 'user.email', 'bob@example.com'], { cwd: dir })
 	execFileSync('git', ['config', 'commit.gpgsign', 'false'], { cwd: dir })
