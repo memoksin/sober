@@ -143,6 +143,23 @@ describe('on a board', () => {
 		expect((await readLog(paths)).events).toEqual([])
 	})
 
+	test('a new node with a blank title is refused, and writes nothing', async () => {
+		await expect(createNode(paths, { title: '   ', by: 'memoksin' })).rejects.toMatchObject({
+			code: 'no-title',
+		})
+		expect((await readLog(paths)).events).toEqual([])
+	})
+
+	test.each([
+		['a blank title', { title: '  ' }, 'no-title'],
+		['a name over 40 characters', { name: 'x'.repeat(41) }, 'bad-name'],
+	])('a correction with %s is refused, and writes nothing', async (_, correction, code) => {
+		await expect(
+			correctNode(paths, 'auth-api-k7f2', { ...correction, by: 'memoksin' }),
+		).rejects.toMatchObject({ code })
+		expect((await readLog(paths)).events).toEqual([])
+	})
+
 	test('a correction to a node that is not here is refused', async () => {
 		await expect(
 			correctNode(paths, 'gone-x9y8', { title: 'A fix', by: 'memoksin' }),
