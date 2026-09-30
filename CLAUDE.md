@@ -25,3 +25,7 @@
 - Changing a package's exports changes `exports.test.ts` snapshots: update them on purpose with `pnpm exec vitest run <pkg>/src/exports.test.ts -u` for that package only (running core and schema together with -u once deleted a snapshot file), and say so in the final message.
 - Never edit `coverage-baseline.json` in a node; a drop is fixed with tests.
 - Shared registries (apps/dashboard/src/App.tsx, apps/dashboard/src/covers.ts, packages/server/src/routes.ts, packages/core/src/index.ts, */src/__snapshots__/exports.test.ts.snap) go in a node's `files` when planning, so SOBER's overlap guard serialises nodes that touch them.
+
+## Platform support
+
+SOBER OS agnostic olmalıdır: CLI, çekirdek davranış ve testler Windows, macOS ve Linux üzerinde yerel olarak çalışmalıdır. Taşınabilir Node yol ve süreç API'lerini kullan. Harici araçlar için gereken OS farklarını ortak adaptörlerde tut ve üç platformun CI işlerinde doğrula. Platform hatalarını tekrar deneme veya test atlama ile örtmeden önce nedenini araştır.
