@@ -1,7 +1,7 @@
 import { decisionState } from '@besober/schema'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { initBoard } from './board.js'
-import { answerDecision, approveBrief, createDecision } from './decide.js'
+import { answerDecision, approveBrief, createDecision, writeBrief } from './decide.js'
 import { loadBoard } from './graph.js'
 import { editDecision } from './impact.js'
 import type { Paths } from './paths.js'
@@ -95,6 +95,14 @@ test('a guard that refuses under the lock writes nothing', async () => {
 		}),
 	).rejects.toThrow('changed underneath')
 	expect(await approvalOf('auth-api-k7f2')).toBeNull()
+})
+
+test('a brief for a node that is not on the board is refused, and no node is written', async () => {
+	await expect(
+		writeBrief(paths, 'ghost-zz99', { approach: 'Endpoints first.', acceptance: [] }),
+	).rejects.toMatchObject({ code: 'not-on-board' })
+
+	expect((await readNode(paths, 'ghost-zz99')).kind).toBe('missing')
 })
 
 describe('createDecision', () => {

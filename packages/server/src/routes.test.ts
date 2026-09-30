@@ -227,7 +227,8 @@ test('the board read carries thinkingVerbs — the default pool absent, the conf
 	expect((withBrokenConfig as { thinkingVerbs: unknown }).thinkingVerbs).toBeNull()
 })
 
-test('create_decision opens an unopened decision, and the node it binds reads held on the board read', async () => {
+/** A committed repository with a fresh board and one node on it. */
+const aBoard = async () => {
 	dir = mkdtempSync(join(tmpdir(), 'sober-routes-it-'))
 	const run = (...args: string[]) =>
 		execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim()
@@ -242,6 +243,16 @@ test('create_decision opens an unopened decision, and the node it binds reads he
 	const p = paths(dir)
 	await OPS.init.run(p, { project: { title: 'acme', intent: '', constraints: [] } })
 	const { id: node } = (await OPS.create_node.run(p, { title: 'The auth API' })) as { id: string }
+	return { p, node }
+}
+
+type BoardRead = {
+	nodes: readonly { id: string; status: string; decisions: string[] }[]
+	decisions: readonly { id: string; options: unknown; answer: unknown }[]
+}
+
+test('create_decision opens an unopened decision, and the node it binds reads held on the board read', async () => {
+	const { p, node } = await aBoard()
 
 	await expect(
 		OPS.create_decision.run(p, {
@@ -256,10 +267,31 @@ test('create_decision opens an unopened decision, and the node it binds reads he
 		binds: [node],
 	})) as { id: string }
 
-	const board = (await READS.board.run(p, {})) as {
-		nodes: readonly { id: string; status: string; decisions: string[] }[]
-		decisions: readonly { id: string; options: unknown; answer: unknown }[]
-	}
+	const board = (await READS.board.run(p, {})) as BoardRead
 	expect(board.decisions).toEqual([expect.objectContaining({ id, options: null, answer: null })])
 	expect(board.nodes[0]).toMatchObject({ id: node, status: 'held', decisions: [id] })
+})
+
+test('create_decision refuses a node that is not on the board as a state refusal, and writes nothing', async () => {
+	const { p, node } = await aBoard()
+
+	const opening = OPS.create_decision.run(p, {
+		question: 'Where does state live?',
+		category: 'state',
+		binds: [node, 'no-such-node-zzzz'],
+	})
+	await expect(opening).rejects.toBeInstanceOf(SoberError)
+	await expect(opening).rejects.toThrow('no-such-node-zzzz')
+
+	const board = (await READS.board.run(p, {})) as BoardRead
+	expect(board.decisions).toEqual([])
+	expect(board.nodes[0]).toMatchObject({ id: node, decisions: [] })
+})
+
+test('archive takes the node off the board read', async () => {
+	const { p, node } = await aBoard()
+
+	expect(await OPS.archive.run(p, { node })).toEqual({ archived: node })
+
+	expect(((await READS.board.run(p, {})) as BoardRead).nodes).toEqual([])
 })

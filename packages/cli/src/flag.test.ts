@@ -33,7 +33,6 @@ afterEach(() => {
 })
 
 test('sober question opens an unopened decision that holds the nodes it binds', async () => {
-	const { createNode } = await import('@besober/core')
 	const { id: node } = await createNode(paths, { title: 'The auth API', by: 'memoksin' })
 
 	await question('Where does state live?', { category: 'state', binds: node })
