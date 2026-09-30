@@ -131,6 +131,7 @@ jobs:
       # `pnpm integration`, split so GitHub times build and suite separately
       # (docs/WINDOWS-CI-2026-09.md).
       - run: pnpm build
+      - run: pnpm vitest run --project @besober/core packages/core/src/agent.test.ts packages/core/src/audit.test.ts
       - run: pnpm vitest run --project integration
         env:
           SOBER_FIXTURE_STATS: '1'

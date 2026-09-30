@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import type { LogLineInput } from '@besober/schema'
+import { posixShell } from './audit.js'
 import type { AgentExit } from './host.js'
 import { capBody, NO_HUMAN, summarize } from './hosts.js'
 
@@ -188,13 +189,18 @@ const refuseBash = (command: string, cwd: string): string | null => {
 
 const runBash = (command: string, cwd: string, signal?: AbortSignal): Promise<string> =>
 	new Promise((resolvePromise) => {
+		const shell = posixShell()
+		if (shell === null) {
+			resolvePromise('error: no POSIX shell found: install Git for Windows\nexit code: null')
+			return
+		}
 		let done = false
 		const res = (value: string): void => {
 			if (done) return
 			done = true
 			resolvePromise(value)
 		}
-		const child = spawn('sh', ['-c', command], { cwd, signal })
+		const child = spawn(shell === true ? 'sh' : shell, ['-c', command], { cwd, signal })
 		let output = ''
 		child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
 		child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
